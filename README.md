@@ -208,6 +208,27 @@ scores_df <- score_expression(...)
 scores_df$score_zscore <- normalize_scores(scores_df[, 1])
 ```
 
+### Prognostic Groups and Marker Genes
+Define the top and bottom 5% prognostic cells per dataset (adverse = highest scores, favorable = lowest) and find unique marker genes using **Seurat's FindMarkers** (requires Seurat):
+```r
+# Score and define groups (top 5% = adverse, bottom 5% = favorable)
+scores <- score_expression(seurat_obj, reference = "precog", cancer_type = "BRCA")
+groups <- define_prognostic_groups(scores, percentile = 0.05)
+
+# One group column per score; values: "adverse", "favorable", "middle"
+table(groups$prognostic_group_weighted_sum_score_precog_BRCA)
+
+# Find marker genes via Seurat::FindMarkers (adverse vs rest, favorable vs rest)
+markers <- find_prognostic_markers(
+  seurat_obj,
+  group_labels = groups,
+  group_column = "prognostic_group_weighted_sum_score_precog_BRCA",
+  cell_id_column = "cell_id"
+)
+head(markers$adverse_markers)   # genes enriched in top 5% (worst prognosis)
+head(markers$favorable_markers) # genes enriched in bottom 5% (best prognosis)
+```
+
 ## Utility Functions
 
 ### Check Gene Coverage

@@ -248,6 +248,6 @@ get_cancer_type_from_dataset <- function(dataset, reference) {
 get_data <- function(name) {
   # This will load data from the package data/ directory
   data_env <- new.env()
-  data(list = name, package = "PrognosticScorer", envir = data_env)
+  data(list = name, package = "scIMPEL", envir = data_env)
   return(data_env[[name]])
 }

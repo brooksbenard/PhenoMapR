@@ -2,6 +2,8 @@
 
 export(add_scores_to_sce)
 export(add_scores_to_seurat)
+export(define_prognostic_groups)
+export(find_prognostic_markers)
 export(get_gene_coverage)
 export(get_top_prognostic_genes)
 export(list_cancer_types)
