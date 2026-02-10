@@ -8,13 +8,13 @@ Install directly from GitHub (requires the `remotes` package):
 
 ```r
 # Install from GitHub
-remotes::install_github("bbenard/scIMPEL")
+remotes::install_github("brooksbenard/scIMPEL")
 ```
 
 Or with devtools:
 
 ```r
-devtools::install_github("bbenard/scIMPEL")
+devtools::install_github("brooksbenard/scIMPEL")
 ```
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
