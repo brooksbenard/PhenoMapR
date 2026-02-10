@@ -1,0 +1,34 @@
+Package: scIMPEL
+Type: Package
+Title: Weighted Sum Scoring for Prognostic Gene Signatures
+Version: 0.1.0
+Authors@R: c(
+    person("Brooks", "Benard", email = "bbenard@stanford.edu", 
+           role = c("aut", "cre"))
+    )
+Description: Calculate prognostic scores for bulk, single-cell, and spatial 
+    transcriptomics data using weighted sum of gene expression and prognostic 
+    z-scores from PRECOG, TCGA, and ICI datasets.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: 
+    R (>= 4.0.0)
+Imports:
+    methods,
+    Matrix,
+    dplyr,
+    glue,
+    progress
+Suggests:
+    Seurat (>= 4.0.0),
+    SingleCellExperiment,
+    SpatialExperiment,
+    SummarizedExperiment,
+    reticulate,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+RoxygenNote: 7.3.3
+Roxygen: list(markdown = TRUE)
+VignetteBuilder: knitr

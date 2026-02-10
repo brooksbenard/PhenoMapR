@@ -1,0 +1,271 @@
+---
+title: "Introduction to PrognosticScorer"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to PrognosticScorer}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Overview
+
+The `PrognosticScorer` package calculates prognostic scores for transcriptomics data using weighted sums of gene expression and prognostic z-scores. It supports:
+
+- Bulk RNA-seq
+- Single-cell RNA-seq  
+- Spatial transcriptomics
+- Multiple input formats (matrix, Seurat, SingleCellExperiment, AnnData)
+- Multiple reference datasets (PRECOG, TCGA, Pediatric, ICI)
+
+# Installation
+
+```{r eval=FALSE}
+devtools::install_github("yourusername/PrognosticScorer")
+```
+
+```{r}
+library(PrognosticScorer)
+```
+
+# Basic Usage
+
+## Explore Available Cancer Types
+
+```{r eval=FALSE}
+# List all available cancer types
+list_cancer_types()
+
+# List cancer types for specific reference
+list_cancer_types("tcga")
+```
+
+## Score a Bulk Expression Matrix
+
+```{r eval=FALSE}
+# Create example expression matrix
+# Rows = genes, Columns = samples
+expression_matrix <- matrix(
+  rnorm(1000 * 50), 
+  nrow = 1000, 
+  ncol = 50,
+  dimnames = list(
+    paste0("Gene", 1:1000),
+    paste0("Sample", 1:50)
+  )
+)
+
+# Calculate scores
+scores <- score_expression(
+  expression = expression_matrix,
+  reference = "precog",
+  cancer_type = "BRCA",
+  z_score_cutoff = 2
+)
+
+head(scores)
+```
+
+## Score Single-Cell Data
+
+### From Seurat Object
+
+```{r eval=FALSE}
+library(Seurat)
+
+# Load your Seurat object
+seurat_obj <- readRDS("path/to/seurat.rds")
+
+# Score cells
+scores <- score_expression(
+  expression = seurat_obj,
+  reference = "tcga",
+  cancer_type = "LUAD",
+  assay = "RNA",
+  slot = "data"
+)
+
+# Add scores back to Seurat metadata
+seurat_obj <- add_scores_to_seurat(seurat_obj, scores)
+
+# Visualize
+library(ggplot2)
+FeaturePlot(seurat_obj, features = "weighted_sum_score_tcga_LUAD")
+```
+
+### From SingleCellExperiment
+
+```{r eval=FALSE}
+library(SingleCellExperiment)
+
+# Load SCE object
+sce <- readRDS("path/to/sce.rds")
+
+# Score cells
+scores <- score_expression(
+  expression = sce,
+  reference = "precog",
+  cancer_type = "BRCA",
+  assay = "logcounts"
+)
+
+# Add to colData
+sce <- add_scores_to_sce(sce, scores)
+```
+
+## Pseudobulk Scoring
+
+Aggregate cells before scoring (useful for patient-level or sample-level scores):
+
+```{r eval=FALSE}
+# Aggregate by patient
+scores <- score_expression(
+  expression = seurat_obj,
+  reference = "ici_precog",
+  cancer_type = "MELANOMA_Metastatic",
+  pseudobulk = TRUE,
+  group_by = "patient_id"
+)
+
+# Each row is now a patient, not a cell
+head(scores)
+```
+
+## Spatial Transcriptomics
+
+```{r eval=FALSE}
+# Load spatial Seurat object
+spatial_obj <- readRDS("path/to/spatial.rds")
+
+# Score spatial spots
+scores <- score_expression(
+  expression = spatial_obj,
+  reference = "precog",
+  cancer_type = "BRCA",
+  assay = "Spatial",
+  slot = "counts"
+)
+
+# Visualize on tissue
+spatial_obj <- add_scores_to_seurat(spatial_obj, scores)
+SpatialFeaturePlot(spatial_obj, features = "weighted_sum_score_precog_BRCA")
+```
+
+# Advanced Usage
+
+## Custom Reference Signatures
+
+Use your own gene signatures:
+
+```{r eval=FALSE}
+# Create custom z-score reference
+custom_signature <- data.frame(
+  row.names = c("TP53", "MYC", "EGFR", "BRCA1", "PTEN"),
+  my_signature = c(3.2, -2.5, 2.8, 1.9, -1.7)
+)
+
+# Score with custom signature
+scores <- score_expression(
+  expression = my_expression_matrix,
+  reference = custom_signature,
+  z_score_cutoff = 1.5
+)
+```
+
+## Multiple Cancer Types
+
+Score against multiple cancer types:
+
+```{r eval=FALSE}
+cancer_types <- c("BRCA", "LUAD", "COAD")
+
+all_scores <- lapply(cancer_types, function(ct) {
+  score_expression(
+    expression = expression_matrix,
+    reference = "precog",
+    cancer_type = ct
+  )
+})
+
+# Combine
+all_scores_df <- do.call(cbind, all_scores)
+```
+
+## Check Gene Coverage
+
+Before scoring, check how many of your genes are in the reference:
+
+```{r eval=FALSE}
+my_genes <- rownames(expression_matrix)
+coverage <- get_gene_coverage(my_genes, reference = "precog")
+print(coverage)
+```
+
+## Get Top Prognostic Genes
+
+Extract the most prognostic genes for a cancer type:
+
+```{r eval=FALSE}
+# Top 100 genes for breast cancer
+top_genes <- get_top_prognostic_genes(
+  reference = "precog",
+  cancer_type = "BRCA",
+  n = 100,
+  direction = "both"
+)
+
+# Top positive prognostic genes only
+good_genes <- get_top_prognostic_genes(
+  reference = "precog",
+  cancer_type = "BRCA",
+  n = 50,
+  direction = "positive"
+)
+
+# Top negative prognostic genes
+bad_genes <- get_top_prognostic_genes(
+  reference = "precog",
+  cancer_type = "BRCA",
+  n = 50,
+  direction = "negative"
+)
+```
+
+# Understanding the Scoring Method
+
+The weighted sum score is calculated as:
+
+$$\text{Score}_i = \sum_{g \in G} z_g \times e_{gi}$$
+
+Where:
+- $\text{Score}_i$ is the score for sample/cell $i$
+- $G$ is the set of genes with $|z_g| >$ `z_score_cutoff`
+- $z_g$ is the prognostic z-score for gene $g$
+- $e_{gi}$ is the expression of gene $g$ in sample/cell $i$
+
+Positive scores indicate enrichment of poor-prognosis genes, while negative scores indicate enrichment of good-prognosis genes.
+
+# Normalizing Scores
+
+Convert scores to z-scores for easier interpretation:
+
+```{r eval=FALSE}
+scores$zscore <- normalize_scores(scores[, 1])
+
+# Visualize
+plot_score_distribution(scores$zscore, main = "Normalized Scores")
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

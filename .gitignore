@@ -1,0 +1,19 @@
+# R
+.Rproj.user
+.Rhistory
+.Rdata
+.Ruserdata
+*.Rproj.user/
+
+# macOS
+.DS_Store
+
+# Build / install
+*.o
+*.so
+*.dll
+*.tar.gz
+*.zip
+.Rcheck/
+revdep/
+library/
