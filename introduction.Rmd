@@ -1,6 +1,6 @@
 ---
-title: "Introduction to PrognosticScorer"
-author: "Your Name"
+title: "Introduction to scIMPEL"
+author: "Brooks Benard"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
