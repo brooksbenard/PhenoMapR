@@ -1,4 +1,4 @@
-# pkgdown: build and deploy package site (e.g. to GitHub Pages)
+# pkgdown: build and deploy package site to GitHub Pages
 # https://github.com/r-lib/actions/tree/master/examples
 on:
   push:
@@ -12,6 +12,8 @@ name: pkgdown
 jobs:
   pkgdown:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -25,10 +27,16 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: pkgdown
+          extra-packages: any::pkgdown, local::.
 
-      - name: Build and deploy pkgdown site
-        run: |
-          git config --local user.name "$GITHUB_ACTOR"
-          git config --local user.email "$GITHUB_ACTOR@users.noreply.github.com"
-          Rscript -e 'pkgdown::deploy_to_branch(new_process = FALSE)'
+      - name: Build pkgdown site
+        run: pkgdown::build_site(deploy = FALSE)
+        shell: Rscript {0}
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        with:
+          clean: false
+          branch: gh-pages
+          folder: docs
