@@ -10,6 +10,7 @@ Description: Calculate prognostic scores for bulk, single-cell, and spatial
     transcriptomics data using weighted sum of gene expression and prognostic 
     z-scores from PRECOG, TCGA, and ICI datasets.
 License: MIT + file LICENSE
+URL: https://brooksbenard.github.io/scIMPEL, https://github.com/brooksbenard/scIMPEL
 Encoding: UTF-8
 LazyData: true
 Depends: 
@@ -28,7 +29,8 @@ Suggests:
     reticulate,
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    pkgdown (>= 2.0.0)
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
 VignetteBuilder: knitr

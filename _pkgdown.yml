@@ -1,0 +1,26 @@
+# pkgdown configuration for scIMPEL
+# https://pkgdown.r-lib.org/reference/build_site.html
+
+template:
+  bootstrap: 5
+
+url: https://brooksbenard.github.io/scIMPEL
+
+destination: docs
+
+development:
+  mode: auto
+
+navbar:
+  structure:
+    left: [reference, articles, news]
+    right: [github]
+  components:
+    github:
+      href: https://github.com/brooksbenard/scIMPEL
+      icon: fa-brands fa-github
+      aria-label: View source on GitHub
+
+reference:
+  - title: Reference
+    desc: Function documentation
