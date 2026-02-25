@@ -1,6 +1,6 @@
 # scIMPEL
 
-**S**ingle-**C**ell **IMP**act of **E**xpression on **L**ong-term outcomes — weighted sum prognostic scoring for bulk, single-cell, and spatial transcriptomics using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets.
+**S**ingle **C**ell **IMP**ortance **E**va**L**uator — weighted sum prognostic scoring for bulk, single-cell, and spatial transcriptomics using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets.
 
 ## Installation
 
