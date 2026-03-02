@@ -1,4 +1,4 @@
-<img src="inst/figures/SCIMPEL_logo.png" align="right" width="160" alt="scIMPEL logo" style="pointer-events: none;" />
+<img src="https://raw.githubusercontent.com/brooksbenard/scIMPEL/main/inst/figures/SCIMPEL_logo.png" align="right" width="160" alt="scIMPEL logo" />
 
 # scIMPEL
 
