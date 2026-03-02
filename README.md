@@ -167,6 +167,62 @@ list_cancer_types("ici_precog")
 # Examples: "MELANOMA", "MELANOMA_Metastatic", "NSCLC", etc.
 ```
 
+## Vignette: PAAD single-cell analysis
+
+This example walks through loading the included **PAAD (pancreatic adenocarcinoma) GSE111672** Seurat object, scoring cells with a prognostic reference, and inspecting results. The file `PAAD_GSE111672_seurat.rds` is provided in the repository.
+
+```r
+library(PhenoMap)
+library(Seurat)
+
+# Load the PAAD single-cell dataset (place PAAD_GSE111672_seurat.rds in your working directory)
+seurat <- readRDS("PAAD_GSE111672_seurat.rds")
+
+# Score each cell with PRECOG pancreatic adenocarcinoma prognostic z-scores
+scores <- score_expression(
+  expression = seurat,
+  reference = "precog",
+  cancer_type = "PAAD",
+  assay = "RNA",
+  slot = "data",
+  verbose = TRUE
+)
+
+# Attach scores to Seurat metadata for downstream plotting and subsetting
+seurat <- add_scores_to_seurat(seurat, scores)
+
+# Quick look at score distribution
+head(scores)
+summary(scores[, 1])
+
+# Optional: plot score distribution
+plot_score_distribution(scores, main = "PAAD GSE111672 — PRECOG prognostic score")
+```
+
+**Defining prognostic groups and marker genes (optional)**  
+Identify cells in the top and bottom 5% by score (adverse vs. favorable prognosis) and find marker genes with Seurat:
+
+```r
+# Define adverse (top 5%) and favorable (bottom 5%) prognostic groups
+groups <- define_prognostic_groups(scores, percentile = 0.05)
+
+# Inspect group counts
+score_col <- names(scores)[1]
+table(groups[[paste0("prognostic_group_", score_col)]])
+
+# Find marker genes (requires Seurat)
+markers <- find_prognostic_markers(
+  seurat,
+  group_labels = groups,
+  group_column = paste0("prognostic_group_", score_col),
+  cell_id_column = "cell_id"
+)
+head(markers$adverse_markers)
+head(markers$favorable_markers)
+```
+
+Interpretation: higher scores correspond to worse prognosis (adverse); lower scores to better prognosis (favorable). The derived groups and markers can be used for visualization (e.g. UMAP colored by score or group) and biological interpretation.
+
 ## Advanced Usage
 
 ### Custom Reference Data
@@ -184,6 +240,31 @@ scores <- score_expression(
 )
 ```
 
+### Derive reference from bulk expression and phenotype
+If you have bulk expression (samples × genes) and a phenotype (e.g. response R/NR, survival, or continuous), you can derive gene-level z-scores and use them as the reference for scoring single-cell or spatial data. The function cleans gene names to HUGO symbols, checks/normalizes expression, then computes association z-scores (Cox for survival, logistic regression for binary, correlation for continuous).
+```r
+# Bulk: samples in rows, genes in columns
+bulk_expr <- matrix(...)   # e.g. 50 samples × 5000 genes
+pheno <- data.frame(
+  sample_id = rownames(bulk_expr),
+  response = c("R", "NR", ...)  # or time + event for survival
+)
+
+# Derive reference z-scores
+ref <- derive_reference_from_bulk(
+  bulk_expression = bulk_expr,
+  phenotype = pheno,
+  sample_id_column = "sample_id",
+  phenotype_column = "response",
+  phenotype_type = "binary"   # or "survival", "continuous", "auto"
+)
+
+# Score single-cell or spatial data with the derived reference
+scores <- score_expression(expression = my_seurat, reference = ref)
+```
+
+For survival, provide `survival_time` and `survival_event` column names and set `phenotype_type = "survival"`. Optional: install `HGNChelper` for HUGO symbol cleaning and `survival` for Cox models.
+
 ### Pseudobulk Aggregation
 ```r
 # Aggregate single cells by patient before scoring
@@ -193,17 +274,6 @@ scores <- score_expression(
   cancer_type = "LUAD",
   pseudobulk = TRUE,
   group_by = "patient_id"
-)
-```
-
-### Automatic Dataset Mapping
-If you have the `datasets_info` table configured:
-```r
-scores <- score_expression(
-  expression = my_seurat,
-  reference = "precog",
-  use_dataset_info = TRUE,
-  dataset = "my_dataset_name"
 )
 ```
 
@@ -273,8 +343,6 @@ plot_score_distribution(scores, main = "BRCA Prognostic Scores")
 - **group_by**: Grouping variable for pseudobulk
 - **assay**: Assay name for Seurat/SCE objects
 - **slot**: Seurat slot ("data", "counts", "scale.data")
-- **use_dataset_info**: Use automatic cancer type mapping
-- **dataset**: Dataset name for mapping
 - **verbose**: Print progress messages
 
 ## Output Format
