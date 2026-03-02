@@ -1,11 +1,3 @@
-/* Remove link from hex logo in content - make non-clickable */
-.contents img[src*="SCIMPEL_logo"],
-.contents a:has(img[src*="SCIMPEL_logo"]) {
-  pointer-events: none;
-  text-decoration: none !important;
-  border: none !important;
-}
-
 /* Remove link from navbar brand (package title) at top */
 .navbar-brand,
 a.navbar-brand {
