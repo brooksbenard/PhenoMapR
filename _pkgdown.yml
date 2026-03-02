@@ -1,10 +1,10 @@
-# pkgdown configuration for scIMPEL
+# pkgdown configuration for PhenoMap
 # https://pkgdown.r-lib.org/reference/build_site.html
 
 template:
   bootstrap: 5
 
-url: https://brooksbenard.github.io/scIMPEL
+url: https://brooksbenard.github.io/PhenoMap
 
 destination: docs
 
@@ -17,7 +17,7 @@ navbar:
     right: [github]
   components:
     github:
-      href: https://github.com/brooksbenard/scIMPEL
+      href: https://github.com/brooksbenard/PhenoMap
       icon: fa-brands fa-github
       aria-label: View source on GitHub
 

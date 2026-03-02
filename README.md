@@ -1,13 +1,13 @@
-# scIMPEL <a href='https://brooksbenard.github.io/scIMPEL'><img src='inst/figures/SCIMPEL_logo.png' align="right" height="139" /></a>
+# PhenoMap <a href='https://brooksbenard.github.io/PhenoMap'><img src='inst/figures/PhenoMap_logo.png' align="right" height="139" /></a>
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/brooksbenard/scIMPEL/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/scIMPEL/actions)
+[![R-CMD-check](https://github.com/brooksbenard/PhenoMap/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMap/actions)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 
 <!-- badges: end -->
 
-scIMPEL (**S**ingle **C**ell **IMP**ortance **E**va**L**uator) is a semi-supervised method to rank the most prognostically relevant samples, cells, and locations in bulk, single-cell, and spatial transcriptomics data using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets.
+PhenoMap is a semi-supervised method to rank the most prognostically relevant samples, cells, and locations in bulk, single-cell, and spatial transcriptomics data using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets.
 
 ## Installation
 
@@ -15,13 +15,13 @@ Install directly from GitHub (requires the `remotes` package):
 
 ```r
 # Install from GitHub
-remotes::install_github("brooksbenard/scIMPEL")
+remotes::install_github("brooksbenard/PhenoMap")
 ```
 
 Or with devtools:
 
 ```r
-devtools::install_github("brooksbenard/scIMPEL")
+devtools::install_github("brooksbenard/PhenoMap")
 ```
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
@@ -29,7 +29,7 @@ Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed auto
 ## Quick Start
 
 ```r
-library(scIMPEL)
+library(PhenoMap)
 
 # Score a bulk expression matrix
 scores <- score_expression(
@@ -307,4 +307,4 @@ MIT
 
 ## Contributing
 
-Issues and pull requests welcome at https://github.com/bbenard/scIMPEL
+Issues and pull requests welcome at https://github.com/brooksbenard/PhenoMap

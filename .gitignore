@@ -20,3 +20,4 @@ library/
 
 # pkgdown build (site is deployed to gh-pages by GitHub Actions)
 docs/
+Rplots.pdf
