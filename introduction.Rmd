@@ -1,5 +1,5 @@
 ---
-title: "Introduction to scIMPEL"
+title: "Introduction to PhenoMap"
 author: "Brooks Benard"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
