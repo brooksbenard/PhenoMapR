@@ -1,0 +1,7 @@
+/* Remove link from hex logo - make non-clickable and remove link styling */
+.contents img[src*="SCIMPEL_logo"],
+.contents a:has(img[src*="SCIMPEL_logo"]) {
+  pointer-events: none;
+  text-decoration: none !important;
+  border: none !important;
+}

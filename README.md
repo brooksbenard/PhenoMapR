@@ -1,4 +1,4 @@
-<img src="inst/figures/SCIMPEL_logo.png" align="right" width="160" />
+<img src="inst/figures/SCIMPEL_logo.png" align="right" width="160" alt="scIMPEL logo" style="pointer-events: none;" />
 
 # scIMPEL
 
