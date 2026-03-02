@@ -2,34 +2,20 @@ if (!requireNamespace("hexSticker", quietly = TRUE)) {
   install.packages("hexSticker")
 }
 
-if (!requireNamespace("ggplot2", quietly = TRUE)) {
-  install.packages("ggplot2")
-}
-
 library(hexSticker)
-library(ggplot2)
 
-# Simple hex logo for scIMPEL
-p <- ggplot() +
-  geom_text(
-    aes(0, 0, label = "scIMPEL"),
-    size = 8,
-    fontface = "bold"
-  ) +
-  xlim(-1, 1) +
-  ylim(-1, 1) +
-  theme_void()
+hex_logo_path <- path.expand("~/Desktop/scIMPEL/inst/figures/hex_logo.png")
 
 sticker(
-  p,
+  hex_logo_path,
   package = "scIMPEL",
-  p_size = 8,
+  p_size = 20,
+  p_color = "#36454f",
   s_x = 1,
-  s_y = 0.8,
-  s_width = 1.4,
-  s_height = 1.2,
-  h_fill = "#1b2838",
-  h_color = "#66c2a5",
-  filename = "inst/figures/SCIMPEL_logo.png"
+  s_y = 0.85,
+  s_width = 0.75,
+  s_height = 0.75,
+  h_fill = "#fff",
+  h_color = "#536878",
+  filename = path.expand("~/Desktop/scIMPEL/inst/figures/SCIMPEL_logo.png")
 )
-
