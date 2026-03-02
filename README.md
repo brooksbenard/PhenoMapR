@@ -7,7 +7,7 @@
 
 <!-- badges: end -->
 
-PhenoMap is a semi-supervised method to rank the most prognostically relevant samples, cells, and locations in bulk, single-cell, and spatial transcriptomics data using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets.
+PhenoMap is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMap nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
 
 ## Installation
 
