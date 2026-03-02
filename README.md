@@ -1,4 +1,4 @@
-# scIMPEL: A framework for weighted sum prognostic scoring in bulk, single-cell, and spatial transcriptomics <a href='https://brooksbenard.github.io/scIMPEL'><img src='inst/figures/SCIMPEL_logo.png' align="right" height="139" /></a>
+# scIMPEL <a href='https://brooksbenard.github.io/scIMPEL'><img src='inst/figures/SCIMPEL_logo.png' align="right" height="139" /></a>
 
 <!-- badges: start -->
 
