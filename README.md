@@ -1,7 +1,8 @@
-| | |
-|:---:|---|
-| <img src="inst/figures/SCIMPEL_logo.png" width="120" /> | # scIMPEL |
-| | **S**ingle **C**ell **IMP**ortance **E**va**L**uator — a semi-supervised method to rank the most prognostically relevant samples, cells, and locations in bulk, single-cell, and spatial transcriptomics data using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets. |
+<img src="inst/figures/SCIMPEL_logo.png" align="right" width="160" />
+
+# scIMPEL
+
+scIMPEL (**S**ingle **C**ell **IMP**ortance **E**va**L**uator) is a semi-supervised method to rank the most prognostically relevant samples, cells, and locations in bulk, single-cell, and spatial transcriptomics data using gene expression and prognostic z-scores from PRECOG, TCGA, Pediatric, and ICI reference datasets.
 
 ## Installation
 
