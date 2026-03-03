@@ -11,7 +11,7 @@ PhenoMap is a semi-supervised method to map phenotypes associated with bulk gene
 
 ![PhenoMap schematic](inst/figures/PhenoMap_schematic.png)
 
-<details>
+<details markdown="1">
 <summary><b>Installation</b></summary>
 
 Install directly from GitHub (requires the `remotes` package):
@@ -31,7 +31,7 @@ Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed auto
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Quick Start</b></summary>
 
 ```r
@@ -73,7 +73,7 @@ scores <- score_expression(
 - **Custom Signatures**: Use your own z-score references
 - **Efficient**: Vectorized operations for fast scoring
 
-<details>
+<details markdown="1">
 <summary><b>Supported Input Types</b></summary>
 
 ### 1. Matrix/Data.frame
@@ -142,7 +142,7 @@ scores <- score_expression(
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Reference Datasets</b></summary>
 
 Prognostic meta-z scores and cancer-type labels in PhenoMap are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)). Additional citations for the underlying data and methods:
@@ -181,7 +181,7 @@ list_cancer_types("ici_precog")
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Vignette: PAAD single-cell analysis</b></summary>
 
 This example walks through loading the included **PAAD (pancreatic adenocarcinoma) GSE111672** Seurat object, scoring cells with a prognostic reference, and inspecting results. The file `PAAD_GSE111672_seurat.rds` is provided in the repository.
@@ -240,7 +240,7 @@ Interpretation: higher scores correspond to worse prognosis (adverse); lower sco
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Advanced Usage</b></summary>
 
 ### Custom Reference Data
@@ -326,7 +326,7 @@ head(markers$favorable_markers) # genes enriched in bottom 5% (best prognosis)
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Utility Functions</b></summary>
 
 ### Check Gene Coverage
@@ -354,7 +354,7 @@ plot_score_distribution(scores, main = "BRCA Prognostic Scores")
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Parameters</b></summary>
 
 ### `score_expression()`
@@ -371,7 +371,7 @@ plot_score_distribution(scores, main = "BRCA Prognostic Scores")
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Output Format</b></summary>
 
 Returns a data.frame with:
@@ -390,7 +390,7 @@ head(scores)
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Citation</b></summary>
 
 If you use PhenoMap, please cite the package and the reference datasets:
@@ -401,7 +401,7 @@ If you use PhenoMap, please cite the package and the reference datasets:
 
 </details>
 
-<details>
+<details markdown="1">
 <summary><b>Session info (example)</b></summary>
 
 Reproducibility summary from a typical session after `library(PhenoMap)`:
