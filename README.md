@@ -404,40 +404,43 @@ If you use PhenoMapR, please cite the package and the reference datasets:
 </details>
 
 <details markdown="1">
-<summary><b>Session info (example)</b></summary>
+<summary><b>Session info</b></summary>
 
-Reproducibility summary from a typical session after `library(PhenoMapR)`:
+Session info when `PhenoMapR` 0.1.0 was last built and checked locally:
 
-```r
-sessionInfo()
-```
-
-Example output:
-
-```
-R version 4.4.x (YYYY-MM-DD)
-Platform: x86_64-pc-linux-gnu (64-bit)
-Running under: ...
+```text
+ℹ Loading PhenoMapR
+R version 4.5.2 (2025-10-31)
+Platform: aarch64-apple-darwin20
+Running under: macOS Tahoe 26.2
 
 Matrix products: default
-BLAS:   ...
-LAPACK: ...
+BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 
 locale:
- [1] LC_CTYPE=en_US.UTF-8    LC_NUMERIC=C            LC_TIME=en_US.UTF-8
- [4] LC_COLLATE=en_US.UTF-8  LC_MONETARY=en_US.UTF-8 LC_MESSAGES=en_US.UTF-8
- [7] LC_PAPER=en_US.UTF-8    LC_NAME=C                LC_ADDRESS=C
-[10] LC_TELEPHONE=C         LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+[1] C.UTF-8/C.UTF-8/C.UTF-8/C/C.UTF-8/C.UTF-8
+
+time zone: America/Los_Angeles
+tzcode source: internal
 
 attached base packages:
-[1] stats     graphics  grDevices utils     datasets  methods   base
+[1] stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
-[1] PhenoMapR_0.1.0   dplyr_xxx         Matrix_xxx        glue_xxx
-[5] progress_xxx
+[1] PhenoMapR_0.1.0
 
 loaded via a namespace (and not attached):
-[1] ...
+ [1] crayon_1.5.3      vctrs_0.7.1       cli_3.6.5         rlang_1.1.7      
+ [5] purrr_1.2.1       pkgload_1.5.0     generics_0.1.4    glue_1.8.0       
+ [9] prettyunits_1.2.0 rprojroot_2.1.1   pkgbuild_1.4.8    hms_1.1.4        
+[13] grid_4.5.2        tibble_3.3.1      ellipsis_0.3.2    fastmap_1.2.0    
+[17] progress_1.2.3    lifecycle_1.0.5   memoise_2.0.1     compiler_4.5.2   
+[21] dplyr_1.2.0       fs_1.6.6          sessioninfo_1.2.3 pkgconfig_2.0.3  
+[25] rstudioapi_0.18.0 lattice_0.22-9    R6_2.6.1          tidyselect_1.2.1 
+[29] usethis_3.2.1     pillar_1.11.1     magrittr_2.0.4    Matrix_1.7-4     
+[33] tools_4.5.2       devtools_2.4.6    remotes_2.5.0     cachem_1.1.0     
+[37] desc_1.4.3       
 ```
 
 To capture your own session info (e.g. for issues or reports):
