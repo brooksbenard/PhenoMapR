@@ -409,6 +409,8 @@ resolve_group_labels <- function(group_labels,
 
 
 #' Default value when NULL
+#' @name or-null
+#' @aliases %||%
 #' @keywords internal
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x

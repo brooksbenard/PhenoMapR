@@ -72,8 +72,8 @@ z-scores that can be used as a custom reference in \code{\link{score_expression}
 \details{
 Steps: (1) clean gene names to approved HUGO symbols, (2) check if expression
 is already normalized/scaled and normalize if needed, (3) compute phenotype
-association z-scores per gene (Cox for survival, t-test for binary,
-correlation for continuous).
+association z-scores per gene (Cox for survival, logistic regression for
+binary, correlation for continuous).
 }
 \examples{
 \dontrun{

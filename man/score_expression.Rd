@@ -48,21 +48,21 @@ pseudobulk = TRUE. For Seurat/SCE objects, should be a metadata column.}
 \item{assay}{Assay name for Seurat/SCE objects (default: "RNA" for sc,
 "Spatial" for spatial)}
 
+\item{slot}{Data layer for Seurat objects: "data" for normalized,
+"counts" for raw, "scale.data" for scaled (default: "data").
+In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot.
+The function handles both automatically.}
+
 \item{use_dataset_info}{Logical. If TRUE, use built-in dataset mapping
 (default: FALSE). Requires 'dataset' parameter.}
 
 \item{dataset}{Dataset name for automatic cancer type mapping (optional)}
 
 \item{verbose}{Logical. Print progress messages (default: TRUE)}
-
-\item{slot/layer}{Data layer for Seurat objects: "data" for normalized,
-"counts" for raw, "scale.data" for scaled (default: "data").
-Note: In Seurat v5+, this uses the 'layer' parameter; in Seurat v4,
-this uses the 'slot' parameter. The function handles both automatically.}
 }
 \value{
 A data.frame with samples/cells as rows and score columns. Column
-names follow pattern: "weighted_sum_score_{reference}_{cancer_type}"
+names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}
 }
 \description{
 Calculate weighted sum scores for expression data using prognostic z-scores

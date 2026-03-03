@@ -3,3 +3,5 @@
 ^GITHUB_SETUP\.md$
 ^docs$
 ^_pkgdown\.yml$
+^\.github$
+^.*~\$

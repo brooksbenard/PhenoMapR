@@ -25,17 +25,17 @@
 #'   pseudobulk = TRUE. For Seurat/SCE objects, should be a metadata column.
 #' @param assay Assay name for Seurat/SCE objects (default: "RNA" for sc, 
 #'   "Spatial" for spatial)
-#' @param slot/layer Data layer for Seurat objects: "data" for normalized, 
+#' @param slot Data layer for Seurat objects: "data" for normalized, 
 #'   "counts" for raw, "scale.data" for scaled (default: "data"). 
-#'   Note: In Seurat v5+, this uses the 'layer' parameter; in Seurat v4, 
-#'   this uses the 'slot' parameter. The function handles both automatically.
+#'   In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot. 
+#'   The function handles both automatically.
 #' @param use_dataset_info Logical. If TRUE, use built-in dataset mapping 
 #'   (default: FALSE). Requires 'dataset' parameter.
 #' @param dataset Dataset name for automatic cancer type mapping (optional)
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #'
 #' @return A data.frame with samples/cells as rows and score columns. Column 
-#'   names follow pattern: "weighted_sum_score_{reference}_{cancer_type}"
+#'   names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}
 #'
 #' @examples
 #' \dontrun{
@@ -231,8 +231,8 @@ get_cancer_type_from_dataset <- function(dataset, reference) {
   )
   
   cancer_type <- datasets_info %>%
-    dplyr::filter(dataset_name == dataset) %>%
-    dplyr::pull(!!label_col)
+    dplyr::filter(.data[["dataset_name"]] == .env[["dataset"]]) %>%
+    dplyr::pull(dplyr::all_of(label_col))
   
   if (length(cancer_type) == 0 || is.na(cancer_type)) {
     stop(glue::glue("No {reference} label found for dataset '{dataset}'"))

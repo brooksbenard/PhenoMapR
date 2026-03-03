@@ -2,11 +2,11 @@
 % Please edit documentation in R/derive_reference.R
 \name{z_scores_binary}
 \alias{z_scores_binary}
-\title{Z-scores from two-group t-test per gene}
+\title{Z-scores from logistic regression per gene (binary outcome)}
 \usage{
 z_scores_binary(expr, group, verbose = TRUE)
 }
 \description{
-Z-scores from two-group t-test per gene
+Z-scores from logistic regression per gene (binary outcome)
 }
 \keyword{internal}
