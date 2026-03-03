@@ -9,31 +9,37 @@
 
 <!-- badges: end -->
 
-PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMapR nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
+PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression onto bulk, single cell, and spatial transcriptomics data. PhenoMapR nominates and rank-orders samples, cells, and spatial locations associated with gene expression signatures that are correlated with a phenotype of interest (e.g. overall survival).
 
 <p align="center">
   <img src="inst/figures/PhenoMapR_visualization.png" alt="PhenoMapR visualization" width="420" />
 </p>
 
-## Features
+## Introduction
 
-- **Multiple Input Formats**: Supports matrices, data.frames, Seurat objects, SingleCellExperiment, SpatialExperiment, and AnnData
-- **Multiple References**: PRECOG, TCGA, Pediatric, and ICI prognostic datasets
-- **Flexible Scoring**: Cell-level or pseudobulk scoring
-- **Custom Signatures**: Use your own z-score references
-- **Efficient**: Vectorized operations for fast scoring
+Single-cell and spatial transcriptomics methods provide an improved understanding of the cell types and spatial organization underlying healthy and malignant biology. However, many single-cell and spatial studies lack sufficient sample size for robust associations between a sample phenotype (e.g. overall survival) and cell types or spatial locations. In contrast, lower resolution methods such as bulk gene expression profiling have been applied at scale in large, clinically-annotated datasets, providing robust signatures for phenotype associations. PhenoMapR bridges this gap between the improved resolution of single-cell/spatial approaches and the bulk phenotype signals by mapping the phenotypic signal directly onto individual cells and spatial locations.
+
+PhenoMapR has some benificial functionality: 
+
+- **Works with Multiple Input Formats**: Supports matrices, data.frames, Seurat objects, SingleCellExperiment, SpatialExperiment, and AnnData
+- **Built-in Bulk Cancer Phenotype References**: Adult PRECOG, TCGA, Pediatric PRECOG, and ICI PRECOG datasets
+- **Flexible Scoring**: Cell/spot-level or sample pseudobulk scoring
+- **Custom Signatures**: Generate and/or use your own z-score references
+- **Efficient**: Optimized approach for fast scoring
 
 ## Installation
 
 ```r
+# Download **PhenoMapR** using the following:
 if (!require(devtools)) install.packages("devtools")
 devtools::install_github("brooksbenard/PhenoMapR")
 ```
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
 
-<details markdown="1">
-<summary><b>Quick Start</b></summary>
+## Getting Started
+
+The primary function of PhenoMapR is `score_expression()`. The basic use of this function takes a `gene x sample/cell/spot` expression file **+** reference phenotype `gene x z-score signature` and generates a `PhenoMapR score x sample/cell/spot` dataframe. For single-cell and spatial inputs, a sample-level PhenoMap score can be generated using the pseudobulk argument.
 
 **`score_expression()` arguments**
 
@@ -48,6 +54,7 @@ Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed auto
 - **verbose**: Print progress messages
 
 ```r
+# Load **PhenoMapR** in your R session using:
 library(PhenoMapR)
 
 # Score a bulk expression matrix
@@ -75,8 +82,6 @@ scores <- score_expression(
   group_by = "patient_id"
 )
 ```
-
-</details>
 
 <details markdown="1">
 <summary><b>Supported Input Types</b></summary>
