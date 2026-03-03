@@ -9,32 +9,41 @@
 
 <!-- badges: end -->
 
-PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMap nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
+PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMapR nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
 
-![PhenoMapR schematic](inst/figures/PhenoMapR_schematic.png)
+![PhenoMapR visualization](inst/figures/PhenoMapR_visualization.png)
 
-<details markdown="1">
-<summary><b>Installation</b></summary>
+## Features
 
-Install directly from GitHub (requires the `remotes` package):
+- **Multiple Input Formats**: Supports matrices, data.frames, Seurat objects, SingleCellExperiment, SpatialExperiment, and AnnData
+- **Multiple References**: PRECOG, TCGA, Pediatric, and ICI prognostic datasets
+- **Flexible Scoring**: Cell-level or pseudobulk scoring
+- **Custom Signatures**: Use your own z-score references
+- **Efficient**: Vectorized operations for fast scoring
 
-```r
-# Install from GitHub
-remotes::install_github("brooksbenard/PhenoMapR")
-```
-
-Or with devtools:
+## Installation
 
 ```r
+if (!require(devtools)) install.packages("devtools")
 devtools::install_github("brooksbenard/PhenoMapR")
 ```
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
 
-</details>
-
 <details markdown="1">
 <summary><b>Quick Start</b></summary>
+
+**`score_expression()` arguments**
+
+- **expression**: Expression data (matrix, Seurat, SCE, etc.)
+- **reference**: Reference dataset name or custom data.frame
+- **cancer_type**: Cancer type label (required for built-in references)
+- **z_score_cutoff**: Absolute z-score threshold (default: 2)
+- **pseudobulk**: Aggregate before scoring? (default: FALSE)
+- **group_by**: Grouping variable for pseudobulk
+- **assay**: Assay name for Seurat/SCE objects
+- **slot**: Seurat slot ("data", "counts", "scale.data")
+- **verbose**: Print progress messages
 
 ```r
 library(PhenoMapR)
@@ -66,14 +75,6 @@ scores <- score_expression(
 ```
 
 </details>
-
-## Features
-
-- **Multiple Input Formats**: Supports matrices, data.frames, Seurat objects, SingleCellExperiment, SpatialExperiment, and AnnData
-- **Multiple References**: PRECOG, TCGA, Pediatric, and ICI prognostic datasets
-- **Flexible Scoring**: Cell-level or pseudobulk scoring
-- **Custom Signatures**: Use your own z-score references
-- **Efficient**: Vectorized operations for fast scoring
 
 <details markdown="1">
 <summary><b>Supported Input Types</b></summary>
@@ -180,6 +181,20 @@ list_cancer_types("ici_precog")
 # Format: "CANCER" or "CANCER_Metastatic"
 # Examples: "MELANOMA", "MELANOMA_Metastatic", "NSCLC", etc.
 ```
+
+</details>
+
+<details markdown="1">
+<summary><b>Under the hood</b></summary>
+
+![PhenoMapR schematic](inst/figures/PhenoMapR_schematic.png)
+
+At a high level, PhenoMapR:
+
+- **Combines pan-cancer prognostic meta-z scores** from PRECOG with your expression matrix.
+- **Filters to strongly prognostic genes** (by |z-score|) and aligns gene sets between reference and query data.
+- **Computes weighted-sum scores** per sample/cell/spot, where weights are prognostic z-scores.
+- **Optionally defines prognostic groups and markers**, by slicing the score distribution (e.g. top/bottom 5%) and running differential expression.
 
 </details>
 
@@ -325,51 +340,6 @@ markers <- find_prognostic_markers(
 head(markers$adverse_markers)   # genes enriched in top 5% (worst prognosis)
 head(markers$favorable_markers) # genes enriched in bottom 5% (best prognosis)
 ```
-
-</details>
-
-<details markdown="1">
-<summary><b>Utility Functions</b></summary>
-
-### Check Gene Coverage
-```r
-my_genes <- rownames(expression_matrix)
-coverage <- get_gene_coverage(my_genes)
-print(coverage)
-```
-
-### Get Top Prognostic Genes
-```r
-# Top 100 genes for breast cancer
-top_genes <- get_top_prognostic_genes(
-  reference = "precog",
-  cancer_type = "BRCA",
-  n = 100,
-  direction = "both"  # or "positive" or "negative"
-)
-```
-
-### Visualize Scores
-```r
-plot_score_distribution(scores, main = "BRCA Prognostic Scores")
-```
-
-</details>
-
-<details markdown="1">
-<summary><b>Parameters</b></summary>
-
-### `score_expression()`
-
-- **expression**: Expression data (matrix, Seurat, SCE, etc.)
-- **reference**: Reference dataset name or custom data.frame
-- **cancer_type**: Cancer type label (required for built-in references)
-- **z_score_cutoff**: Absolute z-score threshold (default: 2)
-- **pseudobulk**: Aggregate before scoring? (default: FALSE)
-- **group_by**: Grouping variable for pseudobulk
-- **assay**: Assay name for Seurat/SCE objects
-- **slot**: Seurat slot ("data", "counts", "scale.data")
-- **verbose**: Print progress messages
 
 </details>
 
