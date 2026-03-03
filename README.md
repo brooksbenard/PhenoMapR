@@ -11,7 +11,8 @@ PhenoMap is a semi-supervised method to map phenotypes associated with bulk gene
 
 ![PhenoMap schematic](inst/figures/PhenoMap_schematic.png)
 
-## Installation
+<details>
+<summary><b>Installation</b></summary>
 
 Install directly from GitHub (requires the `remotes` package):
 
@@ -28,7 +29,10 @@ devtools::install_github("brooksbenard/PhenoMap")
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
 
-## Quick Start
+</details>
+
+<details>
+<summary><b>Quick Start</b></summary>
 
 ```r
 library(PhenoMap)
@@ -59,6 +63,8 @@ scores <- score_expression(
 )
 ```
 
+</details>
+
 ## Features
 
 - **Multiple Input Formats**: Supports matrices, data.frames, Seurat objects, SingleCellExperiment, SpatialExperiment, and AnnData
@@ -67,7 +73,8 @@ scores <- score_expression(
 - **Custom Signatures**: Use your own z-score references
 - **Efficient**: Vectorized operations for fast scoring
 
-## Supported Input Types
+<details>
+<summary><b>Supported Input Types</b></summary>
 
 ### 1. Matrix/Data.frame
 ```r
@@ -133,14 +140,20 @@ scores <- score_expression(
 )
 ```
 
-## Reference Datasets
+</details>
+
+<details>
+<summary><b>Reference Datasets</b></summary>
+
+Prognostic meta-z scores and cancer-type labels in PhenoMap are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)). Additional citations for the underlying data and methods:
+
+- **PRECOG / TCGA (pan-cancer meta-z and TCGA z-scores)**: [Gentles et al., *Nature Medicine* 2015](https://www.nature.com/articles/nm.3909) — The prognostic landscape of genes and infiltrating immune cells across human cancers.
+- **Pediatric PRECOG**: [Stahl et al., *Cancers* 2021](https://www.mdpi.com/2072-6694/13/4/854).
 
 ### PRECOG
-Pan-cancer prognostic meta-analysis from Gentles et al. (2015).
+Pan-cancer prognostic meta-analysis (meta-z scores from PRECOG 2.0 / Gentles et al.).
 ```r
-# List available cancer types
 list_cancer_types("precog")
-
 # Examples: "BRCA", "LUAD", "COAD", "PRAD", etc.
 ```
 
@@ -148,7 +161,6 @@ list_cancer_types("precog")
 TCGA survival analysis z-scores.
 ```r
 list_cancer_types("tcga")
-
 # Examples: "BRCA", "LUAD", "UCEC", "KIRC", etc.
 ```
 
@@ -156,20 +168,21 @@ list_cancer_types("tcga")
 Pediatric cancer prognostic signatures.
 ```r
 list_cancer_types("pediatric_precog")
-
 # Examples: "Neuroblastoma", "Medulloblastoma", etc.
 ```
 
 ### ICI (Immune Checkpoint Inhibitor)
-Response predictions for immunotherapy patients.
+Response-related signatures for immunotherapy patients.
 ```r
 list_cancer_types("ici_precog")
-
 # Format: "CANCER" or "CANCER_Metastatic"
 # Examples: "MELANOMA", "MELANOMA_Metastatic", "NSCLC", etc.
 ```
 
-## Vignette: PAAD single-cell analysis
+</details>
+
+<details>
+<summary><b>Vignette: PAAD single-cell analysis</b></summary>
 
 This example walks through loading the included **PAAD (pancreatic adenocarcinoma) GSE111672** Seurat object, scoring cells with a prognostic reference, and inspecting results. The file `PAAD_GSE111672_seurat.rds` is provided in the repository.
 
@@ -225,7 +238,10 @@ head(markers$favorable_markers)
 
 Interpretation: higher scores correspond to worse prognosis (adverse); lower scores to better prognosis (favorable). The derived groups and markers can be used for visualization (e.g. UMAP colored by score or group) and biological interpretation.
 
-## Advanced Usage
+</details>
+
+<details>
+<summary><b>Advanced Usage</b></summary>
 
 ### Custom Reference Data
 ```r
@@ -308,7 +324,10 @@ head(markers$adverse_markers)   # genes enriched in top 5% (worst prognosis)
 head(markers$favorable_markers) # genes enriched in bottom 5% (best prognosis)
 ```
 
-## Utility Functions
+</details>
+
+<details>
+<summary><b>Utility Functions</b></summary>
 
 ### Check Gene Coverage
 ```r
@@ -333,7 +352,10 @@ top_genes <- get_top_prognostic_genes(
 plot_score_distribution(scores, main = "BRCA Prognostic Scores")
 ```
 
-## Parameters
+</details>
+
+<details>
+<summary><b>Parameters</b></summary>
 
 ### `score_expression()`
 
@@ -347,7 +369,10 @@ plot_score_distribution(scores, main = "BRCA Prognostic Scores")
 - **slot**: Seurat slot ("data", "counts", "scale.data")
 - **verbose**: Print progress messages
 
-## Output Format
+</details>
+
+<details>
+<summary><b>Output Format</b></summary>
 
 Returns a data.frame with:
 - Rows: samples/cells
@@ -363,13 +388,67 @@ head(scores)
 # Cell_3                                   -42.1
 ```
 
-## Citation
+</details>
 
-If you use this package, please cite the relevant reference datasets:
+<details>
+<summary><b>Citation</b></summary>
 
-**PRECOG**: Gentles et al. (2015). The prognostic landscape of genes and infiltrating immune cells across human cancers. *Cell* 163(5):1193-1205.
+If you use PhenoMap, please cite the package and the reference datasets:
 
-**TCGA**: The Cancer Genome Atlas Research Network
+- **PhenoMap / PRECOG 2.0 (meta-z scores)**: Benard B et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research* (2026). [https://academic.oup.com/nar/article/54/D1/D1579/8324954](https://academic.oup.com/nar/article/54/D1/D1579/8324954)
+- **PRECOG / TCGA**: Gentles AJ et al. The prognostic landscape of genes and infiltrating immune cells across human cancers. *Nature Medicine* 21, 938–945 (2015). [https://www.nature.com/articles/nm.3909](https://www.nature.com/articles/nm.3909)
+- **Pediatric PRECOG**: Stahl et al. *Cancers* 13(4), 854 (2021). [https://www.mdpi.com/2072-6694/13/4/854](https://www.mdpi.com/2072-6694/13/4/854)
+
+</details>
+
+<details>
+<summary><b>Session info (example)</b></summary>
+
+Reproducibility summary from a typical session after `library(PhenoMap)`:
+
+```r
+sessionInfo()
+```
+
+Example output:
+
+```
+R version 4.4.x (YYYY-MM-DD)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: ...
+
+Matrix products: default
+BLAS:   ...
+LAPACK: ...
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8    LC_NUMERIC=C            LC_TIME=en_US.UTF-8
+ [4] LC_COLLATE=en_US.UTF-8  LC_MONETARY=en_US.UTF-8 LC_MESSAGES=en_US.UTF-8
+ [7] LC_PAPER=en_US.UTF-8    LC_NAME=C                LC_ADDRESS=C
+[10] LC_TELEPHONE=C         LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+other attached packages:
+[1] PhenoMap_0.1.0   dplyr_xxx         Matrix_xxx        glue_xxx
+[5] progress_xxx
+
+loaded via a namespace (and not attached):
+[1] ...
+```
+
+To capture your own session info (e.g. for issues or reports):
+
+```r
+# Minimal
+sessionInfo()
+
+# With devtools (packages and versions)
+devtools::session_info()
+```
+
+</details>
 
 ## License
 

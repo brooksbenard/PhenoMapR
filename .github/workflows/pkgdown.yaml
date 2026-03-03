@@ -30,7 +30,7 @@ jobs:
           extra-packages: any::pkgdown, local::.
 
       - name: Build pkgdown site
-        run: pkgdown::build_site(deploy = FALSE)
+        run: pkgdown::build_site()
         shell: Rscript {0}
 
       - name: Deploy to GitHub Pages
