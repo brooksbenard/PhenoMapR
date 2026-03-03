@@ -30,7 +30,7 @@ PhenoMapR has some benificial functionality:
 ## Installation
 
 ```r
-# Download **PhenoMapR** using the following:
+# Download PhenoMapR using the following:
 if (!require(devtools)) install.packages("devtools")
 devtools::install_github("brooksbenard/PhenoMapR")
 ```
