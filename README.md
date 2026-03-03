@@ -351,25 +351,6 @@ head(markers$favorable_markers) # genes enriched in bottom 5% (best prognosis)
 </details>
 
 <details markdown="1">
-<summary><b>Output Format</b></summary>
-
-Returns a data.frame with:
-- Rows: samples/cells
-- Columns: scores named `weighted_sum_score_{reference}_{cancer_type}`
-
-```r
-scores <- score_expression(...)
-
-head(scores)
-#                    weighted_sum_score_precog_BRCA
-# Cell_1                                   234.5
-# Cell_2                                   189.3
-# Cell_3                                   -42.1
-```
-
-</details>
-
-<details markdown="1">
 <summary><b>Citation</b></summary>
 
 If you use PhenoMapR, please cite the package and the reference datasets:
