@@ -1,4 +1,4 @@
-Package: PhenoMap
+Package: PhenoMapR
 Type: Package
 Title: Weighted Sum Scoring for Prognostic Gene Signatures
 Version: 0.1.0
@@ -10,7 +10,7 @@ Description: Calculate prognostic scores for bulk, single-cell, and spatial
     transcriptomics data using weighted sum of gene expression and prognostic 
     z-scores from PRECOG, TCGA, and ICI datasets.
 License: MIT + file LICENSE
-URL: https://brooksbenard.github.io/PhenoMap, https://github.com/brooksbenard/PhenoMap
+URL: https://brooksbenard.github.io/PhenoMapR, https://github.com/brooksbenard/PhenoMapR
 Encoding: UTF-8
 LazyData: true
 LazyDataCompression: xz

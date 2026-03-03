@@ -1,15 +1,17 @@
-# PhenoMap <a href='https://brooksbenard.github.io/PhenoMap'><img src='inst/figures/PhenoMap_logo.png' align="right" height="139" /></a>
+# PhenoMapR <a href='https://brooksbenard.github.io/PhenoMapR'><img src='inst/figures/PhenoMap_logo.png' align="right" height="139" /></a>
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/brooksbenard/PhenoMap/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMap/actions)
+[![R-CMD-check](https://github.com/brooksbenard/PhenoMapR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMap/actions)
 [![Lifecycle: Experimental](https://img.shields.io/badge/lifecycle-experimental-teal.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Documentation](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://brooksbenard.github.io/PhenoMapR)
 
 <!-- badges: end -->
 
-PhenoMap is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMap nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
+PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMap nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
 
-![PhenoMap schematic](inst/figures/PhenoMap_schematic.png)
+![PhenoMapR schematic](inst/figures/PhenoMap_schematic.png)
 
 <details markdown="1">
 <summary><b>Installation</b></summary>
@@ -18,13 +20,13 @@ Install directly from GitHub (requires the `remotes` package):
 
 ```r
 # Install from GitHub
-remotes::install_github("brooksbenard/PhenoMap")
+remotes::install_github("brooksbenard/PhenoMapR")
 ```
 
 Or with devtools:
 
 ```r
-devtools::install_github("brooksbenard/PhenoMap")
+devtools::install_github("brooksbenard/PhenoMapR")
 ```
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
@@ -35,7 +37,7 @@ Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed auto
 <summary><b>Quick Start</b></summary>
 
 ```r
-library(PhenoMap)
+library(PhenoMapR)
 
 # Score a bulk expression matrix
 scores <- score_expression(
@@ -145,7 +147,7 @@ scores <- score_expression(
 <details markdown="1">
 <summary><b>Reference Datasets</b></summary>
 
-Prognostic meta-z scores and cancer-type labels in PhenoMap are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)). Additional citations for the underlying data and methods:
+Prognostic meta-z scores and cancer-type labels in PhenoMapR are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)). Additional citations for the underlying data and methods:
 
 - **PRECOG / TCGA (pan-cancer meta-z and TCGA z-scores)**: [Gentles et al., *Nature Medicine* 2015](https://www.nature.com/articles/nm.3909) — The prognostic landscape of genes and infiltrating immune cells across human cancers.
 - **Pediatric PRECOG**: [Stahl et al., *Cancers* 2021](https://www.mdpi.com/2072-6694/13/4/854).
@@ -187,7 +189,7 @@ list_cancer_types("ici_precog")
 This example walks through loading the included **PAAD (pancreatic adenocarcinoma) GSE111672** Seurat object, scoring cells with a prognostic reference, and inspecting results. The file `PAAD_GSE111672_seurat.rds` is provided in the repository.
 
 ```r
-library(PhenoMap)
+library(PhenoMapR)
 library(Seurat)
 
 # Load the PAAD single-cell dataset (place PAAD_GSE111672_seurat.rds in your working directory)
@@ -393,9 +395,9 @@ head(scores)
 <details markdown="1">
 <summary><b>Citation</b></summary>
 
-If you use PhenoMap, please cite the package and the reference datasets:
+If you use PhenoMapR, please cite the package and the reference datasets:
 
-- **PhenoMap / PRECOG 2.0 (meta-z scores)**: Benard B et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research* (2026). [https://academic.oup.com/nar/article/54/D1/D1579/8324954](https://academic.oup.com/nar/article/54/D1/D1579/8324954)
+- **PhenoMapR / PRECOG 2.0 (meta-z scores)**: Benard B et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research* (2026). [https://academic.oup.com/nar/article/54/D1/D1579/8324954](https://academic.oup.com/nar/article/54/D1/D1579/8324954)
 - **PRECOG / TCGA**: Gentles AJ et al. The prognostic landscape of genes and infiltrating immune cells across human cancers. *Nature Medicine* 21, 938–945 (2015). [https://www.nature.com/articles/nm.3909](https://www.nature.com/articles/nm.3909)
 - **Pediatric PRECOG**: Stahl et al. *Cancers* 13(4), 854 (2021). [https://www.mdpi.com/2072-6694/13/4/854](https://www.mdpi.com/2072-6694/13/4/854)
 
@@ -404,7 +406,7 @@ If you use PhenoMap, please cite the package and the reference datasets:
 <details markdown="1">
 <summary><b>Session info (example)</b></summary>
 
-Reproducibility summary from a typical session after `library(PhenoMap)`:
+Reproducibility summary from a typical session after `library(PhenoMapR)`:
 
 ```r
 sessionInfo()
@@ -431,7 +433,7 @@ attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base
 
 other attached packages:
-[1] PhenoMap_0.1.0   dplyr_xxx         Matrix_xxx        glue_xxx
+[1] PhenoMapR_0.1.0   dplyr_xxx         Matrix_xxx        glue_xxx
 [5] progress_xxx
 
 loaded via a namespace (and not attached):
@@ -456,4 +458,4 @@ MIT
 
 ## Contributing
 
-Issues and pull requests welcome at https://github.com/brooksbenard/PhenoMap
+Issues and pull requests welcome at https://github.com/brooksbenard/PhenoMapR

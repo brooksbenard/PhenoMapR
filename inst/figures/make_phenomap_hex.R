@@ -8,7 +8,7 @@ hex_logo_path <- file.path("inst", "figures", "PhenoMap_map_logo.png")
 
 sticker(
   hex_logo_path,
-  package = "PhenoMap",
+  package = "PhenoMapR",
   p_size = 20,
   p_color = "#36454f",
   s_x = 1,

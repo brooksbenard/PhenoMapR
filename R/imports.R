@@ -1,6 +1,6 @@
 #' Package imports for base and stats functions
 #'
-#' @name PhenoMap-imports
+#' @name PhenoMapR-imports
 #' @importFrom stats na.omit sd median cor setNames
 #' @importFrom graphics hist abline legend
 #' @importFrom utils data head

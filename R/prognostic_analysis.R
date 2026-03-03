@@ -181,7 +181,7 @@ find_prognostic_markers <- function(expression,
 
   # Get or create Seurat object and add prognostic group
   seurat_obj <- get_or_create_seurat_for_markers(expression, expr_info, group_vec, assay, slot)
-  meta_col <- "PhenoMap_prognostic_group"
+  meta_col <- "PhenoMapR_prognostic_group"
   Seurat::Idents(seurat_obj) <- seurat_obj[[meta_col]][, 1]
 
   # Adverse vs rest
@@ -190,7 +190,7 @@ find_prognostic_markers <- function(expression,
       seurat_obj,
       ident.1 = "adverse",
       ident.2 = NULL,
-      assay = attr(seurat_obj, "PhenoMap_assay") %||% "RNA",
+      assay = attr(seurat_obj, "PhenoMapR_assay") %||% "RNA",
       slot = slot,
       test.use = test.use,
       min.pct = min.pct,
@@ -212,7 +212,7 @@ find_prognostic_markers <- function(expression,
       seurat_obj,
       ident.1 = "favorable",
       ident.2 = NULL,
-      assay = attr(seurat_obj, "PhenoMap_assay") %||% "RNA",
+      assay = attr(seurat_obj, "PhenoMapR_assay") %||% "RNA",
       slot = slot,
       test.use = test.use,
       min.pct = min.pct,
@@ -290,8 +290,8 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
     # Ensure cells in same order as expr_info
     cell_ids <- expr_info$cell_names
     obj <- obj[, cell_ids, drop = FALSE]
-    obj[["PhenoMap_prognostic_group"]] <- group_vec
-    attr(obj, "PhenoMap_assay") <- assay
+    obj[["PhenoMapR_prognostic_group"]] <- group_vec
+    attr(obj, "PhenoMapR_assay") <- assay
     return(obj)
   }
   # Matrix or SCE: create temporary Seurat object
@@ -305,8 +305,8 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
   if (slot == "data") {
     obj <- Seurat::NormalizeData(obj, verbose = FALSE)
   }
-  obj[["PhenoMap_prognostic_group"]] <- group_vec
-  attr(obj, "PhenoMap_assay") <- "RNA"
+  obj[["PhenoMapR_prognostic_group"]] <- group_vec
+  attr(obj, "PhenoMapR_assay") <- "RNA"
   obj
 }
 

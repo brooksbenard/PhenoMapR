@@ -22,7 +22,7 @@ cat("\n")
 ZSCORE_DIR <- "~/Downloads"  # Change this to your z-score file location
 
 # Where you want to create the package
-PACKAGE_DIR <- "~/Desktop/PhenoMap"  # Change if desired
+PACKAGE_DIR <- "~/Desktop/PhenoMapR"  # Change if desired
 
 # Where the package R source files are located (downloaded from outputs)
 SOURCE_FILES_DIR <- "~/Downloads"  # Where you downloaded the .R files

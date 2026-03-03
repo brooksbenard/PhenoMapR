@@ -1,10 +1,10 @@
-# pkgdown configuration for PhenoMap
+# pkgdown configuration for PhenoMapR
 # https://pkgdown.r-lib.org/reference/build_site.html
 
 template:
   bootstrap: 5
 
-url: https://brooksbenard.github.io/PhenoMap
+url: https://brooksbenard.github.io/PhenoMapR
 
 destination: docs
 
@@ -17,7 +17,7 @@ navbar:
     right: [github]
   components:
     github:
-      href: https://github.com/brooksbenard/PhenoMap
+      href: https://github.com/brooksbenard/PhenoMapR
       icon: fa-brands fa-github
       aria-label: View source on GitHub
 
