@@ -21,6 +21,11 @@ navbar:
       icon: fa-brands fa-github
       aria-label: View source on GitHub
 
+footer:
+  structure:
+    left: []
+    right: []
+
 reference:
   - title: Reference
     desc: Function documentation

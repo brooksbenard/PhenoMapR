@@ -4,7 +4,6 @@
 
 [![R-CMD-check](https://github.com/brooksbenard/PhenoMapR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMap/actions)
 [![Lifecycle: Experimental](https://img.shields.io/badge/lifecycle-experimental-teal.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Documentation](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://brooksbenard.github.io/PhenoMapR)
 
 <!-- badges: end -->
@@ -412,11 +411,3 @@ devtools::session_info()
 ```
 
 </details>
-
-## License
-
-MIT
-
-## Contributing
-
-Issues and pull requests welcome at https://github.com/brooksbenard/PhenoMapR
