@@ -1,4 +1,4 @@
-# PhenoMapR <a href='https://brooksbenard.github.io/PhenoMapR'><img src='inst/figures/PhenoMap_logo.png' align="right" height="139" /></a>
+# PhenoMapR <a href='https://brooksbenard.github.io/PhenoMapR'><img src='inst/figures/PhenoMapR_logo.png' align="right" height="139" /></a>
 
 <!-- badges: start -->
 
@@ -11,7 +11,7 @@
 
 PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression data onto bulk, single cell, and spatial transcriptomics data. PhenoMap nominates and rank-orders samples, cells, and spatial locations most associated with gene expression signatures correlated with a phenotype of interest (e.g. overall survival).
 
-![PhenoMapR schematic](inst/figures/PhenoMap_schematic.png)
+![PhenoMapR schematic](inst/figures/PhenoMapR_schematic.png)
 
 <details markdown="1">
 <summary><b>Installation</b></summary>
