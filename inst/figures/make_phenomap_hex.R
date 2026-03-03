@@ -12,7 +12,7 @@ sticker(
   p_size = 20,
   p_color = "#36454f",
   s_x = 1,
-  s_y = 0.85,
+  s_y = 0.72,
   s_width = 0.6,
   s_height = 0.6,
   h_fill = "#fff",
