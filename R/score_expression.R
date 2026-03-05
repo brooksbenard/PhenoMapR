@@ -35,7 +35,9 @@
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #'
 #' @return A data.frame with samples/cells as rows and score columns. Column 
-#'   names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}
+#'   names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}.
+#'   **Directionality**: higher score = worse prognosis (adverse); lower score = 
+#'   better prognosis (favorable), matching positive reference z = worse survival.
 #'
 #' @examples
 #' \dontrun{
@@ -125,7 +127,7 @@ score_expression <- function(expression,
 #' @keywords internal
 get_reference_data <- function(reference, cancer_type, use_dataset_info, dataset) {
   
-  # If reference is a data.frame, use it directly
+  # If reference is a data.frame (e.g. custom from Cox), use as-is
   if (is.data.frame(reference) || is.matrix(reference)) {
     ref_data <- as.data.frame(reference)
     score_name <- if (!is.null(colnames(ref_data))) {
@@ -174,7 +176,7 @@ get_reference_data <- function(reference, cancer_type, use_dataset_info, dataset
   
   score_name <- paste0(reference, "_", colnames(ref_data)[1])
   attr(ref_data, "score_name") <- score_name
-  
+
   return(ref_data)
 }
 

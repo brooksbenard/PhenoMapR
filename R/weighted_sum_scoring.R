@@ -27,48 +27,48 @@ calculate_weighted_scores <- function(expression_matrix,
   
   # Process each column in reference data
   for (j in seq_len(ncol(reference_data))) {
-    
+
     prog_data_sub <- as.data.frame(reference_data[, j, drop = FALSE])
     meta_z_label <- colnames(prog_data_sub)
-    
+
     # Filter by z-score cutoff and remove NAs
     prog_data_sub <- na.omit(prog_data_sub)
     prog_data_sub <- prog_data_sub[
       abs(prog_data_sub[, meta_z_label]) > z_score_cutoff, ,
       drop = FALSE
     ]
-    
+
     if (nrow(prog_data_sub) == 0) {
       warning(glue::glue("No genes pass z-score cutoff of {z_score_cutoff} for {meta_z_label}"))
       next
     }
-    
+
     # Match genes between expression and reference
     common_genes <- intersect(rownames(expression_matrix), rownames(prog_data_sub))
-    
+
     if (length(common_genes) == 0) {
       warning(glue::glue("No common genes found between expression and reference data for {meta_z_label}"))
       next
     }
-    
+
     expression_data <- expression_matrix[common_genes, , drop = FALSE]
     prog_data_sub <- prog_data_sub[common_genes, , drop = FALSE]
-    
+
     if (verbose) {
       cat(glue::glue("{length(common_genes)} genes used for scoring against {meta_z_label}
 "))
       cat("Calculating scores...
 ")
     }
-    
-    # Calculate scores
+
+    # Weighted sum: higher score = worse prognosis when reference has positive z = adverse
     score_vector <- compute_scores(
       expression_data = expression_data,
       prognostic_scores = prog_data_sub[, 1],
       pseudobulk = pseudobulk,
       verbose = verbose
     )
-    
+
     # Add to results
     score_col_name <- paste0("weighted_sum_score_", meta_z_label)
     scores_all[[score_col_name]] <- score_vector
@@ -89,7 +89,9 @@ calculate_weighted_scores <- function(expression_matrix,
 
 #' Compute Score Vectors
 #'
-#' Efficiently compute weighted sum using matrix operations
+#' Efficiently compute weighted sum using matrix operations. The raw sum
+#' (expression * z per gene) is negated so that **higher score = worse prognosis**
+#' (adverse), matching the convention that positive reference z = worse survival.
 #'
 #' @keywords internal
 compute_scores <- function(expression_data,
@@ -102,15 +104,17 @@ compute_scores <- function(expression_data,
     
     # Convert to dense matrix if sparse
     if (inherits(expression_data, "sparseMatrix")) {
-      score_vector <- as.numeric(
+      raw_sum <- as.numeric(
         Matrix::crossprod(prognostic_scores, expression_data)
       )
     } else {
-      score_vector <- as.numeric(
+      raw_sum <- as.numeric(
         crossprod(prognostic_scores, expression_data)
       )
     }
-    
+    # Negate so that higher score = worse prognosis (positive z = adverse in reference)
+    score_vector <- -raw_sum
+
   } else {
     # For large pseudobulk data, compute iteratively with progress bar
     if (verbose && requireNamespace("progress", quietly = TRUE)) {
@@ -120,19 +124,20 @@ compute_scores <- function(expression_data,
         force = TRUE
       )
     }
-    
+
     score_vector <- numeric(ncol(expression_data))
-    
+
     for (j in seq_len(ncol(expression_data))) {
       exp_vector <- expression_data[, j]
-      score_vector[j] <- sum(prognostic_scores * exp_vector, na.rm = TRUE)
-      
+      raw_sum_j <- sum(prognostic_scores * exp_vector, na.rm = TRUE)
+      score_vector[j] <- -raw_sum_j
+
       if (verbose && exists("pb")) {
         pb$tick()
       }
     }
   }
-  
+
   return(score_vector)
 }
 

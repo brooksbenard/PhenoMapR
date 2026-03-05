@@ -22,6 +22,10 @@ Imports:
     glue,
     progress
 Suggests:
+    CyteTypeR,
+    pheatmap,
+    presto,
+    viridis,
     Seurat (>= 4.0.0),
     SingleCellExperiment,
     SpatialExperiment,

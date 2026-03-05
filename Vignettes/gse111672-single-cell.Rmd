@@ -1,0 +1,226 @@
+---
+title: "GSE111672: Single-cell pancreatic adenocarcinoma (PAAD)"
+author: "PhenoMapR"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{GSE111672 single-cell}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Overview
+
+[GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672) integrates microarray-based spatial transcriptomics and single-cell RNA-seq to reveal tissue architecture in **pancreatic ductal adenocarcinoma (PDAC)**. This vignette uses the PAAD single-cell Seurat object (`PAAD_GSE111672_seurat.rds`) in the `Vignettes` directory to demonstrate PhenoMapR: scoring cells with the built-in PRECOG **Pancreatic** reference, comparing score distributions across cell types, and optionally running prognostic group and marker analysis.
+
+## 1. Load the PAAD GSE111672 Seurat object
+
+Load the preprocessed Seurat object from the vignettes directory. The object includes metadata such as `seurat_clusters`, `Cell_Type_Broad`, and (where available) `Tumor_Normal` or `Sample_Site`.
+
+```{r load-setup}
+library(PhenoMapR)
+library(Seurat)
+
+# Load the PAAD GSE111672 Seurat object (in Vignettes directory)
+rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
+if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
+seurat <- readRDS(rds_path)
+
+dim(seurat)
+head(colnames(seurat@meta.data))
+```
+
+## 2. Score cells with PRECOG Pancreatic
+
+Score each cell with PhenoMapR using the built-in PRECOG **Pancreatic** reference. (The object may already contain scores; we run `score_expression` here to demonstrate the API.)
+
+```{r score-cells}
+# Score with PRECOG primary pancreatic reference
+scores_primary <- score_expression(
+  expression = seurat,
+  reference = "precog",
+  cancer_type = "Pancreatic",
+  assay = "RNA",
+  slot = "data",
+  verbose = TRUE
+)
+seurat <- add_scores_to_seurat(seurat, scores_primary)
+```
+
+## 3. Cell type score distributions
+
+Compare prognostic score distributions across **major lineage** (`Celltype..major.lineage.`) using a distinct color palette.
+
+```{r score-by-celltype}
+library(ggplot2)
+
+df <- seurat@meta.data
+score_col <- "weighted_sum_score_Pancreatic"
+celltype_col <- "Celltype..major.lineage."
+
+# Custom color palette (Tol bright scheme–like; distinct from default ggplot)
+n_lineages <- length(unique(df[[celltype_col]]))
+pal_lineage <- if (n_lineages <= 12) {
+  c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377",
+    "#BBBBBB", "#EE8866", "#FFAABB", "#99DDFF", "#DDDDDD", "#77AADD")[seq_len(n_lineages)]
+} else {
+  colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE"))(n_lineages)
+}
+names(pal_lineage) <- sort(unique(as.character(df[[celltype_col]])))
+
+# Boxplot of Pancreatic score by major lineage
+if (celltype_col %in% names(df)) {
+  ggplot(df, aes(
+    x = reorder(.data[[celltype_col]], .data[[score_col]], FUN = median),
+    y = .data[[score_col]],
+    fill = .data[[celltype_col]]
+  )) +
+    geom_boxplot(outlier.alpha = 0.3) +
+    scale_fill_manual(values = pal_lineage, name = "Major lineage") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = "right",
+      legend.title = element_text(size = 9)
+    ) +
+    labs(y = "PRECOG Pancreatic score", x = "Cell type (major lineage)")
+} else {
+  ggplot(df, aes(x = seurat_clusters, y = .data[[score_col]], fill = factor(seurat_clusters))) +
+    geom_boxplot(outlier.alpha = 0.3) +
+    scale_fill_brewer(palette = "Set3", name = "Cluster") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
+    labs(y = "PRECOG Pancreatic score", x = "Cluster")
+}
+```
+
+## 4. Prognostic groups and marker gene analysis
+
+Define adverse (high score) and favorable (low score) prognostic groups and run marker gene analysis with Seurat. For faster Wilcoxon rank-sum tests, install [presto](https://github.com/immunogenomics/presto)—Seurat will use it automatically when available.
+
+```{r presto-setup, eval = TRUE}
+# Optional: install presto for much faster FindMarkers (Seurat uses it automatically)
+if (!requireNamespace("presto", quietly = TRUE) && requireNamespace("devtools", quietly = TRUE)) {
+  devtools::install_github("immunogenomics/presto")
+}
+```
+
+```{r markers}
+scores_df <- seurat@meta.data[, grep("weighted_sum_score", names(seurat@meta.data)), drop = FALSE]
+groups <- define_prognostic_groups(scores_df, percentile = 0.05)
+seurat <- AddMetaData(seurat, groups)
+
+# Find marker genes between adverse vs rest and favorable vs rest
+group_col <- grep("prognostic_group_weighted_sum_score", names(seurat@meta.data), value = TRUE)[1]
+markers <- NULL
+if (!is.na(group_col)) {
+  markers <- find_prognostic_markers(
+    seurat,
+    group_labels = seurat@meta.data[[group_col]],
+    group_column = NULL,
+    assay = "RNA",
+    slot = "data"
+  )
+  if (!is.null(markers)) {
+    head(markers$adverse_markers)
+    head(markers$favorable_markers)
+  }
+}
+```
+
+## 5. Heatmap: top marker genes across all cells
+
+Visualize the top adverse and favorable marker genes with **all cells as columns** and **genes as rows**. Column annotations show prognostic score, cell type (major lineage), and prognostic group.
+
+```{r heatmap-markers}
+n_top <- 15
+# GetAssayData: use 'layer' in Seurat v5+, 'slot' in v4
+expr <- tryCatch(
+  Seurat::GetAssayData(seurat, layer = "data", assay = "RNA"),
+  error = function(e) Seurat::GetAssayData(seurat, slot = "data", assay = "RNA")
+)
+
+# Top 15 positively expressed marker genes for adverse and favorable (avg_log2FC > 0)
+adverse_pos <- markers$adverse_markers[markers$adverse_markers$avg_log2FC > 0, ]
+favorable_pos <- markers$favorable_markers[markers$favorable_markers$avg_log2FC > 0, ]
+top_genes <- c(
+  head(adverse_pos$gene[order(adverse_pos$p_val_adj)], n_top),
+  head(favorable_pos$gene[order(favorable_pos$p_val_adj)], n_top)
+)
+top_genes <- unique(top_genes[top_genes %in% rownames(expr)])
+if (length(top_genes) == 0) top_genes <- head(rownames(expr), 20)
+
+mat <- as.matrix(expr[top_genes, , drop = FALSE])
+# Row-scale for visualization; clip to [-3, 3] for consistent color scale
+mat_scaled <- t(scale(t(mat)))
+mat_scaled[mat_scaled < -3] <- -3
+mat_scaled[mat_scaled > 3] <- 3
+
+# Order columns: by prognostic group (adverse, middle, favorable) then by score
+meta <- seurat@meta.data
+meta$cell_id <- colnames(seurat)
+ord <- order(
+  match(meta[[group_col]], c("adverse", "middle", "favorable")),
+  -meta[[score_col]]
+)
+mat_scaled <- mat_scaled[, ord, drop = FALSE]
+meta_ord <- meta[ord, ]
+
+# Column annotations: prognostic score (binned), cell type, prognostic group
+score_bin <- cut(meta_ord[[score_col]], breaks = 5, labels = paste0("Q", 1:5), include.lowest = TRUE)
+ann_col <- data.frame(
+  `Prognostic score` = score_bin,
+  `Cell type` = factor(meta_ord[["Celltype..major.lineage."]]),
+  `Prognostic group` = factor(meta_ord[[group_col]], levels = c("adverse", "middle", "favorable")),
+  check.names = FALSE
+)
+rownames(ann_col) <- colnames(mat_scaled)
+
+# Palettes for column annotations (non-default)
+pal_score <- setNames(
+  colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(5),
+  levels(score_bin)
+)
+pal_group <- c(adverse = "#B2182B", middle = "#F7F7F7", favorable = "#2166AC")
+n_ct <- length(unique(ann_col$`Cell type`))
+pal_celltype <- setNames(
+  colorRampPalette(c("#7F3C8D", "#11A579", "#3969AC", "#F2B701", "#E73F74"))(max(n_ct, 5))[seq_len(n_ct)],
+  sort(unique(as.character(ann_col$`Cell type`)))
+)
+ann_colors <- list(
+  `Prognostic score` = pal_score,
+  `Cell type` = pal_celltype,
+  `Prognostic group` = pal_group
+)
+
+# Plot heatmap (genes = rows, cells = columns): viridis fill, scale limits ±3
+heatmap_breaks <- seq(-3, 3, length.out = 101)
+heatmap_colors <- if (requireNamespace("viridis", quietly = TRUE)) {
+  viridis::viridis(100)
+} else {
+  colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+}
+if (requireNamespace("pheatmap", quietly = TRUE)) {
+  pheatmap::pheatmap(
+    mat_scaled,
+    scale = "none",
+    cluster_cols = FALSE,
+    cluster_rows = TRUE,
+    show_colnames = FALSE,
+    annotation_col = ann_col,
+    annotation_colors = ann_colors,
+    color = heatmap_colors,
+    breaks = heatmap_breaks,
+    main = "Top adverse & favorable marker genes (all cells)",
+    fontsize_row = 8
+  )
+} else {
+  heatmap(mat_scaled, scale = "none", Colv = NA, col = heatmap_colors,
+          labCol = FALSE, main = "Top marker genes (all cells)")
+}
+```
+
+## 6. References
+
+- **GSE111672**: [Integrating microarray-based spatial transcriptomics and single-cell RNA-seq reveals tissue architecture in pancreatic ductal adenocarcinomas](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672) (GEO).
+- **PhenoMapR PRECOG**: Built-in reference `Pancreatic` from PRECOG 2.0 (Benard et al., *Nucleic Acids Research* 2026).

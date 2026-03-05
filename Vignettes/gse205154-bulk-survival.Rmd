@@ -1,0 +1,128 @@
+---
+title: "GSE205154: Bulk PDAC scoring and survival stratification"
+author: "PhenoMapR"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{GSE205154 bulk survival}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Overview
+
+[GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) contains **bulk RNA-seq** gene expression for **289 primary and metastatic pancreatic ductal adenocarcinoma (PDAC)** samples (Sears et al.). This vignette uses the **expression matrix** and **clinical info** files in the vignette directory:
+
+- `GSE205154.GPL20301.matrix.txt` — normalized expression (genes × samples)
+- `GSE205154.info.txt` — sample annotations (Tumor_Type: Primary / Met, OS_Time, OS_Status)
+
+Analyses are kept **separate for primary tumors and metastatic samples**: we score all samples with both PRECOG references, then run Kaplan–Meier and stratification for **primary only** (using the Pancreatic score) and for **metastatic only** (using the Pancreatic_Metastasis score).
+
+## 1. Load expression and phenotype from vignette directory
+
+```{r load-data}
+library(PhenoMapR)
+
+# Files in the same directory as this vignette
+vignette_dir <- if (dir.exists("Vignettes")) "Vignettes" else "."
+info_path <- file.path(vignette_dir, "GSE205154.info.txt")
+matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
+if (!file.exists(info_path)) {
+  info_path <- "GSE205154.info.txt"
+  matrix_path <- "GSE205154.GPL20301.matrix.txt"
+}
+
+# Clinical annotations: Array = sample ID, Tumor_Type = Primary/Met, OS_Time, OS_Status
+info <- read.delim(info_path, stringsAsFactors = FALSE, check.names = FALSE)
+colnames(info)[colnames(info) == "Array"] <- "sample_id"
+info$tumor_type <- info$Tumor_Type
+info$survival_time <- as.numeric(info$OS_Time)
+info$survival_event <- as.integer(info$OS_Status)
+info <- info[!is.na(info$survival_time) & !is.na(info$survival_event), ]
+
+# Expression matrix: Gene (ENSG), Name (symbol), then GSM columns
+mat <- read.delim(matrix_path, stringsAsFactors = FALSE, check.names = FALSE)
+# Use gene symbol (Name); keep first of duplicates, drop empty/NA
+mat$Name[mat$Name == "" | is.na(mat$Name)] <- NA
+mat <- mat[!is.na(mat$Name), ]
+mat <- mat[!duplicated(mat$Name), ]
+rownames(mat) <- mat$Name
+sample_cols <- grep("^GSM", colnames(mat), value = TRUE)
+bulk_mat <- as.matrix(mat[, sample_cols])
+mode(bulk_mat) <- "numeric"
+
+# Align to samples in clinical info
+keep <- intersect(colnames(bulk_mat), info$sample_id)
+bulk_mat <- bulk_mat[, keep, drop = FALSE]
+pheno <- info[info$sample_id %in% keep, ]
+pheno <- pheno[match(keep, pheno$sample_id), ]
+rownames(pheno) <- pheno$sample_id
+
+message("Expression: ", nrow(bulk_mat), " genes × ", ncol(bulk_mat), " samples")
+message("Phenotype: ", nrow(pheno), " samples (Primary: ", sum(pheno$tumor_type == "Primary"), ", Met: ", sum(pheno$tumor_type == "Met"), ")")
+```
+
+## 2. Score samples with PRECOG Pancreatic and Pancreatic_Metastasis
+
+```{r score-precog}
+scores_primary <- score_expression(
+  expression = bulk_mat,
+  reference = "precog",
+  cancer_type = "Pancreatic",
+  verbose = TRUE
+)
+scores_met <- score_expression(
+  expression = bulk_mat,
+  reference = "precog",
+  cancer_type = "Pancreatic_Metastasis",
+  verbose = TRUE
+)
+
+col_pan <- grep("Pancreatic$", colnames(scores_primary), value = TRUE)[1]
+col_met <- grep("Pancreatic_Metastasis", colnames(scores_met), value = TRUE)[1]
+scores_df <- data.frame(
+  sample_id = rownames(scores_primary),
+  score_Pancreatic = if (!is.na(col_pan)) scores_primary[[col_pan]] else NA_real_,
+  score_Pancreatic_Metastasis = if (!is.na(col_met)) scores_met[[col_met]] else NA_real_,
+  stringsAsFactors = FALSE
+)
+dat <- merge(pheno, scores_df, by = "sample_id")
+```
+
+## 3. Primary tumors only: Kaplan–Meier by PRECOG Pancreatic score
+
+```{r km-primary}
+library(survival)
+dat_primary <- dat[dat$tumor_type == "Primary", ]
+dat_primary$score_grp <- ifelse(
+  dat_primary$score_Pancreatic >= median(dat_primary$score_Pancreatic, na.rm = TRUE),
+  "High", "Low"
+)
+fit_primary <- survfit(Surv(survival_time, survival_event) ~ score_grp, data = dat_primary)
+plot(fit_primary, col = c("blue", "red"), lwd = 2, xlab = "Time", ylab = "Survival probability",
+     main = "GSE205154 Primary tumors: Kaplan–Meier by PRECOG Pancreatic score")
+legend("bottomleft", legend = c("Low score", "High score"), col = c("blue", "red"), lwd = 2, bty = "n")
+lr_primary <- survdiff(Surv(survival_time, survival_event) ~ score_grp, data = dat_primary)
+message("Primary tumors — Log-rank p-value: ", round(1 - pchisq(lr_primary$chisq, 1), 4))
+```
+
+## 4. Metastatic samples only: Kaplan–Meier by PRECOG Pancreatic_Metastasis score
+
+```{r km-metastatic}
+dat_met <- dat[dat$tumor_type == "Met", ]
+dat_met$score_grp <- ifelse(
+  dat_met$score_Pancreatic_Metastasis >= median(dat_met$score_Pancreatic_Metastasis, na.rm = TRUE),
+  "High", "Low"
+)
+fit_met <- survfit(Surv(survival_time, survival_event) ~ score_grp, data = dat_met)
+plot(fit_met, col = c("blue", "red"), lwd = 2, xlab = "Time", ylab = "Survival probability",
+     main = "GSE205154 Metastatic: Kaplan–Meier by PRECOG Pancreatic_Metastasis score")
+legend("bottomleft", legend = c("Low score", "High score"), col = c("blue", "red"), lwd = 2, bty = "n")
+lr_met <- survdiff(Surv(survival_time, survival_event) ~ score_grp, data = dat_met)
+message("Metastatic samples — Log-rank p-value: ", round(1 - pchisq(lr_met$chisq, 1), 4))
+```
+
+## 5. References
+
+- **GSE205154**: [Bulk RNA-Seq gene expression for 289 primary and metastatic PDAC samples](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) (GEO). Place `GSE205154.GPL20301.matrix.txt` and `GSE205154.info.txt` in the vignette directory.
+- **PhenoMapR PRECOG**: `Pancreatic` and `Pancreatic_Metastasis` from PRECOG 2.0.

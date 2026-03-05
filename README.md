@@ -205,64 +205,17 @@ At a high level, PhenoMapR:
 
 </details>
 
-<details markdown="1">
-<summary><b>Vignette: PAAD single-cell analysis</b></summary>
+## Vignettes
 
-This example walks through loading the included **PAAD (pancreatic adenocarcinoma) GSE111672** Seurat object, scoring cells with a prognostic reference, and inspecting results. The file `PAAD_GSE111672_seurat.rds` is provided in the repository.
+Detailed walkthroughs with public datasets:
 
-```r
-library(PhenoMapR)
-library(Seurat)
+| Vignette | Description |
+|----------|-------------|
+| **[GSE111672 — Single-cell PAAD](https://brooksbenard.github.io/PhenoMapR/articles/gse111672-single-cell.html)** | Score PAAD single cells with PRECOG **Pancreatic** using the included `PAAD_GSE111672_seurat.rds`; cell type score distributions and prognostic group marker analysis. Optional [CyteTypeR](https://github.com/NygenAnalytics/CyteTypeR) annotation. Data: [GEO GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672). |
+| **[GSE205154 — Bulk PDAC scoring and survival](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data: [GEO GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). |
+| **[GSE205154 — Custom survival-based reference](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-custom-reference.html)** | Build a custom gene z-score reference from GSE205154 expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
 
-# Load the PAAD single-cell dataset (place PAAD_GSE111672_seurat.rds in your working directory)
-seurat <- readRDS("PAAD_GSE111672_seurat.rds")
-
-# Score each cell with PRECOG pancreatic adenocarcinoma prognostic z-scores
-scores <- score_expression(
-  expression = seurat,
-  reference = "precog",
-  cancer_type = "PAAD",
-  assay = "RNA",
-  slot = "data",
-  verbose = TRUE
-)
-
-# Attach scores to Seurat metadata for downstream plotting and subsetting
-seurat <- add_scores_to_seurat(seurat, scores)
-
-# Quick look at score distribution
-head(scores)
-summary(scores[, 1])
-
-# Optional: plot score distribution
-plot_score_distribution(scores, main = "PAAD GSE111672 — PRECOG prognostic score")
-```
-
-**Defining prognostic groups and marker genes (optional)**  
-Identify cells in the top and bottom 5% by score (adverse vs. favorable prognosis) and find marker genes with Seurat:
-
-```r
-# Define adverse (top 5%) and favorable (bottom 5%) prognostic groups
-groups <- define_prognostic_groups(scores, percentile = 0.05)
-
-# Inspect group counts
-score_col <- names(scores)[1]
-table(groups[[paste0("prognostic_group_", score_col)]])
-
-# Find marker genes (requires Seurat)
-markers <- find_prognostic_markers(
-  seurat,
-  group_labels = groups,
-  group_column = paste0("prognostic_group_", score_col),
-  cell_id_column = "cell_id"
-)
-head(markers$adverse_markers)
-head(markers$favorable_markers)
-```
-
-Interpretation: higher scores correspond to worse prognosis (adverse); lower scores to better prognosis (favorable). The derived groups and markers can be used for visualization (e.g. UMAP colored by score or group) and biological interpretation.
-
-</details>
+Vignette source: `vignettes/` in the [PhenoMapR repo](https://github.com/brooksbenard/PhenoMapR); built articles appear under [Documentation → Articles](https://brooksbenard.github.io/PhenoMapR/articles/index.html).
 
 <details markdown="1">
 <summary><b>Advanced Usage</b></summary>

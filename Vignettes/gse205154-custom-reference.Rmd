@@ -1,0 +1,134 @@
+---
+title: "GSE205154: Custom survival-based reference with derive_reference_from_bulk"
+author: "PhenoMapR"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{GSE205154 custom reference}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Overview
+
+[GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) provides bulk RNA-seq and clinical data for 289 primary and metastatic PDAC samples. This vignette uses the **expression and info files in the vignette directory** to:
+
+1. Load expression and survival phenotype.
+2. **Derive a custom gene z-score reference** from expression and overall survival with `derive_reference_from_bulk()`.
+3. Score samples with that reference.
+4. Keep **primary and metastatic analyses separate**: Kaplan–Meier by custom score for primary tumors only, then for metastatic samples only.
+
+## 1. Load expression and phenotype from vignette directory
+
+```{r load-data}
+library(PhenoMapR)
+
+vignette_dir <- if (dir.exists("Vignettes")) "Vignettes" else "."
+info_path <- file.path(vignette_dir, "GSE205154.info.txt")
+matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
+if (!file.exists(info_path)) {
+  info_path <- "GSE205154.info.txt"
+  matrix_path <- "GSE205154.GPL20301.matrix.txt"
+}
+
+info <- read.delim(info_path, stringsAsFactors = FALSE, check.names = FALSE)
+colnames(info)[colnames(info) == "Array"] <- "sample_id"
+info$tumor_type <- info$Tumor_Type
+info$survival_time <- as.numeric(info$OS_Time)
+info$survival_event <- as.integer(info$OS_Status)
+info <- info[!is.na(info$survival_time) & !is.na(info$survival_event), ]
+
+mat <- read.delim(matrix_path, stringsAsFactors = FALSE, check.names = FALSE)
+mat$Name[mat$Name == "" | is.na(mat$Name)] <- NA
+mat <- mat[!is.na(mat$Name), ]
+mat <- mat[!duplicated(mat$Name), ]
+rownames(mat) <- mat$Name
+sample_cols <- grep("^GSM", colnames(mat), value = TRUE)
+bulk_mat <- as.matrix(mat[, sample_cols])
+mode(bulk_mat) <- "numeric"
+
+keep <- intersect(colnames(bulk_mat), info$sample_id)
+bulk_mat <- bulk_mat[, keep, drop = FALSE]
+pheno <- info[info$sample_id %in% keep, ]
+pheno <- pheno[match(keep, pheno$sample_id), ]
+rownames(pheno) <- pheno$sample_id
+```
+
+## 2. Derive custom reference from survival
+
+Expression for `derive_reference_from_bulk()` must be **samples × genes**. We pass `gene_axis = "cols"` so the function does not transpose.
+
+```{r derive-ref}
+bulk_samples_rows <- t(bulk_mat)
+rownames(bulk_samples_rows) <- as.character(rownames(bulk_samples_rows))
+pheno_surv <- pheno[, c("sample_id", "survival_time", "survival_event")]
+pheno_surv$sample_id <- as.character(pheno_surv$sample_id)
+pheno_surv <- pheno_surv[pheno_surv$sample_id %in% rownames(bulk_samples_rows), , drop = FALSE]
+pheno_surv <- pheno_surv[match(rownames(bulk_samples_rows), pheno_surv$sample_id), , drop = FALSE]
+pheno_surv <- pheno_surv[!is.na(pheno_surv$sample_id), , drop = FALSE]
+bulk_samples_rows <- bulk_samples_rows[rownames(bulk_samples_rows) %in% pheno_surv$sample_id, , drop = FALSE]
+
+ref_custom <- derive_reference_from_bulk(
+  bulk_expression = bulk_samples_rows,
+  phenotype = pheno_surv,
+  sample_id_column = "sample_id",
+  phenotype_type = "survival",
+  survival_time = "survival_time",
+  survival_event = "survival_event",
+  gene_axis = "cols",
+  verbose = TRUE
+)
+head(ref_custom)
+```
+
+## 3. Score samples with the custom reference
+
+```{r score-custom}
+scores_custom <- score_expression(
+  expression = bulk_mat,
+  reference = ref_custom,
+  z_score_cutoff = 2,
+  verbose = TRUE
+)
+col_custom <- grep("survival_z|weighted_sum", colnames(scores_custom), value = TRUE)[1]
+dat <- pheno
+dat$score_custom <- scores_custom[match(dat$sample_id, rownames(scores_custom)), col_custom]
+```
+
+## 4. Primary tumors only: Kaplan–Meier by custom score
+
+```{r km-primary}
+library(survival)
+dat_primary <- dat[dat$tumor_type == "Primary", ]
+dat_primary$custom_grp <- ifelse(
+  dat_primary$score_custom >= median(dat_primary$score_custom, na.rm = TRUE),
+  "High", "Low"
+)
+fit_primary <- survfit(Surv(survival_time, survival_event) ~ custom_grp, data = dat_primary)
+plot(fit_primary, col = c("blue", "red"), lwd = 2, xlab = "Time", ylab = "Survival probability",
+     main = "GSE205154 Primary: Kaplan–Meier by custom survival-based score")
+legend("bottomleft", legend = c("Low score", "High score"), col = c("blue", "red"), lwd = 2, bty = "n")
+lr_primary <- survdiff(Surv(survival_time, survival_event) ~ custom_grp, data = dat_primary)
+message("Primary — Log-rank p-value: ", round(1 - pchisq(lr_primary$chisq, 1), 4))
+```
+
+## 5. Metastatic samples only: Kaplan–Meier by custom score
+
+```{r km-metastatic}
+dat_met <- dat[dat$tumor_type == "Met", ]
+dat_met$custom_grp <- ifelse(
+  dat_met$score_custom >= median(dat_met$score_custom, na.rm = TRUE),
+  "High", "Low"
+)
+fit_met <- survfit(Surv(survival_time, survival_event) ~ custom_grp, data = dat_met)
+plot(fit_met, col = c("blue", "red"), lwd = 2, xlab = "Time", ylab = "Survival probability",
+     main = "GSE205154 Metastatic: Kaplan–Meier by custom survival-based score")
+legend("bottomleft", legend = c("Low score", "High score"), col = c("blue", "red"), lwd = 2, bty = "n")
+lr_met <- survdiff(Surv(survival_time, survival_event) ~ custom_grp, data = dat_met)
+message("Metastatic — Log-rank p-value: ", round(1 - pchisq(lr_met$chisq, 1), 4))
+```
+
+## 6. References
+
+- **GSE205154**: [Bulk RNA-Seq for 289 primary and metastatic PDAC samples](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) (GEO). Place `GSE205154.GPL20301.matrix.txt` and `GSE205154.info.txt` in the vignette directory.
+- **PhenoMapR**: `derive_reference_from_bulk()` for cohort-specific survival z-scores; see `?derive_reference_from_bulk`.
