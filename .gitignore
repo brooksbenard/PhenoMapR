@@ -24,11 +24,19 @@ Rplots.pdf
 /doc/
 /Meta/
 
+# Large reference datasets (source files; package uses data/*.rda)
+TCGA_metaz.csv
+PRECOG_V2*.rds
+pediatric_metaZ*
+ici_precog_collapsed*
+datasets_info_for_scoring.rds
+data/datasets_info.rda
+
 # Large vignette data (users download from GEO/GSA)
 Vignettes/PAAD_*_seurat.rds
 Vignettes/GSE205154.GPL20301.matrix.txt
 Vignettes/expression_PDAC_GSE205154_metastatic.rds
-data-raw/GSE205154/
+data-raw/
 
 # Generated vignette outputs (keep .html for GitHub; pkgdown also builds)
 Vignettes/*.R

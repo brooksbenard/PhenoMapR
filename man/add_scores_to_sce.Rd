@@ -7,9 +7,9 @@
 add_scores_to_sce(sce_obj, scores, prefix = "")
 }
 \arguments{
-\item{sce_obj}{SingleCellExperiment object}
+\item{sce_obj}{SingleCellExperiment object (the same full object passed to \code{PhenoMap})}
 
-\item{scores}{Data.frame of scores}
+\item{scores}{Data.frame of scores (output from PhenoMap)}
 
 \item{prefix}{Prefix for colData column names (default: "")}
 }
@@ -17,5 +17,7 @@ add_scores_to_sce(sce_obj, scores, prefix = "")
 SingleCellExperiment object with scores in colData
 }
 \description{
-Convenience function to add scores to SCE colData
+Convenience function to add scores to SCE colData. Use the \strong{original}
+(non-subset) SCE object so that all genes are retained for downstream
+analyses (e.g. marker genes).
 }

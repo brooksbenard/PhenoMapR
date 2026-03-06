@@ -12,6 +12,9 @@ compute_scores(
 )
 }
 \description{
-Efficiently compute weighted sum using matrix operations
+Compute the weighted sum of expression with the reference meta-z vector:
+score(cell) = sum over genes of expression\link{gene, cell} * meta_z\link{gene}.
+Implemented via cross product for efficiency: crossprod(meta_z, expression)
+yields one value per cell. Higher score = worse prognosis (adverse).
 }
 \keyword{internal}

@@ -7,9 +7,9 @@
 add_scores_to_seurat(seurat_obj, scores, prefix = "")
 }
 \arguments{
-\item{seurat_obj}{Seurat object}
+\item{seurat_obj}{Seurat object (the same full object passed to \code{PhenoMap})}
 
-\item{scores}{Data.frame of scores (output from score_expression)}
+\item{scores}{Data.frame of scores (output from PhenoMap)}
 
 \item{prefix}{Prefix for metadata column names (default: "")}
 }
@@ -17,5 +17,7 @@ add_scores_to_seurat(seurat_obj, scores, prefix = "")
 Seurat object with scores added to metadata
 }
 \description{
-Convenience function to add scores directly to Seurat metadata
+Convenience function to add scores directly to Seurat metadata. Use the
+\strong{original} (non-subset) Seurat object so that all genes are retained for
+downstream analyses (e.g. cell type marker gene analysis).
 }

@@ -4,7 +4,7 @@
 \alias{process_sce}
 \title{Process SingleCellExperiment Object}
 \usage{
-process_sce(obj, pseudobulk, group_by, assay)
+process_sce(obj, pseudobulk, group_by, assay, genes_to_extract = NULL)
 }
 \description{
 Process SingleCellExperiment Object

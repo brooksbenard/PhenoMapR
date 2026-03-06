@@ -10,6 +10,7 @@ process_expression_input(
   group_by = NULL,
   assay = NULL,
   slot = "data",
+  genes_to_extract = NULL,
   verbose = TRUE
 )
 }

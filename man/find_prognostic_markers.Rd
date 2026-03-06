@@ -16,6 +16,7 @@ find_prognostic_markers(
   logfc.threshold = 0.25,
   pval_threshold = 0.05,
   verbose = TRUE,
+  max_cells_per_ident = 5000L,
   ...
 )
 }
@@ -24,12 +25,12 @@ find_prognostic_markers(
 SingleCellExperiment. Must match cells in \code{group_labels}.}
 
 \item{group_labels}{Either a character vector of group labels
-(\code{"adverse"}, \code{"favorable"}, \code{"middle"}) in the same order
-as columns of \code{expression}, or a data.frame from
+(\code{"Most Adverse"}, \code{"Most Favorable"}, \code{"Other"}) in the
+same order as columns of \code{expression}, or a data.frame from
 \code{define_prognostic_groups()} (see \code{group_column}).}
 
 \item{group_column}{If \code{group_labels} is a data.frame, the name of the
-column containing \code{"adverse"} / \code{"favorable"} / \code{"middle"}.}
+column containing \code{"Most Adverse"} / \code{"Most Favorable"} / \code{"Other"}.}
 
 \item{cell_id_column}{If \code{group_labels} is a data.frame, the column
 name for cell/sample IDs (default \code{"cell_id"}).}
@@ -52,6 +53,10 @@ Passed to \code{FindMarkers}.}
 
 \item{verbose}{Print progress messages (default TRUE).}
 
+\item{max_cells_per_ident}{When any prognostic group exceeds this many cells,
+subsample to this limit before FindMarkers (default 5000). Reduces memory
+for large objects. Set to \code{Inf} to disable.}
+
 \item{...}{Additional arguments passed to \code{Seurat::FindMarkers}.}
 }
 \value{
@@ -72,7 +77,7 @@ Requires the Seurat package.
 }
 \examples{
 \dontrun{
-scores <- score_expression(seurat_obj, reference = "precog", cancer_type = "BRCA")
+scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 groups <- define_prognostic_groups(scores, percentile = 0.05)
 markers <- find_prognostic_markers(
   seurat_obj,

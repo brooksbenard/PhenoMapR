@@ -4,7 +4,7 @@
 \alias{process_seurat}
 \title{Process Seurat Object}
 \usage{
-process_seurat(obj, pseudobulk, group_by, assay, slot)
+process_seurat(obj, pseudobulk, group_by, assay, slot, genes_to_extract = NULL)
 }
 \description{
 Process Seurat Object

@@ -4,7 +4,13 @@
 \alias{process_spatial_experiment}
 \title{Process SpatialExperiment Object}
 \usage{
-process_spatial_experiment(obj, pseudobulk, group_by, assay)
+process_spatial_experiment(
+  obj,
+  pseudobulk,
+  group_by,
+  assay,
+  genes_to_extract = NULL
+)
 }
 \description{
 Process SpatialExperiment Object

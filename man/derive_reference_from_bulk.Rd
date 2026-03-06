@@ -62,12 +62,12 @@ looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.}
 \value{
 A data.frame with genes as rownames and a single column of
 phenotype-association z-scores, suitable for \code{reference} in
-\code{\link{score_expression}}.
+\code{\link{PhenoMap}}.
 }
 \description{
 When you have bulk expression (samples × genes) and a phenotype (binary,
 continuous, or survival), this function computes gene-level association
-z-scores that can be used as a custom reference in \code{\link{score_expression}}.
+z-scores that can be used as a custom reference in \code{\link{PhenoMap}}.
 }
 \details{
 Steps: (1) clean gene names to approved HUGO symbols, (2) check if expression
@@ -93,7 +93,7 @@ ref <- derive_reference_from_bulk(
   phenotype_type = "binary")
 
 # Use in scoring
-scores <- score_expression(expression = my_single_cell_data, reference = ref)
+scores <- PhenoMap(expression = my_single_cell_data, reference = ref)
 }
 
 }
