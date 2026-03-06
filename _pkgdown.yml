@@ -3,6 +3,9 @@
 
 template:
   bootstrap: 5
+  params:
+    toc: true
+    toc_float: true
 
 url: https://brooksbenard.github.io/PhenoMapR
 
@@ -23,8 +26,16 @@ navbar:
 
 footer:
   structure:
-    left: []
-    right: []
+    left: [built_with]
+    right: [developed_by]
+
+articles:
+  - title: Vignettes
+    desc: Tutorials and worked examples
+    contents:
+      - gse111672-single-cell
+      - gse205154-bulk-survival
+      - gse205154-custom-reference
 
 reference:
   - title: Reference
