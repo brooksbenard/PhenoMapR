@@ -89,9 +89,10 @@ calculate_weighted_scores <- function(expression_matrix,
 
 #' Compute Score Vectors
 #'
-#' Efficiently compute weighted sum using matrix operations. The raw sum
-#' (expression * z per gene) is negated so that **higher score = worse prognosis**
-#' (adverse), matching the convention that positive reference z = worse survival.
+#' Compute the weighted sum of expression with the reference meta-z vector:
+#' score(cell) = sum over genes of expression[gene, cell] * meta_z[gene].
+#' Implemented via cross product for efficiency: crossprod(meta_z, expression)
+#' yields one value per cell. Higher score = worse prognosis (adverse).
 #'
 #' @keywords internal
 compute_scores <- function(expression_data,
@@ -112,8 +113,8 @@ compute_scores <- function(expression_data,
         crossprod(prognostic_scores, expression_data)
       )
     }
-    # Negate so that higher score = worse prognosis (positive z = adverse in reference)
-    score_vector <- -raw_sum
+    # Higher raw_sum = higher expression of adverse genes (positive z) = worse prognosis
+    score_vector <- raw_sum
 
   } else {
     # For large pseudobulk data, compute iteratively with progress bar
@@ -130,7 +131,7 @@ compute_scores <- function(expression_data,
     for (j in seq_len(ncol(expression_data))) {
       exp_vector <- expression_data[, j]
       raw_sum_j <- sum(prognostic_scores * exp_vector, na.rm = TRUE)
-      score_vector[j] <- -raw_sum_j
+      score_vector[j] <- raw_sum_j
 
       if (verbose && exists("pb")) {
         pb$tick()
@@ -172,9 +173,11 @@ normalize_scores <- function(scores) {
 
 #' Add Scores to Seurat Object
 #'
-#' Convenience function to add scores directly to Seurat metadata
+#' Convenience function to add scores directly to Seurat metadata. Use the
+#' **original** (non-subset) Seurat object so that all genes are retained for
+#' downstream analyses (e.g. cell type marker gene analysis).
 #'
-#' @param seurat_obj Seurat object
+#' @param seurat_obj Seurat object (the same full object passed to \code{score_expression})
 #' @param scores Data.frame of scores (output from score_expression)
 #' @param prefix Prefix for metadata column names (default: "")
 #'
@@ -218,10 +221,12 @@ add_scores_to_seurat <- function(seurat_obj, scores, prefix = "") {
 
 #' Add Scores to SingleCellExperiment Object
 #'
-#' Convenience function to add scores to SCE colData
+#' Convenience function to add scores to SCE colData. Use the **original**
+#' (non-subset) SCE object so that all genes are retained for downstream
+#' analyses (e.g. marker genes).
 #'
-#' @param sce_obj SingleCellExperiment object
-#' @param scores Data.frame of scores
+#' @param sce_obj SingleCellExperiment object (the same full object passed to \code{score_expression})
+#' @param scores Data.frame of scores (output from score_expression)
 #' @param prefix Prefix for colData column names (default: "")
 #'
 #' @return SingleCellExperiment object with scores in colData

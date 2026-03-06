@@ -8,6 +8,7 @@ process_expression_input <- function(expression,
                                      group_by = NULL,
                                      assay = NULL,
                                      slot = "data",
+                                     genes_to_extract = NULL,
                                      verbose = TRUE) {
 
   input_type <- detect_input_type(expression)
@@ -18,10 +19,10 @@ process_expression_input <- function(expression,
 
   result <- switch(input_type,
     "matrix" = process_matrix(expression),
-    "seurat" = process_seurat(expression, pseudobulk, group_by, assay, slot),
-    "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot = "counts"),
-    "sce" = process_sce(expression, pseudobulk, group_by, assay),
-    "spatial_experiment" = process_spatial_experiment(expression, pseudobulk, group_by, assay),
+    "seurat" = process_seurat(expression, pseudobulk, group_by, assay, slot, genes_to_extract),
+    "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot = "counts", genes_to_extract = genes_to_extract),
+    "sce" = process_sce(expression, pseudobulk, group_by, assay, genes_to_extract),
+    "spatial_experiment" = process_spatial_experiment(expression, pseudobulk, group_by, assay, genes_to_extract),
     "anndata" = process_anndata(expression, pseudobulk, group_by),
     stop("Unsupported input type")
   )
@@ -92,9 +93,7 @@ process_matrix <- function(mat) {
 #' Process Seurat Object
 #'
 #' @keywords internal
-process_seurat <- function(obj, pseudobulk, group_by, assay, slot) {
-
-  # process_seurat(obj = expression, pseudobulk, group_by, assay, slot)
+process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extract = NULL) {
 
   if (!requireNamespace("Seurat", quietly = TRUE)) {
     stop("Seurat package required but not installed")
@@ -138,16 +137,33 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot) {
     expr_matrix <- as.matrix(agg_expr[[assay]])
 
   } else {
-    # Extract expression matrix - compatible with both Seurat v4 and v5
-    expr_matrix <- tryCatch({
-      # Try Seurat v5 first (layer parameter)
-      Seurat::GetAssayData(obj, assay = assay, layer = layer_name)
+    # When genes_to_extract is set, subset only for extraction so we avoid loading
+    # the full assay into memory. The subset obj_use is never returned; the caller
+    # adds the returned scores to their original (full) object so all genes are
+    # retained for marker and other analyses.
+    obj_use <- obj
+    if (length(genes_to_extract) > 0) {
+      avail_genes <- rownames(obj)
+      genes_use <- intersect(genes_to_extract, avail_genes)
+      if (length(genes_use) > 0) {
+        obj_use <- obj[genes_use, ]
+      }
+    }
+
+    assay_data <- tryCatch({
+      Seurat::GetAssayData(obj_use, assay = assay, layer = layer_name)
     }, error = function(e) {
-      # Fall back to Seurat v4 (slot parameter)
-      Seurat::GetAssayData(obj, assay = assay, slot = slot)
+      Seurat::GetAssayData(obj_use, assay = assay, slot = slot)
     })
 
-    expr_matrix <- as.matrix(expr_matrix)
+    # Avoid as.matrix on any Matrix class to prevent sparse->dense (9+ GiB for large objects)
+    if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
+      expr_matrix <- assay_data
+    } else if (!is.matrix(assay_data)) {
+      expr_matrix <- as.matrix(assay_data)
+    } else {
+      expr_matrix <- assay_data
+    }
   }
 
   list(
@@ -163,7 +179,7 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot) {
 #' Process SingleCellExperiment Object
 #'
 #' @keywords internal
-process_sce <- function(obj, pseudobulk, group_by, assay) {
+process_sce <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NULL) {
 
   if (!requireNamespace("SingleCellExperiment", quietly = TRUE)) {
     stop("SingleCellExperiment package required but not installed")
@@ -203,7 +219,21 @@ process_sce <- function(obj, pseudobulk, group_by, assay) {
     expr_matrix <- as.matrix(agg_matrix)
 
   } else {
-    expr_matrix <- as.matrix(SummarizedExperiment::assay(obj, assay))
+    assay_data <- SummarizedExperiment::assay(obj, assay)
+    # Subset only for extraction when genes_to_extract set; never return subset.
+    # Caller adds scores to original (full) object so all genes remain for analyses.
+    if (length(genes_to_extract) > 0) {
+      avail_genes <- rownames(assay_data)
+      genes_use <- intersect(genes_to_extract, avail_genes)
+      if (length(genes_use) > 0) {
+        assay_data <- assay_data[genes_use, , drop = FALSE]
+      }
+    }
+    if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
+      expr_matrix <- assay_data
+    } else {
+      expr_matrix <- as.matrix(assay_data)
+    }
   }
 
   list(
@@ -218,14 +248,14 @@ process_sce <- function(obj, pseudobulk, group_by, assay) {
 #' Process SpatialExperiment Object
 #'
 #' @keywords internal
-process_spatial_experiment <- function(obj, pseudobulk, group_by, assay) {
+process_spatial_experiment <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NULL) {
 
   if (!requireNamespace("SpatialExperiment", quietly = TRUE)) {
     stop("SpatialExperiment package required but not installed")
   }
 
   # SpatialExperiment inherits from SCE, so use same processing
-  process_sce(obj, pseudobulk, group_by, assay)
+  process_sce(obj, pseudobulk, group_by, assay, genes_to_extract)
 }
 
 
@@ -287,8 +317,8 @@ process_anndata <- function(obj, pseudobulk, group_by) {
 #' @keywords internal
 validate_expression_matrix <- function(mat) {
 
-  if (!is.matrix(mat)) {
-    stop("Expression data must be a matrix")
+  if (!is.matrix(mat) && !inherits(mat, "Matrix")) {
+    stop("Expression data must be a matrix or Matrix (sparse)")
   }
 
   if (is.null(rownames(mat))) {
@@ -300,14 +330,15 @@ validate_expression_matrix <- function(mat) {
     colnames(mat) <- paste0("Cell_", seq_len(ncol(mat)))
   }
 
-  # Check for NAs
-  if (any(is.na(mat))) {
-    warning("Expression matrix contains NA values")
-  }
-
-  # Check for negative values
-  if (any(mat < 0, na.rm = TRUE)) {
-    warning("Expression matrix contains negative values")
+  # Skip expensive any() on large matrices to avoid memory blow-up (sparse or dense)
+  n_elem <- as.numeric(nrow(mat)) * as.numeric(ncol(mat))
+  if (n_elem <= 1e6) {
+    if (any(is.na(mat))) {
+      warning("Expression matrix contains NA values")
+    }
+    if (any(mat < 0, na.rm = TRUE)) {
+      warning("Expression matrix contains negative values")
+    }
   }
 
   invisible(TRUE)

@@ -38,6 +38,10 @@
 #'   names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}.
 #'   **Directionality**: higher score = worse prognosis (adverse); lower score = 
 #'   better prognosis (favorable), matching positive reference z = worse survival.
+#'   For Seurat/SCE objects, scoring may use only reference genes internally for 
+#'   memory efficiency. Always add scores to the **same (full) object** using 
+#'   \code{add_scores_to_seurat} or \code{add_scores_to_sce} so that all genes 
+#'   are retained for downstream analyses (e.g. cell type marker genes).
 #'
 #' @examples
 #' \dontrun{
@@ -98,6 +102,9 @@ score_expression <- function(expression,
   # Handle reference data
   reference_data <- get_reference_data(reference, cancer_type, use_dataset_info, dataset)
   
+  # For large objects (Seurat/SCE), extract only reference genes to avoid memory blow-up
+  genes_to_extract <- get_reference_genes_for_extraction(reference_data, z_score_cutoff)
+  
   # Convert expression to matrix format
   expr_info <- process_expression_input(
     expression = expression,
@@ -105,6 +112,7 @@ score_expression <- function(expression,
     group_by = group_by,
     assay = assay,
     slot = slot,
+    genes_to_extract = genes_to_extract,
     verbose = verbose
   )
   
@@ -178,6 +186,21 @@ get_reference_data <- function(reference, cancer_type, use_dataset_info, dataset
   attr(ref_data, "score_name") <- score_name
 
   return(ref_data)
+}
+
+
+#' Get genes to extract for memory-efficient scoring (Seurat/SCE)
+#' @keywords internal
+get_reference_genes_for_extraction <- function(reference_data, z_score_cutoff) {
+  ref_df <- as.data.frame(reference_data)
+  genes <- character(0)
+  for (j in seq_len(ncol(ref_df))) {
+    col_name <- colnames(ref_df)[j]
+    vec <- ref_df[[col_name]]
+    keep <- !is.na(vec) & abs(vec) > z_score_cutoff
+    genes <- c(genes, rownames(ref_df)[keep])
+  }
+  unique(genes)
 }
 
 

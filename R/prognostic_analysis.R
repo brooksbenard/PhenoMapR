@@ -67,9 +67,9 @@ define_prognostic_groups <- function(scores,
     q_lo <- stats::quantile(v, probs = percentile, na.rm = TRUE)
     q_hi <- stats::quantile(v, probs = 1 - percentile, na.rm = TRUE)
 
-    group <- rep("middle", length(v))
-    group[!is.na(v) & v <= q_lo] <- "favorable"
-    group[!is.na(v) & v >= q_hi] <- "adverse"
+    group <- rep("Other", length(v))
+    group[!is.na(v) & v <= q_lo] <- "Most Favorable"
+    group[!is.na(v) & v >= q_hi] <- "Most Adverse"
     group[is.na(v)] <- NA_character_
 
     out[[paste0("prognostic_group_", col)]] <- group
@@ -88,11 +88,11 @@ define_prognostic_groups <- function(scores,
 #' @param expression Expression matrix (genes x cells), a Seurat object, or a
 #'   SingleCellExperiment. Must match cells in \code{group_labels}.
 #' @param group_labels Either a character vector of group labels
-#'   (\code{"adverse"}, \code{"favorable"}, \code{"middle"}) in the same order
-#'   as columns of \code{expression}, or a data.frame from
+#'   (\code{"Most Adverse"}, \code{"Most Favorable"}, \code{"Other"}) in the
+#'   same order as columns of \code{expression}, or a data.frame from
 #'   \code{define_prognostic_groups()} (see \code{group_column}).
 #' @param group_column If \code{group_labels} is a data.frame, the name of the
-#'   column containing \code{"adverse"} / \code{"favorable"} / \code{"middle"}.
+#'   column containing \code{"Most Adverse"} / \code{"Most Favorable"} / \code{"Other"}.
 #' @param cell_id_column If \code{group_labels} is a data.frame, the column
 #'   name for cell/sample IDs (default \code{"cell_id"}).
 #' @param assay Assay name for Seurat/SCE (e.g. \code{"RNA"}).
@@ -106,6 +106,9 @@ define_prognostic_groups <- function(scores,
 #'   Passed to \code{FindMarkers}.
 #' @param pval_threshold Maximum unadjusted p-value to include (default 0.05).
 #' @param verbose Print progress messages (default TRUE).
+#' @param max_cells_per_ident When any prognostic group exceeds this many cells,
+#'   subsample to this limit before FindMarkers (default 5000). Reduces memory
+#'   for large objects. Set to \code{Inf} to disable.
 #' @param ... Additional arguments passed to \code{Seurat::FindMarkers}.
 #'
 #' @return A list with:
@@ -144,6 +147,7 @@ find_prognostic_markers <- function(expression,
                                     logfc.threshold = 0.25,
                                     pval_threshold = 0.05,
                                     verbose = TRUE,
+                                    max_cells_per_ident = 5000L,
                                     ...) {
   if (!requireNamespace("Seurat", quietly = TRUE)) {
     stop("find_prognostic_markers() requires the Seurat package. Install with: install.packages('Seurat')")
@@ -165,17 +169,17 @@ find_prognostic_markers <- function(expression,
     cell_id_column = cell_id_column
   )
 
-  n_adverse <- sum(group_vec == "adverse", na.rm = TRUE)
-  n_favorable <- sum(group_vec == "favorable", na.rm = TRUE)
+  n_adverse <- sum(group_vec == "Most Adverse", na.rm = TRUE)
+  n_favorable <- sum(group_vec == "Most Favorable", na.rm = TRUE)
   if (n_adverse < 5L) {
-    warning("Fewer than 5 adverse cells; adverse marker results may be unreliable")
+    warning("Fewer than 5 Most Adverse cells; marker results may be unreliable")
   }
   if (n_favorable < 5L) {
-    warning("Fewer than 5 favorable cells; favorable marker results may be unreliable")
+    warning("Fewer than 5 Most Favorable cells; marker results may be unreliable")
   }
   if (verbose) {
     message(glue::glue(
-      "Using Seurat FindMarkers: adverse n={n_adverse}, favorable n={n_favorable}"
+      "Using Seurat FindMarkers: Most Adverse n={n_adverse}, Most Favorable n={n_favorable}"
     ))
   }
 
@@ -184,11 +188,29 @@ find_prognostic_markers <- function(expression,
   meta_col <- "PhenoMapR_prognostic_group"
   Seurat::Idents(seurat_obj) <- seurat_obj[[meta_col]][, 1]
 
+  # Subsample when any ident exceeds max_cells_per_ident (reduces memory for large objects)
+  if (is.finite(max_cells_per_ident)) {
+    idents <- as.character(Seurat::Idents(seurat_obj))
+    cells_keep <- character(0)
+    for (grp in c("Most Adverse", "Most Favorable", "Other")) {
+      idx <- which(idents == grp)
+      if (length(idx) > max_cells_per_ident) {
+        idx <- idx[sample.int(length(idx), max_cells_per_ident)]
+        if (verbose) {
+          message(glue::glue("Subsampled {grp} from {sum(idents == grp)} to {max_cells_per_ident} cells (memory limit)"))
+        }
+      }
+      cells_keep <- c(cells_keep, colnames(seurat_obj)[idx])
+    }
+    seurat_obj <- seurat_obj[, cells_keep]
+  }
+
   # Adverse vs rest
+  gc(verbose = FALSE)
   adverse_markers <- tryCatch(
     Seurat::FindMarkers(
       seurat_obj,
-      ident.1 = "adverse",
+      ident.1 = "Most Adverse",
       ident.2 = NULL,
       assay = attr(seurat_obj, "PhenoMapR_assay") %||% "RNA",
       slot = slot,
@@ -206,11 +228,12 @@ find_prognostic_markers <- function(expression,
       )
     }
   )
+  gc(verbose = FALSE)
   # Favorable vs rest
   favorable_markers <- tryCatch(
     Seurat::FindMarkers(
       seurat_obj,
-      ident.1 = "favorable",
+      ident.1 = "Most Favorable",
       ident.2 = NULL,
       assay = attr(seurat_obj, "PhenoMapR_assay") %||% "RNA",
       slot = slot,
@@ -221,7 +244,7 @@ find_prognostic_markers <- function(expression,
       ...
     ),
     error = function(e) {
-      warning(glue::glue("FindMarkers (favorable) failed: {e$message}"))
+      warning(glue::glue("FindMarkers (Most Favorable) failed: {e$message}"))
       data.frame(
         p_val = numeric(0), avg_log2FC = numeric(0),
         pct.1 = numeric(0), pct.2 = numeric(0), p_val_adj = numeric(0)
@@ -289,7 +312,7 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
     obj <- expression
     # Ensure cells in same order as expr_info
     cell_ids <- expr_info$cell_names
-    obj <- obj[, cell_ids, drop = FALSE]
+    obj <- obj[, cell_ids]
     obj[["PhenoMapR_prognostic_group"]] <- group_vec
     attr(obj, "PhenoMapR_assay") <- assay
     return(obj)
@@ -384,11 +407,11 @@ resolve_group_labels <- function(group_labels,
     group_candidates <- setdiff(names(group_labels), id_col)
     group_candidates <- group_candidates[
       vapply(group_labels[group_candidates], function(x) {
-        is.character(x) && all(unique(x) %in% c("adverse", "favorable", "middle", NA_character_), na.rm = TRUE)
+        is.character(x) && all(unique(x) %in% c("Most Adverse", "Most Favorable", "Other", NA_character_), na.rm = TRUE)
       }, logical(1))
     ]
     if (length(group_candidates) == 0) {
-      stop("No column in 'group_labels' contains only 'adverse'/'favorable'/'middle'. Specify 'group_column'.")
+      stop("No column in 'group_labels' contains only 'Most Adverse'/'Most Favorable'/'Other'. Specify 'group_column'.")
     }
     if (length(group_candidates) > 1) {
       stop("Multiple group columns found. Specify 'group_column'.")
