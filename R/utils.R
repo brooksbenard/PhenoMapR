@@ -224,21 +224,17 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Score D
 #' @keywords internal
 validate_package_data <- function() {
   
-  required_data <- c("precog", "tcga", "pediatric", "ici", "datasets_info")
+  required_data <- c("precog", "tcga", "pediatric", "ici")
   
   for (data_name in required_data) {
     tryCatch({
       obj <- get_data(data_name)
-      
-      if (data_name != "datasets_info") {
-        if (!is.data.frame(obj) && !is.matrix(obj)) {
-          warning(glue::glue("{data_name} is not a data.frame or matrix"))
-        }
-        if (is.null(rownames(obj))) {
-          warning(glue::glue("{data_name} has no rownames (gene names)"))
-        }
+      if (!is.data.frame(obj) && !is.matrix(obj)) {
+        warning(glue::glue("{data_name} is not a data.frame or matrix"))
       }
-      
+      if (is.null(rownames(obj))) {
+        warning(glue::glue("{data_name} has no rownames (gene names)"))
+      }
     }, error = function(e) {
       warning(glue::glue("Could not load {data_name}: {e$message}"))
     })

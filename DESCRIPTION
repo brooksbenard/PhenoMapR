@@ -22,7 +22,6 @@ Imports:
     glue,
     progress
 Suggests:
-    CyteTypeR,
     pheatmap,
     presto,
     viridis,

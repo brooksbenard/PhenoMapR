@@ -39,9 +39,9 @@ Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed auto
 
 ## Getting Started
 
-The primary function of PhenoMapR is `score_expression()`. The basic use of this function takes a `gene x sample/cell/spot` expression file **+** reference phenotype `gene x z-score signature` and generates a `PhenoMapR score x sample/cell/spot` dataframe. For single-cell and spatial inputs, a sample-level PhenoMap score can be generated using the pseudobulk argument.
+The primary function of PhenoMapR is `PhenoMap()`. The basic use of this function takes a `gene x sample/cell/spot` expression file **+** reference phenotype `gene x z-score signature` and generates a `PhenoMapR score x sample/cell/spot` dataframe. For single-cell and spatial inputs, a sample-level PhenoMap score can be generated using the pseudobulk argument.
 
-**`score_expression()` arguments**
+**`PhenoMap()` arguments**
 
 - **expression**: Expression data (matrix, Seurat, SCE, etc.)
 - **reference**: Reference dataset name or custom data.frame
@@ -58,14 +58,14 @@ The primary function of PhenoMapR is `score_expression()`. The basic use of this
 library(PhenoMapR)
 
 # Score a bulk expression matrix
-scores <- score_expression(
+scores <- PhenoMap(
   expression = bulk_matrix,  # genes x samples
   reference = "precog",
   cancer_type = "BRCA"
 )
 
 # Score single-cell data
-scores <- score_expression(
+scores <- PhenoMap(
   expression = seurat_obj,
   reference = "tcga",
   cancer_type = "LUAD",
@@ -74,7 +74,7 @@ scores <- score_expression(
 )
 
 # Score with pseudobulk aggregation
-scores <- score_expression(
+scores <- PhenoMap(
   expression = seurat_obj,
   reference = "ici_precog",
   cancer_type = "MELANOMA_Metastatic",
@@ -93,7 +93,7 @@ expression_matrix <- matrix(...)
 rownames(expression_matrix) <- gene_names
 colnames(expression_matrix) <- cell_names
 
-scores <- score_expression(expression_matrix, reference = "precog", cancer_type = "BRCA")
+scores <- PhenoMap(expression_matrix, reference = "precog", cancer_type = "BRCA")
 ```
 
 ### 2. Seurat Objects
@@ -101,7 +101,7 @@ scores <- score_expression(expression_matrix, reference = "precog", cancer_type 
 library(Seurat)
 
 # Single-cell
-scores <- score_expression(
+scores <- PhenoMap(
   seurat_obj,
   reference = "tcga",
   cancer_type = "LUAD",
@@ -113,7 +113,7 @@ scores <- score_expression(
 seurat_obj <- add_scores_to_seurat(seurat_obj, scores)
 
 # Spatial
-scores <- score_expression(
+scores <- PhenoMap(
   spatial_seurat,
   reference = "precog",
   cancer_type = "BRCA",
@@ -126,7 +126,7 @@ scores <- score_expression(
 ```r
 library(SingleCellExperiment)
 
-scores <- score_expression(
+scores <- PhenoMap(
   sce_obj,
   reference = "pediatric_precog",
   cancer_type = "Neuroblastoma",
@@ -143,7 +143,7 @@ library(reticulate)
 
 adata <- import("scanpy")$read_h5ad("data.h5ad")
 
-scores <- score_expression(
+scores <- PhenoMap(
   adata,
   reference = "precog",
   cancer_type = "BRCA"
@@ -196,6 +196,10 @@ list_cancer_types("ici_precog")
 
 ![PhenoMapR schematic](inst/figures/PhenoMapR_schematic.png)
 
+**Reference coverage** — Cancer types available for scoring in each built-in database (Adult PRECOG, Pediatric PRECOG, TCGA, ICI PRECOG). Use `list_cancer_types("precog")` (or `"tcga"`, `"pediatric_precog"`, `"ici_precog"`) to see labels for your reference of choice.
+
+![Reference coverage by database and cancer type](inst/figures/reference_coverage.png)
+
 At a high level, PhenoMapR:
 
 - **Combines pan-cancer prognostic meta-z scores** from PRECOG with your expression matrix.
@@ -211,7 +215,7 @@ Detailed walkthroughs with public datasets:
 
 | Vignette | Description |
 |----------|-------------|
-| **[GSE111672 — Single-cell PAAD](https://brooksbenard.github.io/PhenoMapR/articles/gse111672-single-cell.html)** | Score PAAD single cells with PRECOG **Pancreatic** using the included `PAAD_GSE111672_seurat.rds`; cell type score distributions and prognostic group marker analysis. Optional [CyteTypeR](https://github.com/NygenAnalytics/CyteTypeR) annotation. Data: [GEO GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672). |
+| **[GSE111672 — Single-cell PAAD](https://brooksbenard.github.io/PhenoMapR/articles/gse111672-single-cell.html)** | Score PAAD single cells with PRECOG **Pancreatic** using the included `PAAD_GSE111672_seurat.rds`; cell type score distributions and prognostic group marker analysis. Data: [GEO GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672). |
 | **[GSE205154 — Bulk PDAC scoring and survival](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data: [GEO GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). |
 | **[GSE205154 — Custom survival-based reference](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-custom-reference.html)** | Build a custom gene z-score reference from GSE205154 expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
 
@@ -228,7 +232,7 @@ custom_ref <- data.frame(
   my_signature = c(3.2, -2.5, 2.8, 1.9)
 )
 
-scores <- score_expression(
+scores <- PhenoMap(
   expression = my_data,
   reference = custom_ref,
   z_score_cutoff = 1.5
@@ -255,7 +259,7 @@ ref <- derive_reference_from_bulk(
 )
 
 # Score single-cell or spatial data with the derived reference
-scores <- score_expression(expression = my_seurat, reference = ref)
+scores <- PhenoMap(expression = my_seurat, reference = ref)
 ```
 
 For survival, provide `survival_time` and `survival_event` column names and set `phenotype_type = "survival"`. Optional: install `HGNChelper` for HUGO symbol cleaning and `survival` for Cox models.
@@ -263,7 +267,7 @@ For survival, provide `survival_time` and `survival_event` column names and set 
 ### Pseudobulk Aggregation
 ```r
 # Aggregate single cells by patient before scoring
-scores <- score_expression(
+scores <- PhenoMap(
   seurat_obj,
   reference = "tcga",
   cancer_type = "LUAD",
@@ -274,7 +278,7 @@ scores <- score_expression(
 
 ### Normalize Scores
 ```r
-scores_df <- score_expression(...)
+scores_df <- PhenoMap(...)
 
 # Convert to z-scores
 scores_df$score_zscore <- normalize_scores(scores_df[, 1])
@@ -284,7 +288,7 @@ scores_df$score_zscore <- normalize_scores(scores_df[, 1])
 Define the top and bottom 5% prognostic cells per dataset (adverse = highest scores, favorable = lowest) and find unique marker genes using **Seurat's FindMarkers** (requires Seurat):
 ```r
 # Score and define groups (top 5% = adverse, bottom 5% = favorable)
-scores <- score_expression(seurat_obj, reference = "precog", cancer_type = "BRCA")
+scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 groups <- define_prognostic_groups(scores, percentile = 0.05)
 
 # One group column per score; values: "adverse", "favorable", "middle"

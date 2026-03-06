@@ -3,7 +3,7 @@
 #' For each score column (dataset), labels cells as adverse (top percentile,
 #' highest scores), favorable (bottom percentile, lowest scores), or middle.
 #'
-#' @param scores Data.frame of prognostic scores from \code{score_expression}.
+#' @param scores Data.frame of prognostic scores from \code{PhenoMap}.
 #'   Rows = cells/samples, columns = score variables (e.g. weighted_sum_score_precog_BRCA).
 #' @param percentile Fraction of cells in each tail (default 0.05 for top and bottom 5%).
 #' @param score_columns Character vector of score column names to use. If NULL,
@@ -19,7 +19,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' scores <- score_expression(seurat_obj, reference = "precog", cancer_type = "BRCA")
+#' scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 #' groups <- define_prognostic_groups(scores, percentile = 0.05)
 #' table(groups$prognostic_group_weighted_sum_score_precog_BRCA)
 #' }
@@ -29,7 +29,7 @@ define_prognostic_groups <- function(scores,
                                      percentile = 0.05,
                                      score_columns = NULL) {
   if (!is.data.frame(scores)) {
-    stop("'scores' must be a data.frame from score_expression()")
+    stop("'scores' must be a data.frame from PhenoMap()")
   }
   if (percentile <= 0 || percentile >= 0.5) {
     stop("'percentile' must be between 0 and 0.5 (e.g. 0.05 for 5%)")
@@ -123,7 +123,7 @@ define_prognostic_groups <- function(scores,
 #'
 #' @examples
 #' \dontrun{
-#' scores <- score_expression(seurat_obj, reference = "precog", cancer_type = "BRCA")
+#' scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 #' groups <- define_prognostic_groups(scores, percentile = 0.05)
 #' markers <- find_prognostic_markers(
 #'   seurat_obj,

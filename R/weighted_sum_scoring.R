@@ -177,8 +177,8 @@ normalize_scores <- function(scores) {
 #' **original** (non-subset) Seurat object so that all genes are retained for
 #' downstream analyses (e.g. cell type marker gene analysis).
 #'
-#' @param seurat_obj Seurat object (the same full object passed to \code{score_expression})
-#' @param scores Data.frame of scores (output from score_expression)
+#' @param seurat_obj Seurat object (the same full object passed to \code{PhenoMap})
+#' @param scores Data.frame of scores (output from PhenoMap)
 #' @param prefix Prefix for metadata column names (default: "")
 #'
 #' @return Seurat object with scores added to metadata
@@ -225,8 +225,8 @@ add_scores_to_seurat <- function(seurat_obj, scores, prefix = "") {
 #' (non-subset) SCE object so that all genes are retained for downstream
 #' analyses (e.g. marker genes).
 #'
-#' @param sce_obj SingleCellExperiment object (the same full object passed to \code{score_expression})
-#' @param scores Data.frame of scores (output from score_expression)
+#' @param sce_obj SingleCellExperiment object (the same full object passed to \code{PhenoMap})
+#' @param scores Data.frame of scores (output from PhenoMap)
 #' @param prefix Prefix for colData column names (default: "")
 #'
 #' @return SingleCellExperiment object with scores in colData

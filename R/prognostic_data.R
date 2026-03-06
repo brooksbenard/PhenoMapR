@@ -42,20 +42,3 @@
 #'   CANCER_THERAPY_STAGE_ENDPOINT (e.g., "MELANOMA_Anti-PD1_Primary_OS")
 #'
 "ici"
-
-
-#' Dataset Information and Cancer Type Mapping
-#'
-#' Metadata for mapping dataset names to appropriate cancer type labels
-#' in each reference dataset.
-#'
-#' @format A data.frame with columns:
-#' \describe{
-#'   \item{dataset_name}{Name of the dataset}
-#'   \item{precog_label}{Cancer type label for PRECOG reference}
-#'   \item{tcga_label}{Cancer type label for TCGA reference}
-#'   \item{pediatric_precog_label}{Cancer type label for Pediatric reference}
-#'   \item{ici_precog_label}{Cancer type label for ICI reference}
-#' }
-#'
-"datasets_info"
