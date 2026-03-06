@@ -1,0 +1,2 @@
+# Exclude HTML from GitHub Languages report (vignette outputs, pkgdown docs)
+*.html linguist-documentation
