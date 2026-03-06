@@ -1,36 +1,72 @@
-template:
-  bootstrap: 5
-  params:
-    toc: yes
-    toc_float: yes
 url: https://brooksbenard.github.io/PhenoMapR/
-destination: docs
+
 development:
   mode: auto
-navbar:
-  structure:
-    left:
-    - reference
-    - articles
-    - news
-    right: github
-  components:
-    github:
-      href: https://github.com/brooksbenard/PhenoMapR
-      icon: fa-brands fa-github
-      aria-label: View source on GitHub
-footer:
-  structure:
-    left: built_with
-    right: developed_by
-articles:
-- title: Vignettes
-  desc: Tutorials and worked examples
-  contents:
-  - gse111672-single-cell
-  - gse205154-bulk-survival
-  - gse205154-custom-reference
-reference:
-- title: Reference
-  desc: Function documentation
 
+repo:
+  url:
+    home: https://github.com/brooksbenard/PhenoMapR
+    source: https://github.com/brooksbenard/PhenoMapR/blob/main/
+    issue: https://github.com/brooksbenard/PhenoMapR/issues
+  branch: main
+
+template:
+  bootswatch: simplex
+  bootstrap: 5
+  bslib:
+    primary: "#0054AD"
+    border-radius: 0.5rem
+    btn-border-radius: 0.25rem
+
+authors:
+  Brooks Benard:
+    href: https://profiles.stanford.edu/brooks-benard
+
+navbar:
+  title: ~
+  type: default
+  left:
+    - text: Vignettes
+      menu:
+      - text: Single-cell example (GSE111672)
+        href: articles/gse111672-single-cell.html
+      - text: Bulk survival analysis (GSE205154)
+        href: articles/gse205154-bulk-survival.html
+      - text: Custom reference (GSE205154)
+        href: articles/gse205154-custom-reference.html
+    - text: R functions
+      href: reference/index.html
+    - text: News
+      href: news/index.html
+
+reference:
+- title: Prognostic scoring
+  desc: Score expression data with weighted sum of prognostic gene signatures.
+  contents:
+  - PhenoMap
+  - normalize_scores
+  - add_scores_to_seurat
+  - add_scores_to_sce
+- title: Reference data and utilities
+  desc: List cancer types, check gene coverage, and get top prognostic genes.
+  contents:
+  - list_cancer_types
+  - get_gene_coverage
+  - get_top_prognostic_genes
+- title: Custom reference derivation
+  desc: Derive reference z-scores from bulk expression and phenotype.
+  contents:
+  - derive_reference_from_bulk
+- title: Prognostic group analysis
+  desc: Define adverse/favorable groups and find marker genes.
+  contents:
+  - define_prognostic_groups
+  - find_prognostic_markers
+- title: Visualization
+  contents:
+  - plot_score_distribution
+
+news:
+  releases:
+  - text: "Version 0.1.0"
+    href:
