@@ -9,7 +9,7 @@
 
 <!-- badges: end -->
 
-PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression onto bulk, single cell, and spatial transcriptomics data. PhenoMapR nominates and rank-orders samples, cells, and spatial locations associated with gene expression signatures that are correlated with a phenotype of interest (e.g. overall survival).
+**PhenoMapR** is a semi-supervised method to map phenotypes associated with bulk gene expression onto bulk, single cell, and spatial transcriptomics data. PhenoMapR nominates and rank-orders samples, cells, and spatial locations associated with gene expression signatures that are correlated with a phenotype of interest (e.g. overall survival).
 
 <p align="center">
   <img src="inst/figures/PhenoMapR_visualization.png" alt="PhenoMapR visualization" width="420" />
