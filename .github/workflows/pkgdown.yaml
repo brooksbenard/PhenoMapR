@@ -27,11 +27,25 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::pkgdown, local::.
+          extra-packages: any::remotes, any::pkgdown, local::.
+
+      - name: Ensure pkgdown >= 2.1.0
+        run: |
+          Rscript -e 'v <- packageVersion("pkgdown"); if (v < "2.1.0") remotes::install_github("r-lib/pkgdown", ref = "v2.1.0", upgrade = "never")'
+          Rscript -e 'packageVersion("pkgdown")'
+
+      - name: Verify vignettes exist before build
+        run: |
+          echo "Package root:"
+          pwd
+          echo "vignettes/ contents:"
+          ls -la vignettes/*.Rmd 2>/dev/null || { echo "ERROR: no .Rmd in vignettes/"; exit 1; }
 
       - name: Build pkgdown site
-        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
-        shell: Rscript {0}
+        run: |
+          Rscript -e "pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)"
+        env:
+          PKGDOWN_DEV_MODE: release
 
       - name: Verify articles were built
         run: |

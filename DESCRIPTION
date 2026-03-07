@@ -34,7 +34,7 @@ Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    pkgdown (>= 2.0.0),
+    pkgdown (>= 2.1.0),
     HGNChelper,
     survival,
     survminer
