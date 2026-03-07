@@ -26,7 +26,7 @@ navbar:
   title: ~
   type: default
   left:
-    - text: Vignettes
+    - text: Articles
       menu:
       - text: Single-cell example (GSE111672)
         href: articles/gse111672-single-cell.html
@@ -42,7 +42,7 @@ navbar:
       href: news/index.html
 
 articles:
-  - title: Vignettes
+  - title: Articles
     desc: Tutorials and worked examples with PhenoMapR.
     contents:
       - gse111672-single-cell

@@ -1,0 +1,516 @@
+---
+title: "Scoring spatial transcriptomics with PhenoMapR"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+---
+
+## Overview
+
+This vignette demonstrates using PhenoMapR on **spatial transcriptomics** data. We use the processed spatial object **HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed** (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`) to score spots with the PRECOG **Pancreatic** reference, define adverse vs. favorable prognostic groups, and visualize both score distributions and **where** PhenoMapR scores localize on the tissue image. The workflow mirrors the single-cell vignette but adds spatial plots to show score and prognostic group across the slide.
+
+## Load and setup
+
+Load PhenoMapR and Seurat, and locate the spatial RDS file. Place `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` in `vignettes/` or the project root (see [vignettes/README.md](README.md)).
+
+```{r load-setup}
+suppressPackageStartupMessages(library(PhenoMapR))
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+if (!exists("PhenoMap", mode = "function")) {
+  stop("PhenoMap not found. Reinstall PhenoMapR from source: devtools::install() or install.packages('.', repos = NULL, type = 'source')")
+}
+knitr::opts_chunk$set(fig.width = 12, out.width = "100%", warning = FALSE)
+
+report_timing <- function(step_name, t0, obj = NULL) {
+  elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+  mem_mb <- if (!is.null(obj)) format(object.size(obj), units = "MB") else "-"
+  message(sprintf("[%s] Runtime: %.2f s | Memory: %s", step_name, elapsed, mem_mb))
+}
+
+rds_path <- "Vignettes/HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
+if (!file.exists(rds_path)) rds_path <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
+has_data <- file.exists(rds_path)
+knitr::opts_chunk$set(eval = has_data)
+if (!has_data) {
+  message("HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds not found. See Vignettes/README.md for data instructions.")
+} else {
+  suppressMessages({
+    seurat <- readRDS(rds_path)
+    update_fn <- tryCatch(
+      get("UpdateSeuratObject", envir = asNamespace("SeuratObject")),
+      error = function(e) get0("UpdateSeuratObject", envir = asNamespace("Seurat"), mode = "function")
+    )
+    if (is.function(update_fn)) {
+      seurat <- tryCatch(update_fn(seurat), error = function(e) seurat)
+    }
+  })
+  assay_use <- if ("Spatial" %in% names(seurat@assays)) "Spatial" else "RNA"
+  n_genes <- nrow(seurat)
+  n_spots <- ncol(seurat)
+  n_images <- length(seurat@images)
+  head(colnames(seurat@meta.data))
+}
+```
+
+## Score spots with PRECOG Pancreatic
+
+Apply PhenoMapR using the built-in PRECOG primary **Pancreatic** reference, then add scores to the Seurat object metadata.
+
+```{r score-spots}
+suppressMessages({
+  scores_spatial <- PhenoMapR::PhenoMap(
+    expression = seurat,
+    reference = "precog",
+    cancer_type = "Pancreatic",
+    assay = assay_use,
+    slot = "data",
+    verbose = FALSE
+  )
+  seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
+})
+score_col <- grep("weighted_sum_score", names(scores_spatial), value = TRUE)[1]
+summary(seurat@meta.data[[score_col]])
+```
+
+## Score distribution
+
+Distribution of PhenoMapR (PRECOG Pancreatic) scores across spots.
+
+```{r score-distribution}
+plot_score_distribution(
+  seurat@meta.data[[score_col]],
+  main = "PRECOG Pancreatic score (spatial spots)"
+)
+```
+
+## Score by cell type or cluster (if available)
+
+If the object has cell type or cluster annotations (e.g. **CellType**), we can see how scores vary by group. For HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed, cell types may be in a separate file from CytoSpace; we try to load a companion table and add **CellType** to the object if it is not already in `meta.data`.
+
+```{r add-celltype-if-missing}
+# If CellType is missing, try a companion file (e.g. *_celltypes.csv or *_annotations.csv next to the RDS)
+tried <- character(0)
+if (!"CellType" %in% names(seurat@meta.data)) {
+  rds_dir <- dirname(rds_path)
+  rds_base <- sub("\\.rds$", "", basename(rds_path))
+  for (suffix in c("_celltypes.csv", "_annotations.csv", "_celltype.csv", "_metadata.csv")) {
+    f <- file.path(rds_dir, paste0(rds_base, suffix))
+    if (file.exists(f)) {
+      tried <- c(tried, f)
+      tab <- tryCatch(utils::read.csv(f, stringsAsFactors = FALSE), error = function(e) NULL)
+      if (!is.null(tab) && nrow(tab) > 0) {
+        # Find a column that looks like cell type (many unique character values) and one for cell/spot ID
+        id_col <- NULL
+        type_col <- NULL
+        for (c in c("CellType", "celltype", "cell_type", "annotation", "celltype_predicted")) {
+          if (c %in% names(tab)) { type_col <- c; break }
+        }
+        if (is.null(type_col)) type_col <- names(tab)[sapply(tab, function(x) is.character(x) || is.factor(x))][1]
+        for (c in c("cell", "barcode", "spot", "id", "Cell", "Barcode")) {
+          if (any(tolower(names(tab)) == tolower(c))) {
+            id_col <- names(tab)[tolower(names(tab)) == tolower(c)][1]
+            break
+          }
+        }
+        if (is.null(id_col)) id_col <- names(tab)[1]
+        if (!is.null(type_col) && type_col %in% names(tab)) {
+          types <- setNames(as.character(tab[[type_col]]), tab[[id_col]])
+          cells <- colnames(seurat)
+          match_idx <- match(cells, names(types))
+          if (sum(!is.na(match_idx)) > 0) {
+            seurat$CellType <- types[match_idx]
+            NULL
+            break
+          }
+        }
+      }
+    }
+  }
+}
+if (!"CellType" %in% names(seurat@meta.data) && length(tried) > 0) {
+  message("Companion files tried: ", paste(basename(tried), collapse = ", "), "; no match by cell ID.")
+}
+```
+
+```{r score-by-annotation}
+# Prefer CellType; then any column with 2--100 discrete levels (e.g. orig.ident, clusters)
+spatial_celltype_pal <- NULL
+spatial_celltype_col <- NULL
+meta_names <- names(seurat@meta.data)
+celltype_col <- NULL
+for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) {
+  if (c %in% meta_names) {
+    celltype_col <- c
+    break
+  }
+}
+if (is.null(celltype_col)) {
+  idx <- grep("celltype|cluster|annotation", meta_names, ignore.case = TRUE)
+  if (length(idx) > 0) celltype_col <- meta_names[idx[1]]
+}
+# Last resort: use first metadata column that has 2--100 unique values (discrete grouping)
+if (is.null(celltype_col)) {
+  for (c in meta_names) {
+    if (c == score_col) next
+    raw <- seurat@meta.data[[c]]
+    if (is.list(raw)) raw <- vapply(raw, function(x) as.character(x)[1], character(1))
+    else raw <- as.character(raw)
+    n_u <- length(unique(na.omit(raw)))
+    if (n_u >= 2L && n_u <= 100L) {
+      celltype_col <- c
+      break
+    }
+  }
+}
+
+df <- seurat@meta.data
+n_meta <- nrow(df)
+ann_vec <- NULL
+if (!is.null(celltype_col)) {
+  raw <- df[[celltype_col]]
+  if (is.list(raw)) {
+    ann_vec <- vapply(raw, function(x) if (is.null(x) || length(x) == 0) NA_character_ else as.character(x)[1], character(1))
+  } else {
+    ann_vec <- as.vector(raw)
+  }
+  if (length(ann_vec) != n_meta) ann_vec <- NULL
+}
+if (is.null(ann_vec)) {
+  message("No annotation column with 2--100 levels found. To plot score by cell type, add a CellType column to the object (e.g. from a CytoSpace annotation file).")
+  df$annotation <- factor(rep("all", n_meta))
+  celltype_col <- "annotation"
+} else {
+  df$annotation <- factor(ann_vec, exclude = NULL)
+}
+
+n_levels <- length(levels(df$annotation))
+# Allow 2--100 levels for boxplot (covers 16 cell types and similar datasets)
+if (n_levels >= 2L && n_levels <= 100L) {
+  n_lev <- n_levels
+  pal <- if (n_lev <= 12) {
+    c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377",
+      "#BBBBBB", "#EE8866", "#FFAABB", "#99DDFF", "#DDDDDD", "#77AADD")[seq_len(n_lev)]
+  } else {
+    colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#004488", "#DDAA33"))(n_lev)
+  }
+  names(pal) <- levels(df$annotation)
+  print(ggplot(df, aes(
+    x = reorder(.data$annotation, .data[[score_col]], FUN = median),
+    y = .data[[score_col]],
+    fill = .data$annotation
+  )) +
+    geom_boxplot(outlier.alpha = 0.3) +
+    scale_fill_manual(values = pal, name = celltype_col) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = "right"
+    ) +
+    labs(y = "PRECOG Pancreatic score", x = celltype_col, title = "Score by annotation (spatial)"))
+} else {
+  spatial_celltype_pal <- NULL
+  spatial_celltype_col <- NULL
+  message("Single or too many annotation levels (", n_levels, "); skipping boxplot.")
+}
+```
+
+## Define prognostic groups
+
+Label spots as Most Adverse (top 5%), Most Favorable (bottom 5%), or Other, then attach to metadata for spatial plotting.
+
+```{r prognostic-groups}
+scores_df <- seurat@meta.data[, grep("weighted_sum_score", names(seurat@meta.data)), drop = FALSE]
+groups <- PhenoMapR::define_prognostic_groups(scores_df, percentile = 0.05)
+suppressMessages(seurat <- AddMetaData(seurat, groups))
+
+group_col <- grep("prognostic_group_weighted_sum_score", names(seurat@meta.data), value = TRUE)[1]
+table(seurat@meta.data[[group_col]], useNA = "ifany")
+```
+
+## Spatial plots: where do PhenoMapR scores localize?
+
+We plot **cell type**, **PhenoMapR score** (z-scaled for display), and **5th percentile prognostic groups** in spatial coordinates. High (red) scores indicate more adverse prognostic expression; low (blue) indicate more favorable.
+
+```{r spatial-build-df}
+suppressPackageStartupMessages(library(dplyr))
+coords <- tryCatch(
+  suppressMessages(Seurat::GetTissueCoordinates(seurat)),
+  error = function(e) NULL
+)
+if (is.null(coords) && length(seurat@images) > 0L) {
+  img <- seurat@images[[1]]
+  coords <- tryCatch(img@coordinates, error = function(e) NULL)
+}
+# Fallback: look for row/col or imagerow/imagecol in metadata
+if (is.null(coords) || nrow(coords) == 0) {
+  meta <- seurat@meta.data
+  for (pair in list(
+    c("row", "col"),
+    c("imagerow", "imagecol"),
+    c("x", "y"),
+    c("tile", "cell")
+  )) {
+    if (pair[1] %in% names(meta) && pair[2] %in% names(meta)) {
+      coords <- meta[, pair, drop = FALSE]
+      names(coords) <- c("row", "col")
+      break
+    }
+  }
+}
+if (!is.null(coords) && nrow(coords) > 0) {
+  if (!"row" %in% names(coords)) coords$row <- coords[[grep("row|imagerow|x", names(coords), ignore.case = TRUE)[1]]]
+  if (!"col" %in% names(coords)) coords$col <- coords[[grep("col|imagecol|y", names(coords), ignore.case = TRUE)[1]]]
+  spatial_df <- as.data.frame(seurat@meta.data)
+  spatial_df$cell_id <- rownames(spatial_df)
+  # Align coordinates by cell id (coords rownames match cell barcodes)
+  ids <- spatial_df$cell_id
+  spatial_df$row <- coords[match(ids, rownames(coords)), "row"]
+  spatial_df$col <- coords[match(ids, rownames(coords)), "col"]
+  if (!is.null(group_col)) spatial_df$prognostic_group <- spatial_df[[group_col]]
+  # Cell type for spatial: use spatial_celltype_col if set, else find CellType or any 2--100 level column
+  celltype_plot_col <- NULL
+  if (!is.null(spatial_celltype_col) && spatial_celltype_col %in% names(spatial_df)) {
+    celltype_plot_col <- spatial_celltype_col
+  } else if ("CellType" %in% names(spatial_df)) {
+    celltype_plot_col <- "CellType"
+  } else {
+    idx <- grep("celltype|cell_type|annotation", names(spatial_df), ignore.case = TRUE)
+    if (length(idx) > 0) celltype_plot_col <- names(spatial_df)[idx[1]]
+  }
+  if (is.null(celltype_plot_col)) {
+    for (c in setdiff(names(spatial_df), c(score_col, group_col, "cell_id", "row", "col", "prognostic_group"))) {
+      raw <- spatial_df[[c]]
+      if (is.list(raw)) raw <- vapply(raw, function(x) as.character(x)[1], character(1))
+      else raw <- as.character(raw)
+      if (length(unique(na.omit(raw))) >= 2L && length(unique(na.omit(raw))) <= 100L) {
+        celltype_plot_col <- c
+        break
+      }
+    }
+  }
+  if (!is.null(celltype_plot_col)) {
+    spatial_df$celltype_plot <- factor(spatial_df[[celltype_plot_col]], exclude = NULL)
+    spatial_df_celltype_col <- celltype_plot_col
+    n_lev <- length(levels(spatial_df$celltype_plot))
+    if (n_lev >= 2L && (is.null(spatial_celltype_pal) || length(spatial_celltype_pal) != n_lev)) {
+      spatial_celltype_pal <- if (n_lev <= 12) {
+        setNames(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377",
+          "#BBBBBB", "#EE8866", "#FFAABB", "#99DDFF", "#DDDDDD", "#77AADD")[seq_len(n_lev)], levels(spatial_df$celltype_plot))
+      } else {
+        setNames(colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#004488", "#DDAA33"))(n_lev), levels(spatial_df$celltype_plot))
+      }
+      spatial_celltype_col <- celltype_plot_col
+    }
+  } else {
+    spatial_df$celltype_plot <- NULL
+    spatial_df_celltype_col <- NULL
+  }
+  spatial_df <- spatial_df %>%
+    group_by(.data$row, .data$col) %>%
+    mutate(points_per_location = n()) %>%
+    ungroup()
+  # Scaled PhenoMapR score (z-score) for gradient plot so colors show variation
+  if (score_col %in% names(spatial_df)) {
+    raw_score <- as.numeric(spatial_df[[score_col]])
+    spatial_df$phenomapr_scaled <- as.numeric(scale(raw_score))
+  } else {
+    spatial_df$phenomapr_scaled <- NA_real_
+  }
+  # Shared jitter and point size so all three spatial plots match (multiple cells per location)
+  rng_row <- diff(range(spatial_df$row, na.rm = TRUE))
+  rng_col <- diff(range(-spatial_df$col, na.rm = TRUE))
+  spatial_jitter_w <- max(0.15, if (rng_row > 0) rng_row * 0.025 else 0.15)
+  spatial_jitter_h <- max(0.15, if (rng_col > 0) rng_col * 0.025 else 0.15)
+  spatial_point_range <- c(0.8, 2.2)
+  has_spatial_coords <- TRUE
+} else {
+  has_spatial_coords <- FALSE
+  message("No spatial coordinates found; skipping spatial plots.")
+}
+```
+
+### Where cell types are
+
+```{r spatial-celltype-plot, fig.width=6, fig.height=5.5, out.width=NULL}
+if (exists("has_spatial_coords") && has_spatial_coords && !is.null(spatial_df$celltype_plot) &&
+    length(levels(spatial_df$celltype_plot)) >= 2L) {
+  ct_col <- if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col)) spatial_df_celltype_col else spatial_celltype_col
+  ct_pal <- if (!is.null(spatial_celltype_pal)) spatial_celltype_pal else {
+    n_lev <- length(levels(spatial_df$celltype_plot))
+    if (n_lev <= 12) {
+      setNames(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377",
+        "#BBBBBB", "#EE8866", "#FFAABB", "#99DDFF", "#DDDDDD", "#77AADD")[seq_len(n_lev)], levels(spatial_df$celltype_plot))
+    } else {
+      setNames(colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#004488", "#DDAA33"))(n_lev), levels(spatial_df$celltype_plot))
+    }
+  }
+  p3 <- ggplot(spatial_df, aes(x = .data$row, y = -.data$col, color = .data$celltype_plot,
+    size = points_per_location)) +
+    geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+    ggtitle(paste("Cell type (", ct_col, ")", sep = "")) +
+    scale_color_manual(values = ct_pal, name = ct_col, na.value = "grey90") +
+    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per location") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank()
+    )
+  print(p3)
+}
+```
+
+### Where raw PhenoMapR scores are
+
+Spatial map of PhenoMapR score (z-scaled for color gradient). Blue = more favorable, red = more adverse.
+
+```{r spatial-score, fig.width=6, fig.height=5.5, out.width=NULL}
+if (exists("has_spatial_coords") && has_spatial_coords) {
+  score_vals <- spatial_df$phenomapr_scaled
+  p1 <- ggplot(spatial_df, aes(x = .data$row, y = -.data$col, color = score_vals,
+    size = points_per_location, zorder = score_vals)) +
+    geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+    ggtitle("PhenoMapR score (PRECOG Pancreatic, z-scaled)") +
+    scale_color_gradientn(
+      colors = colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100),
+      name = "PhenoMapR\nscore (z)",
+      limits = c(-2, 2),
+      na.value = "grey80"
+    ) +
+    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per location") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank()
+    )
+  print(p1)
+}
+```
+
+### Where 5th percentile cells are
+
+Spatial map of prognostic groups: top 5% (Most Adverse), bottom 5% (Most Favorable), and the rest (Other).
+
+```{r spatial-group, fig.width=6, fig.height=5.5, out.width=NULL}
+if (exists("has_spatial_coords") && has_spatial_coords && !is.null(group_col)) {
+  p2 <- ggplot(spatial_df, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+    size = points_per_location, zorder = as.numeric(factor(.data$prognostic_group,
+      levels = c("Most Favorable", "Other", "Most Adverse"))))) +
+    geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+    ggtitle("5th percentile: Most Adverse vs Most Favorable") +
+    scale_color_manual(
+      values = c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC"),
+      name = "Prognostic group",
+      na.value = "grey90"
+    ) +
+    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per location") +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank()
+    )
+  print(p2)
+}
+```
+
+## Prognostic markers (optional)
+
+Identify marker genes for adverse vs. favorable spots, then visualize top genes in a heatmap (same logic as the single-cell vignette).
+
+```{r markers-spatial, cache = FALSE}
+markers <- NULL
+if (!is.null(group_col)) {
+  # Pass group labels as data.frame with cell IDs so lengths match expression (assay may subset cells)
+  group_df <- data.frame(
+    cell_id = rownames(seurat@meta.data),
+    prognostic_group = seurat@meta.data[[group_col]],
+    stringsAsFactors = FALSE
+  )
+  markers <- tryCatch(
+    suppressMessages(PhenoMapR::find_prognostic_markers(
+      seurat,
+      group_labels = group_df,
+      group_column = "prognostic_group",
+      cell_id_column = "cell_id",
+      assay = assay_use,
+      slot = "data",
+      max_cells_per_ident = 5000L,
+      verbose = FALSE
+    )),
+    error = function(e) NULL
+  )
+  if (!is.null(markers)) {
+    print(head(markers$adverse_markers, 5))
+    print(head(markers$favorable_markers, 5))
+  }
+}
+```
+
+```{r heatmap-markers-spatial}
+if (exists("markers") && !is.null(markers)) {
+  n_top <- 12
+  expr <- tryCatch(
+    Seurat::GetAssayData(seurat, layer = "data", assay = assay_use),
+    error = function(e) Seurat::GetAssayData(seurat, slot = "data", assay = assay_use)
+  )
+  adverse_pos <- markers$adverse_markers[markers$adverse_markers$avg_log2FC > 0, ]
+  favorable_pos <- markers$favorable_markers[markers$favorable_markers$avg_log2FC > 0, ]
+  top_genes <- unique(c(
+    head(adverse_pos$gene[order(adverse_pos$p_adj)], n_top),
+    head(favorable_pos$gene[order(favorable_pos$p_adj)], n_top)
+  ))
+  top_genes <- top_genes[top_genes %in% rownames(expr)]
+  if (length(top_genes) == 0) top_genes <- head(rownames(expr), 20)
+
+  mat <- as.matrix(expr[top_genes, , drop = FALSE])
+  mat_scaled <- t(scale(t(mat)))
+  mat_scaled[mat_scaled < -3] <- -3
+  mat_scaled[mat_scaled > 3] <- 3
+  meta <- seurat@meta.data
+  ord <- order(meta[[score_col]])
+  mat_scaled <- mat_scaled[, ord, drop = FALSE]
+
+  if (requireNamespace("pheatmap", quietly = TRUE)) {
+    ann_col <- data.frame(
+      `PhenoMapR Score` = meta[[score_col]][ord],
+      `Prognostic group` = factor(meta[[group_col]][ord], levels = c("Most Adverse", "Other", "Most Favorable")),
+      check.names = FALSE
+    )
+    rownames(ann_col) <- colnames(mat_scaled)
+    pheatmap::pheatmap(
+      mat_scaled,
+      scale = "none",
+      cluster_cols = FALSE,
+      cluster_rows = TRUE,
+      show_colnames = FALSE,
+      annotation_col = ann_col,
+      color = if (requireNamespace("viridis", quietly = TRUE)) viridis::viridis(100) else grDevices::colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100),
+      breaks = seq(-3, 3, length.out = 101),
+      main = "Top adverse & favorable marker genes (spatial spots)",
+      fontsize_row = 8
+    )
+  }
+}
+```
+
+## Summary
+
+- **Data**: Processed spatial object (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`).
+- **Scoring**: PhenoMapR with PRECOG **Pancreatic**; scores added to Seurat metadata.
+- **Plots**: Score distribution, score by annotation (if present), prognostic groups, and **spatial maps** of the continuous score and prognostic group so you can see where adverse vs. favorable phenotypes localize on the tissue.
+- **Optional**: Marker genes for adverse/favorable spots and a heatmap; multiple sections if the object has more than one image.
+
+## References
+
+- **PRECOG 2.0**: Benard B, Lalgudi S, et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research*. 2026.

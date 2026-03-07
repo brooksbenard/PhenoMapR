@@ -37,6 +37,10 @@ devtools::install_github("brooksbenard/PhenoMapR")
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
 
+## Documentation
+
+The [pkgdown site](https://brooksbenard.github.io/PhenoMapR) (vignettes, reference, news) is built by GitHub Actions and deployed from the **gh-pages** branch. If vignette links return 404, in the repo go to **Settings → Pages** and set **Source** to “Deploy from a branch”, **Branch** to `gh-pages`, and **Folder** to “/ (root)”.
+
 ## Getting Started
 
 The primary function of PhenoMapR is `PhenoMap()`. The basic use of this function takes a `gene x sample/cell/spot` expression file **+** reference phenotype `gene x z-score signature` and generates a `PhenoMapR score x sample/cell/spot` dataframe. For single-cell and spatial inputs, a sample-level PhenoMap score can be generated using the pseudobulk argument.
@@ -209,17 +213,17 @@ At a high level, PhenoMapR:
 
 </details>
 
-## Vignettes
+## Articles
 
-Detailed walkthroughs with public datasets:
+Detailed walkthroughs with public datasets (on the [pkgdown site](https://brooksbenard.github.io/PhenoMapR/articles/index.html) and in the repo under `vignettes/`):
 
-| Vignette | Description |
+| Article | Description |
 |----------|-------------|
 | **[GSE111672 — Single-cell PAAD](https://brooksbenard.github.io/PhenoMapR/articles/gse111672-single-cell.html)** | Score PAAD single cells with PRECOG **Pancreatic** using the included `PAAD_GSE111672_seurat.rds`; cell type score distributions and prognostic group marker analysis. Data: [GEO GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672). |
 | **[GSE205154 — Bulk PDAC scoring and survival](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data: [GEO GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). |
 | **[GSE205154 — Custom survival-based reference](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-custom-reference.html)** | Build a custom gene z-score reference from GSE205154 expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
 
-Vignette source: `vignettes/` in the [PhenoMapR repo](https://github.com/brooksbenard/PhenoMapR); built articles appear under [Documentation → Articles](https://brooksbenard.github.io/PhenoMapR/articles/index.html).
+Source: `vignettes/` in the [PhenoMapR repo](https://github.com/brooksbenard/PhenoMapR); built articles appear under [Documentation → Articles](https://brooksbenard.github.io/PhenoMapR/articles/index.html).
 
 <details markdown="1">
 <summary><b>Advanced Usage</b></summary>

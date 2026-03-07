@@ -25,20 +25,27 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Link vignettes for pkgdown (Linux is case-sensitive)
-        run: |
-          if [ ! -d vignettes ] && [ -d Vignettes ]; then
-            ln -s Vignettes vignettes
-          fi
-
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::pkgdown, local::.
 
       - name: Build pkgdown site
-        run: pkgdown::build_site_github_pages(new_process = FALSE, install = TRUE)
+        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
 
+      - name: Verify articles were built
+        run: |
+          echo "Contents of docs/articles:"
+          ls -la docs/articles/ || { echo "ERROR: docs/articles missing"; exit 1; }
+          n=$(find docs/articles -maxdepth 1 -name '*.html' ! -name 'index.html' | wc -l)
+          if [ "$n" -lt 1 ]; then
+            echo "ERROR: No article HTML files built. Check that vignettes/ exists and has .Rmd files."
+            exit 1
+          fi
+          echo "Built $n article(s)."
+
+      # Site is published from gh-pages branch. In repo Settings → Pages, set
+      # Source to "Deploy from a branch", Branch to "gh-pages", Folder to "/ (root)".
       - name: Deploy to GitHub Pages
         if: github.event_name != 'pull_request'
         uses: JamesIves/github-pages-deploy-action@v4.5.0
