@@ -137,24 +137,22 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
     expr_matrix <- as.matrix(agg_expr[[assay]])
 
   } else {
-    # When genes_to_extract is set, subset only for extraction so we avoid loading
-    # the full assay into memory. The subset obj_use is never returned; the caller
-    # adds the returned scores to their original (full) object so all genes are
-    # retained for marker and other analyses.
-    obj_use <- obj
+    # Get assay data from the full object (do not subset the Seurat object by
+    # genes, to avoid copying spatial images and triggering VisiumV1/etc.
+    # validity errors when the object was saved with a different Seurat version).
+    assay_data <- tryCatch({
+      Seurat::GetAssayData(obj, assay = assay, layer = layer_name)
+    }, error = function(e) {
+      Seurat::GetAssayData(obj, assay = assay, slot = slot)
+    })
+
     if (length(genes_to_extract) > 0) {
-      avail_genes <- rownames(obj)
+      avail_genes <- rownames(assay_data)
       genes_use <- intersect(genes_to_extract, avail_genes)
       if (length(genes_use) > 0) {
-        obj_use <- obj[genes_use, ]
+        assay_data <- assay_data[genes_use, , drop = FALSE]
       }
     }
-
-    assay_data <- tryCatch({
-      Seurat::GetAssayData(obj_use, assay = assay, layer = layer_name)
-    }, error = function(e) {
-      Seurat::GetAssayData(obj_use, assay = assay, slot = slot)
-    })
 
     # Avoid as.matrix on any Matrix class to prevent sparse->dense (9+ GiB for large objects)
     if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
