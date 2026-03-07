@@ -30,6 +30,8 @@ navbar:
       menu:
       - text: Single-cell example (GSE111672)
         href: articles/gse111672-single-cell.html
+      - text: Spatial transcriptomics
+        href: articles/spatial-transcriptomics.html
       - text: Bulk survival analysis (GSE205154)
         href: articles/gse205154-bulk-survival.html
       - text: Custom reference (GSE205154)
@@ -38,6 +40,15 @@ navbar:
       href: reference/index.html
     - text: News
       href: news/index.html
+
+articles:
+  - title: Vignettes
+    desc: Tutorials and worked examples with PhenoMapR.
+    contents:
+      - gse111672-single-cell
+      - spatial-transcriptomics
+      - gse205154-bulk-survival
+      - gse205154-custom-reference
 
 reference:
 - title: Prognostic scoring

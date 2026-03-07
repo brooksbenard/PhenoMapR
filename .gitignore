@@ -20,6 +20,8 @@ library/
 
 # pkgdown build (site is deployed to gh-pages by GitHub Actions)
 docs/
+# Symlink used in CI only (vignettes -> Vignettes); do not commit
+/vignettes
 Rplots.pdf
 /doc/
 /Meta/
@@ -34,6 +36,8 @@ data/datasets_info.rda
 
 # Large vignette data (users download from GEO/GSA)
 Vignettes/PAAD_*_seurat.rds
+Vignettes/*cytospace*.rds
+Vignettes/*_processed.rds
 Vignettes/GSE205154.GPL20301.matrix.txt
 Vignettes/expression_PDAC_GSE205154_metastatic.rds
 data-raw/

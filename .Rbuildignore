@@ -8,5 +8,5 @@
 ^.*~\$
 ^doc$
 ^Meta$
-^[Vv]ignettes$
+^Vignettes$
 ^pkgdown$

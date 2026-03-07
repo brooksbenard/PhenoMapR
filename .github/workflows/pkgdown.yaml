@@ -25,15 +25,15 @@ jobs:
         with:
           use-public-rspm: true
 
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::pkgdown, local::.
-
       - name: Link vignettes for pkgdown (Linux is case-sensitive)
         run: |
           if [ ! -d vignettes ] && [ -d Vignettes ]; then
             ln -s Vignettes vignettes
           fi
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgdown, local::.
 
       - name: Build pkgdown site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = TRUE)
