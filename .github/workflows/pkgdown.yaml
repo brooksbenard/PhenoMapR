@@ -34,6 +34,9 @@ jobs:
           Rscript -e 'v <- packageVersion("pkgdown"); if (v < "2.1.0") remotes::install_github("r-lib/pkgdown", ref = "v2.1.0", upgrade = "never")'
           Rscript -e 'packageVersion("pkgdown")'
 
+      - name: Install presto from GitHub
+        run: Rscript -e 'remotes::install_github("immunogenomics/presto")'
+
       - name: Verify vignettes exist before build
         run: |
           echo "Package root:"
