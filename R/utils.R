@@ -289,9 +289,10 @@ get_top_prognostic_genes <- function(reference,
 #' @param scores Numeric vector or data.frame of scores
 #' @param score_column If scores is data.frame, which column to plot
 #' @param main Plot title
+#' @param ... Additional arguments passed to \code{hist} (e.g. \code{cex.main}, \code{cex.lab}, \code{cex.axis})
 #'
 #' @export
-plot_score_distribution <- function(scores, score_column = NULL, main = "Score Distribution") {
+plot_score_distribution <- function(scores, score_column = NULL, main = "Score Distribution", ...) {
   
   if (is.data.frame(scores)) {
     if (is.null(score_column)) {
@@ -306,7 +307,8 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Score D
        border = "white",
        main = main,
        xlab = "Score",
-       ylab = "Frequency")
+       ylab = "Frequency",
+       ...)
   
   abline(v = median(scores, na.rm = TRUE), col = "red", lwd = 2, lty = 2)
   legend("topright", legend = "Median", col = "red", lty = 2, lwd = 2)

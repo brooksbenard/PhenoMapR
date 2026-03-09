@@ -26,6 +26,7 @@ if (!exists("PhenoMap", mode = "function")) {
   stop("PhenoMap not found. Reinstall PhenoMapR from source: devtools::install() or install.packages('.', repos = NULL, type = 'source')")
 }
 knitr::opts_chunk$set(fig.width = 12, out.width = "100%", warning = FALSE)
+theme_set(theme_minimal(base_size = 14))
 
 report_timing <- function(step_name, t0, obj = NULL) {
   elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
@@ -86,7 +87,8 @@ Distribution of PhenoMapR (PRECOG Pancreatic) scores across spots.
 ```{r score-distribution}
 plot_score_distribution(
   seurat@meta.data[[score_col]],
-  main = "PRECOG Pancreatic score (spatial spots)"
+  main = "PRECOG Pancreatic score (spatial spots)",
+  cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2
 )
 ```
 
@@ -186,6 +188,7 @@ if (is.null(ann_vec)) {
   message("No annotation column with 2--100 levels found. To plot score by cell type, add a CellType column to the object (e.g. from a CytoSpace annotation file).")
   df$annotation <- factor(rep("all", n_meta))
   celltype_col <- "annotation"
+  seurat$annotation <- df$annotation
 } else {
   df$annotation <- factor(ann_vec, exclude = NULL)
 }
@@ -201,9 +204,9 @@ if (n_levels >= 2L && n_levels <= 100L) {
   )) +
     geom_boxplot(outlier.alpha = 0.3) +
     scale_fill_manual(values = pal, name = celltype_col) +
-    theme_minimal() +
+    theme_minimal(base_size = 14) +
     theme(
-      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
       legend.position = "right"
     ) +
     labs(y = "PRECOG Pancreatic score", x = celltype_col, title = "Score by annotation (spatial)"))
@@ -223,7 +226,8 @@ scores_df <- seurat@meta.data[, grep("weighted_sum_score", names(seurat@meta.dat
 groups <- PhenoMapR::define_prognostic_groups(scores_df, percentile = 0.05)
 suppressMessages(seurat <- AddMetaData(seurat, groups))
 
-group_col <- grep("prognostic_group", names(seurat@meta.data), value = TRUE)[1]
+group_col <- paste0("prognostic_group_", score_col)
+if (!group_col %in% names(seurat@meta.data)) group_col <- grep("prognostic_group", names(seurat@meta.data), value = TRUE)[1]
 table(seurat@meta.data[[group_col]], useNA = "ifany")
 ```
 
@@ -311,7 +315,7 @@ if (!is.null(coords) && nrow(coords) > 0) {
   } else {
     spatial_df$phenomapr_scaled <- NA_real_
   }
-  # Shared jitter and point size so all three spatial plots match (multiple cells per location)
+  # Shared jitter and point size so all three spatial plots match (multiple cells per spot)
   rng_row <- diff(range(spatial_df$row, na.rm = TRUE))
   rng_col <- diff(range(-spatial_df$col, na.rm = TRUE))
   spatial_jitter_w <- max(0.15, if (rng_row > 0) rng_row * 0.025 else 0.15)
@@ -339,10 +343,10 @@ if (exists("has_spatial_coords") && has_spatial_coords && !is.null(spatial_df$ce
     geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
     ggtitle(paste("Cell type (", ct_col, ")", sep = "")) +
     scale_color_manual(values = ct_pal, name = ct_col, na.value = "grey90") +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per location") +
-    theme_minimal() +
+    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+    theme_minimal(base_size = 14) +
     theme(
-      plot.title = element_text(hjust = 0.5),
+      plot.title = element_text(hjust = 0.5, size = 14),
       axis.text = element_blank(),
       axis.ticks = element_blank(),
       axis.title = element_blank()
@@ -368,10 +372,10 @@ if (exists("has_spatial_coords") && has_spatial_coords) {
       limits = c(-2, 2),
       na.value = "grey80"
     ) +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per location") +
-    theme_minimal() +
+    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+    theme_minimal(base_size = 14) +
     theme(
-      plot.title = element_text(hjust = 0.5),
+      plot.title = element_text(hjust = 0.5, size = 14),
       axis.text = element_blank(),
       axis.ticks = element_blank(),
       axis.title = element_blank()
@@ -386,20 +390,25 @@ Spatial map of prognostic groups: top 5% (Most Adverse), bottom 5% (Most Favorab
 
 ```{r spatial-group, fig.width=6, fig.height=5.5, out.width=NULL}
 if (exists("has_spatial_coords") && has_spatial_coords && !is.null(group_col)) {
-  spatial_df$prognostic_zorder <- ifelse(spatial_df$prognostic_group == "Other", 0L, 1L)
-  p2 <- ggplot(spatial_df, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
-    size = points_per_location, zorder = .data$prognostic_zorder)) +
-    geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+  pg <- as.character(spatial_df$prognostic_group)
+  df_other <- spatial_df[pg == "Other" | is.na(pg), ]
+  df_extreme <- spatial_df[pg %in% c("Most Adverse", "Most Favorable"), ]
+  p2 <- ggplot() +
+    geom_jitter(data = df_other, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+      size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+    geom_jitter(data = df_extreme, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+      size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
     ggtitle("5th percentile: Most Adverse vs Most Favorable") +
     scale_color_manual(
-      values = c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC"),
+      values = c(`Most Adverse` = "#B2182B", Other = "#f7f7f7", `Most Favorable` = "#2166AC"),
       name = "Prognostic group",
-      na.value = "grey90"
+      na.value = "grey90",
+      drop = FALSE
     ) +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per location") +
-    theme_minimal() +
+    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+    theme_minimal(base_size = 14) +
     theme(
-      plot.title = element_text(hjust = 0.5),
+      plot.title = element_text(hjust = 0.5, size = 14),
       axis.text = element_blank(),
       axis.ticks = element_blank(),
       axis.title = element_blank()
@@ -416,6 +425,7 @@ We first find marker genes for adverse vs. favorable spots, visualize them in a 
 
 ```{r markers-spatial, cache = FALSE}
 markers <- NULL
+assay_markers <- NULL
 if (!is.null(group_col)) {
   cells <- colnames(seurat)
   group_vec <- seurat@meta.data[cells, group_col]
@@ -442,7 +452,10 @@ if (!is.null(group_col)) {
         NULL
       }
     )
-    if (!is.null(markers) && (nrow(markers$adverse_markers) > 0 || nrow(markers$favorable_markers) > 0)) break
+    if (!is.null(markers) && (nrow(markers$adverse_markers) > 0 || nrow(markers$favorable_markers) > 0)) {
+      assay_markers <- a
+      break
+    }
   }
   if (!is.null(markers)) {
     message("Adverse markers (top 5):")
@@ -461,16 +474,30 @@ if (!is.null(group_col)) {
 if (exists("markers") && !is.null(markers)) {
   n_top <- 15
   expr <- NULL
-  for (a in unique(c(assay_use, "RNA", "SCT"))) {
-    if (a %in% names(seurat@assays)) {
+  assay_order <- unique(c(
+    if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0),
+    assay_use, "RNA", "SCT"
+  ))
+  for (a in assay_order) {
+    if (!a %in% names(seurat@assays)) next
+    expr <- tryCatch(
+      Seurat::GetAssayData(seurat, layer = "data", assay = a),
+      error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL)
+    )
+    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
+    expr <- tryCatch(
+      SeuratObject::LayerData(seurat, layer = "data", assay = a),
+      error = function(e) NULL
+    )
+    if (is.null(expr) || ncol(expr) == 0) {
       expr <- tryCatch(
-        Seurat::GetAssayData(seurat, layer = "data", assay = a),
-        error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL)
+        SeuratObject::LayerData(seurat, layer = "counts", assay = a),
+        error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = NULL, assay = a), error = function(e2) NULL)
       )
-      if (!is.null(expr) && nrow(expr) > 0) break
     }
+    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
   }
-  if (!is.null(expr)) {
+  if (!is.null(expr) && ncol(expr) > 0) {
   adverse_pos <- markers$adverse_markers
   if (nrow(adverse_pos) > 0 && "avg_log2FC" %in% names(adverse_pos)) adverse_pos <- adverse_pos[adverse_pos$avg_log2FC > 0, ]
   favorable_pos <- markers$favorable_markers
@@ -515,10 +542,13 @@ if (exists("markers") && !is.null(markers)) {
   mat_scaled <- mat_scaled[, ord, drop = FALSE]
   meta_ord <- meta[ord, , drop = FALSE]
 
+  group_col_heatmap <- paste0("prognostic_group_", score_col)
+  if (!group_col_heatmap %in% names(meta_ord)) group_col_heatmap <- group_col
+
   if (requireNamespace("pheatmap", quietly = TRUE)) {
     ann_col <- data.frame(
       `PhenoMapR Score` = meta_ord[[score_col]],
-      `Prognostic group` = factor(meta_ord[[group_col]], levels = c("Most Adverse", "Other", "Most Favorable")),
+      `Prognostic group` = factor(meta_ord[[group_col_heatmap]], levels = c("Most Adverse", "Other", "Most Favorable")),
       check.names = FALSE
     )
     ct_col_ann <- if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col)) spatial_df_celltype_col else if (exists("celltype_col") && !is.null(celltype_col)) celltype_col else NULL
@@ -526,7 +556,21 @@ if (exists("markers") && !is.null(markers)) {
       ann_col$`Cell type` <- factor(meta_ord[[ct_col_ann]])
     }
     rownames(ann_col) <- colnames(mat_scaled)
-    heatmap_colors <- if (requireNamespace("viridis", quietly = TRUE)) viridis::viridis(100) else colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+    pal_score <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+    pal_group <- c(`Most Adverse` = "#B2182B", Other = "#f7f7f7", `Most Favorable` = "#2166AC")
+    pal_celltype <- if ("Cell type" %in% names(ann_col)) {
+      PhenoMapR::get_celltype_palette(levels(ann_col$`Cell type`))
+    } else list()
+    ann_colors <- list(
+      `PhenoMapR Score` = pal_score,
+      `Prognostic group` = pal_group
+    )
+    if (length(pal_celltype) > 0) ann_colors$`Cell type` <- pal_celltype
+    heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
+      colorRampPalette(paletteer::paletteer_d("PNWColors::Shuksan2"))(100)
+    } else {
+      colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+    }
     pheatmap::pheatmap(
       mat_scaled,
       scale = "none",
@@ -534,15 +578,83 @@ if (exists("markers") && !is.null(markers)) {
       cluster_rows = TRUE,
       show_colnames = FALSE,
       annotation_col = ann_col,
+      annotation_colors = ann_colors,
       color = heatmap_colors,
       breaks = seq(-3, 3, length.out = 101),
       main = "Top adverse & favorable marker genes (spatial spots)",
-      fontsize_row = 8
+      fontsize = 12,
+      fontsize_row = 10,
+      treeheight_row = 25
     )
   }
   }
   } else {
-    message("Could not retrieve expression data for heatmap.")
+    msg <- "Could not retrieve expression data for heatmap"
+    if (!is.null(expr)) {
+      msg <- paste0(msg, " (expr nrow=", nrow(expr), ", ncol=", ncol(expr), "; try LayerData for Seurat v5)")
+    }
+    message(msg, ".")
+  }
+}
+```
+
+### Stacked barplot: adverse vs. favorable by cell type
+
+Each column is a cell type; the height is filled by the number of adverse (5th percentile) or favorable (5th percentile) cells.
+
+```{r stacked-bar-adverse-favorable-by-celltype}
+if (!is.null(group_col)) {
+  ct_col_bar <- NULL
+  if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && spatial_df_celltype_col %in% names(seurat@meta.data)) {
+    ct_col_bar <- spatial_df_celltype_col
+  } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) {
+    ct_col_bar <- celltype_col
+  } else {
+    for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) {
+      if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) {
+        ct_col_bar <- c
+        break
+      }
+    }
+  }
+  if (!is.null(ct_col_bar)) {
+    meta <- seurat@meta.data
+    meta$pg <- meta[[group_col]]
+    meta$ct <- as.character(meta[[ct_col_bar]])
+    meta$ct_ok <- !is.na(meta$ct) & nzchar(trimws(meta$ct))
+    idx_extreme <- meta$pg %in% c("Most Adverse", "Most Favorable") & meta$ct_ok
+    df_bar <- as.data.frame(table(
+      CellType = meta$ct[idx_extreme],
+      Prognostic_group = meta$pg[idx_extreme],
+      useNA = "no"
+    ))
+    if (nrow(df_bar) > 0) {
+      df_bar$Prognostic_group <- factor(df_bar$Prognostic_group, levels = c("Most Favorable", "Most Adverse"))
+      pal_bar <- c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC")
+      adverse <- df_bar[df_bar$Prognostic_group == "Most Adverse", c("CellType", "Freq")]
+      fav <- df_bar[df_bar$Prognostic_group == "Most Favorable", c("CellType", "Freq")]
+      names(adverse)[2] <- "n_adverse"
+      names(fav)[2] <- "n_fav"
+      df_labels <- merge(adverse, fav, by = "CellType", all = TRUE)
+      df_labels$n_adverse[is.na(df_labels$n_adverse)] <- 0
+      df_labels$n_fav[is.na(df_labels$n_fav)] <- 0
+      df_labels$label <- paste0(df_labels$n_adverse, "/", df_labels$n_fav)
+      df_labels$total <- df_labels$n_adverse + df_labels$n_fav
+      ct_ord <- levels(reorder(df_bar$CellType, df_bar$Freq, function(x) -sum(x)))
+      df_labels$CellType <- factor(df_labels$CellType, levels = ct_ord)
+      p_bar <- ggplot(df_bar, aes(x = reorder(.data$CellType, .data$Freq, function(x) -sum(x)), y = .data$Freq, fill = .data$Prognostic_group)) +
+        geom_col(position = "stack") +
+        geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = .data$n_adverse),
+                  inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#B2182B", hjust = 1.05) +
+        geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = paste0("/", .data$n_fav)),
+                  inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#2166AC", hjust = -0.05) +
+        scale_fill_manual(values = pal_bar) +
+        labs(x = "Cell type", y = "Number of cells", fill = "Prognostic group",
+             title = "Adverse vs. favorable cells (5th percentile) by cell type") +
+        theme_minimal(base_size = 14) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12), legend.position = "top")
+      print(p_bar)
+    }
   }
 }
 ```
@@ -551,66 +663,130 @@ if (exists("markers") && !is.null(markers)) {
 
 For each combination of prognostic group and cell type (e.g. adverse ductal, favorable B cell), we find genes that are uniquely upregulated in that group vs. all other spots.
 
-```{r markers-by-celltype-spatial, cache = FALSE}
+```{r markers-by-celltype-spatial, cache = FALSE, message = TRUE}
 markers_by_ct <- NULL
 ct_col_markers <- NULL
-if (!is.null(group_col)) {
+cat("Step 3: Finding unique markers for adverse/favorable cell types...\n")
+if (is.null(group_col)) {
+  cat("Skipping: prognostic groups not defined (group_col is NULL).\n")
+} else {
   celltype_for_markers <- NULL
   if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && spatial_df_celltype_col %in% names(seurat@meta.data)) {
     celltype_for_markers <- spatial_df_celltype_col
+  } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) {
+    celltype_for_markers <- celltype_col
   } else {
-    for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation")) {
-      if (c %in% names(seurat@meta.data) && length(unique(seurat@meta.data[[c]])) >= 2) {
+    for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) {
+      if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) {
         celltype_for_markers <- c
         break
       }
     }
   }
-  if (!is.null(celltype_for_markers)) {
+  if (is.null(celltype_for_markers)) {
+    cat("Skipping: no cell type column found in metadata.\n")
+  } else {
+    cat("Using cell type column:", celltype_for_markers, "\n")
     meta <- seurat@meta.data
     meta$pg <- meta[[group_col]]
     meta$ct <- as.character(meta[[celltype_for_markers]])
-    meta$combined_group <- paste0(tolower(gsub(" ", "_", meta$pg)), "_", gsub(" ", "_", meta$ct))
-    idx_keep <- meta$pg %in% c("Most Adverse", "Most Favorable")
+    meta$ct_ok <- !is.na(meta$ct) & nzchar(trimws(meta$ct))
+    meta$combined_group <- "Other"
+    meta$combined_group[meta$pg == "Most Adverse" & meta$ct_ok] <- paste0("Adverse_", gsub(" ", "_", meta$ct[meta$pg == "Most Adverse" & meta$ct_ok]))
+    meta$combined_group[meta$pg == "Most Favorable" & meta$ct_ok] <- paste0("Favorable_", gsub(" ", "_", meta$ct[meta$pg == "Most Favorable" & meta$ct_ok]))
+    idx_keep <- meta$pg %in% c("Most Adverse", "Most Favorable") & meta$ct_ok
     combined_tab <- table(meta$combined_group[idx_keep], useNA = "no")
-    combined_lev <- names(combined_tab)[combined_tab >= 10]
+    min_cells <- 10L
+    combined_lev <- names(combined_tab)[combined_tab >= min_cells]
     if (length(combined_lev) >= 1L) {
-      cells_keep <- rownames(meta)[idx_keep & meta$combined_group %in% combined_lev]
-      seurat_sub <- seurat[, cells_keep]
-      seurat_sub$PhenoMapR_combined_group <- meta[cells_keep, "combined_group"]
-      Seurat::Idents(seurat_sub) <- seurat_sub$PhenoMapR_combined_group
-      assay_fa <- if (assay_use %in% names(seurat_sub@assays)) assay_use else "RNA"
-      markers_by_ct <- tryCatch(
-        Seurat::FindAllMarkers(
-          seurat_sub,
-          assay = assay_fa,
-          slot = "data",
-          test.use = "wilcox",
-          min.pct = 0.1,
-          logfc.threshold = 0.25,
-          max.cells.per.ident = 3000,
-          verbose = FALSE,
-          only.pos = TRUE
-        ),
-        error = function(e) NULL
+      cat("Groups with >=", min_cells, " cells:", paste(combined_lev, collapse = ", "), "\n")
+      seurat$PhenoMapR_combined_group <- meta$combined_group
+      all_lev <- c(combined_lev, "Other")
+      seurat$PhenoMapR_combined_group <- factor(seurat$PhenoMapR_combined_group, levels = all_lev)
+      assay_fa <- if (exists("assay_markers") && !is.null(assay_markers) && assay_markers %in% names(seurat@assays)) {
+        assay_markers
+      } else if (assay_use %in% names(seurat@assays)) {
+        assay_use
+      } else {
+        "RNA"
+      }
+      cat("Using assay for FindAllMarkers:", assay_fa, "(full object, ncol=", ncol(seurat), ")\n")
+      find_args <- list(
+        seurat,
+        assay = assay_fa,
+        group.by = "PhenoMapR_combined_group",
+        test.use = "wilcox",
+        min.pct = 0.05,
+        logfc.threshold = 0.1,
+        max.cells.per.ident = 3000,
+        verbose = FALSE,
+        only.pos = TRUE,
+        return.thresh = 0.05
       )
+      if ("layer" %in% names(formals(Seurat::FindAllMarkers))) {
+        find_args$layer <- "data"
+      } else {
+        find_args$slot <- "data"
+      }
+      markers_by_ct <- tryCatch(
+        do.call(Seurat::FindAllMarkers, find_args),
+        error = function(e) {
+          cat("FindAllMarkers (cell-type-specific) failed:", conditionMessage(e), "\n")
+          NULL
+        }
+      )
+      if (!is.null(markers_by_ct) && nrow(markers_by_ct) == 0) {
+        cat("No markers with min.pct=0.05, logfc.threshold=0.1, return.thresh=0.05; retrying with relaxed thresholds...\n")
+        find_args$min.pct <- 0
+        find_args$logfc.threshold <- 0
+        markers_by_ct <- tryCatch(
+          do.call(Seurat::FindAllMarkers, find_args),
+          error = function(e) NULL
+        )
+      }
+      if (!is.null(markers_by_ct) && nrow(markers_by_ct) == 0) {
+        cat("Retrying with return.thresh=1 (return all genes regardless of p-value)...\n")
+        find_args$return.thresh <- 1
+        markers_by_ct <- tryCatch(
+          do.call(Seurat::FindAllMarkers, find_args),
+          error = function(e) NULL
+        )
+        if (!is.null(markers_by_ct) && nrow(markers_by_ct) > 0) {
+          markers_by_ct <- markers_by_ct[markers_by_ct$p_val_adj < 0.05, , drop = FALSE]
+          cat("Filtered to p_val_adj < 0.05:", nrow(markers_by_ct), "markers.\n")
+        }
+      }
       if (!is.null(markers_by_ct) && nrow(markers_by_ct) > 0) {
-        ct_col_markers <- celltype_for_markers
-        message("Found markers for ", length(unique(markers_by_ct$cluster)), " adverse/favorable cell type groups.")
-        print(head(markers_by_ct[, c("gene", "cluster", "avg_log2FC", "p_val_adj")], 10))
+        markers_by_ct <- markers_by_ct[markers_by_ct$cluster %in% combined_lev, , drop = FALSE]
+        if (nrow(markers_by_ct) > 0) {
+          ct_col_markers <- celltype_for_markers
+          cat("Found markers for", length(unique(markers_by_ct$cluster)), "adverse/favorable cell type groups.\n")
+          print(head(markers_by_ct[, c("gene", "cluster", "avg_log2FC", "p_val_adj")], 10))
+        } else {
+          cat("FindAllMarkers returned markers only for excluded groups (after filtering to adverse/favorable).\n")
+        }
+      } else {
+        if (is.null(markers_by_ct)) {
+          cat("FindAllMarkers failed or returned NULL.\n")
+        } else {
+          cat("FindAllMarkers returned 0 marker genes.\n")
+        }
+        tab_ct <- table(seurat$PhenoMapR_combined_group, useNA = "no")
+        cat("Diagnostic: cells per group:", paste(names(tab_ct), "=", tab_ct, collapse = ", "), "\n")
+        cat("Diagnostic: assay", assay_fa, "\n")
       }
     } else {
-      message("Insufficient cells in adverse/favorable cell type combinations (need >= 10 per group); skipping.")
+      cat("Insufficient cells in adverse/favorable cell type combinations (need >=", min_cells, " per group).\n")
+      cat("Group counts:", paste(names(combined_tab), "=", combined_tab, collapse = ", "), "\n")
     }
-  } else {
-    message("No cell type column found; skipping cell-type-specific markers.")
   }
 }
 ```
 
 ### Step 4: Heatmap of cell-type-specific markers
 
-```{r heatmap-markers-by-celltype-spatial}
+```{r heatmap-markers-by-celltype-spatial, message = TRUE}
+cat("Step 4: Heatmap of cell-type-specific markers...\n")
 if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 0 && exists("ct_col_markers") && !is.null(ct_col_markers)) {
   suppressPackageStartupMessages(library(dplyr))
   n_top_per_group <- 5
@@ -625,6 +801,13 @@ if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 
       Seurat::GetAssayData(seurat, layer = "data", assay = assay_use),
       error = function(e) Seurat::GetAssayData(seurat, slot = "data", assay = assay_use)
     )
+    if (is.null(expr) || ncol(expr) == 0) {
+      expr <- tryCatch(
+        SeuratObject::LayerData(seurat, layer = "data", assay = assay_use),
+        error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = "counts", assay = assay_use), error = function(e2) NULL)
+      )
+    }
+    if (!is.null(expr) && ncol(expr) > 0) {
     mat <- as.matrix(expr[top_genes_ct, , drop = FALSE])
     mat_scaled <- t(scale(t(mat)))
     mat_scaled[mat_scaled < -3] <- -3
@@ -632,8 +815,10 @@ if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 
     meta <- seurat@meta.data
     meta$pg <- meta[[group_col]]
     meta$ct <- as.character(meta[[ct_col_markers]])
-    meta$combined_group <- paste0(tolower(gsub(" ", "_", meta$pg)), "_", gsub(" ", "_", meta$ct))
-    meta$combined_group[meta$pg == "Other"] <- "Other"
+    meta$ct_ok <- !is.na(meta$ct) & nzchar(trimws(meta$ct))
+    meta$combined_group <- "Other"
+    meta$combined_group[meta$pg == "Most Adverse" & meta$ct_ok] <- paste0("Adverse_", gsub(" ", "_", meta$ct[meta$pg == "Most Adverse" & meta$ct_ok]))
+    meta$combined_group[meta$pg == "Most Favorable" & meta$ct_ok] <- paste0("Favorable_", gsub(" ", "_", meta$ct[meta$pg == "Most Favorable" & meta$ct_ok]))
     ord <- order(meta$combined_group, meta[[score_col]])
     mat_scaled <- mat_scaled[, ord, drop = FALSE]
     meta_ord <- meta[ord, ]
@@ -644,7 +829,15 @@ if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 
         check.names = FALSE
       )
       rownames(ann_col) <- colnames(mat_scaled)
-      heatmap_colors <- if (requireNamespace("viridis", quietly = TRUE)) viridis::viridis(100) else colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+      pal_score <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+      heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
+        colorRampPalette(paletteer::paletteer_d("PNWColors::Shuksan2"))(100)
+      } else {
+        colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+      }
+      ann_colors <- list(
+        `PhenoMapR Score` = pal_score
+      )
       pheatmap::pheatmap(
         mat_scaled,
         scale = "none",
@@ -652,13 +845,21 @@ if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 
         cluster_rows = TRUE,
         show_colnames = FALSE,
         annotation_col = ann_col,
+        annotation_colors = ann_colors,
         color = heatmap_colors,
         breaks = seq(-3, 3, length.out = 101),
         main = "Unique markers by adverse/favorable cell type (spatial spots)",
-        fontsize_row = 8
+        fontsize = 12,
+        fontsize_row = 10,
+        treeheight_row = 25
       )
     }
+    } else {
+      cat("Could not retrieve expression data for cell-type heatmap.\n")
+    }
   }
+} else {
+  cat("Skipping heatmap: no cell-type-specific markers found in Step 3.\n")
 }
 ```
 
