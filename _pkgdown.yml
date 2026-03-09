@@ -22,6 +22,14 @@ authors:
   Brooks Benard:
     href: https://profiles.stanford.edu/brooks-benard
 
+home:
+  sidebar:
+    structure: [links, license, community, citation, authors, dev]
+    components:
+      license:
+        title: License
+        text: "[Stanford Non-Commercial License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE)"
+
 navbar:
   title: ~
   type: default
@@ -43,10 +51,10 @@ navbar:
 
 footer:
   structure:
-    left: [license, developed_by]
+    left: [license_text, developed_by]
     right: [pkgdown]
   components:
-    license: "Stanford Non-Commercial License"
+    license_text: "[Stanford Non-Commercial License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE)"
 
 articles:
   - title: Vignettes
