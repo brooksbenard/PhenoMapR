@@ -1,3 +1,99 @@
+#' Default Cell Type Color Palette
+#'
+#' Named vector of hex colors for common cell types. Used in vignettes for
+#' consistent coloring across plots. Cell types not in this palette receive
+#' fallback colors from \code{get_celltype_palette}.
+#'
+#' @export
+cell_type_colors <- c(
+  "Acinar"     = "#66c2a5",
+  "Alpha"      = "#a6cee3",
+  "B_cell"     = "#1f78b4",
+  "Beta"       = "#8c510a",
+  "CD4T"       = "#b2df8a",
+  "CD8T"       = "#33a02c",
+  "Delta"      = "#c51b7d",
+  "Dendritic"  = "#fb9a99",
+  "Ductal"     = "#e31a1c",
+  "Endothelial" = "#8073ac",
+  "Fibroblast" = "#fdbf6f",
+  "Macrophage" = "#ff7f00",
+  "Mast"       = "#cab2d6",
+  "NK"         = "#6a3d9a",
+  "Plasma"     = "#e5e572",
+  "Schwann"    = "#b15928"
+)
+
+
+#' Get Cell Type Color Palette
+#'
+#' Returns a named vector of colors for the given cell types. Uses
+#' \code{cell_type_colors} for known types; assigns fallback colors for others.
+#'
+#' @param types Character vector of cell type names.
+#' @return Named character vector of hex colors.
+#' @export
+get_celltype_palette <- function(types) {
+  types <- unique(as.character(na.omit(types)))
+  known <- intersect(types, names(cell_type_colors))
+  unknown <- setdiff(types, names(cell_type_colors))
+  pal <- character(length(types))
+  names(pal) <- types
+  if (length(known) > 0) pal[known] <- cell_type_colors[known]
+  if (length(unknown) > 0) {
+    fallback <- colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB", "#EE8866"))(length(unknown))
+    pal[unknown] <- fallback
+  }
+  pal
+}
+
+
+#' Load RDS File with Fast Parallel Decompression
+#'
+#' Loads RDS files using \code{fastSave::readRDS.pigz} when available for
+#' faster parallel decompression. Installs fastSave from GitHub if not present.
+#' Falls back to base \code{readRDS} if fastSave is unavailable or fails.
+#'
+#' @param file Path to the RDS file.
+#' @param install_if_missing If TRUE (default), attempts to install fastSave
+#'   via \code{devtools::install_github('barkasn/fastSave')} when not found.
+#' @return The R object loaded from the RDS file.
+#'
+#' @examples
+#' \dontrun{
+#' obj <- load_rds_fast("path/to/object.rds")
+#' }
+#' @export
+load_rds_fast <- function(file, install_if_missing = TRUE) {
+  if (!file.exists(file)) {
+    stop("File not found: ", file)
+  }
+  use_fast <- FALSE
+  if (requireNamespace("fastSave", quietly = TRUE)) {
+    use_fast <- TRUE
+  } else if (install_if_missing) {
+    tryCatch({
+      if (requireNamespace("devtools", quietly = TRUE)) {
+        suppressMessages(devtools::install_github("barkasn/fastSave", upgrade = "never", quiet = TRUE))
+      }
+      if (requireNamespace("fastSave", quietly = TRUE)) {
+        use_fast <- TRUE
+      }
+    }, error = function(e) {
+      message("Could not install fastSave: ", conditionMessage(e), "; using base readRDS")
+    })
+  }
+  if (use_fast) {
+    tryCatch({
+      return(fastSave::readRDS.pigz(file))
+    }, error = function(e) {
+      message("fastSave::readRDS.pigz failed: ", conditionMessage(e), "; falling back to readRDS")
+    })
+  }
+  readRDS(file)
+}
+
+
 #' List Available Cancer Types
 #'
 #' Show available cancer types for each reference dataset

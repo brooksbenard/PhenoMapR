@@ -41,14 +41,14 @@ if (!has_data) {
   message("PAAD_GSE111672_seurat.rds not found. See Vignettes/README.md for download instructions.")
 } else {
   t0 <- Sys.time()
-  seurat <- readRDS(rds_path)
+  seurat <- PhenoMapR::load_rds_fast(rds_path)
   report_timing("Load GSE111672", t0, seurat)
 
   # Load CRA001160 early if available (for shared cell type palette alignment)
   rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
   if (file.exists(rds_path2)) {
-    seurat2 <- readRDS(rds_path2)
+    seurat2 <- PhenoMapR::load_rds_fast(rds_path2)
   } else {
     seurat2 <- NULL
   }
@@ -59,12 +59,7 @@ if (!has_data) {
     as.character(seurat@meta.data[[celltype_col]]),
     if (!is.null(seurat2)) as.character(seurat2@meta.data[[celltype_col]]) else character(0)
   )))
-  base_colors <- c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377",
-    "#BBBBBB", "#EE8866", "#FFAABB", "#99DDFF", "#DDDDDD", "#77AADD")
-  shared_pal_lineage <- setNames(
-    if (length(all_celltypes) <= 12) base_colors[seq_len(length(all_celltypes))] else colorRampPalette(base_colors)(length(all_celltypes)),
-    all_celltypes
-  )
+  shared_pal_lineage <- PhenoMapR::get_celltype_palette(all_celltypes)
 
   n_genes <- nrow(seurat)
   n_cells <- ncol(seurat)
@@ -149,7 +144,7 @@ scores_df <- seurat@meta.data[, grep("weighted_sum_score", names(seurat@meta.dat
 groups <- define_prognostic_groups(scores_df, percentile = 0.05)
 seurat <- AddMetaData(seurat, groups)
 
-group_col <- grep("prognostic_group_weighted_sum_score", names(seurat@meta.data), value = TRUE)[1]
+group_col <- grep("prognostic_group", names(seurat@meta.data), value = TRUE)[1]
 markers <- NULL
 if (!is.na(group_col)) {
   markers <- find_prognostic_markers(
@@ -315,7 +310,7 @@ if (is.null(seurat2)) {
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
   if (file.exists(rds_path2)) {
     t0 <- Sys.time()
-    seurat2 <- readRDS(rds_path2)
+    seurat2 <- PhenoMapR::load_rds_fast(rds_path2)
     report_timing("Load CRA001160", t0, seurat2)
   }
 }
@@ -390,7 +385,7 @@ t0 <- Sys.time()
 scores_df2 <- seurat2@meta.data[, grep("weighted_sum_score", names(seurat2@meta.data)), drop = FALSE]
 groups2 <- define_prognostic_groups(scores_df2, percentile = 0.05)
 seurat2 <- AddMetaData(seurat2, groups2)
-group_col2 <- grep("prognostic_group_weighted_sum_score", names(seurat2@meta.data), value = TRUE)[1]
+group_col2 <- grep("prognostic_group", names(seurat2@meta.data), value = TRUE)[1]
 markers2 <- NULL
 if (!is.na(group_col2)) {
   markers2 <- find_prognostic_markers(
