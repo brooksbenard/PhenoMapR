@@ -24,6 +24,7 @@ Imports:
 Suggests:
     devtools,
     fastSave,
+    paletteer,
     gridExtra,
     pheatmap,
     presto,
