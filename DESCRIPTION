@@ -23,10 +23,14 @@ Imports:
     glue,
     progress
 Suggests:
+    cluster,
+    ComplexHeatmap,
+    circlize,
     devtools,
     fastSave,
     paletteer,
     gridExtra,
+    patchwork,
     pheatmap,
     presto,
     viridis,

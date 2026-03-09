@@ -563,3 +563,9 @@ report_timing("Proportion plot CRA001160", t0)
 **Reference signatures**
 
 - **PRECOG 2.0**: Benard B, Lalgudi S, et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research*. 2026. [https://academic.oup.com/nar/article/54/D1/D1579/8324954](https://academic.oup.com/nar/article/54/D1/D1579/8324954).
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```

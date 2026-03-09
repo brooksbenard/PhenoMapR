@@ -873,3 +873,9 @@ if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 
 ## References
 
 - **PRECOG 2.0**: Benard B, Lalgudi S, et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research*. 2026.
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```

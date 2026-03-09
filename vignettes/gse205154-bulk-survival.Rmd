@@ -9,12 +9,12 @@ output:
 
 ## Overview
 
-This vignette is an **example of using PhenoMapR to score bulk RNA-seq samples** and to **show that the resulting score stratifies outcome**. PhenoMapR has built-in pan-cancer outcomes meta-z score signatures from [PRECOG 2.0](https://precog.stanford.edu/). To demonstrate that PhenoMapR can assign prognostic risk to patient samples profiled by bulk RNAseq, we use the [GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) dataset: **289 primary and metastatic pancreatic ductal adenocarcinoma (PDAC)** samples with gene expression and overall survival (Sears et al.). Pre-processed gene expression and cleaned clinical annotations were obtained from [PRECOG](https://precog.stanford.edu/). After scoring samples with PhenoMapR’s built-in PRECOG references, we stratify by score (high vs low) and demonstrate that the PhenoMapR score separates survival in both primary and metastatic groups.
+This vignette is an **example of using PhenoMapR to score bulk RNA-seq samples** and to **show that the resulting score stratifies outcome**. PhenoMapR has built-in pan-cancer outcomes meta-z score signatures from [PRECOG](https://precog.stanford.edu/). To demonstrate that PhenoMapR can assign prognostic risk to patient samples profiled by bulk RNAseq, we use the [GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) dataset: **289 primary and metastatic pancreatic ductal adenocarcinoma (PDAC)** samples with gene expression and overall survival (Sears et al.). Pre-processed gene expression and cleaned clinical annotations were obtained from [PRECOG](https://precog.stanford.edu/). After scoring samples with PhenoMapR’s built-in PRECOG references, we stratify by score (high vs low) and demonstrate that the PhenoMapR score separates survival in both primary and metastatic groups.
 
 **Data files** (downloadable from [PRECOG](https://precog.stanford.edu/)):
 
 - `GSE205154.GPL20301.matrix.txt` — normalized expression (genes × samples)
-- `GSE205154.info.txt` — sample annotations (Tumor_Type: Primary / Met, OS_Time, OS_Status)
+- `GSE205154.info.txt` — sample annotations (Tumor_Type: Primary / Met, OS_Time, OS_Status, Specimen_Site when available)
 
 
 ## 1. Load bulk expression and clinical annotations for GSE205154
@@ -22,7 +22,7 @@ This vignette is an **example of using PhenoMapR to score bulk RNA-seq samples**
 Load the expression matrix and clinical info so we can score samples with PhenoMapR and link scores to outcome.
 
 ```{r load-data}
-knitr::opts_chunk$set(fig.width = 6, fig.height = 6, out.width = "100%")
+knitr::opts_chunk$set(fig.width = 6, fig.height = 6, fig.align = "center")
 suppressPackageStartupMessages(library(PhenoMapR))
 
 # Files in the same directory as this vignette
@@ -38,11 +38,13 @@ knitr::opts_chunk$set(eval = has_data)
 if (!has_data) {
   message("GSE205154 data files not found. See Vignettes/README.md for download instructions.")
 } else {
-  # Clinical annotations: Array = sample ID, Tumor_Type = Primary/Met, OS_Time, OS_Status
+  # Clinical annotations: Array = sample ID, Tumor_Type = Primary/Met, OS_Time, OS_Status, Specimen_Site (when available)
   info <- read.delim(info_path, stringsAsFactors = FALSE, check.names = FALSE)
   colnames(info)[colnames(info) == "Array"] <- "sample_id"
   info$tumor_type <- info$Tumor_Type
-  info$survival_time <- as.numeric(info$OS_Time)
+  site_col <- intersect(c("Specimen_Site", "Specimen.Site"), colnames(info))[1]
+  if (!is.na(site_col)) info$specimen_site <- info[[site_col]]
+  info$survival_time <- as.numeric(info$OS_Time) / 365.25  # convert to years
   info$survival_event <- as.integer(info$OS_Status)
   info <- info[!is.na(info$survival_time) & !is.na(info$survival_event), ]
 
@@ -110,11 +112,130 @@ scores_df <- data.frame(
 dat <- merge(pheno, scores_df, by = "sample_id")
 ```
 
+```{r score-histogram, fig.width=8, fig.height=4}
+# Summary histogram: Primary and Metastatic PhenoMapR scores (z-scaled)
+suppressPackageStartupMessages(library(ggplot2))
+score_long <- data.frame(
+  score = c(dat$score_Pancreatic, dat$score_Pancreatic_Metastasis),
+  type = rep(c("Pancreatic (primary)", "Pancreatic_Metastasis"), each = nrow(dat))
+)
+score_long$score_z <- as.numeric(scale(score_long$score))
+ggplot(score_long, aes(x = score_z, fill = type)) +
+  geom_histogram(alpha = 0.8, position = "identity", bins = 30) +
+  scale_fill_manual(values = c("Pancreatic (primary)" = "tan", "Pancreatic_Metastasis" = "darkred")) +
+  labs(x = "PhenoMapR score (z-scaled)", y = "Count", fill = "Signature", title = "PhenoMapR score distribution") +
+  theme_minimal()
+```
+
+<!-- ## 3. Gene expression heatmap (commented out)
+Clustered heatmap of input gene expression using variable genes (top 2000 by variance). Rows and columns are clustered. Column annotations: metastatic status (Primary/Met), site of metastasis when available (Specimen_Site), and PhenoMapR score (z-scaled). Top 5 genes per cluster are labeled with anno_mark.
+
+```{r heatmap-expression, eval=FALSE, include=FALSE, fig.width=14, fig.height=10}
+if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE) &&
+    requireNamespace("paletteer", quietly = TRUE)) {
+  suppressPackageStartupMessages(library(ComplexHeatmap))
+  suppressPackageStartupMessages(library(circlize))
+  gene_var <- apply(bulk_mat, 1, var, na.rm = TRUE)
+  genes_var <- names(sort(gene_var, decreasing = TRUE))[gene_var > 0]
+  genes_var <- head(genes_var, 2000)
+  expr_sub <- bulk_mat[genes_var, , drop = FALSE]
+  expr_scaled <- t(scale(t(expr_sub)))
+  expr_scaled[expr_scaled < -3] <- -3
+  expr_scaled[expr_scaled > 3] <- 3
+  samples_ord <- colnames(expr_sub)
+  dat_ord <- dat[match(samples_ord, dat$sample_id), ]
+  score_col <- ifelse(dat_ord$tumor_type == "Primary",
+    dat_ord$score_Pancreatic, dat_ord$score_Pancreatic_Metastasis)
+  score_scaled <- as.numeric(scale(score_col))
+  hc_row <- hclust(dist(expr_scaled), method = "complete")
+  hc_col <- hclust(dist(t(expr_scaled)), method = "complete")
+  k_max <- min(10, max(2, floor(nrow(expr_scaled) / 50)))
+  if (requireNamespace("cluster", quietly = TRUE) && k_max >= 2) {
+    sil_widths <- numeric(k_max - 1)
+    for (k in 2:k_max) {
+      cl <- cutree(hc_row, k = k)
+      sil <- cluster::silhouette(cl, dist(expr_scaled))
+      sil_widths[k - 1] <- mean(sil[, 3])
+    }
+    n_clust <- which.max(sil_widths) + 1
+  } else {
+    n_clust <- min(8, max(2, ceiling(nrow(expr_scaled) / 100)))
+  }
+  row_clust <- cutree(hc_row, k = n_clust)
+  row_order <- hc_row$order
+  genes_to_label <- character(0)
+  for (k in seq_len(n_clust)) {
+    idx_k <- which(row_clust == k)
+    genes_k <- rownames(expr_scaled)[idx_k]
+    var_k <- gene_var[genes_k]
+    top5 <- names(sort(var_k, decreasing = TRUE))[seq_len(min(5, length(genes_k)))]
+    genes_to_label <- c(genes_to_label, top5)
+  }
+  ord_genes <- rownames(expr_scaled)[row_order]
+  at_match <- match(genes_to_label, ord_genes)
+  at_match <- at_match[!is.na(at_match)]
+  labels_match <- ord_genes[at_match]
+  score_min <- min(score_scaled, na.rm = TRUE)
+  score_max <- max(score_scaled, na.rm = TRUE)
+  if (score_min < 0 && score_max > 0) {
+    brks <- c(score_min, 0, score_max)
+    cols <- c("#2166AC", "#F7F7F7", "#B2182B")
+  } else {
+    brks <- seq(score_min, score_max, length.out = 5)
+    cols <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(5)
+  }
+  col_score <- circlize::colorRamp2(brks, cols)
+  ha_col_args <- list(
+    `Metastatic status` = factor(dat_ord$tumor_type, levels = c("Primary", "Met")),
+    `PhenoMapR score (z)` = score_scaled,
+    col = list(
+      `Metastatic status` = c(Primary = "tan", Met = "darkred"),
+      `PhenoMapR score (z)` = col_score
+    )
+  )
+  if ("specimen_site" %in% names(dat_ord) && length(unique(na.omit(dat_ord$specimen_site))) > 0) {
+    site_anno <- ifelse(is.na(dat_ord$specimen_site) | dat_ord$specimen_site == "", "Unknown", as.character(dat_ord$specimen_site))
+    site_lev <- unique(site_anno)
+    site_lev <- c("Primary", setdiff(site_lev, "Primary"))
+    ha_col_args$`Sample site` <- factor(site_anno, levels = site_lev)
+    pal_site <- setNames(
+      c("grey90", grDevices::colorRampPalette(c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#a6d854"))(max(1, length(site_lev) - 1))),
+      site_lev
+    )
+    ha_col_args$col$`Sample site` <- pal_site
+  }
+  ha_col <- do.call(HeatmapAnnotation, ha_col_args)
+  ha_row <- NULL
+  if (length(at_match) > 0) {
+    ha_row <- rowAnnotation(
+      genes = anno_mark(at = at_match, labels = labels_match, which = "row", side = "right",
+        labels_gp = grid::gpar(fontsize = 8))
+    )
+  }
+  col_fun <- circlize::colorRamp2(seq(-3, 3, length.out = 100),
+    colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100))
+  expr_ord <- expr_scaled[row_order, , drop = FALSE]
+  ht <- Heatmap(expr_ord, name = "Z-score",
+    col = col_fun,
+    cluster_rows = FALSE,
+    cluster_columns = hc_col,
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    top_annotation = ha_col,
+    right_annotation = ha_row,
+    row_title = "Variable genes",
+    column_title = "Gene expression (variable genes)"
+  )
+  draw(ht)
+}
+```
+-->
+
 ## 3. Primary vs Metastatic outcomes
 
 Before seeing if PhenoMapR scores stratify outcomes, let's see if the primary and metastatic patients in the study show differences in outcomes.
 
-```{r primary-vs-met}
+```{r primary-vs-met, fig.width=7, fig.height=3}
 suppressPackageStartupMessages(library(survival))
 suppressPackageStartupMessages(library(survminer))
 # Unnamed vector: order matches strata (Met first, then Primary). Named palettes trigger scale warnings.
@@ -131,8 +252,8 @@ label_primary <- sprintf("p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)",
 max_time_primary <- max(dat$survival_time, na.rm = TRUE)
 ggsurvplot(fit_primary, data = dat, palette = pal_tumor, risk.table = FALSE,
            title = "Survival by Primary vs Metastatic status",
-           xlab = "Time", ylab = "Survival probability", legend.title = "Status",
-           legend.labs = c("Metastatic", "Primary"),
+           xlab = "Time (years)", ylab = "Survival probability", legend.title = "Status",
+           legend.labs = c("Metastatic", "Primary"), legend = "right",
            pval = label_primary, pval.coord = c(max_time_primary * 0.5, 0.95), pval.size = 3.5)
 ```
 
@@ -143,7 +264,7 @@ It seems like patients with metastatic disease trend towards worse outcomes but 
 
 Stratify primary samples by PhenoMapR score (high vs low median split) and show that the **Pancreatic** score stratifies survival.
 
-```{r km-primary}
+```{r km-primary, fig.width=7, fig.height=3}
 # Unnamed vector: order matches strata (High first, then Low). Named palettes can trigger scale warnings.
 pal_km <- c("#B2182B", "#2166AC")  # High (adverse), Low (favorable)
 dat_primary <- dat[dat$tumor_type == "Primary", ]
@@ -162,8 +283,8 @@ label_primary <- sprintf("p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)",
 max_time_primary <- max(dat_primary$survival_time, na.rm = TRUE)
 ggsurvplot(fit_primary, data = dat_primary, palette = pal_km, risk.table = FALSE,
            title = "Survival by PhenoMapR score in Primary tumors",
-           xlab = "Time", ylab = "Survival probability", legend.title = "PhenoMapR Score",
-           legend.labs = c("High", "Low"),
+           xlab = "Time (years)", ylab = "Survival probability", legend.title = "PhenoMapR Score",
+           legend.labs = c("High", "Low"), legend = "right",
            pval = label_primary, pval.coord = c(max_time_primary * 0.5, 0.95), pval.size = 3.5)
 ```
 
@@ -171,7 +292,7 @@ ggsurvplot(fit_primary, data = dat_primary, palette = pal_km, risk.table = FALSE
 
 Stratify metastatic samples by PhenoMapR score (high vs low median split) and show that the **Pancreatic_Metastasis** score stratifies survival in this subset.
 
-```{r km-metastatic}
+```{r km-metastatic, fig.width=7, fig.height=3}
 dat_met <- dat[dat$tumor_type == "Met", ]
 dat_met$score_grp <- ifelse(
   dat_met$score_Pancreatic_Metastasis >= median(dat_met$score_Pancreatic_Metastasis, na.rm = TRUE),
@@ -188,8 +309,8 @@ label_met <- sprintf("p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)",
 max_time_met <- max(dat_met$survival_time, na.rm = TRUE)
 ggsurvplot(fit_met, data = dat_met, palette = pal_km, risk.table = FALSE,
            title = "Survival by PhenoMapR score in Metastatic Patients",
-           xlab = "Time", ylab = "Survival probability", legend.title = "PhenoMapR Score",
-           legend.labs = c("High", "Low"),
+           xlab = "Time (years)", ylab = "Survival probability", legend.title = "PhenoMapR Score",
+           legend.labs = c("High", "Low"), legend = "right",
            pval = label_met, pval.coord = c(max_time_met * 0.5, 0.95), pval.size = 3.5)
 ```
 
@@ -199,4 +320,10 @@ PhenoMapR can take a bulk expression dataset and assign prognostic risk scores a
 ## 7. References
 
 - **GSE205154**: Sears et al. Bulk RNA-Seq gene expression for 289 primary and metastatic PDAC samples. *Nature Cancer* (2025). [GEO: GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). 
-- **PRECOG 2.0**: Benard B et al. PRECOG 2.0: an updated resource of pan-cancer gene-level prognostic meta-z scores. *Nucleic Acids Research* (2026). [https://academic.oup.com/nar/article/54/D1/D1579/8324954](https://academic.oup.com/nar/article/54/D1/D1579/8324954).
+- **PRECOG**: Benard B et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. *Nucleic Acids Research* (2025). [precog.stanford.edu](https://precog.stanford.edu/); [PubMed: 40909678](https://pubmed.ncbi.nlm.nih.gov/40909678/).
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```

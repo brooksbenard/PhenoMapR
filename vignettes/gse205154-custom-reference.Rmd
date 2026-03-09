@@ -136,3 +136,9 @@ message("Metastatic — Log-rank p-value: ", round(1 - pchisq(lr_met$chisq, 1), 
 
 - **GSE205154**: [Bulk RNA-Seq for 289 primary and metastatic PDAC samples](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) (GEO). Place `GSE205154.GPL20301.matrix.txt` and `GSE205154.info.txt` in the vignette directory.
 - **PhenoMapR**: `derive_reference_from_bulk()` for cohort-specific survival z-scores; see `?derive_reference_from_bulk`.
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```
