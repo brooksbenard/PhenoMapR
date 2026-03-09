@@ -52,11 +52,6 @@ In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot.
 The function handles both automatically.}
 
 \item{verbose}{Logical. Print progress messages (default: TRUE)}
-
-\item{use_dataset_info}{Logical. If TRUE, use built-in dataset mapping
-(default: FALSE). Requires 'dataset' parameter.}
-
-\item{dataset}{Dataset name for automatic cancer type mapping (optional)}
 }
 \value{
 A data.frame with samples/cells as rows and score columns. Column
