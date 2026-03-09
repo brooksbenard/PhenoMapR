@@ -7,7 +7,8 @@
 plot_score_distribution(
   scores,
   score_column = NULL,
-  main = "Score Distribution"
+  main = "Score Distribution",
+  base_size = 14
 )
 }
 \arguments{
@@ -16,7 +17,9 @@ plot_score_distribution(
 \item{score_column}{If scores is data.frame, which column to plot}
 
 \item{main}{Plot title}
+
+\item{base_size}{Base font size for the plot (default 14)}
 }
 \description{
-Simple histogram of score distribution
+Simple histogram of score distribution using ggplot2
 }
