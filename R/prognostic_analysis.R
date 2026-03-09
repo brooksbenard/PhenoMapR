@@ -161,6 +161,7 @@ find_prognostic_markers <- function(expression,
     slot = slot
   )
   cell_ids <- expr_info$cell_names
+  slot_use <- expr_info$slot_used %||% slot
 
   group_vec <- resolve_group_labels(
     group_labels,
@@ -187,6 +188,18 @@ find_prognostic_markers <- function(expression,
   seurat_obj <- get_or_create_seurat_for_markers(expression, expr_info, group_vec, assay, slot)
   meta_col <- "PhenoMapR_prognostic_group"
   Seurat::Idents(seurat_obj) <- seurat_obj[[meta_col]][, 1]
+  assay_use <- assay %||% attr(seurat_obj, "PhenoMapR_assay") %||% "RNA"
+  if (slot_use == "counts" && inherits(seurat_obj, "Seurat")) {
+    dat_check <- tryCatch(
+      Seurat::GetAssayData(seurat_obj, assay = assay_use, layer = "data"),
+      error = function(e) NULL
+    )
+    if (is.null(dat_check) || (nrow(dat_check) == 0 || ncol(dat_check) == 0)) {
+      if (verbose) message("Normalizing assay '", assay_use, "' for FindMarkers (data layer was empty)")
+      seurat_obj <- Seurat::NormalizeData(seurat_obj, assay = assay_use, verbose = verbose)
+      slot_use <- "data"
+    }
+  }
 
   # Subsample when any ident exceeds max_cells_per_ident (reduces memory for large objects)
   if (is.finite(max_cells_per_ident)) {
@@ -202,18 +215,27 @@ find_prognostic_markers <- function(expression,
       }
       cells_keep <- c(cells_keep, colnames(seurat_obj)[idx])
     }
-    seurat_obj <- seurat_obj[, cells_keep]
+    seurat_obj <- tryCatch(
+      seurat_obj[, cells_keep],
+      error = function(e) {
+        if (verbose) {
+          message(glue::glue("Subsetting failed ({e$message}); using full object (may use more memory)"))
+        }
+        seurat_obj
+      }
+    )
   }
 
   # Adverse vs rest
   gc(verbose = FALSE)
+  assay_use <- assay %||% attr(seurat_obj, "PhenoMapR_assay") %||% "RNA"
   adverse_markers <- tryCatch(
     Seurat::FindMarkers(
       seurat_obj,
       ident.1 = "Most Adverse",
       ident.2 = NULL,
-      assay = attr(seurat_obj, "PhenoMapR_assay") %||% "RNA",
-      slot = slot,
+      assay = assay_use,
+      slot = slot_use,
       test.use = test.use,
       min.pct = min.pct,
       logfc.threshold = logfc.threshold,
@@ -235,8 +257,8 @@ find_prognostic_markers <- function(expression,
       seurat_obj,
       ident.1 = "Most Favorable",
       ident.2 = NULL,
-      assay = attr(seurat_obj, "PhenoMapR_assay") %||% "RNA",
-      slot = slot,
+      assay = assay_use,
+      slot = slot_use,
       test.use = test.use,
       min.pct = min.pct,
       logfc.threshold = logfc.threshold,
@@ -352,17 +374,35 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
       stop("Seurat package required for Seurat input")
     }
     assay <- assay %||% "RNA"
+    if (!assay %in% names(expression@assays)) {
+      stop(glue::glue("Assay '{assay}' not found. Available: {paste(names(expression@assays), collapse = ', ')}"))
+    }
     layer_map <- c(data = "data", counts = "counts", scale.data = "scale.data")
     layer_name <- if (slot %in% names(layer_map)) layer_map[slot] else "data"
     mat <- tryCatch(
       Seurat::GetAssayData(expression, assay = assay, layer = layer_name),
-      error = function(e) Seurat::GetAssayData(expression, assay = assay, slot = slot)
+      error = function(e) NULL
     )
+    slot_used <- slot
+    if (is.null(mat)) {
+      mat <- tryCatch(
+        Seurat::GetAssayData(expression, assay = assay, slot = slot),
+        error = function(e) NULL
+      )
+    }
+    if (is.null(mat) || (nrow(mat) == 0 || ncol(mat) == 0)) {
+      mat <- tryCatch(
+        Seurat::GetAssayData(expression, assay = assay, layer = "counts"),
+        error = function(e) Seurat::GetAssayData(expression, assay = assay, slot = "counts")
+      )
+      if (!is.null(mat) && (nrow(mat) > 0 && ncol(mat) > 0)) slot_used <- "counts"
+    }
     mat <- as.matrix(mat)
     return(list(
       matrix = mat,
       cell_names = colnames(mat),
-      gene_names = rownames(mat)
+      gene_names = rownames(mat),
+      slot_used = slot_used
     ))
   }
   if (inherits(expression, "SingleCellExperiment")) {

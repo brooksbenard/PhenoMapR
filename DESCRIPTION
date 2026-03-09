@@ -22,6 +22,8 @@ Imports:
     glue,
     progress
 Suggests:
+    devtools,
+    fastSave,
     gridExtra,
     pheatmap,
     presto,
