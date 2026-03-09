@@ -2,7 +2,7 @@
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://github.com/brooksbenard/PhenoMapR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMap/actions)
+[![R-CMD-check](https://github.com/brooksbenard/PhenoMapR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMapR/actions)
 [![Lifecycle: Experimental](https://img.shields.io/badge/lifecycle-experimental-teal.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![License: Stanford](https://img.shields.io/badge/License-Stanford-yellow.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://brooksbenard.github.io/PhenoMapR)
@@ -220,6 +220,7 @@ Detailed walkthroughs with public datasets (on the [pkgdown site](https://brooks
 | Article | Description |
 |----------|-------------|
 | **[GSE111672 — Single-cell PAAD](https://brooksbenard.github.io/PhenoMapR/articles/gse111672-single-cell.html)** | Score PAAD single cells with PRECOG **Pancreatic** using the included `PAAD_GSE111672_seurat.rds`; cell type score distributions and prognostic group marker analysis. Data: [GEO GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672). |
+| **[Spatial transcriptomics](https://brooksbenard.github.io/PhenoMapR/articles/spatial-transcriptomics.html)** | Score spatial transcriptomics spots with PRECOG **Pancreatic**; score distributions, prognostic groups, and spatial maps of score and group on the tissue image. |
 | **[GSE205154 — Bulk PDAC scoring and survival](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data: [GEO GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). |
 | **[GSE205154 — Custom survival-based reference](https://brooksbenard.github.io/PhenoMapR/articles/gse205154-custom-reference.html)** | Build a custom gene z-score reference from GSE205154 expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
 
