@@ -74,11 +74,21 @@ reference:
   - add_scores_to_seurat
   - add_scores_to_sce
 - title: Reference data and utilities
-  desc: List cancer types, check gene coverage, and get top prognostic genes.
+  desc: List cancer types, check gene coverage, get top prognostic genes, and helpers.
   contents:
   - list_cancer_types
   - get_gene_coverage
   - get_top_prognostic_genes
+  - get_celltype_palette
+  - cell_type_colors
+  - load_rds_fast
+- title: Reference datasets (internal)
+  desc: Built-in reference data; use list_cancer_types() and PhenoMap() in practice.
+  contents:
+  - precog
+  - tcga
+  - pediatric
+  - ici
 - title: Custom reference derivation
   desc: Derive reference z-scores from bulk expression and phenotype.
   contents:
