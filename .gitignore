@@ -36,7 +36,6 @@ data/datasets_info.rda
 vignettes/PAAD_*.rds
 vignettes/*cytospace*.rds
 vignettes/*_processed.rds
-vignettes/GSE205154.GPL20301.matrix.txt
 vignettes/expression_*.rds
 vignettes/clinical_*.rds
 data-raw/

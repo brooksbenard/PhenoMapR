@@ -31,7 +31,9 @@ home:
         text: "[Stanford Non-Commercial License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE)"
 
 navbar:
-  title: ~
+  title:
+    text: PhenoMapR
+    href: index.html
   type: default
   left:
     - text: Vignettes

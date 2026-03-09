@@ -22,7 +22,7 @@ output:
 ```{r load-data}
 suppressPackageStartupMessages(library(PhenoMapR))
 
-vignette_dir <- if (dir.exists("Vignettes")) "Vignettes" else "."
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 info_path <- file.path(vignette_dir, "GSE205154.info.txt")
 matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
 if (!file.exists(info_path)) {

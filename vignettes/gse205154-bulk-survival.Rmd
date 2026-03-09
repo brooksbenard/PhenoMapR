@@ -25,8 +25,8 @@ Load the expression matrix and clinical info so we can score samples with PhenoM
 knitr::opts_chunk$set(fig.width = 6, fig.height = 6, fig.align = "center")
 suppressPackageStartupMessages(library(PhenoMapR))
 
-# Files in the same directory as this vignette
-vignette_dir <- if (dir.exists("Vignettes")) "Vignettes" else "."
+# Files in vignettes/ (or current dir when run from package root)
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 info_path <- file.path(vignette_dir, "GSE205154.info.txt")
 matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
 if (!file.exists(info_path)) {

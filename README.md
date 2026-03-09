@@ -37,10 +37,6 @@ devtools::install_github("brooksbenard/PhenoMapR")
 
 Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
 
-## Documentation
-
-The [pkgdown site](https://brooksbenard.github.io/PhenoMapR) (vignettes, reference, news) is built by GitHub Actions and deployed from the **gh-pages** branch. If vignette links return 404, in the repo go to **Settings → Pages** and set **Source** to “Deploy from a branch”, **Branch** to `gh-pages`, and **Folder** to “/ (root)”.
-
 ## Getting Started
 
 The primary function of PhenoMapR is `PhenoMap()`. The basic use of this function takes a `gene x sample/cell/spot` expression file **+** reference phenotype `gene x z-score signature` and generates a `PhenoMapR score x sample/cell/spot` dataframe. For single-cell and spatial inputs, a sample-level PhenoMap score can be generated using the pseudobulk argument.
