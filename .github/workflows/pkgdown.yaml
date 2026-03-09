@@ -28,14 +28,18 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::remotes, any::pkgdown, local::.
+          dependency-type: hard
 
       - name: Ensure pkgdown >= 2.1.0
         run: |
           Rscript -e 'v <- packageVersion("pkgdown"); if (v < "2.1.0") remotes::install_github("r-lib/pkgdown", ref = "v2.1.0", upgrade = "never")'
           Rscript -e 'packageVersion("pkgdown")'
 
-      - name: Install presto from GitHub
-        run: Rscript -e 'remotes::install_github("immunogenomics/presto")'
+      - name: Install Suggests (including GitHub-only)
+        run: |
+          Rscript -e 'remotes::install_github("immunogenomics/presto", upgrade = "never")'
+          Rscript -e 'remotes::install_github("barkasn/fastSave", upgrade = "never")'
+          Rscript -e 'remotes::install_deps(dependencies = TRUE, upgrade = "never")'
 
       - name: Verify vignettes exist before build
         run: |
