@@ -230,10 +230,10 @@ ann_colors <- list(
   `Prognostic group` = pal_group
 )
 
-# Plot heatmap (genes = rows, cells = columns): viridis fill, scale limits ±3
+# Plot heatmap (genes = rows, cells = columns): Vendedora fill, scale limits ±3
 heatmap_breaks <- seq(-3, 3, length.out = 101)
-heatmap_colors <- if (requireNamespace("viridis", quietly = TRUE)) {
-  viridis::viridis(100)
+heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
+  colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
 } else {
   colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
 }
@@ -477,8 +477,8 @@ ann_colors2 <- list(
 )
 
 heatmap_breaks2 <- seq(-3, 3, length.out = 101)
-heatmap_colors2 <- if (requireNamespace("viridis", quietly = TRUE)) {
-  viridis::viridis(100)
+heatmap_colors2 <- if (requireNamespace("paletteer", quietly = TRUE)) {
+  colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
 } else {
   colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
 }

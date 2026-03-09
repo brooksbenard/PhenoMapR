@@ -2,7 +2,6 @@
 #'
 #' @name PhenoMapR-imports
 #' @importFrom stats na.omit sd median cor setNames
-#' @importFrom graphics hist abline legend
 #' @importFrom utils data head
 #' @importFrom dplyr %>%
 #' @keywords internal

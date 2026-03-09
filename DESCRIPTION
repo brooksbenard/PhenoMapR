@@ -19,6 +19,7 @@ Depends:
 Imports:
     Matrix,
     dplyr,
+    ggplot2,
     glue,
     progress
 Suggests:

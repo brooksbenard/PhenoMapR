@@ -88,7 +88,7 @@ Distribution of PhenoMapR (PRECOG Pancreatic) scores across spots.
 plot_score_distribution(
   seurat@meta.data[[score_col]],
   main = "PRECOG Pancreatic score (spatial spots)",
-  cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2
+  base_size = 14
 )
 ```
 
@@ -567,7 +567,7 @@ if (exists("markers") && !is.null(markers)) {
     )
     if (length(pal_celltype) > 0) ann_colors$`Cell type` <- pal_celltype
     heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
-      colorRampPalette(paletteer::paletteer_d("PNWColors::Shuksan2"))(100)
+      colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
     } else {
       colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
     }
@@ -831,7 +831,7 @@ if (exists("markers_by_ct") && !is.null(markers_by_ct) && nrow(markers_by_ct) > 
       rownames(ann_col) <- colnames(mat_scaled)
       pal_score <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
       heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
-        colorRampPalette(paletteer::paletteer_d("PNWColors::Shuksan2"))(100)
+        colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
       } else {
         colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
       }

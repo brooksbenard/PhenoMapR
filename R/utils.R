@@ -284,34 +284,33 @@ get_top_prognostic_genes <- function(reference,
 
 #' Plot Score Distribution
 #'
-#' Simple histogram of score distribution
+#' Simple histogram of score distribution using ggplot2
 #'
 #' @param scores Numeric vector or data.frame of scores
 #' @param score_column If scores is data.frame, which column to plot
 #' @param main Plot title
-#' @param ... Additional arguments passed to \code{hist} (e.g. \code{cex.main}, \code{cex.lab}, \code{cex.axis})
+#' @param base_size Base font size for the plot (default 14)
 #'
 #' @export
-plot_score_distribution <- function(scores, score_column = NULL, main = "Score Distribution", ...) {
-  
+plot_score_distribution <- function(scores, score_column = NULL, main = "Score Distribution", base_size = 14) {
+
   if (is.data.frame(scores)) {
     if (is.null(score_column)) {
       score_column <- colnames(scores)[1]
     }
     scores <- scores[[score_column]]
   }
-  
-  hist(scores,
-       breaks = 50,
-       col = "steelblue",
-       border = "white",
-       main = main,
-       xlab = "Score",
-       ylab = "Frequency",
-       ...)
-  
-  abline(v = median(scores, na.rm = TRUE), col = "red", lwd = 2, lty = 2)
-  legend("topright", legend = "Median", col = "red", lty = 2, lwd = 2)
+
+  df <- data.frame(score = as.numeric(stats::na.omit(scores)))
+  med <- stats::median(df$score)
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$score)) +
+    ggplot2::geom_histogram(bins = 50, fill = "steelblue", color = "white") +
+    ggplot2::geom_vline(xintercept = med, color = "red", linewidth = 1, linetype = 2) +
+    ggplot2::labs(title = main, x = "Score", y = "Frequency") +
+    ggplot2::theme_minimal(base_size = base_size)
+
+  p
 }
 
 
