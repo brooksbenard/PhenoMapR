@@ -29,9 +29,6 @@
 #'   "counts" for raw, "scale.data" for scaled (default: "data"). 
 #'   In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot. 
 #'   The function handles both automatically.
-#' @param use_dataset_info Logical. If TRUE, use built-in dataset mapping 
-#'   (default: FALSE). Requires 'dataset' parameter.
-#' @param dataset Dataset name for automatic cancer type mapping (optional)
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #'
 #' @return A data.frame with samples/cells as rows and score columns. Column 

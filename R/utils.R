@@ -41,7 +41,7 @@ get_celltype_palette <- function(types) {
   names(pal) <- types
   if (length(known) > 0) pal[known] <- cell_type_colors[known]
   if (length(unknown) > 0) {
-    fallback <- colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB", "#EE8866"))(length(unknown))
+    fallback <- grDevices::colorRampPalette(c("#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB", "#EE8866"))(length(unknown))
     pal[unknown] <- fallback
   }
   pal
