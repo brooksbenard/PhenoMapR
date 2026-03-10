@@ -1,6 +1,7 @@
-/* Remove link from navbar brand (package title) at top */
-.navbar-brand,
-a.navbar-brand {
-  pointer-events: none;
-  cursor: default;
+/* Hex logo: size and align like pkgdown.r-lib.org - top right, aligned with navbar */
+.contents .page-header img.logo,
+.contents h1 img.logo {
+  float: right;
+  height: 120px !important;
+  margin-top: -0.5em;
 }
