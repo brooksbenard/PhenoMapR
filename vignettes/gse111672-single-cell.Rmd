@@ -35,7 +35,7 @@ report_timing <- function(step_name, t0, obj = NULL) {
 rds_path <- "vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
-if (!file.exists(rds_path) && requireNamespace("googledrive", quietly = TRUE)) {
+if (!file.exists(rds_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
   googledrive::drive_deauth()
   googledrive::drive_download(googledrive::as_id("1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"), rds_path, overwrite = TRUE)
 }
@@ -56,7 +56,7 @@ if (!has_data) {
   rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2) && requireNamespace("googledrive", quietly = TRUE)) {
+  if (!file.exists(rds_path2) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
     googledrive::drive_deauth()
     googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
   }
@@ -326,7 +326,7 @@ if (is.null(seurat2)) {
   rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2) && requireNamespace("googledrive", quietly = TRUE)) {
+  if (!file.exists(rds_path2) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
     googledrive::drive_deauth()
     googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
   }
