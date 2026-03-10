@@ -58,10 +58,8 @@ navbar:
 
 footer:
   structure:
-    left: [license_text, developed_by]
+    left: [developed_by]
     right: [built_with]
-  components:
-    license_text: "[Stanford Non-Commercial License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE)"
 
 articles:
   - title: Introduction
