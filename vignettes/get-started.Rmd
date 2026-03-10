@@ -9,7 +9,7 @@ output:
 
 ## Introduction
 
-<img src="../man/figures/PhenoMapR_stacked_modalities.png" alt="PhenoMapR stacked modalities" align="right" width="260" />
+<img src="../man/figures/PhenoMapR_stacked_modalities.png" alt="PhenoMapR stacked modalities" align="right" width="390" />
 
 Single-cell and spatial transcriptomics methods provide an improved understanding of the cell types and spatial organization underlying healthy and malignant biology. However, many single-cell and spatial studies lack sufficient sample size for robust associations between a sample phenotype (e.g. overall survival) and cell types or spatial locations. In contrast, lower resolution methods such as bulk gene expression profiling have been applied at scale in large, clinically-annotated datasets, providing robust signatures for phenotype associations. PhenoMapR bridges this gap between the improved resolution of single-cell/spatial approaches and the bulk phenotype signals by mapping the phenotypic signal directly onto individual cells and spatial locations.
 
