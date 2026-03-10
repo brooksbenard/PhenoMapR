@@ -37,7 +37,7 @@ if (!file.exists(rds_path)) rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path) && requireNamespace("googledrive", quietly = TRUE)) {
   googledrive::drive_deauth()
-  googledrive::drive_download(as_id("1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"), rds_path, overwrite = TRUE)
+  googledrive::drive_download(googledrive::as_id("1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"), rds_path, overwrite = TRUE)
 }
 if (!file.exists(rds_path)) {
   url <- Sys.getenv("PHENOMAPR_GSE111672_RDS_URL", "")
@@ -58,7 +58,7 @@ if (!has_data) {
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2) && requireNamespace("googledrive", quietly = TRUE)) {
     googledrive::drive_deauth()
-    googledrive::drive_download(as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
+    googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
   }
   if (!file.exists(rds_path2)) {
     url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
@@ -328,7 +328,7 @@ if (is.null(seurat2)) {
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2) && requireNamespace("googledrive", quietly = TRUE)) {
     googledrive::drive_deauth()
-    googledrive::drive_download(as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
+    googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
   }
   if (!file.exists(rds_path2)) {
     url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
