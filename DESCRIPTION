@@ -23,6 +23,7 @@ Imports:
     glue,
     progress
 Suggests:
+    googledrive,
     cluster,
     ComplexHeatmap,
     circlize,

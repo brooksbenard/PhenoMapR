@@ -20,12 +20,21 @@ output:
 ```{r load-data}
 suppressPackageStartupMessages(library(PhenoMapR))
 
+# Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
 vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 info_path <- file.path(vignette_dir, "GSE205154.info.txt")
 matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
 if (!file.exists(info_path)) {
   info_path <- "GSE205154.info.txt"
   matrix_path <- "GSE205154.GPL20301.matrix.txt"
+}
+if (!file.exists(matrix_path) && requireNamespace("googledrive", quietly = TRUE)) {
+  googledrive::drive_deauth()
+  googledrive::drive_download(as_id("1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN"), matrix_path, overwrite = TRUE)
+}
+if (!file.exists(info_path) && requireNamespace("googledrive", quietly = TRUE)) {
+  googledrive::drive_deauth()
+  googledrive::drive_download(as_id("1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"), info_path, overwrite = TRUE)
 }
 if (!file.exists(matrix_path)) {
   u <- Sys.getenv("PHENOMAPR_GSE205154_MATRIX_URL", "")

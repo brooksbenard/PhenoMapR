@@ -31,15 +31,17 @@ report_timing <- function(step_name, t0, obj = NULL) {
   message(sprintf("[%s] Runtime: %.2f s | Memory: %s", step_name, elapsed, mem_mb))
 }
 
+# Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
 rds_path <- "vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
+if (!file.exists(rds_path) && requireNamespace("googledrive", quietly = TRUE)) {
+  googledrive::drive_deauth()
+  googledrive::drive_download(as_id("1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"), rds_path, overwrite = TRUE)
+}
 if (!file.exists(rds_path)) {
   url <- Sys.getenv("PHENOMAPR_GSE111672_RDS_URL", "")
-  if (nzchar(url)) {
-    tryCatch({ download.file(url, rds_path, mode = "wb", quiet = TRUE) },
-      error = function(e) message("Download failed: ", conditionMessage(e)))
-  }
+  if (nzchar(url)) tryCatch({ download.file(url, rds_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
 }
 has_data <- file.exists(rds_path)
 knitr::opts_chunk$set(eval = has_data)
@@ -54,6 +56,10 @@ if (!has_data) {
   rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
+  if (!file.exists(rds_path2) && requireNamespace("googledrive", quietly = TRUE)) {
+    googledrive::drive_deauth()
+    googledrive::drive_download(as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
+  }
   if (!file.exists(rds_path2)) {
     url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
     if (nzchar(url2)) tryCatch({ download.file(url2, rds_path2, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
@@ -320,6 +326,10 @@ if (is.null(seurat2)) {
   rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
+  if (!file.exists(rds_path2) && requireNamespace("googledrive", quietly = TRUE)) {
+    googledrive::drive_deauth()
+    googledrive::drive_download(as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
+  }
   if (!file.exists(rds_path2)) {
     url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
     if (nzchar(url2)) tryCatch({ download.file(url2, rds_path2, mode = "wb", quiet = TRUE) }, error = function(e) NULL)

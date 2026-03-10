@@ -1,28 +1,39 @@
 # Vignette Data
 
-The vignettes use data files that are too large for GitHub. You can place them locally or load them from URLs (e.g. Google Drive).
+The vignettes use data files that are too large for GitHub. You can place them locally, let the vignettes download from Google Drive via **googledrive**, or set direct-download URLs.
 
-**PhenoMapR data on Google Drive:** [Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) — subfolders **Bulk_Expression**, **Single_Cell**, and **Spatial_Transcriptomics** contain the same files used by the vignettes.
+**PhenoMapR data on Google Drive:** [Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) — subfolders **Bulk_Expression**, **Single_Cell**, and **Spatial_Transcriptomics** contain the same files used by the vignettes. The vignettes use these fixed file IDs when downloading with **googledrive**:
+
+| File | Drive file ID | Vignette |
+|------|----------------|----------|
+| `PAAD_GSE111672_seurat.rds` | `1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c` | Single-cell (GSE111672) |
+| `PAAD_CRA001160_seurat.rds` | `14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb` | Single-cell (CRA001160) |
+| `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj` | Spatial transcriptomics |
+| `GSE205154.GPL20301.matrix.txt` | `1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN` | Bulk survival & Custom reference |
+| `GSE205154.info.txt` | `1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ` | Bulk survival & Custom reference |
 
 ---
 
 ## Option 1: Place files locally (simplest)
 
-Download from the [Drive Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (open each subfolder and download the files), then put them in `vignettes/`, `Vignettes/`, or the package root:
-
-| File | Drive subfolder | Vignette |
-|------|-----------------|----------|
-| `PAAD_GSE111672_seurat.rds` | Single_Cell | Single-cell (GSE111672) |
-| `PAAD_CRA001160_seurat.rds` | Single_Cell | Single-cell (CRA001160) |
-| `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | Spatial_Transcriptomics | Spatial transcriptomics |
-| `GSE205154.GPL20301.matrix.txt` | Bulk_Expression | Bulk survival & Custom reference |
-| `GSE205154.info.txt` | Bulk_Expression | Bulk survival & Custom reference |
+Download from the [Drive Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (open each subfolder and download the files), then put them in `vignettes/`, `Vignettes/`, or the package root. If a file is present, the vignette uses it and does not download.
 
 ---
 
-## Option 2: Load from URL (Google Drive direct links)
+## Option 2: Automatic download from Google Drive (googledrive)
 
-The single-cell and spatial vignettes can **download** files from URLs if you set environment variables. Use **direct download** URLs (see below for how to get them from Google Drive).
+If a data file is **not** found locally, each vignette will try to download it from Google Drive using the **googledrive** package (no login: `drive_deauth()` is used for public links).
+
+1. Install the package with Suggests: `install.packages("PhenoMapR", dependencies = TRUE)` or `install.packages("googledrive")`.
+2. Run or knit the vignette from the package root (so paths like `vignettes/PAAD_GSE111672_seurat.rds` resolve). The first run will download the file(s) into `vignettes/` (or the current directory).
+
+Files must be shared **Anyone with the link**. The vignettes use the file IDs in the table above.
+
+---
+
+## Option 3: Load from URL (environment variables)
+
+You can supply **direct download** URLs via environment variables. This is useful in CI (e.g. GitHub Actions) where you store the URLs in secrets; the vignettes fall back to these if the file is still missing after trying local paths and googledrive.
 
 ### Step 1: Get each file’s direct download link from Drive
 
@@ -35,18 +46,18 @@ The single-cell and spatial vignettes can **download** files from URLs if you se
 3. Do the same for the file in **Spatial_Transcriptomics** (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`).
 4. (Optional) For **Bulk_Expression**, get direct download URLs for `GSE205154.GPL20301.matrix.txt` and `GSE205154.info.txt` the same way.
 
-### Step 2: Set the URLs in R and run the vignettes
+### Step 2: Set the URLs and run the vignettes
 
-In R, **before** knitting or sourcing the vignettes, run (replace the `id=...` parts with your actual file IDs):
+In R, **before** knitting or sourcing the vignettes, run (you can use the file IDs from the table at the top):
 
 ```r
-# Replace YOUR_GSE111672_ID, YOUR_CRA001160_ID, YOUR_SPATIAL_ID (and optionally bulk IDs) with the IDs from Step 1.
+# Use the file IDs from the table at the top of this README.
 Sys.setenv(
-  PHENOMAPR_GSE111672_RDS_URL   = "https://drive.google.com/uc?export=download&id=YOUR_GSE111672_ID",
-  PHENOMAPR_CRA001160_RDS_URL   = "https://drive.google.com/uc?export=download&id=YOUR_CRA001160_ID",
-  PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=YOUR_SPATIAL_ID",
-  PHENOMAPR_GSE205154_MATRIX_URL = "https://drive.google.com/uc?export=download&id=YOUR_MATRIX_ID",
-  PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=YOUR_INFO_ID"
+  PHENOMAPR_GSE111672_RDS_URL   = "https://drive.google.com/uc?export=download&id=1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c",
+  PHENOMAPR_CRA001160_RDS_URL   = "https://drive.google.com/uc?export=download&id=14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb",
+  PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj",
+  PHENOMAPR_GSE205154_MATRIX_URL = "https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN",
+  PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"
 )
 
 # Then knit or run the vignettes, e.g.:
@@ -59,11 +70,11 @@ Sys.setenv(
 Or set them in the shell before starting R:
 
 ```bash
-export PHENOMAPR_GSE111672_RDS_URL="https://drive.google.com/uc?export=download&id=YOUR_GSE111672_ID"
-export PHENOMAPR_CRA001160_RDS_URL="https://drive.google.com/uc?export=download&id=YOUR_CRA001160_ID"
-export PHENOMAPR_SPATIAL_RDS_URL="https://drive.google.com/uc?export=download&id=YOUR_SPATIAL_ID"
-export PHENOMAPR_GSE205154_MATRIX_URL="https://drive.google.com/uc?export=download&id=YOUR_MATRIX_ID"
-export PHENOMAPR_GSE205154_INFO_URL="https://drive.google.com/uc?export=download&id=YOUR_INFO_ID"
+export PHENOMAPR_GSE111672_RDS_URL="https://drive.google.com/uc?export=download&id=1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"
+export PHENOMAPR_CRA001160_RDS_URL="https://drive.google.com/uc?export=download&id=14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"
+export PHENOMAPR_SPATIAL_RDS_URL="https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"
+export PHENOMAPR_GSE205154_MATRIX_URL="https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN"
+export PHENOMAPR_GSE205154_INFO_URL="https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"
 R
 ```
 
