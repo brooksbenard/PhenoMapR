@@ -15,8 +15,6 @@ template:
   light-switch: true
   theme: github-light
   theme-dark: github-dark
-  includes:
-    before_title: '<a href="index.html" class="d-inline-block me-2"><img src="https://brooksbenard.github.io/PhenoMapR/man/figures/PhenoMapR_logo.png" alt="PhenoMapR" class="navbar-logo" /></a>'
   bslib:
     primary: "#0054AD"
     border-radius: 0.5rem
@@ -39,7 +37,7 @@ home:
 navbar:
   type: default
   left:
-    - text: Introduction
+    - text: Get started
       href: articles/get-started.html
     - text: Vignettes
       menu:
