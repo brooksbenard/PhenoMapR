@@ -33,8 +33,16 @@ report_timing <- function(step_name, t0, obj = NULL) {
   message(sprintf("[%s] Runtime: %.2f s | Memory: %s", step_name, elapsed, mem_mb))
 }
 
-rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
+rds_path <- "vignettes/PAAD_GSE111672_seurat.rds"
+if (!file.exists(rds_path)) rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
+if (!file.exists(rds_path)) {
+  url <- Sys.getenv("PHENOMAPR_GSE111672_RDS_URL", "")
+  if (nzchar(url)) {
+    tryCatch({ download.file(url, rds_path, mode = "wb", quiet = TRUE) },
+      error = function(e) message("Download failed: ", conditionMessage(e)))
+  }
+}
 has_data <- file.exists(rds_path)
 knitr::opts_chunk$set(eval = has_data)
 if (!has_data) {
@@ -45,8 +53,13 @@ if (!has_data) {
   report_timing("Load GSE111672", t0, seurat)
 
   # Load CRA001160 early if available (for shared cell type palette alignment)
-  rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
+  rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
+  if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
+  if (!file.exists(rds_path2)) {
+    url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
+    if (nzchar(url2)) tryCatch({ download.file(url2, rds_path2, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
+  }
   if (file.exists(rds_path2)) {
     seurat2 <- PhenoMapR::load_rds_fast(rds_path2)
   } else {
@@ -306,8 +319,13 @@ report_timing("Proportion plot GSE111672", t0)
 
 ```{r load-cra001160}
 if (is.null(seurat2)) {
-  rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
+  rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
+  if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
+  if (!file.exists(rds_path2)) {
+    url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
+    if (nzchar(url2)) tryCatch({ download.file(url2, rds_path2, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
+  }
   if (file.exists(rds_path2)) {
     t0 <- Sys.time()
     seurat2 <- PhenoMapR::load_rds_fast(rds_path2)

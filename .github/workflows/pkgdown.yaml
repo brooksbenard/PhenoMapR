@@ -41,6 +41,11 @@ jobs:
           Rscript -e 'remotes::install_github("barkasn/fastSave", upgrade = "never")'
           Rscript -e 'remotes::install_deps(dependencies = TRUE, upgrade = "never")'
 
+      - name: Copy inst/figures to man/figures for pkgdown home images
+        run: |
+          mkdir -p man/figures
+          cp -n inst/figures/*.png man/figures/ 2>/dev/null || true
+
       - name: Verify vignettes exist before build
         run: |
           echo "Package root:"
@@ -53,6 +58,9 @@ jobs:
           Rscript -e "pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)"
         env:
           PKGDOWN_DEV_MODE: release
+          PHENOMAPR_GSE111672_RDS_URL: ${{ secrets.PHENOMAPR_GSE111672_RDS_URL }}
+          PHENOMAPR_CRA001160_RDS_URL: ${{ secrets.PHENOMAPR_CRA001160_RDS_URL }}
+          PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}
 
       - name: Verify articles were built
         run: |
