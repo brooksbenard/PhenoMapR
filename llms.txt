@@ -46,14 +46,6 @@ Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be
 installed automatically. For Seurat/SCE support, install suggested
 packages as needed.
 
-## Documentation
-
-The [pkgdown site](https://brooksbenard.github.io/PhenoMapR) (vignettes,
-reference, news) is built by GitHub Actions and deployed from the
-**gh-pages** branch. If vignette links return 404, in the repo go to
-**Settings → Pages** and set **Source** to “Deploy from a branch”,
-**Branch** to `gh-pages`, and **Folder** to “/ (root)”.
-
 ## Getting Started
 
 The primary function of PhenoMapR is

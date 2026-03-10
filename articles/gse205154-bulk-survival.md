@@ -34,8 +34,8 @@ with PhenoMapR and link scores to outcome.
 knitr::opts_chunk$set(fig.width = 6, fig.height = 6, fig.align = "center")
 suppressPackageStartupMessages(library(PhenoMapR))
 
-# Files in the same directory as this vignette
-vignette_dir <- if (dir.exists("Vignettes")) "Vignettes" else "."
+# Files in vignettes/ (or current dir when run from package root)
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 info_path <- file.path(vignette_dir, "GSE205154.info.txt")
 matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
 if (!file.exists(info_path)) {
@@ -80,7 +80,9 @@ if (!has_data) {
 }
 ```
 
-    ## GSE205154 data files not found. See Vignettes/README.md for download instructions.
+    ## Expression: 38562 genes × 289 samples
+
+    ## Phenotype: 289 samples (Primary: 218, Met: 71)
 
 ## 2. Score bulk samples with PhenoMapR
 
@@ -105,7 +107,14 @@ scores_primary <- PhenoMap(
   cancer_type = "Pancreatic",
   verbose = TRUE
 )
+```
 
+    ## Detected input type: matrix
+
+    ## 7376 genes used for scoring against PancreaticCalculating scores...
+    ## Completed scoring for Pancreatic
+
+``` r
 # Score all samples using the Metastatic PAAD signature
 scores_met <- PhenoMap(
   expression = bulk_mat,
@@ -113,7 +122,14 @@ scores_met <- PhenoMap(
   cancer_type = "Pancreatic_Metastasis",
   verbose = TRUE
 )
+```
 
+    ## Detected input type: matrix
+
+    ## 2997 genes used for scoring against Pancreatic_MetastasisCalculating scores...
+    ## Completed scoring for Pancreatic_Metastasis
+
+``` r
 # make a combined dataframe of sample clinical annotations and PhenoMap scores 
 col_pan <- grep("Pancreatic$", colnames(scores_primary), value = TRUE)[1]
 col_met <- grep("Pancreatic_Metastasis", colnames(scores_met), value = TRUE)[1]
@@ -140,6 +156,8 @@ ggplot(score_long, aes(x = score_z, fill = type)) +
   labs(x = "PhenoMapR score (z-scaled)", y = "Count", fill = "Signature", title = "PhenoMapR score distribution") +
   theme_minimal()
 ```
+
+![](gse205154-bulk-survival_files/figure-html/score-histogram-1.png)
 
 ## 3. Primary vs Metastatic outcomes
 
@@ -168,6 +186,8 @@ ggsurvplot(fit_primary, data = dat, palette = pal_tumor, risk.table = FALSE,
            legend.labs = c("Metastatic", "Primary"), legend = "right",
            pval = label_primary, pval.coord = c(max_time_primary * 0.5, 0.95), pval.size = 3.5)
 ```
+
+![](gse205154-bulk-survival_files/figure-html/primary-vs-met-1.png)
 
 It seems like patients with metastatic disease trend towards worse
 outcomes but it’s not statistically significant.
@@ -201,6 +221,8 @@ ggsurvplot(fit_primary, data = dat_primary, palette = pal_km, risk.table = FALSE
            pval = label_primary, pval.coord = c(max_time_primary * 0.5, 0.95), pval.size = 3.5)
 ```
 
+![](gse205154-bulk-survival_files/figure-html/km-primary-1.png)
+
 ## 5. Metastatic samples: PhenoMapR stratifies outcome
 
 Stratify metastatic samples by PhenoMapR score (high vs low median
@@ -229,6 +251,8 @@ ggsurvplot(fit_met, data = dat_met, palette = pal_km, risk.table = FALSE,
            pval = label_met, pval.coord = c(max_time_met * 0.5, 0.95), pval.size = 3.5)
 ```
 
+![](gse205154-bulk-survival_files/figure-html/km-metastatic-1.png)
+
 ## 6. Summary
 
 PhenoMapR can take a bulk expression dataset and assign prognostic risk
@@ -256,3 +280,44 @@ sample groupings.
 ``` r
 sessionInfo()
 ```
+
+    ## R version 4.5.2 (2025-10-31)
+    ## Platform: x86_64-pc-linux-gnu
+    ## Running under: Ubuntu 24.04.3 LTS
+    ## 
+    ## Matrix products: default
+    ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+    ## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
+    ## 
+    ## locale:
+    ##  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       
+    ##  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   
+    ##  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          
+    ## [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   
+    ## 
+    ## time zone: UTC
+    ## tzcode source: system (glibc)
+    ## 
+    ## attached base packages:
+    ## [1] stats     graphics  grDevices utils     datasets  methods   base     
+    ## 
+    ## other attached packages:
+    ## [1] survminer_0.5.2 ggpubr_0.6.3    survival_3.8-3  ggplot2_4.0.2  
+    ## [5] PhenoMapR_0.1.0
+    ## 
+    ## loaded via a namespace (and not attached):
+    ##  [1] sass_0.4.10        generics_0.1.4     tidyr_1.3.2        rstatix_0.7.3     
+    ##  [5] lattice_0.22-7     digest_0.6.39      magrittr_2.0.4     evaluate_1.0.5    
+    ##  [9] grid_4.5.2         RColorBrewer_1.1-3 fastmap_1.2.0      jsonlite_2.0.0    
+    ## [13] Matrix_1.7-4       backports_1.5.0    Formula_1.2-5      gridExtra_2.3     
+    ## [17] purrr_1.2.1        scales_1.4.0       textshaping_1.0.5  jquerylib_0.1.4   
+    ## [21] abind_1.4-8        cli_3.6.5          rlang_1.1.7        splines_4.5.2     
+    ## [25] withr_3.0.2        cachem_1.1.0       yaml_2.3.12        otel_0.2.0        
+    ## [29] tools_4.5.2        ggsignif_0.6.4     dplyr_1.2.0        broom_1.0.12      
+    ## [33] vctrs_0.7.1        R6_2.6.1           lifecycle_1.0.5    fs_1.6.7          
+    ## [37] car_3.1-5          htmlwidgets_1.6.4  ragg_1.5.1         pkgconfig_2.0.3   
+    ## [41] desc_1.4.3         pkgdown_2.2.0      pillar_1.11.1      bslib_0.10.0      
+    ## [45] gtable_0.3.6       glue_1.8.0         systemfonts_1.3.2  xfun_0.56         
+    ## [49] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         farver_2.1.2      
+    ## [53] htmltools_0.5.9    carData_3.0-6      rmarkdown_2.30     labeling_0.4.3    
+    ## [57] compiler_4.5.2     S7_0.2.1

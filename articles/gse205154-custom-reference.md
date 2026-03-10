@@ -21,7 +21,7 @@ vignette directory** to:
 ``` r
 suppressPackageStartupMessages(library(PhenoMapR))
 
-vignette_dir <- if (dir.exists("Vignettes")) "Vignettes" else "."
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 info_path <- file.path(vignette_dir, "GSE205154.info.txt")
 matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
 if (!file.exists(info_path)) {
@@ -57,8 +57,6 @@ if (!has_data) {
 }
 ```
 
-    ## GSE205154 data files not found. See Vignettes/README.md for download instructions.
-
 ## 2. Derive custom reference from survival
 
 Expression for
@@ -86,8 +84,498 @@ ref_custom <- derive_reference_from_bulk(
   gene_axis = "cols",
   verbose = TRUE
 )
+```
+
+    ## Using 289 samples common between expression and phenotype
+
+    ## Cleaning gene symbols to approved HUGO IDs...
+
+    ## Maps last updated on: Sat Nov 16 10:35:32 2024
+
+    ## Warning in HGNChelper::checkGeneSymbols(gene_names, species = hugo_species, : x
+    ## contains non-approved gene symbols
+
+    ## Collapsed to 38475 unique genes
+
+    ## Expression looks like counts; applying log2(CPM+1)...
+
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+    ## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :
+    ## Loglik converged before variable 1 ; coefficient may be infinite.
+
+    ## Cox PH: 4546 genes had NA z-scores (convergence or low variation)
+
+    ## Derived reference with 38475 genes
+
+``` r
 head(ref_custom)
 ```
+
+    ##          survival_z
+    ## A1BG      1.5793134
+    ## A1BG-AS1 -0.3185781
+    ## A1CF     -1.0188730
+    ## A2M      -1.5102313
+    ## A2M-AS1  -2.0662227
+    ## A2ML1     3.2964255
 
 ## 3. Score samples with the custom reference
 
@@ -98,6 +586,14 @@ scores_custom <- PhenoMap(
   z_score_cutoff = 2,
   verbose = TRUE
 )
+```
+
+    ## Detected input type: matrix
+
+    ## 5317 genes used for scoring against survival_zCalculating scores...
+    ## Completed scoring for survival_z
+
+``` r
 col_custom <- grep("survival_z|weighted_sum", colnames(scores_custom), value = TRUE)[1]
 dat <- pheno
 dat$score_custom <- scores_custom[match(dat$sample_id, rownames(scores_custom)), col_custom]
@@ -116,9 +612,16 @@ fit_primary <- survfit(Surv(survival_time, survival_event) ~ custom_grp, data = 
 plot(fit_primary, col = c("blue", "red"), lwd = 2, xlab = "Time", ylab = "Survival probability",
      main = "GSE205154 Primary: Kaplan–Meier by custom survival-based score")
 legend("bottomleft", legend = c("Low score", "High score"), col = c("blue", "red"), lwd = 2, bty = "n")
+```
+
+![](gse205154-custom-reference_files/figure-html/km-primary-1.png)
+
+``` r
 lr_primary <- survdiff(Surv(survival_time, survival_event) ~ custom_grp, data = dat_primary)
 message("Primary — Log-rank p-value: ", round(1 - pchisq(lr_primary$chisq, 1), 4))
 ```
+
+    ## Primary — Log-rank p-value: 0
 
 ## 5. Metastatic samples only: Kaplan–Meier by custom score
 
@@ -132,9 +635,16 @@ fit_met <- survfit(Surv(survival_time, survival_event) ~ custom_grp, data = dat_
 plot(fit_met, col = c("blue", "red"), lwd = 2, xlab = "Time", ylab = "Survival probability",
      main = "GSE205154 Metastatic: Kaplan–Meier by custom survival-based score")
 legend("bottomleft", legend = c("Low score", "High score"), col = c("blue", "red"), lwd = 2, bty = "n")
+```
+
+![](gse205154-custom-reference_files/figure-html/km-metastatic-1.png)
+
+``` r
 lr_met <- survdiff(Surv(survival_time, survival_event) ~ custom_grp, data = dat_met)
 message("Metastatic — Log-rank p-value: ", round(1 - pchisq(lr_met$chisq, 1), 4))
 ```
+
+    ## Metastatic — Log-rank p-value: 1e-04
 
 ## 6. References
 
@@ -152,3 +662,43 @@ message("Metastatic — Log-rank p-value: ", round(1 - pchisq(lr_met$chisq, 1), 
 ``` r
 sessionInfo()
 ```
+
+    ## R version 4.5.2 (2025-10-31)
+    ## Platform: x86_64-pc-linux-gnu
+    ## Running under: Ubuntu 24.04.3 LTS
+    ## 
+    ## Matrix products: default
+    ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
+    ## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0
+    ## 
+    ## locale:
+    ##  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       
+    ##  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   
+    ##  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          
+    ## [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   
+    ## 
+    ## time zone: UTC
+    ## tzcode source: system (glibc)
+    ## 
+    ## attached base packages:
+    ## [1] stats     graphics  grDevices utils     datasets  methods   base     
+    ## 
+    ## other attached packages:
+    ## [1] survival_3.8-3  PhenoMapR_0.1.0
+    ## 
+    ## loaded via a namespace (and not attached):
+    ##  [1] Matrix_1.7-4          jsonlite_2.0.0        dplyr_1.2.0          
+    ##  [4] compiler_4.5.2        tidyselect_1.2.1      jquerylib_0.1.4      
+    ##  [7] splines_4.5.2         systemfonts_1.3.2     textshaping_1.0.5    
+    ## [10] yaml_2.3.12           fastmap_1.2.0         lattice_0.22-7       
+    ## [13] R6_2.6.1              generics_0.1.4        knitr_1.51           
+    ## [16] htmlwidgets_1.6.4     tibble_3.3.1          desc_1.4.3           
+    ## [19] bslib_0.10.0          pillar_1.11.1         rlang_1.1.7          
+    ## [22] cachem_1.1.0          splitstackshape_1.4.8 xfun_0.56            
+    ## [25] fs_1.6.7              sass_0.4.10           otel_0.2.0           
+    ## [28] cli_3.6.5             pkgdown_2.2.0         magrittr_2.0.4       
+    ## [31] digest_0.6.39         grid_4.5.2            lifecycle_1.0.5      
+    ## [34] vctrs_0.7.1           evaluate_1.0.5        glue_1.8.0           
+    ## [37] data.table_1.18.2.1   HGNChelper_0.8.15     ragg_1.5.1           
+    ## [40] rmarkdown_2.30        tools_4.5.2           pkgconfig_2.0.3      
+    ## [43] htmltools_0.5.9

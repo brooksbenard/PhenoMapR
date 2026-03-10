@@ -63,7 +63,7 @@
       <h1>GSE205154: Custom survival-based reference with derive_reference_from_bulk</h1>
                         <h4 data-toc-skip class="author">PhenoMapR</h4>
             
-            <h4 data-toc-skip class="date">2026-03-09</h4>
+            <h4 data-toc-skip class="date">2026-03-10</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/brooksbenard/PhenoMapR/blob/main/vignettes/gse205154-custom-reference.Rmd" class="external-link"><code>vignettes/gse205154-custom-reference.Rmd</code></a></small>
       <div class="d-none name"><code>gse205154-custom-reference.Rmd</code></div>
@@ -96,7 +96,7 @@ metastatic samples only.</li>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://brooksbenard.github.io/PhenoMapR">PhenoMapR</a></span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">vignette_dir</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="st">"Vignettes"</span><span class="op">)</span><span class="op">)</span> <span class="st">"Vignettes"</span> <span class="kw">else</span> <span class="st">"."</span></span>
+<span><span class="va">vignette_dir</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="st">"vignettes"</span><span class="op">)</span><span class="op">)</span> <span class="st">"vignettes"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="st">"Vignettes"</span><span class="op">)</span><span class="op">)</span> <span class="st">"Vignettes"</span> <span class="kw">else</span> <span class="st">"."</span></span>
 <span><span class="va">info_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">vignette_dir</span>, <span class="st">"GSE205154.info.txt"</span><span class="op">)</span></span>
 <span><span class="va">matrix_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">vignette_dir</span>, <span class="st">"GSE205154.GPL20301.matrix.txt"</span><span class="op">)</span></span>
 <span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">info_path</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -130,7 +130,6 @@ metastatic samples only.</li>
 <span>  <span class="va">pheno</span> <span class="op">&lt;-</span> <span class="va">pheno</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">keep</span>, <span class="va">pheno</span><span class="op">$</span><span class="va">sample_id</span><span class="op">)</span>, <span class="op">]</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">pheno</span><span class="op">$</span><span class="va">sample_id</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<pre><code><span><span class="co">## GSE205154 data files not found. See Vignettes/README.md for download instructions.</span></span></code></pre>
 </div>
 <div class="section level2">
 <h2 id="derive-custom-reference-from-survival">2. Derive custom reference from survival<a class="anchor" aria-label="anchor" href="#derive-custom-reference-from-survival"></a>
@@ -138,7 +137,7 @@ metastatic samples only.</li>
 <p>Expression for <code><a href="../reference/derive_reference_from_bulk.html">derive_reference_from_bulk()</a></code> must be
 <strong>samples × genes</strong>. We pass
 <code>gene_axis = "cols"</code> so the function does not transpose.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">bulk_samples_rows</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">bulk_mat</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">bulk_samples_rows</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">bulk_samples_rows</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">pheno_surv</span> <span class="op">&lt;-</span> <span class="va">pheno</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sample_id"</span>, <span class="st">"survival_time"</span>, <span class="st">"survival_event"</span><span class="op">)</span><span class="op">]</span></span>
@@ -157,27 +156,508 @@ metastatic samples only.</li>
 <span>  survival_event <span class="op">=</span> <span class="st">"survival_event"</span>,</span>
 <span>  gene_axis <span class="op">=</span> <span class="st">"cols"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">ref_custom</span><span class="op">)</span></span></code></pre></div>
+<span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Using 289 samples common between expression and phenotype</span></span></code></pre>
+<pre><code><span><span class="co">## Cleaning gene symbols to approved HUGO IDs...</span></span></code></pre>
+<pre><code><span><span class="co">## Maps last updated on: Sat Nov 16 10:35:32 2024</span></span></code></pre>
+<pre><code><span><span class="co">## Warning in HGNChelper::checkGeneSymbols(gene_names, species = hugo_species, : x</span></span>
+<span><span class="co">## contains non-approved gene symbols</span></span></code></pre>
+<pre><code><span><span class="co">## Collapsed to 38475 unique genes</span></span></code></pre>
+<pre><code><span><span class="co">## Expression looks like counts; applying log2(CPM+1)...</span></span></code></pre>
+<pre><code><span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span></code></pre>
+<pre><code><span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span>
+<span><span class="co">## Warning in coxph.fit(X, Y, istrat, offset, init, control, weights = weights, :</span></span>
+<span><span class="co">## Loglik converged before variable 1 ; coefficient may be infinite.</span></span></code></pre>
+<pre><code><span><span class="co">## Cox PH: 4546 genes had NA z-scores (convergence or low variation)</span></span></code></pre>
+<pre><code><span><span class="co">## Derived reference with 38475 genes</span></span></code></pre>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">ref_custom</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">##          survival_z</span></span>
+<span><span class="co">## A1BG      1.5793134</span></span>
+<span><span class="co">## A1BG-AS1 -0.3185781</span></span>
+<span><span class="co">## A1CF     -1.0188730</span></span>
+<span><span class="co">## A2M      -1.5102313</span></span>
+<span><span class="co">## A2M-AS1  -2.0662227</span></span>
+<span><span class="co">## A2ML1     3.2964255</span></span></code></pre>
 </div>
 <div class="section level2">
 <h2 id="score-samples-with-the-custom-reference">3. Score samples with the custom reference<a class="anchor" aria-label="anchor" href="#score-samples-with-the-custom-reference"></a>
 </h2>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scores_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
 <span>  expression <span class="op">=</span> <span class="va">bulk_mat</span>,</span>
 <span>  reference <span class="op">=</span> <span class="va">ref_custom</span>,</span>
 <span>  z_score_cutoff <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">col_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"survival_z|weighted_sum"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_custom</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
+<pre><code><span><span class="co">## 5317 genes used for scoring against survival_zCalculating scores...</span></span>
+<span><span class="co">## Completed scoring for survival_z</span></span></code></pre>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">col_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"survival_z|weighted_sum"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_custom</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="va">pheno</span></span>
 <span><span class="va">dat</span><span class="op">$</span><span class="va">score_custom</span> <span class="op">&lt;-</span> <span class="va">scores_custom</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">dat</span><span class="op">$</span><span class="va">sample_id</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">scores_custom</span><span class="op">)</span><span class="op">)</span>, <span class="va">col_custom</span><span class="op">]</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="primary-tumors-only-kaplanmeier-by-custom-score">4. Primary tumors only: Kaplan–Meier by custom score<a class="anchor" aria-label="anchor" href="#primary-tumors-only-kaplanmeier-by-custom-score"></a>
 </h2>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/therneau/survival" class="external-link">survival</a></span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">dat_primary</span> <span class="op">&lt;-</span> <span class="va">dat</span><span class="op">[</span><span class="va">dat</span><span class="op">$</span><span class="va">tumor_type</span> <span class="op">==</span> <span class="st">"Primary"</span>, <span class="op">]</span></span>
 <span><span class="va">dat_primary</span><span class="op">$</span><span class="va">custom_grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span></span>
@@ -187,14 +667,17 @@ metastatic samples only.</li>
 <span><span class="va">fit_primary</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">custom_grp</span>, data <span class="op">=</span> <span class="va">dat_primary</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fit_primary</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"red"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>, xlab <span class="op">=</span> <span class="st">"Time"</span>, ylab <span class="op">=</span> <span class="st">"Survival probability"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">"GSE205154 Primary: Kaplan–Meier by custom survival-based score"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/legend.html" class="external-link">legend</a></span><span class="op">(</span><span class="st">"bottomleft"</span>, legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Low score"</span>, <span class="st">"High score"</span><span class="op">)</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"red"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>, bty <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span>
-<span><span class="va">lr_primary</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survdiff.html" class="external-link">survdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">custom_grp</span>, data <span class="op">=</span> <span class="va">dat_primary</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/legend.html" class="external-link">legend</a></span><span class="op">(</span><span class="st">"bottomleft"</span>, legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Low score"</span>, <span class="st">"High score"</span><span class="op">)</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"red"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>, bty <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="gse205154-custom-reference_files/figure-html/km-primary-1.png" class="r-plt" alt="" width="700"></p>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">lr_primary</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survdiff.html" class="external-link">survdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">custom_grp</span>, data <span class="op">=</span> <span class="va">dat_primary</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Primary — Log-rank p-value: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Chisquare.html" class="external-link">pchisq</a></span><span class="op">(</span><span class="va">lr_primary</span><span class="op">$</span><span class="va">chisq</span>, <span class="fl">1</span><span class="op">)</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Primary — Log-rank p-value: 0</span></span></code></pre>
 </div>
 <div class="section level2">
 <h2 id="metastatic-samples-only-kaplanmeier-by-custom-score">5. Metastatic samples only: Kaplan–Meier by custom score<a class="anchor" aria-label="anchor" href="#metastatic-samples-only-kaplanmeier-by-custom-score"></a>
 </h2>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">dat_met</span> <span class="op">&lt;-</span> <span class="va">dat</span><span class="op">[</span><span class="va">dat</span><span class="op">$</span><span class="va">tumor_type</span> <span class="op">==</span> <span class="st">"Met"</span>, <span class="op">]</span></span>
 <span><span class="va">dat_met</span><span class="op">$</span><span class="va">custom_grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span></span>
 <span>  <span class="va">dat_met</span><span class="op">$</span><span class="va">score_custom</span> <span class="op">&gt;=</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="va">dat_met</span><span class="op">$</span><span class="va">score_custom</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
@@ -203,9 +686,12 @@ metastatic samples only.</li>
 <span><span class="va">fit_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">custom_grp</span>, data <span class="op">=</span> <span class="va">dat_met</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fit_met</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"red"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>, xlab <span class="op">=</span> <span class="st">"Time"</span>, ylab <span class="op">=</span> <span class="st">"Survival probability"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">"GSE205154 Metastatic: Kaplan–Meier by custom survival-based score"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/graphics/legend.html" class="external-link">legend</a></span><span class="op">(</span><span class="st">"bottomleft"</span>, legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Low score"</span>, <span class="st">"High score"</span><span class="op">)</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"red"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>, bty <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span>
-<span><span class="va">lr_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survdiff.html" class="external-link">survdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">custom_grp</span>, data <span class="op">=</span> <span class="va">dat_met</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/legend.html" class="external-link">legend</a></span><span class="op">(</span><span class="st">"bottomleft"</span>, legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Low score"</span>, <span class="st">"High score"</span><span class="op">)</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"red"</span><span class="op">)</span>, lwd <span class="op">=</span> <span class="fl">2</span>, bty <span class="op">=</span> <span class="st">"n"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="gse205154-custom-reference_files/figure-html/km-metastatic-1.png" class="r-plt" alt="" width="700"></p>
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">lr_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survdiff.html" class="external-link">survdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">custom_grp</span>, data <span class="op">=</span> <span class="va">dat_met</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Metastatic — Log-rank p-value: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Chisquare.html" class="external-link">pchisq</a></span><span class="op">(</span><span class="va">lr_met</span><span class="op">$</span><span class="va">chisq</span>, <span class="fl">1</span><span class="op">)</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Metastatic — Log-rank p-value: 1e-04</span></span></code></pre>
 </div>
 <div class="section level2">
 <h2 id="references">6. References<a class="anchor" aria-label="anchor" href="#references"></a>
@@ -225,8 +711,47 @@ z-scores; see <code><a href="../reference/derive_reference_from_bulk.html">?deri
 <div class="section level2">
 <h2 id="session-info">Session Info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h2>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## R version 4.5.2 (2025-10-31)</span></span>
+<span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
+<span><span class="co">## Running under: Ubuntu 24.04.3 LTS</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## Matrix products: default</span></span>
+<span><span class="co">## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 </span></span>
+<span><span class="co">## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## locale:</span></span>
+<span><span class="co">##  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       </span></span>
+<span><span class="co">##  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   </span></span>
+<span><span class="co">##  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          </span></span>
+<span><span class="co">## [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   </span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## time zone: UTC</span></span>
+<span><span class="co">## tzcode source: system (glibc)</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## attached base packages:</span></span>
+<span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## other attached packages:</span></span>
+<span><span class="co">## [1] survival_3.8-3  PhenoMapR_0.1.0</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## loaded via a namespace (and not attached):</span></span>
+<span><span class="co">##  [1] Matrix_1.7-4          jsonlite_2.0.0        dplyr_1.2.0          </span></span>
+<span><span class="co">##  [4] compiler_4.5.2        tidyselect_1.2.1      jquerylib_0.1.4      </span></span>
+<span><span class="co">##  [7] splines_4.5.2         systemfonts_1.3.2     textshaping_1.0.5    </span></span>
+<span><span class="co">## [10] yaml_2.3.12           fastmap_1.2.0         lattice_0.22-7       </span></span>
+<span><span class="co">## [13] R6_2.6.1              generics_0.1.4        knitr_1.51           </span></span>
+<span><span class="co">## [16] htmlwidgets_1.6.4     tibble_3.3.1          desc_1.4.3           </span></span>
+<span><span class="co">## [19] bslib_0.10.0          pillar_1.11.1         rlang_1.1.7          </span></span>
+<span><span class="co">## [22] cachem_1.1.0          splitstackshape_1.4.8 xfun_0.56            </span></span>
+<span><span class="co">## [25] fs_1.6.7              sass_0.4.10           otel_0.2.0           </span></span>
+<span><span class="co">## [28] cli_3.6.5             pkgdown_2.2.0         magrittr_2.0.4       </span></span>
+<span><span class="co">## [31] digest_0.6.39         grid_4.5.2            lifecycle_1.0.5      </span></span>
+<span><span class="co">## [34] vctrs_0.7.1           evaluate_1.0.5        glue_1.8.0           </span></span>
+<span><span class="co">## [37] data.table_1.18.2.1   HGNChelper_0.8.15     ragg_1.5.1           </span></span>
+<span><span class="co">## [40] rmarkdown_2.30        tools_4.5.2           pkgconfig_2.0.3      </span></span>
+<span><span class="co">## [43] htmltools_0.5.9</span></span></code></pre>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
