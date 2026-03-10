@@ -37,8 +37,6 @@ home:
 navbar:
   type: default
   left:
-    - text: PhenoMapR
-      href: index.html
     - text: Get started
       href: articles/get-started.html
     - text: Vignettes

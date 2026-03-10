@@ -1,4 +1,4 @@
-# PhenoMapR <a href='https://brooksbenard.github.io/PhenoMapR'><img src='man/figures/PhenoMapR_logo.png' align="right" height="139" /></a>
+# PhenoMapR <a href='https://brooksbenard.github.io/PhenoMapR'><img src='man/figures/PhenoMapR_logo.png' alt='' class='logo' style='float:right; height:120px; margin-top:-0.5em;' /></a>
 
 <!-- badges: start -->
 
