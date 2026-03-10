@@ -1,11 +1,20 @@
-/* Hex logo: top right, preserve aspect ratio (avoid squishing) */
+/* Hex logo: top right, preserve aspect ratio; align bottom-left with navbar grey line */
 .contents .page-header img.logo,
 .contents h1 img.logo {
   float: right !important;
   height: 120px !important;
   width: auto !important;
-  margin-top: -0.5em;
+  margin-top: 0.5em;
   object-fit: contain;
+}
+
+/* Navbar hex logo (all pages): position so bottom-left point intersects grey line */
+.navbar-logo,
+.navbar-brand img,
+.navbar .logo {
+  margin-top: 0.35em !important;
+  height: 40px !important;
+  width: auto !important;
 }
 
 /* Code blocks: neutral background (override any yellow/cream) */

@@ -1,4 +1,4 @@
-# <a href='https://brooksbenard.github.io/PhenoMapR'><img src='man/figures/PhenoMapR_logo.png' alt='' class='logo' style='float:right; height:120px; width:auto; margin-top:-0.5em;' /></a> PhenoMapR
+# <a href='https://brooksbenard.github.io/PhenoMapR'><img src='man/figures/PhenoMapR_logo.png' alt='' class='logo' style='float:right; height:120px; width:auto; margin-top:0.5em;' /></a> PhenoMapR
 
 <!-- badges: start -->
 
@@ -22,5 +22,3 @@
 if (!require(devtools)) install.packages("devtools")
 devtools::install_github("brooksbenard/PhenoMapR")
 ```
-
-Dependencies (e.g. `dplyr`, `Matrix`, `glue`, `progress`) will be installed automatically. For Seurat/SCE support, install suggested packages as needed.
