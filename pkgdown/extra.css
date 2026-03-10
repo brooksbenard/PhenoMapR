@@ -1,7 +1,19 @@
-/* Hex logo: size and align like pkgdown.r-lib.org - top right, aligned with navbar */
+/* Hex logo: top right, preserve aspect ratio (avoid squishing) */
 .contents .page-header img.logo,
 .contents h1 img.logo {
-  float: right;
+  float: right !important;
   height: 120px !important;
+  width: auto !important;
   margin-top: -0.5em;
+  object-fit: contain;
+}
+
+/* Code blocks: neutral background (override any yellow/cream) */
+pre, pre code, .sourceCode {
+  background-color: #f6f8fa !important;
+}
+[data-bs-theme="dark"] pre,
+[data-bs-theme="dark"] pre code,
+[data-bs-theme="dark"] .sourceCode {
+  background-color: #161b22 !important;
 }
