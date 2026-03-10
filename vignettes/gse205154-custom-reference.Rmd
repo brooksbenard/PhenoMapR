@@ -27,6 +27,14 @@ if (!file.exists(info_path)) {
   info_path <- "GSE205154.info.txt"
   matrix_path <- "GSE205154.GPL20301.matrix.txt"
 }
+if (!file.exists(matrix_path)) {
+  u <- Sys.getenv("PHENOMAPR_GSE205154_MATRIX_URL", "")
+  if (nzchar(u)) tryCatch({ download.file(u, matrix_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
+}
+if (!file.exists(info_path)) {
+  u <- Sys.getenv("PHENOMAPR_GSE205154_INFO_URL", "")
+  if (nzchar(u)) tryCatch({ download.file(u, info_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
+}
 has_data <- file.exists(info_path) && file.exists(matrix_path)
 knitr::opts_chunk$set(eval = has_data)
 if (!has_data) {

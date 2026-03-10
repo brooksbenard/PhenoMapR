@@ -1,8 +1,9 @@
-# <a href='https://brooksbenard.github.io/PhenoMapR'><img src='man/figures/PhenoMapR_logo.png' alt='' class='logo' style='float:right; height:120px; width:auto; margin-top:0.5em;' /></a> PhenoMapR
+# <a href='https://brooksbenard.github.io/PhenoMapR'><img src='man/figures/PhenoMapR_logo.png' alt='PhenoMapR' width='120' align='right' style='float:right; height:120px; width:auto; margin-top:0.5em;' class='logo' /></a> PhenoMapR
 
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/brooksbenard/PhenoMapR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMapR/actions)
+[![codecov](https://codecov.io/gh/brooksbenard/PhenoMapR/graph/badge.svg)](https://codecov.io/gh/brooksbenard/PhenoMapR)
 [![Lifecycle: Experimental](https://img.shields.io/badge/lifecycle-experimental-teal.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![License: Stanford](https://img.shields.io/badge/License-Stanford-yellow.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://brooksbenard.github.io/PhenoMapR)
