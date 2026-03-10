@@ -27,6 +27,7 @@ authors:
     href: https://profiles.stanford.edu/brooks-benard
 
 home:
+  title: PhenoMapR
   sidebar:
     structure: [links, license, community, citation, authors, dev]
     components:
