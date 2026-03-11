@@ -71,19 +71,28 @@ scores <- PhenoMap(
 
 ## Supported Input Types
 
+Each input type is summarized below; expand a section to see example code.
+
 <details>
-  <summary>**Matrix/Data.frame**</summary>
+<summary><strong>1. Matrix/Data.frame</strong></summary>
+
+Expression matrix: genes (rows) x samples/cells (columns).
+
 ```r
-# Expression matrix: genes (rows) x samples/cells (columns)
 expression_matrix <- matrix(...)
 rownames(expression_matrix) <- gene_names
 colnames(expression_matrix) <- cell_names
 
 scores <- PhenoMap(expression_matrix, reference = "precog", cancer_type = "BRCA")
 ```
+
+</details>
+
 <details>
-<details>
-  <summary>**Seurat Objects**</summary>
+<summary><strong>2. Seurat Objects</strong></summary>
+
+Single-cell and spatial Seurat objects; use `assay` and `slot` to match your data.
+
 ```r
 library(Seurat)
 
@@ -108,10 +117,14 @@ scores <- PhenoMap(
   slot = "counts"
 )
 ```
-<details>
+
+</details>
 
 <details>
-  <summary>**SingleCellExperiment**</summary>
+<summary><strong>3. SingleCellExperiment</strong></summary>
+
+Use the assay name that holds your (e.g. log-normalized) expression.
+
 ```r
 library(SingleCellExperiment)
 
@@ -125,10 +138,14 @@ scores <- PhenoMap(
 # Add scores to colData
 sce_obj <- add_scores_to_sce(sce_obj, scores)
 ```
-<details>
+
+</details>
 
 <details>
-  <summary>**AnnData (Python)**</summary>
+<summary><strong>4. AnnData (Python)</strong></summary>
+
+PhenoMapR can score AnnData objects via `reticulate` (e.g. from Scanpy).
+
 ```r
 library(reticulate)
 
@@ -140,7 +157,9 @@ scores <- PhenoMap(
   cancer_type = "BRCA"
 )
 ```
-<details>
+
+</details>
+
 ## Built-in Reference Datasets
 
 Prognostic meta-z scores and cancer-type labels in PhenoMapR are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)). Additional citations for the underlying data and methods:
