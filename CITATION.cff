@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: PhenoMapR
+message: "If you use PhenoMapR, please cite it as below."
+version: 0.1.0
+date-released: 2026-02-24
+authors:
+  - family-names: Benard
+    given-names: Brooks
+    email: bbenard@stanford.edu
+url: https://github.com/brooksbenard/PhenoMapR
+repository-code: https://github.com/brooksbenard/PhenoMapR
+abstract: "PhenoMapR is a semi-supervised method to map phenotypes associated with bulk gene expression onto single cell, spatial, and bulk transcriptomics data. It nominates and rank-orders samples, cells, and spatial locations by gene expression signatures correlated with a phenotype of interest (e.g. overall survival)."
+keywords:
+  - transcriptomics
+  - single-cell
+  - spatial transcriptomics
+  - prognostic signatures
+  - phenotype mapping
+license: Stanford-Non-Commercial
