@@ -1,7 +1,7 @@
 # PhenoMapR
 
 **PhenoMapR** is a semi-supervised method to map phenotypes associated
-with bulk gene expression onto bulk, single cell, and spatial
+with bulk gene expression onto single cell, spatial, and bulk
 transcriptomics data. PhenoMapR nominates and rank-orders samples,
 cells, and spatial locations associated with gene expression signatures
 that are correlated with a phenotype of interest (e.g. overall
