@@ -27,8 +27,8 @@ devtools::install_github("brooksbenard/PhenoMapR")
 ## Quick Start
 **Basic PhenoMapR requirements (if using built-in cancer references):**
 
-**1.** User-provided gene expression input (bulk, single-cell, or spatial). 
-**2.** Select a database reference to score against. 
+**1.** User-provided gene expression input (bulk, single-cell, or spatial).   
+**2.** Select a database reference to score against.   
 **3.** Select the matching reference cancer type based on the input data cancer type. 
 ```r
 # Load PhenoMapR in your R session using:
