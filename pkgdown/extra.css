@@ -17,6 +17,19 @@
   width: auto !important;
 }
 
+/* Reference coverage plot: use most of the page so it isn't tiny */
+.reference-coverage-plot {
+  width: 100%;
+  margin: 1em 0;
+}
+.reference-coverage-plot img,
+.reference-coverage-plot p img {
+  width: 100% !important;
+  min-width: 1100px !important;
+  height: auto !important;
+  max-width: none !important;
+}
+
 /* Code blocks: neutral background (override any yellow/cream) */
 pre, pre code, .sourceCode {
   background-color: #f6f8fa !important;

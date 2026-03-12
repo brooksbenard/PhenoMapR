@@ -32,7 +32,9 @@ report_timing <- function(step_name, t0, obj = NULL) {
 }
 
 # Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
-rds_path <- "vignettes/PAAD_GSE111672_seurat.rds"
+rds_subset <- system.file("extdata/vignette_subsets/PAAD_GSE111672_seurat_subset.rds", package = "PhenoMapR")
+use_subset <- nzchar(Sys.getenv("CI", "")) || nzchar(Sys.getenv("PKGDOWN_DEV_MODE", ""))
+rds_path <- if (use_subset && file.exists(rds_subset)) rds_subset else "vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
 if (!file.exists(rds_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
@@ -53,7 +55,8 @@ if (!has_data) {
   report_timing("Load GSE111672", t0, seurat)
 
   # Load CRA001160 early if available (for shared cell type palette alignment)
-  rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
+  rds_subset2 <- system.file("extdata/vignette_subsets/PAAD_CRA001160_seurat_subset.rds", package = "PhenoMapR")
+  rds_path2 <- if (use_subset && file.exists(rds_subset2)) rds_subset2 else "vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
   if (!file.exists(rds_path2) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {

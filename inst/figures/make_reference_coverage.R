@@ -93,17 +93,109 @@ ici_cols <- setdiff(colnames(mat), c(tcga_cols, met_cols, ped_cols))
 col_order <- c(sort(tcga_cols), sort(met_cols), sort(ped_cols), sort(ici_cols))
 mat <- mat[, col_order, drop = FALSE]
 
-# Plot
-out <- file.path("inst", "figures", "reference_coverage.png")
-png(out, width = 1400, height = 340, res = 120, bg = "white")
-par(mar = c(10, 6, 3, 2))
-image(1:ncol(mat), 1:4, t(mat[nrow(mat):1, , drop = FALSE]),
-  col = c("#F7F7F7", "#2166AC"), axes = FALSE, xlab = "", ylab = "")
-axis(1, at = 1:ncol(mat), labels = colnames(mat), las = 2, cex.axis = 0.75)
-axis(2, at = 1:4, labels = rev(db_names), las = 1, cex.axis = 1)
-title(main = "Reference coverage: cancer types available for scoring")
-legend("topright", legend = c("Available", "Not available"),
-  fill = c("#2166AC", "#F7F7F7"), bty = "n", cex = 0.9)
-dev.off()
+# Color scheme per database
+color_scheme <- c(
+  "PRECOG" = "#44536a",
+  "TCGA" = "#9f9f9f",
+  "ICI" = "#95c277",
+  "Pediatric" = "#d58457"
+)
+# Map row names to scheme keys
+db_to_key <- c(
+  "Adult PRECOG" = "PRECOG",
+  "Pediatric PRECOG" = "Pediatric",
+  "TCGA" = "TCGA",
+  "ICI PRECOG" = "ICI"
+)
 
+# Long format for ggplot2: database, cancer_type, available (0/1)
+library(ggplot2)
+df <- expand.grid(
+  database = db_names,
+  cancer_type = colnames(mat),
+  stringsAsFactors = FALSE
+)
+df$available <- as.vector(mat[cbind(
+  match(df$database, db_names),
+  match(df$cancer_type, colnames(mat))
+)])
+
+# Order y-axis (database) by number of cancers available (most first)
+count_per_db <- setNames(rowSums(mat), db_names)
+db_order <- names(sort(count_per_db, decreasing = TRUE))
+df$database <- factor(df$database, levels = db_order)
+
+# Fill: factor with explicit levels so colors map correctly
+fill_levels <- c("Not available", "PRECOG", "TCGA", "ICI", "Pediatric")
+db_key_vec <- setNames(
+  c("PRECOG", "Pediatric", "TCGA", "ICI"),
+  c("Adult PRECOG", "Pediatric PRECOG", "TCGA", "ICI PRECOG")
+)
+df$fill <- ifelse(df$available == 1L, db_key_vec[as.character(df$database)], "Not available")
+df$fill <- factor(df$fill, levels = fill_levels)
+
+fill_colors <- c(
+  "Not available" = "#F7F7F7",
+  "PRECOG" = unname(color_scheme["PRECOG"]),
+  "TCGA" = unname(color_scheme["TCGA"]),
+  "ICI" = unname(color_scheme["ICI"]),
+  "Pediatric" = unname(color_scheme["Pediatric"])
+)
+
+# ggplot2: minimal theme, square tiles, large font, minimal margins
+out <- file.path("inst", "figures", "reference_coverage.png")
+n_cancer <- ncol(mat)
+n_db <- 4L
+p <- ggplot(df, aes(x = .data$cancer_type, y = .data$database, fill = .data$fill)) +
+  geom_tile(color = "white", linewidth = 0.4) +
+  scale_fill_manual(
+    values = fill_colors,
+    name = NULL,
+    breaks = fill_levels,
+    drop = FALSE
+  ) +
+  scale_x_discrete(expand = c(0, 0), guide = guide_axis(angle = 90)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  coord_fixed(ratio = 1) +
+  labs(
+    x = NULL,
+    y = NULL,
+    title = "Reference coverage: cancer types available for scoring"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5, face = "plain", size = 16),
+    legend.text = element_text(size = 12),
+    legend.position = "top",
+    legend.direction = "horizontal",
+    legend.justification = "center",
+    plot.margin = margin(0, 0, 0, 0),
+    axis.ticks.length = unit(0, "pt"),
+    axis.ticks = element_blank()
+  )
+
+# Save with a tightly sized PNG device to avoid extra whitespace from aspect constraints.
+# We size the device to the tile grid plus room for axes/title/legend.
+tile_px <- 22L
+panel_w <- n_cancer * tile_px
+panel_h <- n_db * tile_px
+
+pad_left <- 220L   # y-axis labels
+pad_right <- 30L
+pad_top <- 120L    # legend + title
+pad_bottom <- 260L # rotated x labels
+
+png(
+  filename = out,
+  width = pad_left + panel_w + pad_right,
+  height = pad_top + panel_h + pad_bottom,
+  res = 150,
+  bg = "white"
+)
+print(p)
+dev.off()
 message("Saved: ", out)

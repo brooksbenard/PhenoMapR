@@ -33,7 +33,9 @@ report_timing <- function(step_name, t0, obj = NULL) {
 }
 
 # Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
-rds_path <- "vignettes/HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
+spatial_subset <- system.file("extdata/vignette_subsets/HT270P1_processed_subset.rds", package = "PhenoMapR")
+use_subset <- nzchar(Sys.getenv("CI", "")) || nzchar(Sys.getenv("PKGDOWN_DEV_MODE", ""))
+rds_path <- if (use_subset && file.exists(spatial_subset)) spatial_subset else "vignettes/HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 if (!file.exists(rds_path)) rds_path <- "Vignettes/HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 if (!file.exists(rds_path)) rds_path <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 if (!file.exists(rds_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
