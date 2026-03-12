@@ -87,15 +87,17 @@ pheno_surv <- pheno_surv[match(rownames(bulk_samples_rows), pheno_surv$sample_id
 pheno_surv <- pheno_surv[!is.na(pheno_surv$sample_id), , drop = FALSE]
 bulk_samples_rows <- bulk_samples_rows[rownames(bulk_samples_rows) %in% pheno_surv$sample_id, , drop = FALSE]
 
-ref_custom <- derive_reference_from_bulk(
-  bulk_expression = bulk_samples_rows,
-  phenotype = pheno_surv,
-  sample_id_column = "sample_id",
-  phenotype_type = "survival",
-  survival_time = "survival_time",
-  survival_event = "survival_event",
-  gene_axis = "cols",
-  verbose = TRUE
+ref_custom <- suppressWarnings(
+  derive_reference_from_bulk(
+    bulk_expression = bulk_samples_rows,
+    phenotype = pheno_surv,
+    sample_id_column = "sample_id",
+    phenotype_type = "survival",
+    survival_time = "survival_time",
+    survival_event = "survival_event",
+    gene_axis = "cols",
+    verbose = TRUE
+  )
 )
 head(ref_custom)
 ```
