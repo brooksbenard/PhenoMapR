@@ -360,41 +360,37 @@ if (is.list(gset) && length(gset) > 0 && !inherits(gset, "ExpressionSet")) {
 expr <- Biobase::exprs(gset)
 
 # Ensure genes are rows, samples are columns
-if (nrow(expr) < ncol(expr)) {
+if (nrow(expr) < ncol(expr) && nrow(expr) > 0) {
   expr <- t(expr)
   message("Transposed GSE253260 expression to genes × samples.")
 }
 
+# Optionally set rownames to HUGO symbols if feature data are available and aligned
 fd <- Biobase::fData(gset)
-sym_col <- grep("symbol|SYMBOL|Gene.symbol", colnames(fd), ignore.case = TRUE, value = TRUE)[1]
-if (!is.na(sym_col)) {
-  symbols <- as.character(fd[[sym_col]])
-} else {
-  symbols <- rownames(expr)
-}
-
-if (requireNamespace("HGNChelper", quietly = TRUE)) {
-  checked <- HGNChelper::checkGeneSymbols(symbols, unmapped.as.na = FALSE)
-  if ("Suggested.Symbol" %in% names(checked)) {
-    symbols <- checked$Suggested.Symbol
+if (!is.null(fd) && nrow(fd) == nrow(expr)) {
+  sym_col <- grep("symbol|SYMBOL|Gene.symbol", colnames(fd), ignore.case = TRUE, value = TRUE)[1]
+  if (!is.na(sym_col)) {
+    symbols <- as.character(fd[[sym_col]])
+    if (requireNamespace("HGNChelper", quietly = TRUE)) {
+      checked <- HGNChelper::checkGeneSymbols(symbols, unmapped.as.na = FALSE)
+      if ("Suggested.Symbol" %in% names(checked)) {
+        symbols <- checked$Suggested.Symbol
+      }
+    }
+    symbols[symbols == "" | is.na(symbols)] <- NA
+    if (sum(!is.na(symbols)) > 0) {
+      # Keep only genes with non-NA symbols and set rownames
+      keep <- !is.na(symbols)
+      expr <- expr[keep, , drop = FALSE]
+      symbols <- symbols[keep]
+      rownames(expr) <- make.unique(symbols)
+    }
   }
 }
 
-symbols[symbols == "" | is.na(symbols)] <- NA
-keep <- !is.na(symbols)
-expr <- expr[keep, , drop = FALSE]
-symbols <- symbols[keep]
-
-ugenes <- unique(symbols)
-expr_collapsed <- sapply(ugenes, function(g) {
-  rows <- symbols == g
-  colMeans(expr[rows, , drop = FALSE], na.rm = TRUE)
-})
-expr_collapsed <- t(expr_collapsed)
-rownames(expr_collapsed) <- ugenes
-
-expr_tpm <- apply(expr_collapsed, 2, function(x) {
-  x[x < 0] <- 0
+expr <- as.matrix(expr)
+expr[expr < 0] <- 0
+expr_tpm <- apply(expr, 2, function(x) {
   denom <- sum(x, na.rm = TRUE)
   if (denom == 0) x else 1e6 * x / denom
 })
