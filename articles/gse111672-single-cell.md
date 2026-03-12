@@ -338,7 +338,7 @@ if (requireNamespace("pheatmap", quietly = TRUE)) {
 report_timing("Heatmap GSE111672", t0)
 ```
 
-    ## [Heatmap GSE111672] Runtime: 0.95 s | Memory: -
+    ## [Heatmap GSE111672] Runtime: 0.96 s | Memory: -
 
 ### Proportion by sample and cell type
 
@@ -389,7 +389,7 @@ if (nrow(meta_plot) > 0) {
 report_timing("Proportion plot GSE111672", t0)
 ```
 
-    ## [Proportion plot GSE111672] Runtime: 1.60 s | Memory: -
+    ## [Proportion plot GSE111672] Runtime: 1.64 s | Memory: -
 
 ------------------------------------------------------------------------
 
@@ -532,7 +532,7 @@ report_timing("Marker analysis CRA001160", t0)
 
     ## Using Seurat FindMarkers: Most Adverse n=20, Most Favorable n=20
 
-    ## [Marker analysis CRA001160] Runtime: 0.66 s | Memory: -
+    ## [Marker analysis CRA001160] Runtime: 0.68 s | Memory: -
 
 ### Marker heatmap (CRA001160)
 
