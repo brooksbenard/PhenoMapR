@@ -277,42 +277,26 @@ expression dataset (GSE253260) against the PRECOG primary pancreatic
 signature.
 
 ``` r
-# Paths to preprocessed GSE253260 bulk expression (genes x samples) and optional
-# phenotype/info RDS files. For pkgdown and reproducible builds, download from
-# the public Google Drive links if the files are not present locally.
-expr_path_253260 <- "vignettes/GSE253260_expression.rds"
-info_path_253260 <- "vignettes/GSE253260_info.rds"
-
-if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = TRUE)) {
-  # Ensure vignette directory exists before downloading
-  dest_dir_253260 <- dirname(expr_path_253260)
-  if (!dir.exists(dest_dir_253260)) {
-    dir.create(dest_dir_253260, recursive = TRUE, showWarnings = FALSE)
-  }
-  googledrive::drive_deauth()
-  # Expression matrix (GSE253260 bulk expression)
-  tryCatch(
-    googledrive::drive_download(
-      googledrive::as_id("1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"),
-      path = expr_path_253260,
-      overwrite = TRUE
-    ),
-    error = function(e) {
-      message("Could not download GSE253260 expression from Google Drive: ", conditionMessage(e))
-    }
-  )
-  # Optional: phenotype/info RDS (not required for scoring in this section)
-  tryCatch(
-    googledrive::drive_download(
-      googledrive::as_id("1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"),
-      path = info_path_253260,
-      overwrite = TRUE
-    ),
-    error = function(e) {
-      message("Could not download GSE253260 info from Google Drive: ", conditionMessage(e))
-    }
-  )
+if (!requireNamespace("googledrive", quietly = TRUE)) {
+  stop("The 'googledrive' package is required for the GSE253260 example. Install with install.packages('googledrive').")
 }
+
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
+if (!dir.exists(vignette_dir)) {
+  dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
+}
+
+expr_path_253260 <- file.path(vignette_dir, "GSE253260_expression.rds")
+info_path_253260 <- file.path(vignette_dir, "GSE253260_info.rds")
+
+googledrive::drive_deauth() # Disable Google sign-in requirement
+
+# Download expression matrix (GSE253260 bulk expression)
+googledrive::drive_download(
+  googledrive::as_id("1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"),
+  path = expr_path_253260,
+  overwrite = TRUE
+)
 ```
 
     ## File downloaded:
@@ -321,7 +305,16 @@ if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = 
 
     ## Saved locally as:
 
-    ## • vignettes/GSE253260_expression.rds
+    ## • ./GSE253260_expression.rds
+
+``` r
+# Download optional phenotype/info RDS (not required for scoring in this section)
+googledrive::drive_download(
+  googledrive::as_id("1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"),
+  path = info_path_253260,
+  overwrite = TRUE
+)
+```
 
     ## File downloaded:
 
@@ -329,48 +322,45 @@ if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = 
 
     ## Saved locally as:
 
-    ## • vignettes/GSE253260_info.rds
+    ## • ./GSE253260_info.rds
 
 ``` r
-if (file.exists(expr_path_253260)) {
-  bulk_253260 <- readRDS(expr_path_253260)
-  if (!is.matrix(bulk_253260) && !is.data.frame(bulk_253260)) {
-    stop("GSE253260 object must be a matrix or data.frame with genes in rows")
-  }
-  if (is.data.frame(bulk_253260)) bulk_253260 <- as.matrix(bulk_253260)
-
-  message("GSE253260 expression: ", nrow(bulk_253260), " genes × ", ncol(bulk_253260), " samples")
-
-  # Score samples with PRECOG primary pancreatic signature
-  scores_253260 <- PhenoMap(
-    expression = bulk_253260,
-    reference = "precog",
-    cancer_type = "Pancreatic",
-    verbose = TRUE
-  )
-
-  score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
-  if (!is.na(score_col_253260)) {
-    print(plot_score_distribution(
-      scores_253260,
-      score_column = score_col_253260,
-      main = "GSE253260: PRECOG Pancreatic score"
-    ))
-  }
-} else {
-  message(
-    "GSE253260 expression file not found at ", expr_path_253260,
-    "; skipping GSE253260 example."
-  )
+bulk_253260 <- readRDS(expr_path_253260)
+if (!is.matrix(bulk_253260) && !is.data.frame(bulk_253260)) {
+  stop("GSE253260 object must be a matrix or data.frame with genes in rows")
 }
+if (is.data.frame(bulk_253260)) bulk_253260 <- as.matrix(bulk_253260)
+
+message("GSE253260 expression: ", nrow(bulk_253260), " genes × ", ncol(bulk_253260), " samples")
 ```
 
     ## GSE253260 expression: 317 genes × 28858 samples
+
+``` r
+# Score samples with PRECOG primary pancreatic signature
+scores_253260 <- PhenoMap(
+  expression = bulk_253260,
+  reference = "precog",
+  cancer_type = "Pancreatic",
+  verbose = TRUE
+)
+```
 
     ## Detected input type: matrix
 
     ## Warning in calculate_weighted_scores(expression_matrix = expr_info$matrix, : No
     ## common genes found between expression and reference data for Pancreatic
+
+``` r
+score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
+if (!is.na(score_col_253260)) {
+  print(plot_score_distribution(
+    scores_253260,
+    score_column = score_col_253260,
+    main = "GSE253260: PRECOG Pancreatic score"
+  ))
+}
+```
 
 ## 7. Summary
 

@@ -171,7 +171,7 @@ datsets.</p>
 <span>  <span class="va">n_samples</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Sample"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">$</span><span class="va">Sample</span><span class="op">)</span><span class="op">)</span> <span class="kw">else</span> <span class="cn">NA</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"Genes: %d | Cells: %d | Samples: %s"</span>, <span class="va">n_genes</span>, <span class="va">n_cells</span>, <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">n_samples</span><span class="op">)</span><span class="op">)</span> <span class="st">"N/A"</span> <span class="kw">else</span> <span class="va">n_samples</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<pre><code><span><span class="co">## [Load GSE111672] Runtime: 0.40 s | Memory: 24.1 Mb</span></span></code></pre>
+<pre><code><span><span class="co">## [Load GSE111672] Runtime: 0.41 s | Memory: 24.1 Mb</span></span></code></pre>
 <pre><code><span><span class="co">## Genes: 1500 | Cells: 6122 | Samples: 3</span></span></code></pre>
 </div>
 <div class="section level3">
@@ -293,7 +293,7 @@ associated cell types nominated by PhenoMapR:</p>
 <span><span class="co">## 6 2.953036e-28  -2.190502        0.088    0.431   PLAUR 4.429555e-25</span></span></code></pre>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">report_timing</span><span class="op">(</span><span class="st">"Marker analysis GSE111672"</span>, <span class="va">t0</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## [Marker analysis GSE111672] Runtime: 0.98 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Marker analysis GSE111672] Runtime: 1.07 s | Memory: -</span></span></code></pre>
 </div>
 <div class="section level3">
 <h3 id="marker-heatmap">Marker heatmap<a class="anchor" aria-label="anchor" href="#marker-heatmap"></a>
@@ -394,7 +394,7 @@ phenotypes. Columns are ordered by increasing PhenoMapR score.</p>
 <p><img src="gse111672-single-cell_files/figure-html/heatmap-markers-1.png" class="r-plt" alt="" width="100%"></p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">report_timing</span><span class="op">(</span><span class="st">"Heatmap GSE111672"</span>, <span class="va">t0</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## [Heatmap GSE111672] Runtime: 2.04 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Heatmap GSE111672] Runtime: 2.17 s | Memory: -</span></span></code></pre>
 </div>
 <div class="section level3">
 <h3 id="proportion-by-sample-and-cell-type">Proportion by sample and cell type<a class="anchor" aria-label="anchor" href="#proportion-by-sample-and-cell-type"></a>
@@ -440,7 +440,7 @@ identified cells per sample are skewed to specific cell types:</p>
 <p><img src="gse111672-single-cell_files/figure-html/proportion-by-sample-celltype-1.png" class="r-plt" alt="" width="100%"></p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">report_timing</span><span class="op">(</span><span class="st">"Proportion plot GSE111672"</span>, <span class="va">t0</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## [Proportion plot GSE111672] Runtime: 3.02 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Proportion plot GSE111672] Runtime: 3.17 s | Memory: -</span></span></code></pre>
 <hr>
 </div>
 </div>
@@ -505,7 +505,7 @@ and marker analyses across cell types.</p>
 <pre><code><span><span class="co">## 614 genes used for scoring against PancreaticCalculating scores...</span></span>
 <span><span class="co">## Completed scoring for Pancreatic</span></span></code></pre>
 <pre><code><span><span class="co">## Added 1 score column(s) to Seurat metadata</span></span></code></pre>
-<pre><code><span><span class="co">## [Score CRA001160] Runtime: 0.67 s | Memory: 349.2 Mb</span></span></code></pre>
+<pre><code><span><span class="co">## [Score CRA001160] Runtime: 0.72 s | Memory: 349.2 Mb</span></span></code></pre>
 </div>
 <div class="section level3">
 <h3 id="score-by-cell-type-cra001160">Score by cell type (CRA001160)<a class="anchor" aria-label="anchor" href="#score-by-cell-type-cra001160"></a>
@@ -542,7 +542,7 @@ and marker analyses across cell types.</p>
 <span><span class="fu">report_timing</span><span class="op">(</span><span class="st">"Cell type plot CRA001160"</span>, <span class="va">t0</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <p><img src="gse111672-single-cell_files/figure-html/score-by-celltype-cra001160-1.png" class="r-plt" alt="" width="100%"></p>
-<pre><code><span><span class="co">## [Cell type plot CRA001160] Runtime: 0.39 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Cell type plot CRA001160] Runtime: 0.40 s | Memory: -</span></span></code></pre>
 </div>
 <div class="section level3">
 <h3 id="prognostic-markers-cra001160">Prognostic markers (CRA001160)<a class="anchor" aria-label="anchor" href="#prognostic-markers-cra001160"></a>
@@ -575,7 +575,7 @@ and marker analyses across cell types.</p>
 <span><span class="op">}</span></span></code></pre></div>
 <pre><code><span><span class="co">## Using Seurat FindMarkers: Most Adverse n=2873, Most Favorable n=2873</span></span></code></pre>
 <pre><code><span><span class="co">## Subsampled Other from 51697 to 5000 cells (memory limit)</span></span></code></pre>
-<pre><code><span><span class="co">## [Marker analysis CRA001160] Runtime: 2.24 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Marker analysis CRA001160] Runtime: 2.40 s | Memory: -</span></span></code></pre>
 </div>
 <div class="section level3">
 <h3 id="marker-heatmap-cra001160">Marker heatmap (CRA001160)<a class="anchor" aria-label="anchor" href="#marker-heatmap-cra001160"></a>
@@ -676,7 +676,7 @@ and marker analyses across cell types.</p>
 <span><span class="fu">report_timing</span><span class="op">(</span><span class="st">"Heatmap CRA001160"</span>, <span class="va">t0</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <p><img src="gse111672-single-cell_files/figure-html/heatmap-markers-cra001160-1.png" class="r-plt" alt="" width="100%"></p>
-<pre><code><span><span class="co">## [Heatmap CRA001160] Runtime: 6.64 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Heatmap CRA001160] Runtime: 6.87 s | Memory: -</span></span></code></pre>
 </div>
 <div class="section level3">
 <h3 id="proportion-by-sample-and-cell-type-cra001160">Proportion by sample and cell type (CRA001160)<a class="anchor" aria-label="anchor" href="#proportion-by-sample-and-cell-type-cra001160"></a>
@@ -724,7 +724,7 @@ and marker analyses across cell types.</p>
 <span><span class="fu">report_timing</span><span class="op">(</span><span class="st">"Proportion plot CRA001160"</span>, <span class="va">t0</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <p><img src="gse111672-single-cell_files/figure-html/proportion-by-sample-celltype-cra001160-1.png" class="r-plt" alt="" width="100%"></p>
-<pre><code><span><span class="co">## [Proportion plot CRA001160] Runtime: 0.22 s | Memory: -</span></span></code></pre>
+<pre><code><span><span class="co">## [Proportion plot CRA001160] Runtime: 0.23 s | Memory: -</span></span></code></pre>
 <hr>
 </div>
 </div>
