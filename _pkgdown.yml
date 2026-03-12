@@ -50,8 +50,6 @@ navbar:
         href: articles/gse205154-custom-reference.html
     - text: R functions
       href: reference/index.html
-    - text: News
-      href: news/index.html
 
 footer:
   structure:
