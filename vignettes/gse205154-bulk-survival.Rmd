@@ -397,63 +397,63 @@ if (file.exists(info_path_253260)) {
   info_253260 <- readRDS(info_path_253260)
 
   if (!"sample_id" %in% names(info_253260)) {
-    stop("GSE253260 info RDS must contain a 'sample_id' column.")
-  }
-
-  # Align clinical info with expression and scores
-  keep_253260 <- intersect(colnames(bulk_253260), info_253260$sample_id)
-  if (length(keep_253260) > 0) {
-    dat_253260 <- info_253260[info_253260$sample_id %in% keep_253260, , drop = FALSE]
-    dat_253260 <- dat_253260[match(keep_253260, dat_253260$sample_id), , drop = FALSE]
-    rownames(dat_253260) <- dat_253260$sample_id
-
-    # Expect survival_time and survival_event columns in the info RDS
-    if (!all(c("survival_time", "survival_event") %in% names(dat_253260))) {
-      stop("GSE253260 info RDS must contain 'survival_time' and 'survival_event' columns.")
-    }
-
-    score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
-    if (!is.na(score_col_253260)) {
-      dat_253260$score_pancreatic <- scores_253260[keep_253260, score_col_253260]
-
-      dat_253260$score_grp <- ifelse(
-        dat_253260$score_pancreatic >= median(dat_253260$score_pancreatic, na.rm = TRUE),
-        "High", "Low"
-      )
-
-      fit_253260 <- survfit(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
-      lr_253260 <- survdiff(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
-      pval_253260 <- 1 - pchisq(lr_253260$chisq, 1)
-      cox_253260 <- coxph(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
-      hr_253260 <- exp(coef(cox_253260))[1]
-      ci_253260 <- as.vector(exp(confint(cox_253260)))
-      label_253260 <- sprintf(
-        "p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)",
-        format.pval(pval_253260, digits = 2, eps = 0.001),
-        hr_253260,
-        ci_253260[1],
-        ci_253260[2]
-      )
-      max_time_253260 <- max(dat_253260$survival_time, na.rm = TRUE)
-
-      pal_km_253260 <- c("#B2182B", "#2166AC")  # High (adverse), Low (favorable)
-      print(ggsurvplot(
-        fit_253260,
-        data = dat_253260,
-        palette = pal_km_253260,
-        risk.table = FALSE,
-        title = "GSE253260: survival by PRECOG Pancreatic score (median split)",
-        xlab = "Time", ylab = "Survival probability",
-        legend.title = "Score group",
-        legend.labs = c("High", "Low"),
-        legend = "right",
-        pval = label_253260,
-        pval.coord = c(max_time_253260 * 0.5, 0.95),
-        pval.size = 3.5
-      ))
-    }
+    message("GSE253260 info RDS does not contain 'sample_id'; skipping KM plot.")
   } else {
-    message("No overlapping samples between GSE253260 expression and info; skipping KM plot.")
+    # Align clinical info with expression and scores
+    keep_253260 <- intersect(colnames(bulk_253260), info_253260$sample_id)
+    if (length(keep_253260) > 0) {
+      dat_253260 <- info_253260[info_253260$sample_id %in% keep_253260, , drop = FALSE]
+      dat_253260 <- dat_253260[match(keep_253260, dat_253260$sample_id), , drop = FALSE]
+      rownames(dat_253260) <- dat_253260$sample_id
+
+      # Expect survival_time and survival_event columns in the info RDS
+      if (!all(c("survival_time", "survival_event") %in% names(dat_253260))) {
+        message("GSE253260 info RDS lacks 'survival_time'/'survival_event'; skipping KM plot.")
+      } else {
+        score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
+        if (!is.na(score_col_253260)) {
+          dat_253260$score_pancreatic <- scores_253260[keep_253260, score_col_253260]
+
+          dat_253260$score_grp <- ifelse(
+            dat_253260$score_pancreatic >= median(dat_253260$score_pancreatic, na.rm = TRUE),
+            "High", "Low"
+          )
+
+          fit_253260 <- survfit(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
+          lr_253260 <- survdiff(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
+          pval_253260 <- 1 - pchisq(lr_253260$chisq, 1)
+          cox_253260 <- coxph(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
+          hr_253260 <- exp(coef(cox_253260))[1]
+          ci_253260 <- as.vector(exp(confint(cox_253260)))
+          label_253260 <- sprintf(
+            "p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)",
+            format.pval(pval_253260, digits = 2, eps = 0.001),
+            hr_253260,
+            ci_253260[1],
+            ci_253260[2]
+          )
+          max_time_253260 <- max(dat_253260$survival_time, na.rm = TRUE)
+
+          pal_km_253260 <- c("#B2182B", "#2166AC")  # High (adverse), Low (favorable)
+          print(ggsurvplot(
+            fit_253260,
+            data = dat_253260,
+            palette = pal_km_253260,
+            risk.table = FALSE,
+            title = "GSE253260: survival by PRECOG Pancreatic score (median split)",
+            xlab = "Time", ylab = "Survival probability",
+            legend.title = "Score group",
+            legend.labs = c("High", "Low"),
+            legend = "right",
+            pval = label_253260,
+            pval.coord = c(max_time_253260 * 0.5, 0.95),
+            pval.size = 3.5
+          ))
+        }
+      }
+    } else {
+      message("No overlapping samples between GSE253260 expression and info; skipping KM plot.")
+    }
   }
 } else {
   message("GSE253260 info RDS not found at ", info_path_253260, "; skipping KM plot.")
