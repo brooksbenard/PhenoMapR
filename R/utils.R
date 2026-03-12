@@ -306,9 +306,21 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Score D
   df <- data.frame(score = as.numeric(stats::na.omit(scores)))
   med <- stats::median(df$score)
 
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$score)) +
-    ggplot2::geom_histogram(bins = 50, fill = "steelblue", color = "white") +
-    ggplot2::geom_vline(xintercept = med, color = "red", linewidth = 1, linetype = 2) +
+  # PhenoMapR red-blue score palette: blue = favorable (low), white = mid, red = adverse (high)
+  score_low <- "#2166AC"
+  score_mid <- "#F7F7F7"
+  score_high <- "#B2182B"
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$score, fill = ggplot2::after_stat(x))) +
+    ggplot2::geom_histogram(bins = 50, color = "white", linewidth = 0.2) +
+    ggplot2::scale_fill_gradient2(
+      low = score_low,
+      mid = score_mid,
+      high = score_high,
+      midpoint = med,
+      name = "Score"
+    ) +
+    ggplot2::geom_vline(xintercept = med, color = "grey25", linewidth = 1, linetype = 2) +
     ggplot2::labs(title = main, x = "Score", y = "Frequency") +
     ggplot2::theme_minimal(base_size = base_size)
 
