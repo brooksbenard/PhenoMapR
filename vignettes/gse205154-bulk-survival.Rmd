@@ -333,11 +333,25 @@ ggsurvplot(fit_met, data = dat_met, palette = pal_km, risk.table = FALSE,
 In many bulk expression studies, only the expression matrix is available without matched outcomes. Here we show how to start from GEO, preprocess expression and clinical data, and then score and stratify patients using PhenoMapR.
 
 ```{r gse253260-download, message=TRUE}
-suppressPackageStartupMessages(library(GEOquery))
+if (!requireNamespace("googledrive", quietly = TRUE)) {
+  stop("The 'googledrive' package is required for the GSE253260 example. Install with install.packages('googledrive').")
+}
 
-gse_id <- "GSE253260"
-gse <- GEOquery::getGEO(gse_id, GSEMatrix = TRUE)
-gset <- gse[[1]]
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
+if (!dir.exists(vignette_dir)) {
+  dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
+}
+
+gse_rds_path <- file.path(vignette_dir, "GSE253260.rds")
+
+googledrive::drive_deauth()
+googledrive::drive_download(
+  googledrive::as_id("1ZBiFtZDTBKSpbLCgw6z_-qDF7WF2Sam5"),
+  path = gse_rds_path,
+  overwrite = TRUE
+)
+
+gset <- readRDS(gse_rds_path)
 
 expr <- Biobase::exprs(gset)
 
