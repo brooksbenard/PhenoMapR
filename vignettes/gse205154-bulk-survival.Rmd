@@ -330,160 +330,245 @@ ggsurvplot(fit_met, data = dat_met, palette = pal_km, risk.table = FALSE,
 
 ## 6. Additional example: GSE253260 bulk expression
 
-In many bulk expression studies, only the expression matrix is available without matched outcomes. Here we show how to score an independent bulk expression dataset (GSE253260) against the PRECOG primary pancreatic signature.
+In many bulk expression studies, only the expression matrix is available without matched outcomes. Here we show how to start from GEO, preprocess expression and clinical data, and then score and stratify patients using PhenoMapR.
 
-```{r gse253260-precog, fig.width=7, fig.height=4}
-if (!requireNamespace("googledrive", quietly = TRUE)) {
-  stop("The 'googledrive' package is required for the GSE253260 example. Install with install.packages('googledrive').")
-}
+```{r gse253260-download, message=TRUE}
+suppressPackageStartupMessages(library(GEOquery))
 
-vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
-if (!dir.exists(vignette_dir)) {
-  dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
-}
+gse_id <- "GSE253260"
+gse <- GEOquery::getGEO(gse_id, GSEMatrix = TRUE)
+gset <- gse[[1]]
 
-expr_path_253260 <- file.path(vignette_dir, "GSE253260_expression.rds")
-info_path_253260 <- file.path(vignette_dir, "GSE253260_info.rds")
+expr <- Biobase::exprs(gset)
 
-googledrive::drive_deauth() # Disable Google sign-in requirement
-
-# Download expression matrix (GSE253260 bulk expression)
-googledrive::drive_download(
-  googledrive::as_id("1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"),
-  path = expr_path_253260,
-  overwrite = TRUE
-)
-
-# Download optional phenotype/info RDS (not required for scoring in this section)
-googledrive::drive_download(
-  googledrive::as_id("1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"),
-  path = info_path_253260,
-  overwrite = TRUE
-)
-
-bulk_253260 <- readRDS(expr_path_253260)
-if (!is.matrix(bulk_253260) && !is.data.frame(bulk_253260)) {
-  stop("GSE253260 object must be a matrix or data.frame with genes in rows")
-}
-if (is.data.frame(bulk_253260)) bulk_253260 <- as.matrix(bulk_253260)
-
-# Ensure expression is genes × samples (rows = genes, cols = samples)
-if (nrow(bulk_253260) < ncol(bulk_253260)) {
-  bulk_253260 <- t(bulk_253260)
+# Ensure genes are rows, samples are columns
+if (nrow(expr) < ncol(expr)) {
+  expr <- t(expr)
   message("Transposed GSE253260 expression to genes × samples.")
 }
 
-message("GSE253260 expression: ", nrow(bulk_253260), " genes × ", ncol(bulk_253260), " samples")
+fd <- Biobase::fData(gset)
+sym_col <- grep("symbol|SYMBOL|Gene.symbol", colnames(fd), ignore.case = TRUE, value = TRUE)[1]
+if (!is.na(sym_col)) {
+  symbols <- as.character(fd[[sym_col]])
+} else {
+  symbols <- rownames(expr)
+}
 
-# Score samples with PRECOG primary pancreatic signature
-scores_253260 <- PhenoMap(
-  expression = bulk_253260,
-  reference = "precog",
-  cancer_type = "Pancreatic",
-  verbose = TRUE
+if (requireNamespace("HGNChelper", quietly = TRUE)) {
+  checked <- HGNChelper::checkGeneSymbols(symbols, unmapped.as.na = FALSE)
+  if ("Suggested.Symbol" %in% names(checked)) {
+    symbols <- checked$Suggested.Symbol
+  }
+}
+
+symbols[symbols == "" | is.na(symbols)] <- NA
+keep <- !is.na(symbols)
+expr <- expr[keep, , drop = FALSE]
+symbols <- symbols[keep]
+
+ugenes <- unique(symbols)
+expr_collapsed <- sapply(ugenes, function(g) {
+  rows <- symbols == g
+  colMeans(expr[rows, , drop = FALSE], na.rm = TRUE)
+})
+expr_collapsed <- t(expr_collapsed)
+rownames(expr_collapsed) <- ugenes
+
+expr_tpm <- apply(expr_collapsed, 2, function(x) {
+  x[x < 0] <- 0
+  denom <- sum(x, na.rm = TRUE)
+  if (denom == 0) x else 1e6 * x / denom
+})
+expr_tpm <- as.matrix(expr_tpm)
+
+message("GSE253260 TPM matrix: ", nrow(expr_tpm), " genes × ", ncol(expr_tpm), " samples")
+```
+
+```{r gse253260-clinical}
+pheno <- Biobase::pData(gset)
+pheno$geo_accession <- rownames(pheno)
+
+pick_col <- function(df, patterns) {
+  cols <- colnames(df)
+  hit <- cols[apply(outer(patterns, cols, Vectorize(grepl, SIMPLIFY = FALSE), ignore.case = TRUE),
+                    2, any)]
+  if (length(hit)) hit[1] else NA_character_
+}
+
+id_col   <- pick_col(pheno, c("sample", "patient", "id", "accession"))
+age_col  <- pick_col(pheno, c("age"))
+sex_col  <- pick_col(pheno, c("sex", "gender"))
+os_t_col <- pick_col(pheno, c("os_days", "os.time", "os", "overall.survival"))
+os_e_col <- pick_col(pheno, c("os_censor", "os_event", "os.status", "os_event"))
+pfs_t_col <- pick_col(pheno, c("pfs_days", "pfs.time", "pfs"))
+pfs_e_col <- pick_col(pheno, c("pfs_censor", "pfs_event", "pfs.status"))
+stage_col <- pick_col(pheno, c("stage", "disease", "resectable", "borderline", "locally", "meta"))
+
+sample_id <- if (!is.na(id_col)) as.character(pheno[[id_col]]) else pheno$geo_accession
+
+clin <- data.frame(
+  geo_accession = pheno$geo_accession,
+  sample_id     = sample_id,
+  age           = if (!is.na(age_col)) pheno[[age_col]] else NA,
+  sex           = if (!is.na(sex_col)) pheno[[sex_col]] else NA,
+  OS_Days       = if (!is.na(os_t_col)) as.numeric(pheno[[os_t_col]]) else NA_real_,
+  OS_Censor     = if (!is.na(os_e_col)) as.integer(pheno[[os_e_col]]) else NA_integer_,
+  PFS_Days      = if (!is.na(pfs_t_col)) as.numeric(pheno[[pfs_t_col]]) else NA_real_,
+  PFS_Censor    = if (!is.na(pfs_e_col)) as.integer(pheno[[pfs_e_col]]) else NA_integer_,
+  stage_raw     = if (!is.na(stage_col)) as.character(pheno[[stage_col]]) else NA_character_,
+  stringsAsFactors = FALSE
 )
 
-score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
-if (!is.na(score_col_253260)) {
-  print(plot_score_distribution(
-    scores_253260,
-    score_column = score_col_253260,
-    main = "GSE253260: PRECOG Pancreatic score"
-  ))
+stage_map <- function(x) {
+  x_low <- tolower(x)
+  dplyr::case_when(
+    grepl("meta", x_low) ~ "Metastatic",
+    grepl("loc", x_low)  ~ "Locally Advanced",
+    grepl("border", x_low) ~ "Borderline",
+    grepl("res", x_low)  ~ "Resectable",
+    TRUE ~ NA_character_
+  )
+}
+clin$stage_group <- factor(stage_map(clin$stage_raw),
+                           levels = c("Resectable", "Borderline", "Locally Advanced", "Metastatic"))
+
+common_samples <- intersect(colnames(expr_tpm), clin$sample_id)
+clin <- clin[clin$sample_id %in% common_samples, , drop = FALSE]
+clin <- clin[match(common_samples, clin$sample_id), , drop = FALSE]
+rownames(clin) <- clin$sample_id
+expr_tpm <- expr_tpm[, common_samples, drop = FALSE]
+```
+
+```{r gse253260-km-by-stage, fig.width=7, fig.height=3}
+suppressPackageStartupMessages(library(survival))
+suppressPackageStartupMessages(library(survminer))
+
+dat_os <- subset(clin, !is.na(OS_Days) & !is.na(OS_Censor) & !is.na(stage_group))
+if (nrow(dat_os) >= 10) {
+  fit_os <- survfit(Surv(OS_Days, OS_Censor) ~ stage_group, data = dat_os)
+  ggsurvplot(
+    fit_os,
+    data = dat_os,
+    title = "GSE253260: Overall survival by disease stage",
+    xlab = "Time (days)",
+    ylab = "Survival probability",
+    legend.title = "Stage",
+    risk.table = FALSE
+  )
+}
+
+dat_pfs <- subset(clin, !is.na(PFS_Days) & !is.na(PFS_Censor) & !is.na(stage_group))
+if (nrow(dat_pfs) >= 10) {
+  fit_pfs <- survfit(Surv(PFS_Days, PFS_Censor) ~ stage_group, data = dat_pfs)
+  ggsurvplot(
+    fit_pfs,
+    data = dat_pfs,
+    title = "GSE253260: Progression-free survival by disease stage",
+    xlab = "Time (days)",
+    ylab = "PFS probability",
+    legend.title = "Stage",
+    risk.table = FALSE
+  )
 }
 ```
 
-### Survival analysis for GSE253260 (median score split)
+```{r gse253260-phenomap}
+suppressPackageStartupMessages(library(PhenoMapR))
 
-```{r gse253260-survival, fig.width=7, fig.height=3}
-if (file.exists(info_path_253260)) {
-  suppressPackageStartupMessages(library(survival))
-  suppressPackageStartupMessages(library(survminer))
+non_met_idx <- which(clin$stage_group != "Metastatic" & !is.na(clin$stage_group))
+met_idx     <- which(clin$stage_group == "Metastatic")
 
-  info_253260 <- readRDS(info_path_253260)
+scores_nonmet <- NULL
+scores_met    <- NULL
 
-  # Determine sample ID column by overlap with expression sample IDs
-  expr_ids <- colnames(bulk_253260)
-  id_cols <- names(info_253260)
-  overlaps <- vapply(
-    id_cols,
-    function(col) {
-      vals <- as.character(info_253260[[col]])
-      length(intersect(expr_ids, vals))
-    },
-    numeric(1)
+if (length(non_met_idx) > 0) {
+  expr_nonmet <- expr_tpm[, non_met_idx, drop = FALSE]
+  scores_nonmet <- PhenoMap(
+    expression  = expr_nonmet,
+    reference   = "precog",
+    cancer_type = "Pancreatic",
+    verbose     = TRUE
   )
-  if (all(overlaps == 0)) {
-    message("No column in GSE253260 info RDS matches expression sample IDs; skipping KM plot.")
-  } else {
-    id_col <- id_cols[which.max(overlaps)]
-    keep_253260 <- intersect(expr_ids, as.character(info_253260[[id_col]]))
-    if (length(keep_253260) == 0) {
-      message("No overlapping samples between GSE253260 expression and info; skipping KM plot.")
-    } else {
-      dat_253260 <- info_253260[info_253260[[id_col]] %in% keep_253260, , drop = FALSE]
-      dat_253260 <- dat_253260[match(keep_253260, as.character(dat_253260[[id_col]])), , drop = FALSE]
-      rownames(dat_253260) <- keep_253260
+}
 
-      # Use OS_Days and OS_Censor for survival analysis
-      if (!all(c("OS_Days", "OS_Censor") %in% names(dat_253260))) {
-        message("GSE253260 info RDS lacks 'OS_Days'/'OS_Censor'; skipping KM plot.")
-      } else {
-        dat_253260$survival_time <- as.numeric(dat_253260$OS_Days)
-        dat_253260$survival_event <- as.integer(dat_253260$OS_Censor)
-        dat_253260 <- dat_253260[!is.na(dat_253260$survival_time) & !is.na(dat_253260$survival_event), , drop = FALSE]
+if (length(met_idx) > 0) {
+  expr_met <- expr_tpm[, met_idx, drop = FALSE]
+  scores_met <- PhenoMap(
+    expression  = expr_met,
+    reference   = "precog",
+    cancer_type = "Pancreatic_Metastasis",
+    verbose     = TRUE
+  )
+}
 
-        if (nrow(dat_253260) < 10) {
-          message("Fewer than 10 samples with survival information; skipping KM plot.")
-        } else {
-          score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
-          if (is.na(score_col_253260)) {
-            message("No Pancreatic score column found for GSE253260; skipping KM plot.")
-          } else {
-            dat_253260$score_pancreatic <- scores_253260[rownames(dat_253260), score_col_253260]
+clin$score_Pancreatic <- NA_real_
+clin$score_Pancreatic_Met <- NA_real_
 
-            dat_253260$score_grp <- ifelse(
-              dat_253260$score_pancreatic >= median(dat_253260$score_pancreatic, na.rm = TRUE),
-              "High", "Low"
-            )
-
-            fit_253260 <- survfit(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
-            lr_253260 <- survdiff(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
-            pval_253260 <- 1 - pchisq(lr_253260$chisq, 1)
-            cox_253260 <- coxph(Surv(survival_time, survival_event) ~ score_grp, data = dat_253260)
-            hr_253260 <- exp(coef(cox_253260))[1]
-            ci_253260 <- as.vector(exp(confint(cox_253260)))
-            label_253260 <- sprintf(
-              "p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)",
-              format.pval(pval_253260, digits = 2, eps = 0.001),
-              hr_253260,
-              ci_253260[1],
-              ci_253260[2]
-            )
-            max_time_253260 <- max(dat_253260$survival_time, na.rm = TRUE)
-
-            pal_km_253260 <- c("#B2182B", "#2166AC")  # High (adverse), Low (favorable)
-            print(ggsurvplot(
-              fit_253260,
-              data = dat_253260,
-              palette = pal_km_253260,
-              risk.table = FALSE,
-              title = "GSE253260: survival by PRECOG Pancreatic score (median split)",
-              xlab = "Time (days)", ylab = "Survival probability",
-              legend.title = "Score group",
-              legend.labs = c("High", "Low"),
-              legend = "right",
-              pval = label_253260,
-              pval.coord = c(max_time_253260 * 0.5, 0.95),
-              pval.size = 3.5
-            ))
-          }
-        }
-      }
-    }
+if (!is.null(scores_nonmet)) {
+  col_pan <- grep("Pancreatic$", colnames(scores_nonmet), value = TRUE)[1]
+  if (!is.na(col_pan)) {
+    clin$score_Pancreatic[non_met_idx] <- scores_nonmet[, col_pan]
   }
-} else {
-  message("GSE253260 info RDS not found at ", info_path_253260, "; skipping KM plot.")
+}
+
+if (!is.null(scores_met)) {
+  col_met <- grep("Pancreatic_Metastasis", colnames(scores_met), value = TRUE)[1]
+  if (!is.na(col_met)) {
+    clin$score_Pancreatic_Met[met_idx] <- scores_met[, col_met]
+  }
+}
+```
+
+```{r gse253260-nonmet-plots, fig.width=7, fig.height=3}
+dat_nonmet <- subset(clin, stage_group != "Metastatic" & !is.na(stage_group) & !is.na(score_Pancreatic))
+
+if (nrow(dat_nonmet) > 0) {
+  ggplot(dat_nonmet, aes(x = stage_group, y = score_Pancreatic, fill = stage_group)) +
+    geom_violin(trim = FALSE, alpha = 0.7) +
+    geom_boxplot(width = 0.2, outlier.size = 0.5) +
+    theme_minimal() +
+    labs(
+      title = "GSE253260: PRECOG Pancreatic score by disease stage (non-metastatic)",
+      x = "Stage", y = "PhenoMapR score"
+    ) +
+    theme(legend.position = "none")
+}
+
+dat_nonmet_os <- subset(dat_nonmet, !is.na(OS_Days) & !is.na(OS_Censor))
+if (nrow(dat_nonmet_os) >= 10) {
+  median_cut <- median(dat_nonmet_os$score_Pancreatic, na.rm = TRUE)
+  dat_nonmet_os$score_grp <- ifelse(dat_nonmet_os$score_Pancreatic >= median_cut, "High", "Low")
+
+  fit_nonmet <- survfit(Surv(OS_Days, OS_Censor) ~ score_grp, data = dat_nonmet_os)
+  ggsurvplot(
+    fit_nonmet,
+    data = dat_nonmet_os,
+    title = "GSE253260 (non-metastatic): OS by PRECOG Pancreatic score (median split)",
+    xlab = "Time (days)", ylab = "Survival probability",
+    legend.title = "Score group", legend.labs = c("High", "Low"),
+    risk.table = FALSE
+  )
+}
+```
+
+```{r gse253260-met-plots, fig.width=7, fig.height=3}
+dat_met <- subset(clin, stage_group == "Metastatic" & !is.na(score_Pancreatic_Met))
+
+dat_met_os <- subset(dat_met, !is.na(OS_Days) & !is.na(OS_Censor))
+if (nrow(dat_met_os) >= 10) {
+  median_cut_met <- median(dat_met_os$score_Pancreatic_Met, na.rm = TRUE)
+  dat_met_os$score_grp <- ifelse(dat_met_os$score_Pancreatic_Met >= median_cut_met, "High", "Low")
+
+  fit_met <- survfit(Surv(OS_Days, OS_Censor) ~ score_grp, data = dat_met_os)
+  ggsurvplot(
+    fit_met,
+    data = dat_met_os,
+    title = "GSE253260 (metastatic): OS by PRECOG Pancreatic_Metastasis score (median split)",
+    xlab = "Time (days)", ylab = "Survival probability",
+    legend.title = "Score group", legend.labs = c("High", "Low"),
+    risk.table = FALSE
+  )
 }
 ```
 
