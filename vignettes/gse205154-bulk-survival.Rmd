@@ -333,68 +333,126 @@ ggsurvplot(fit_met, data = dat_met, palette = pal_km, risk.table = FALSE,
 In many bulk expression studies, only the expression matrix is available without matched outcomes. Here we show how to start from GEO, preprocess expression and clinical data, and then score and stratify patients using PhenoMapR.
 
 ```{r gse253260-download, message=TRUE}
-if (!requireNamespace("googledrive", quietly = TRUE)) {
-  stop("The 'googledrive' package is required for the GSE253260 example. Install with install.packages('googledrive').")
-}
+study <- "GSE253260"
+expr_tpm <- NULL
+gset <- NULL
 
+# ---- Primary: Google Drive RDS (ExpressionSet) ----
 vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 if (!dir.exists(vignette_dir)) {
   dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
 }
-
 gse_rds_path <- file.path(vignette_dir, "GSE253260.rds")
 
-googledrive::drive_deauth()
-googledrive::drive_download(
-  googledrive::as_id("1ZBiFtZDTBKSpbLCgw6z_-qDF7WF2Sam5"),
-  path = gse_rds_path,
-  overwrite = TRUE
-)
-
-gset <- readRDS(gse_rds_path)
-# If the RDS holds a list (e.g. from getGEO), take the first ExpressionSet
-if (is.list(gset) && length(gset) > 0 && !inherits(gset, "ExpressionSet")) {
-  gset <- gset[[1]]
-}
-
-expr <- Biobase::exprs(gset)
-
-# Ensure genes are rows, samples are columns
-if (nrow(expr) < ncol(expr) && nrow(expr) > 0) {
-  expr <- t(expr)
-  message("Transposed GSE253260 expression to genes × samples.")
-}
-
-# Optionally set rownames to HUGO symbols if feature data are available and aligned
-fd <- Biobase::fData(gset)
-if (!is.null(fd) && nrow(fd) == nrow(expr)) {
-  sym_col <- grep("symbol|SYMBOL|Gene.symbol", colnames(fd), ignore.case = TRUE, value = TRUE)[1]
-  if (!is.na(sym_col)) {
-    symbols <- as.character(fd[[sym_col]])
-    if (requireNamespace("HGNChelper", quietly = TRUE)) {
-      checked <- HGNChelper::checkGeneSymbols(symbols, unmapped.as.na = FALSE)
-      if ("Suggested.Symbol" %in% names(checked)) {
-        symbols <- checked$Suggested.Symbol
+primary_ok <- tryCatch({
+  if (!requireNamespace("googledrive", quietly = TRUE)) stop("googledrive not available")
+  googledrive::drive_deauth()
+  googledrive::drive_download(
+    googledrive::as_id("1ZBiFtZDTBKSpbLCgw6z_-qDF7WF2Sam5"),
+    path = gse_rds_path,
+    overwrite = TRUE
+  )
+  gset <- readRDS(gse_rds_path)
+  if (is.list(gset) && length(gset) > 0 && !inherits(gset, "ExpressionSet")) {
+    gset <- gset[[1]]
+  }
+  if (!inherits(gset, "ExpressionSet")) stop("RDS is not an ExpressionSet")
+  expr <- Biobase::exprs(gset)
+  if (!is.matrix(expr) || length(dim(expr)) != 2) stop("exprs(gset) not a matrix")
+  if (nrow(expr) < ncol(expr) && nrow(expr) > 0) {
+    expr <- t(expr)
+    message("Transposed GSE253260 expression to genes × samples.")
+  }
+  fd <- Biobase::fData(gset)
+  if (!is.null(fd) && nrow(fd) == nrow(expr)) {
+    sym_col <- grep("symbol|SYMBOL|Gene.symbol", colnames(fd), ignore.case = TRUE, value = TRUE)[1]
+    if (!is.na(sym_col)) {
+      symbols <- as.character(fd[[sym_col]])
+      if (requireNamespace("HGNChelper", quietly = TRUE)) {
+        checked <- HGNChelper::checkGeneSymbols(symbols, unmapped.as.na = FALSE)
+        if ("Suggested.Symbol" %in% names(checked)) symbols <- checked$Suggested.Symbol
+      }
+      symbols[symbols == "" | is.na(symbols)] <- NA
+      if (sum(!is.na(symbols)) > 0) {
+        keep <- !is.na(symbols)
+        expr <- expr[keep, , drop = FALSE]
+        symbols <- symbols[keep]
+        rownames(expr) <- make.unique(symbols)
       }
     }
-    symbols[symbols == "" | is.na(symbols)] <- NA
-    if (sum(!is.na(symbols)) > 0) {
-      # Keep only genes with non-NA symbols and set rownames
-      keep <- !is.na(symbols)
-      expr <- expr[keep, , drop = FALSE]
-      symbols <- symbols[keep]
-      rownames(expr) <- make.unique(symbols)
-    }
+  }
+  expr <- as.matrix(expr)
+  expr[expr < 0] <- 0
+  expr_tpm <<- as.matrix(apply(expr, 2, function(x) {
+    denom <- sum(x, na.rm = TRUE)
+    if (denom == 0) x else 1e6 * x / denom
+  }))
+  nrow(expr_tpm) > 0 && ncol(expr_tpm) > 0
+}, error = function(e) {
+  message("Primary (Drive RDS) failed: ", conditionMessage(e))
+  FALSE
+})
+
+# ---- Fallback: GEO metadata + raw counts URL ----
+if (!primary_ok && (is.null(expr_tpm) || nrow(expr_tpm) == 0 || ncol(expr_tpm) == 0)) {
+  message("Downloading GEO metadata for: ", study)
+  if (requireNamespace("GEOquery", quietly = TRUE)) {
+    geo_ok <- tryCatch({
+      geo_data <- GEOquery::getGEO(GEO = study, GSEMatrix = TRUE, getGPL = TRUE, AnnotGPL = TRUE)
+      if (length(geo_data) > 0) {
+        gset <<- geo_data[[1]]
+      }
+      length(geo_data) > 0
+    }, error = function(e) {
+      message("getGEO failed: ", conditionMessage(e))
+      FALSE
+    })
+  } else {
+    geo_ok <- FALSE
+  }
+
+  if (geo_ok && requireNamespace("data.table", quietly = TRUE) &&
+      requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+    counts_url <- paste0(
+      "https://www.ncbi.nlm.nih.gov/geo/download/?format=file&type=rnaseq_counts",
+      "&acc=", study,
+      "&file=", study, "_raw_counts_GRCh38.p13_NCBI.tsv.gz"
+    )
+    message("Attempting to download expression matrix from: ", counts_url)
+    count_ok <- tryCatch({
+      expression <- data.table::fread(counts_url, header = TRUE, colClasses = "integer")
+      expression <- as.matrix(expression, rownames = 1)
+      suppressPackageStartupMessages(library("org.Hs.eg.db", character.only = TRUE))
+      gene_symbols <- AnnotationDbi::mapIds(
+        org.Hs.eg.db,
+        keys = rownames(expression),
+        column = "SYMBOL",
+        keytype = "ENTREZID",
+        multiVals = "first"
+      )
+      rownames(expression) <- gene_symbols
+      expression <- expression[!is.na(rownames(expression)), , drop = FALSE]
+      expression <- as.matrix(expression)
+      expression[expression < 0] <- 0
+      expr_tpm <<- as.matrix(apply(expression, 2, function(x) {
+        denom <- sum(x, na.rm = TRUE)
+        if (denom == 0) x else 1e6 * x / denom
+      }))
+      nrow(expr_tpm) > 0 && ncol(expr_tpm) > 0
+    }, error = function(e) {
+      message("Raw counts download/processing failed: ", conditionMessage(e))
+      FALSE
+    })
+    if (count_ok) message("GSE253260 expression loaded from GEO raw counts (fallback).")
   }
 }
 
-expr <- as.matrix(expr)
-expr[expr < 0] <- 0
-expr_tpm <- apply(expr, 2, function(x) {
-  denom <- sum(x, na.rm = TRUE)
-  if (denom == 0) x else 1e6 * x / denom
-})
-expr_tpm <- as.matrix(expr_tpm)
+if (is.null(expr_tpm) || nrow(expr_tpm) == 0 || ncol(expr_tpm) == 0) {
+  stop("Could not load GSE253260 expression (Drive RDS and GEO raw counts both failed or unavailable).")
+}
+if (is.null(gset)) {
+  stop("GSE253260 clinical metadata (gset) not available; need Drive RDS or successful getGEO.")
+}
 
 message("GSE253260 TPM matrix: ", nrow(expr_tpm), " genes × ", ncol(expr_tpm), " samples")
 ```
