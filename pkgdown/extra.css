@@ -17,17 +17,18 @@
   width: auto !important;
 }
 
-/* Reference coverage plot: use most of the page so it isn't tiny */
+/* Reference coverage plot: keep within page content width, no overflow */
 .reference-coverage-plot {
   width: 100%;
+  max-width: 100%;
   margin: 1em 0;
+  overflow: hidden;
 }
 .reference-coverage-plot img,
 .reference-coverage-plot p img {
+  max-width: 100% !important;
   width: 100% !important;
-  min-width: 1100px !important;
   height: auto !important;
-  max-width: none !important;
 }
 
 /* Code blocks: neutral background (override any yellow/cream) */
