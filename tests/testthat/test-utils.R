@@ -66,3 +66,43 @@ test_that("get_top_prognostic_genes returns data.frame", {
   expect_s3_class(out, "data.frame")
   expect_true(nrow(out) <= 5)
 })
+
+test_that("get_top_prognostic_genes direction positive and negative", {
+  out_pos <- get_top_prognostic_genes("precog", "Breast", n = 3, direction = "positive")
+  expect_s3_class(out_pos, "data.frame")
+  expect_true(all(out_pos$z_score > 0))
+  out_neg <- get_top_prognostic_genes("precog", "Breast", n = 3, direction = "negative")
+  expect_true(all(out_neg$z_score < 0))
+})
+
+test_that("get_gene_coverage with reference NULL checks all references", {
+  genes <- c("TP53", "MYC", "BRCA1")
+  out <- get_gene_coverage(genes, reference = NULL)
+  expect_s3_class(out, "data.frame")
+  expect_true(nrow(out) >= 4)  # precog, tcga, pediatric_precog, ici_precog
+  expect_true("reference" %in% names(out))
+})
+
+test_that("list_cancer_types accepts pediatric and ici aliases", {
+  peds <- list_cancer_types("pediatric")
+  expect_type(peds, "character")
+  expect_true(length(peds) >= 1)
+  ici <- list_cancer_types("ici")
+  expect_type(ici, "character")
+})
+
+test_that("load_rds_fast errors on missing file", {
+  expect_error(load_rds_fast("/nonexistent/path/to/file.rds"), "File not found")
+})
+
+test_that("plot_score_distribution uses first column when score_column NULL and data.frame", {
+  df <- data.frame(a = 1:5, b = 10:14)
+  p <- plot_score_distribution(df)
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("plot_score_distribution handles all NA scores", {
+  df <- data.frame(score = rep(NA_real_, 5))
+  p <- plot_score_distribution(df)
+  expect_s3_class(p, "ggplot")
+})

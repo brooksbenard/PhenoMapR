@@ -61,3 +61,14 @@ test_that("PhenoMap errors on non-matrix expression", {
     "Unable to detect input type|Supported"
   )
 })
+
+test_that("PhenoMap accepts data.frame expression (process_matrix path)", {
+  custom_ref <- data.frame(row.names = c("G1", "G2"), sig = c(1, -1))
+  expr_df <- as.data.frame(matrix(pmax(0, rnorm(2 * 4)), 2, 4))
+  rownames(expr_df) <- c("G1", "G2")
+  colnames(expr_df) <- paste0("C", 1:4)
+  scores <- PhenoMap(expression = expr_df, reference = custom_ref, verbose = FALSE)
+  expect_s3_class(scores, "data.frame")
+  expect_equal(nrow(scores), 4)
+})
+
