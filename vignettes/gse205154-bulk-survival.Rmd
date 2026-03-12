@@ -352,6 +352,10 @@ googledrive::drive_download(
 )
 
 gset <- readRDS(gse_rds_path)
+# If the RDS holds a list (e.g. from getGEO), take the first ExpressionSet
+if (is.list(gset) && length(gset) > 0 && !inherits(gset, "ExpressionSet")) {
+  gset <- gset[[1]]
+}
 
 expr <- Biobase::exprs(gset)
 
