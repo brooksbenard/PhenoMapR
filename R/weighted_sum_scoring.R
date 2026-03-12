@@ -19,9 +19,17 @@ calculate_weighted_scores <- function(expression_matrix,
   
   reference_data <- as.data.frame(reference_data)
   
+  # Cell IDs: use colnames if present; otherwise generate and assign (validate_expression_matrix
+  # may not modify the caller's matrix due to R copy-on-write)
+  cell_ids <- colnames(expression_matrix)
+  if (is.null(cell_ids) || length(cell_ids) == 0) {
+    cell_ids <- paste0("Cell_", seq_len(ncol(expression_matrix)))
+    colnames(expression_matrix) <- cell_ids
+  }
+  
   # Initialize scores dataframe
   scores_all <- data.frame(
-    Cell = colnames(expression_matrix),
+    Cell = cell_ids,
     stringsAsFactors = FALSE
   )
   

@@ -185,6 +185,7 @@ get_gene_coverage <- function(genes, reference = NULL) {
     stringsAsFactors = FALSE
   )
   
+  n_genes <- length(genes)
   for (ref in refs) {
     data_obj <- switch(ref,
       "precog" = get_data("precog"),
@@ -195,12 +196,13 @@ get_gene_coverage <- function(genes, reference = NULL) {
     
     ref_genes <- rownames(data_obj)
     common <- intersect(genes, ref_genes)
+    coverage_pct <- if (n_genes > 0) round(100 * length(common) / n_genes, 2) else NA_real_
     
     coverage <- rbind(coverage, data.frame(
       reference = ref,
-      total_genes = length(genes),
+      total_genes = n_genes,
       covered_genes = length(common),
-      coverage_pct = round(100 * length(common) / length(genes), 2),
+      coverage_pct = coverage_pct,
       stringsAsFactors = FALSE
     ))
   }

@@ -72,3 +72,16 @@ test_that("PhenoMap accepts data.frame expression (process_matrix path)", {
   expect_equal(nrow(scores), 4)
 })
 
+test_that("PhenoMap with matrix lacking colnames generates cell names and returns scores", {
+  custom_ref <- data.frame(row.names = c("A", "B"), s = c(3, -2))
+  expr <- matrix(1, nrow = 2, ncol = 3)
+  rownames(expr) <- c("A", "B")
+  expect_warning(
+    scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE),
+    "no column names"
+  )
+  expect_s3_class(scores, "data.frame")
+  expect_equal(nrow(scores), 3)
+  expect_true(ncol(scores) >= 1)
+})
+

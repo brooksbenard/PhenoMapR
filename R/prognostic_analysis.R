@@ -13,8 +13,8 @@
 #'   \itemize{
 #'     \item \code{cell_id}: same as row names of \code{scores}
 #'     \item For each score column: a \code{prognostic_group_<name>} column with
-#'       values \code{"adverse"} (top percentile), \code{"favorable"} (bottom
-#'       percentile), or \code{"middle"}
+#'       values \code{"Most Adverse"} (top percentile), \code{"Most Favorable"}
+#'       (bottom percentile), or \code{"Other"}
 #'   }
 #'
 #' @examples

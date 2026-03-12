@@ -83,6 +83,14 @@ test_that("get_gene_coverage with reference NULL checks all references", {
   expect_true("reference" %in% names(out))
 })
 
+test_that("get_gene_coverage with empty genes returns coverage_pct NA", {
+  out <- get_gene_coverage(character(0), reference = "precog")
+  expect_s3_class(out, "data.frame")
+  expect_equal(out$total_genes, 0)
+  expect_equal(out$covered_genes, 0)
+  expect_true(is.na(out$coverage_pct))
+})
+
 test_that("list_cancer_types accepts pediatric and ici aliases", {
   peds <- list_cancer_types("pediatric")
   expect_type(peds, "character")
