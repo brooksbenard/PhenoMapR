@@ -24,6 +24,9 @@ Imports:
     progress
 Suggests:
     googledrive,
+    GEOquery,
+    data.table,
+    org.Hs.eg.db,
     cluster,
     ComplexHeatmap,
     circlize,
