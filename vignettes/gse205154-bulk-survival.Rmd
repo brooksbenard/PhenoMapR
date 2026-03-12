@@ -328,10 +328,80 @@ ggsurvplot(fit_met, data = dat_met, palette = pal_km, risk.table = FALSE,
            pval = label_met, pval.coord = c(max_time_met * 0.5, 0.95), pval.size = 3.5)
 ```
 
-## 6. Summary
+## 6. Additional example: GSE253260 bulk expression
+
+In many bulk expression studies, only the expression matrix is available without matched outcomes. Here we show how to score an independent bulk expression dataset (GSE253260) against the PRECOG primary pancreatic signature.
+
+```{r gse253260-precog, fig.width=7, fig.height=4}
+# Paths to preprocessed GSE253260 bulk expression (genes x samples) and optional
+# phenotype/info RDS files. For pkgdown and reproducible builds, download from
+# the public Google Drive links if the files are not present locally.
+expr_path_253260 <- "vignettes/GSE253260_expression.rds"
+info_path_253260 <- "vignettes/GSE253260_info.rds"
+
+if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = TRUE)) {
+  googledrive::drive_deauth()
+  # Expression matrix
+  tryCatch(
+    googledrive::drive_download(
+      googledrive::as_id("13womOrSDbQVsBWVH06Z91eD5-2PeFyoH"),
+      path = expr_path_253260,
+      overwrite = TRUE
+    ),
+    error = function(e) {
+      message("Could not download GSE253260 expression from Google Drive: ", conditionMessage(e))
+    }
+  )
+  # Optional: phenotype/info RDS (not required for scoring in this section)
+  tryCatch(
+    googledrive::drive_download(
+      googledrive::as_id("14UzRBPTsLN7D3d57eNaWTVwAP8ObCDwH"),
+      path = info_path_253260,
+      overwrite = TRUE
+    ),
+    error = function(e) {
+      message("Could not download GSE253260 info from Google Drive: ", conditionMessage(e))
+    }
+  )
+}
+
+if (file.exists(expr_path_253260)) {
+  bulk_253260 <- readRDS(expr_path_253260)
+  if (!is.matrix(bulk_253260) && !is.data.frame(bulk_253260)) {
+    stop("GSE253260 object must be a matrix or data.frame with genes in rows")
+  }
+  if (is.data.frame(bulk_253260)) bulk_253260 <- as.matrix(bulk_253260)
+
+  message("GSE253260 expression: ", nrow(bulk_253260), " genes × ", ncol(bulk_253260), " samples")
+
+  # Score samples with PRECOG primary pancreatic signature
+  scores_253260 <- PhenoMap(
+    expression = bulk_253260,
+    reference = "precog",
+    cancer_type = "Pancreatic",
+    verbose = TRUE
+  )
+
+  score_col_253260 <- grep("Pancreatic$", colnames(scores_253260), value = TRUE)[1]
+  if (!is.na(score_col_253260)) {
+    print(plot_score_distribution(
+      scores_253260,
+      score_column = score_col_253260,
+      main = "GSE253260: PRECOG Pancreatic score"
+    ))
+  }
+} else {
+  message(
+    "GSE253260 expression file not found at ", expr_path_253260,
+    "; skipping GSE253260 example."
+  )
+}
+```
+
+## 7. Summary
 PhenoMapR can take a bulk expression dataset and assign prognostic risk scores and significantly stratify outcomes in both primary and metastatic disease in PAAD. In this case, we had access to outcomes annotations for the cohort but it is reasonable to assume many datasets profiled with bulk gene expression do not have outcomes data available or reported. In these cases, PhenoMapR can nominate samples that are on the extremes of the phenotype space (e.g. survival) and help define sample groupings.
 
-## 7. References
+## 8. References
 
 - **GSE205154**: Sears et al. Bulk RNA-Seq gene expression for 289 primary and metastatic PDAC samples. *Nature Cancer* (2025). [GEO: GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). 
 - **PRECOG**: Benard B et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. *Nucleic Acids Research* (2025). [precog.stanford.edu](https://precog.stanford.edu/); [PubMed: 40909678](https://pubmed.ncbi.nlm.nih.gov/40909678/).

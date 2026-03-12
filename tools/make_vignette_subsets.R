@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# Regenerate vignette subset RDS files. Retains all samples/patients; keeps max 5000
+# Regenerate vignette subset RDS files. Retains all samples/patients; keeps max 10k
 # cells per (sample, cell type). Run from package root: Rscript tools/make_vignette_subsets.R
 # Requires: googledrive, Seurat. Full datasets are downloaded from Google Drive.
 
@@ -49,7 +49,7 @@ find_celltype_col <- function(obj) {
 }
 
 # Retain all samples and all cell types; only subset when a (sample, cell type) has > max_per_group cells.
-subset_cells_by_sample_and_type <- function(obj, max_per_group = 5000L, sample_col = NULL, celltype_col = NULL) {
+subset_cells_by_sample_and_type <- function(obj, max_per_group = 10000L, sample_col = NULL, celltype_col = NULL) {
   sample_col <- sample_col %||% find_sample_col(obj)
   celltype_col <- celltype_col %||% find_celltype_col(obj)
   if (is.null(celltype_col)) {
@@ -80,7 +80,7 @@ subset_cells_by_sample_and_type <- function(obj, max_per_group = 5000L, sample_c
 }
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-save_seurat_subset <- function(src_rds, dest_rds, max_per_type = 5000L, n_genes = 1500L) {
+save_seurat_subset <- function(src_rds, dest_rds, max_per_type = 10000L, n_genes = 1500L) {
   if (!requireNamespace("Seurat", quietly = TRUE)) stop("Seurat is required.")
   obj <- readRDS(src_rds)
   if (!inherits(obj, "Seurat")) stop("Expected a Seurat object in: ", src_rds)
@@ -100,7 +100,7 @@ save_seurat_subset <- function(src_rds, dest_rds, max_per_type = 5000L, n_genes 
   invisible(dest_rds)
 }
 
-save_spatial_subset <- function(src_rds, dest_rds, max_per_type = 5000L, n_genes = 1500L) {
+save_spatial_subset <- function(src_rds, dest_rds, max_per_type = 10000L, n_genes = 1500L) {
   if (!requireNamespace("Seurat", quietly = TRUE)) stop("Seurat is required.")
   obj <- readRDS(src_rds)
   if (!inherits(obj, "Seurat")) stop("Expected a Seurat object in: ", src_rds)
@@ -129,7 +129,7 @@ spatial_full <- file.path(tmp_dir, "HT270P1_processed.rds")
 download_from_drive(ids$gse111672, gse_full)
 download_from_drive(ids$cra001160, cra_full)
 download_from_drive(ids$spatial, spatial_full)
-save_seurat_subset(gse_full, file.path(dest_dir, "PAAD_GSE111672_seurat_subset.rds"), max_per_type = 5000, n_genes = 1500)
-save_seurat_subset(cra_full, file.path(dest_dir, "PAAD_CRA001160_seurat_subset.rds"), max_per_type = 5000, n_genes = 1500)
-save_spatial_subset(spatial_full, file.path(dest_dir, "HT270P1_processed_subset.rds"), max_per_type = 5000, n_genes = 1500)
+save_seurat_subset(gse_full, file.path(dest_dir, "PAAD_GSE111672_seurat_subset.rds"), max_per_type = 10000, n_genes = 1500)
+save_seurat_subset(cra_full, file.path(dest_dir, "PAAD_CRA001160_seurat_subset.rds"), max_per_type = 10000, n_genes = 1500)
+save_spatial_subset(spatial_full, file.path(dest_dir, "HT270P1_processed_subset.rds"), max_per_type = 10000, n_genes = 1500)
 message("Done.")
