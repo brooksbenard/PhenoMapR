@@ -102,11 +102,40 @@ calculate_weighted_scores <- function(expression_matrix,
 #' Implemented via cross product for efficiency: \code{crossprod(meta_z, expression)}
 #' yields one value per cell. Higher score = worse prognosis (adverse).
 #'
+#' This helper explicitly aligns gene IDs between \code{expression_data} and
+#' \code{prognostic_scores} so that the cross-product is always computed with
+#' a consistent gene order.
+#'
 #' @keywords internal
 compute_scores <- function(expression_data,
-                          prognostic_scores,
-                          pseudobulk = FALSE,
-                          verbose = TRUE) {
+                           prognostic_scores,
+                           pseudobulk = FALSE,
+                           verbose = TRUE) {
+  
+  # Ensure expression_data has gene IDs as rownames and prognostic_scores is named
+  if (is.null(rownames(expression_data))) {
+    stop("expression_data must have rownames set to gene IDs")
+  }
+  if (is.null(names(prognostic_scores))) {
+    stop("prognostic_scores must be a named numeric vector with gene IDs in names()")
+  }
+  
+  # Align by common gene IDs
+  common_genes <- intersect(rownames(expression_data), names(prognostic_scores))
+  
+  if (length(common_genes) == 0L) {
+    stop("No overlapping genes between expression_data rownames and prognostic_scores names")
+  }
+  
+  # Optionally warn if overlap is very small
+  if (length(common_genes) < 50L) {
+    warning("Fewer than 50 overlapping genes between expression_data and prognostic_scores")
+  }
+  
+  # Use a consistent, explicit ordering
+  common_genes <- sort(common_genes)
+  expression_data <- expression_data[common_genes, , drop = FALSE]
+  prognostic_scores <- prognostic_scores[common_genes]
   
   # For non-pseudobulk or when matrix is small, use vectorized crossprod
   if (!pseudobulk || ncol(expression_data) < 100) {
@@ -123,7 +152,7 @@ compute_scores <- function(expression_data,
     }
     # Higher raw_sum = higher expression of adverse genes (positive z) = worse prognosis
     score_vector <- raw_sum
-
+    
   } else {
     # For large pseudobulk data, compute iteratively with progress bar
     if (verbose && requireNamespace("progress", quietly = TRUE)) {
@@ -133,20 +162,20 @@ compute_scores <- function(expression_data,
         force = TRUE
       )
     }
-
+    
     score_vector <- numeric(ncol(expression_data))
-
+    
     for (j in seq_len(ncol(expression_data))) {
       exp_vector <- expression_data[, j]
       raw_sum_j <- sum(prognostic_scores * exp_vector, na.rm = TRUE)
       score_vector[j] <- raw_sum_j
-
+      
       if (verbose && exists("pb")) {
         pb$tick()
       }
     }
   }
-
+  
   return(score_vector)
 }
 
