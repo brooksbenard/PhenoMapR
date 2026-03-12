@@ -341,10 +341,10 @@ info_path_253260 <- "vignettes/GSE253260_info.rds"
 
 if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = TRUE)) {
   googledrive::drive_deauth()
-  # Expression matrix
+  # Expression matrix (GSE253260 bulk expression)
   tryCatch(
     googledrive::drive_download(
-      googledrive::as_id("13womOrSDbQVsBWVH06Z91eD5-2PeFyoH"),
+      googledrive::as_id("1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"),
       path = expr_path_253260,
       overwrite = TRUE
     ),
@@ -355,7 +355,7 @@ if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = 
   # Optional: phenotype/info RDS (not required for scoring in this section)
   tryCatch(
     googledrive::drive_download(
-      googledrive::as_id("14UzRBPTsLN7D3d57eNaWTVwAP8ObCDwH"),
+      googledrive::as_id("1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"),
       path = info_path_253260,
       overwrite = TRUE
     ),
