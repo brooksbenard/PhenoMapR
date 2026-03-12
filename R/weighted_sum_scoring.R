@@ -69,10 +69,11 @@ calculate_weighted_scores <- function(expression_matrix,
 ")
     }
 
-    # Weighted sum: higher score = worse prognosis when reference has positive z = adverse
+    # Weighted sum: higher score = worse prognosis when reference has positive z = adverse.
+    # Compute_scores expects a named numeric vector with gene IDs in names().
     score_vector <- compute_scores(
       expression_data = expression_data,
-      prognostic_scores = prog_data_sub[, 1],
+      prognostic_scores = stats::setNames(prog_data_sub[, 1], rownames(prog_data_sub)),
       pseudobulk = pseudobulk,
       verbose = verbose
     )
