@@ -340,6 +340,11 @@ expr_path_253260 <- "vignettes/GSE253260_expression.rds"
 info_path_253260 <- "vignettes/GSE253260_info.rds"
 
 if (!file.exists(expr_path_253260) && requireNamespace("googledrive", quietly = TRUE)) {
+  # Ensure vignette directory exists before downloading
+  dest_dir_253260 <- dirname(expr_path_253260)
+  if (!dir.exists(dest_dir_253260)) {
+    dir.create(dest_dir_253260, recursive = TRUE, showWarnings = FALSE)
+  }
   googledrive::drive_deauth()
   # Expression matrix (GSE253260 bulk expression)
   tryCatch(
