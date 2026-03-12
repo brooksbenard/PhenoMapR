@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
-# Regenerate vignette subset RDS files (max 5000 cells per cell type, no types lost).
-# Run from package root: Rscript tools/make_vignette_subsets.R
+# Regenerate vignette subset RDS files. Retains all samples/patients; keeps max 5000
+# cells per (sample, cell type). Run from package root: Rscript tools/make_vignette_subsets.R
 # Requires: googledrive, Seurat. Full datasets are downloaded from Google Drive.
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -18,6 +18,15 @@ download_from_drive <- function(file_id, dest) {
   invisible(dest)
 }
 
+find_sample_col <- function(obj) {
+  md <- obj@meta.data
+  candidates <- c("Sample", "sample", "patient_id", "Patient", "patient", "orig.ident", "sample_id")
+  for (col in candidates) {
+    if (col %in% names(md) && length(unique(md[[col]])) >= 1) return(col)
+  }
+  NULL
+}
+
 find_celltype_col <- function(obj) {
   md <- obj@meta.data
   candidates <- c(
@@ -33,30 +42,39 @@ find_celltype_col <- function(obj) {
   NULL
 }
 
-subset_cells_by_type <- function(obj, max_per_type = 5000L, celltype_col = NULL) {
-  if (is.null(celltype_col)) celltype_col <- find_celltype_col(obj)
+# Retain all samples; within each sample, keep max max_per_group cells per cell type.
+subset_cells_by_sample_and_type <- function(obj, max_per_group = 5000L, sample_col = NULL, celltype_col = NULL) {
+  sample_col <- sample_col %||% find_sample_col(obj)
+  celltype_col <- celltype_col %||% find_celltype_col(obj)
   if (is.null(celltype_col)) {
     n <- min(5000L, ncol(obj))
     return(colnames(obj)[seq_len(n)])
   }
-  grp <- as.character(obj@meta.data[[celltype_col]])
-  names(grp) <- colnames(obj)
+  md <- obj@meta.data
+  sample_vec <- if (!is.null(sample_col)) as.character(md[[sample_col]]) else rep("_single_", ncol(obj))
+  type_vec <- as.character(md[[celltype_col]])
+  cells <- colnames(obj)
   keep <- character(0)
   set.seed(1)
-  for (g in unique(grp)) {
-    cells <- names(grp)[grp == g]
-    n <- min(as.integer(max_per_type), length(cells))
-    keep <- c(keep, if (length(cells) <= n) cells else sample(cells, n))
+  for (s in unique(sample_vec)) {
+    in_s <- sample_vec == s
+    for (t in unique(type_vec[in_s])) {
+      idx <- in_s & type_vec == t
+      sub_cells <- cells[idx]
+      n <- min(as.integer(max_per_group), length(sub_cells))
+      keep <- c(keep, if (length(sub_cells) <= n) sub_cells else sample(sub_cells, n))
+    }
   }
   keep
 }
+`%||%` <- function(x, y) if (is.null(x)) y else x
 
 save_seurat_subset <- function(src_rds, dest_rds, max_per_type = 5000L, n_genes = 1500L) {
   if (!requireNamespace("Seurat", quietly = TRUE)) stop("Seurat is required.")
   obj <- readRDS(src_rds)
   if (!inherits(obj, "Seurat")) stop("Expected a Seurat object in: ", src_rds)
   obj <- tryCatch(Seurat::UpdateSeuratObject(obj), error = function(e) obj)
-  keep_cells <- subset_cells_by_type(obj, max_per_type = max_per_type)
+  keep_cells <- subset_cells_by_sample_and_type(obj, max_per_group = max_per_type)
   obj <- subset(obj, cells = keep_cells)
   assay <- if ("RNA" %in% names(obj@assays)) "RNA" else names(obj@assays)[1]
   Seurat::DefaultAssay(obj) <- assay
@@ -78,7 +96,7 @@ save_spatial_subset <- function(src_rds, dest_rds, max_per_type = 5000L, n_genes
   obj <- tryCatch(Seurat::UpdateSeuratObject(obj), error = function(e) obj)
   assay <- if ("Spatial" %in% names(obj@assays)) "Spatial" else if ("RNA" %in% names(obj@assays)) "RNA" else names(obj@assays)[1]
   Seurat::DefaultAssay(obj) <- assay
-  keep_cells <- subset_cells_by_type(obj, max_per_type = max_per_type)
+  keep_cells <- subset_cells_by_sample_and_type(obj, max_per_group = max_per_type)
   if (length(keep_cells) == 0) keep_cells <- colnames(obj)[seq_len(min(3000L, ncol(obj)))]
   obj <- subset(obj, cells = keep_cells)
   feats <- Seurat::VariableFeatures(obj)
