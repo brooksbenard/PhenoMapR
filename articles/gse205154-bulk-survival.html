@@ -334,177 +334,875 @@ stratifies survival in this subset.</p>
 <h2 id="additional-example-gse253260-bulk-expression">6. Additional example: GSE253260 bulk expression<a class="anchor" aria-label="anchor" href="#additional-example-gse253260-bulk-expression"></a>
 </h2>
 <p>In many bulk expression studies, only the expression matrix is
-available without matched outcomes. Here we show how to score an
-independent bulk expression dataset (GSE253260) against the PRECOG
-primary pancreatic signature.</p>
+available without matched outcomes. Here we show how to start from GEO,
+preprocess expression and clinical data, and then score and stratify
+patients using PhenoMapR.</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"googledrive"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"The 'googledrive' package is required for the GSE253260 example. Install with install.packages('googledrive')."</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
+<code class="sourceCode R"><span><span class="va">study</span> <span class="op">&lt;-</span> <span class="st">"GSE253260"</span></span>
+<span><span class="va">expr_tpm</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="va">gset</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
 <span></span>
+<span><span class="co"># ---- Primary: Google Drive RDS (ExpressionSet) ----</span></span>
 <span><span class="va">vignette_dir</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="st">"vignettes"</span><span class="op">)</span><span class="op">)</span> <span class="st">"vignettes"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="st">"Vignettes"</span><span class="op">)</span><span class="op">)</span> <span class="st">"Vignettes"</span> <span class="kw">else</span> <span class="st">"."</span></span>
 <span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.exists</a></span><span class="op">(</span><span class="va">vignette_dir</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">vignette_dir</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span>, showWarnings <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
+<span><span class="va">gse_rds_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">vignette_dir</span>, <span class="st">"GSE253260.rds"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">expr_path_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">vignette_dir</span>, <span class="st">"GSE253260_expression.rds"</span><span class="op">)</span></span>
-<span><span class="va">info_path_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">vignette_dir</span>, <span class="st">"GSE253260_info.rds"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_deauth.html" class="external-link">drive_deauth</a></span><span class="op">(</span><span class="op">)</span> <span class="co"># Disable Google sign-in requirement</span></span>
-<span></span>
-<span><span class="co"># Download expression matrix (GSE253260 bulk expression)</span></span>
-<span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_download.html" class="external-link">drive_download</a></span><span class="op">(</span></span>
-<span>  <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_id.html" class="external-link">as_id</a></span><span class="op">(</span><span class="st">"1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"</span><span class="op">)</span>,</span>
-<span>  path <span class="op">=</span> <span class="va">expr_path_253260</span>,</span>
-<span>  overwrite <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## File downloaded:</span></span></code></pre>
-<pre><code><span><span class="co">## • <span style="color: #00BBBB;">GSE253260_expression.rds</span> <span style="color: #555555;">&lt;id: 1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R&gt;</span></span></span></code></pre>
-<pre><code><span><span class="co">## Saved locally as:</span></span></code></pre>
-<pre><code><span><span class="co">## • <span style="color: #0000BB;">./GSE253260_expression.rds</span></span></span></code></pre>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Download optional phenotype/info RDS (not required for scoring in this section)</span></span>
-<span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_download.html" class="external-link">drive_download</a></span><span class="op">(</span></span>
-<span>  <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_id.html" class="external-link">as_id</a></span><span class="op">(</span><span class="st">"1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"</span><span class="op">)</span>,</span>
-<span>  path <span class="op">=</span> <span class="va">info_path_253260</span>,</span>
-<span>  overwrite <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## File downloaded:</span></span></code></pre>
-<pre><code><span><span class="co">## • <span style="color: #00BBBB;">GSE253260_info.rds</span> <span style="color: #555555;">&lt;id: 1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f&gt;</span></span></span></code></pre>
-<pre><code><span><span class="co">## Saved locally as:</span></span></code></pre>
-<pre><code><span><span class="co">## • <span style="color: #0000BB;">./GSE253260_info.rds</span></span></span></code></pre>
-<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">bulk_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="va">expr_path_253260</span><span class="op">)</span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">is.matrix</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">is.data.frame</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"GSE253260 object must be a matrix or data.frame with genes in rows"</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">is.data.frame</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span><span class="op">)</span> <span class="va">bulk_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Ensure expression is genes × samples (rows = genes, cols = samples)</span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">bulk_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Transposed GSE253260 expression to genes × samples."</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-<pre><code><span><span class="co">## Transposed GSE253260 expression to genes × samples.</span></span></code></pre>
-<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"GSE253260 expression: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span>, <span class="st">" genes × "</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span>, <span class="st">" samples"</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## GSE253260 expression: 28858 genes × 317 samples</span></span></code></pre>
-<div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Score samples with PRECOG primary pancreatic signature</span></span>
-<span><span class="va">scores_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
-<span>  expression <span class="op">=</span> <span class="va">bulk_253260</span>,</span>
-<span>  reference <span class="op">=</span> <span class="st">"precog"</span>,</span>
-<span>  cancer_type <span class="op">=</span> <span class="st">"Pancreatic"</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
-<pre><code><span><span class="co">## 7418 genes used for scoring against PancreaticCalculating scores...</span></span>
-<span><span class="co">## Completed scoring for Pancreatic</span></span></code></pre>
-<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">score_col_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"Pancreatic$"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_253260</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">score_col_253260</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="../reference/plot_score_distribution.html">plot_score_distribution</a></span><span class="op">(</span></span>
-<span>    <span class="va">scores_253260</span>,</span>
-<span>    score_column <span class="op">=</span> <span class="va">score_col_253260</span>,</span>
-<span>    main <span class="op">=</span> <span class="st">"GSE253260: PRECOG Pancreatic score"</span></span>
-<span>  <span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-<p><img src="gse205154-bulk-survival_files/figure-html/gse253260-precog-1.png" class="r-plt" alt="" width="672" style="display: block; margin: auto;"></p>
-<div class="section level3">
-<h3 id="survival-analysis-for-gse253260-median-score-split">Survival analysis for GSE253260 (median score split)<a class="anchor" aria-label="anchor" href="#survival-analysis-for-gse253260-median-score-split"></a>
-</h3>
-<div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">info_path_253260</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/therneau/survival" class="external-link">survival</a></span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rpkgs.datanovia.com/survminer/index.html" class="external-link">survminer</a></span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="va">info_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="va">info_path_253260</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="co"># Determine sample ID column by overlap with expression sample IDs</span></span>
-<span>  <span class="va">expr_ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">bulk_253260</span><span class="op">)</span></span>
-<span>  <span class="va">id_cols</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">info_253260</span><span class="op">)</span></span>
-<span>  <span class="va">overlaps</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span></span>
-<span>    <span class="va">id_cols</span>,</span>
-<span>    <span class="kw">function</span><span class="op">(</span><span class="va">col</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="va">vals</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">info_253260</span><span class="op">[[</span><span class="va">col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="va">expr_ids</span>, <span class="va">vals</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="op">}</span>,</span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">numeric</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">primary_ok</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="op">{</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"googledrive"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"googledrive not available"</span><span class="op">)</span></span>
+<span>  <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_deauth.html" class="external-link">drive_deauth</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_download.html" class="external-link">drive_download</a></span><span class="op">(</span></span>
+<span>    <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_id.html" class="external-link">as_id</a></span><span class="op">(</span><span class="st">"1ZBiFtZDTBKSpbLCgw6z_-qDF7WF2Sam5"</span><span class="op">)</span>,</span>
+<span>    path <span class="op">=</span> <span class="va">gse_rds_path</span>,</span>
+<span>    overwrite <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span>  <span class="op">)</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/all.html" class="external-link">all</a></span><span class="op">(</span><span class="va">overlaps</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"No column in GSE253260 info RDS matches expression sample IDs; skipping KM plot."</span><span class="op">)</span></span>
-<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>    <span class="va">id_col</span> <span class="op">&lt;-</span> <span class="va">id_cols</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html" class="external-link">which.max</a></span><span class="op">(</span><span class="va">overlaps</span><span class="op">)</span><span class="op">]</span></span>
-<span>    <span class="va">keep_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="va">expr_ids</span>, <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">info_253260</span><span class="op">[[</span><span class="va">id_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">keep_253260</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"No overlapping samples between GSE253260 expression and info; skipping KM plot."</span><span class="op">)</span></span>
-<span>    <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>      <span class="va">dat_253260</span> <span class="op">&lt;-</span> <span class="va">info_253260</span><span class="op">[</span><span class="va">info_253260</span><span class="op">[[</span><span class="va">id_col</span><span class="op">]</span><span class="op">]</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">keep_253260</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>      <span class="va">dat_253260</span> <span class="op">&lt;-</span> <span class="va">dat_253260</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">keep_253260</span>, <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">[[</span><span class="va">id_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">keep_253260</span></span>
-<span></span>
-<span>      <span class="co"># Use OS_Days and OS_Censor for survival analysis</span></span>
-<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/all.html" class="external-link">all</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"OS_Days"</span>, <span class="st">"OS_Censor"</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"GSE253260 info RDS lacks 'OS_Days'/'OS_Censor'; skipping KM plot."</span><span class="op">)</span></span>
-<span>      <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>        <span class="va">dat_253260</span><span class="op">$</span><span class="va">survival_time</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">$</span><span class="va">OS_Days</span><span class="op">)</span></span>
-<span>        <span class="va">dat_253260</span><span class="op">$</span><span class="va">survival_event</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">$</span><span class="va">OS_Censor</span><span class="op">)</span></span>
-<span>        <span class="va">dat_253260</span> <span class="op">&lt;-</span> <span class="va">dat_253260</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">$</span><span class="va">survival_time</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">$</span><span class="va">survival_event</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span></span>
-<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">10</span><span class="op">)</span> <span class="op">{</span></span>
-<span>          <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Fewer than 10 samples with survival information; skipping KM plot."</span><span class="op">)</span></span>
-<span>        <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>          <span class="va">score_col_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"Pancreatic$"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_253260</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span>          <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">score_col_253260</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>            <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"No Pancreatic score column found for GSE253260; skipping KM plot."</span><span class="op">)</span></span>
-<span>          <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>            <span class="va">dat_253260</span><span class="op">$</span><span class="va">score_pancreatic</span> <span class="op">&lt;-</span> <span class="va">scores_253260</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">)</span>, <span class="va">score_col_253260</span><span class="op">]</span></span>
-<span></span>
-<span>            <span class="va">dat_253260</span><span class="op">$</span><span class="va">score_grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span></span>
-<span>              <span class="va">dat_253260</span><span class="op">$</span><span class="va">score_pancreatic</span> <span class="op">&gt;=</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">$</span><span class="va">score_pancreatic</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
-<span>              <span class="st">"High"</span>, <span class="st">"Low"</span></span>
-<span>            <span class="op">)</span></span>
-<span></span>
-<span>            <span class="va">fit_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">score_grp</span>, data <span class="op">=</span> <span class="va">dat_253260</span><span class="op">)</span></span>
-<span>            <span class="va">lr_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survdiff.html" class="external-link">survdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">score_grp</span>, data <span class="op">=</span> <span class="va">dat_253260</span><span class="op">)</span></span>
-<span>            <span class="va">pval_253260</span> <span class="op">&lt;-</span> <span class="fl">1</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Chisquare.html" class="external-link">pchisq</a></span><span class="op">(</span><span class="va">lr_253260</span><span class="op">$</span><span class="va">chisq</span>, <span class="fl">1</span><span class="op">)</span></span>
-<span>            <span class="va">cox_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">survival_time</span>, <span class="va">survival_event</span><span class="op">)</span> <span class="op">~</span> <span class="va">score_grp</span>, data <span class="op">=</span> <span class="va">dat_253260</span><span class="op">)</span></span>
-<span>            <span class="va">hr_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">cox_253260</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span>            <span class="va">ci_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">cox_253260</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span>            <span class="va">label_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span></span>
-<span>              <span class="st">"p = %s\nHR = %.2f (95%% CI: %.2f-%.2f)"</span>,</span>
-<span>              <span class="fu"><a href="https://rdrr.io/r/base/format.pval.html" class="external-link">format.pval</a></span><span class="op">(</span><span class="va">pval_253260</span>, digits <span class="op">=</span> <span class="fl">2</span>, eps <span class="op">=</span> <span class="fl">0.001</span><span class="op">)</span>,</span>
-<span>              <span class="va">hr_253260</span>,</span>
-<span>              <span class="va">ci_253260</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>,</span>
-<span>              <span class="va">ci_253260</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span></span>
-<span>            <span class="op">)</span></span>
-<span>            <span class="va">max_time_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">dat_253260</span><span class="op">$</span><span class="va">survival_time</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span></span>
-<span>            <span class="va">pal_km_253260</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#B2182B"</span>, <span class="st">"#2166AC"</span><span class="op">)</span>  <span class="co"># High (adverse), Low (favorable)</span></span>
-<span>            <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survminer/man/ggsurvplot.html" class="external-link">ggsurvplot</a></span><span class="op">(</span></span>
-<span>              <span class="va">fit_253260</span>,</span>
-<span>              data <span class="op">=</span> <span class="va">dat_253260</span>,</span>
-<span>              palette <span class="op">=</span> <span class="va">pal_km_253260</span>,</span>
-<span>              risk.table <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>              title <span class="op">=</span> <span class="st">"GSE253260: survival by PRECOG Pancreatic score (median split)"</span>,</span>
-<span>              xlab <span class="op">=</span> <span class="st">"Time (days)"</span>, ylab <span class="op">=</span> <span class="st">"Survival probability"</span>,</span>
-<span>              legend.title <span class="op">=</span> <span class="st">"Score group"</span>,</span>
-<span>              legend.labs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"High"</span>, <span class="st">"Low"</span><span class="op">)</span>,</span>
-<span>              legend <span class="op">=</span> <span class="st">"right"</span>,</span>
-<span>              pval <span class="op">=</span> <span class="va">label_253260</span>,</span>
-<span>              pval.coord <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">max_time_253260</span> <span class="op">*</span> <span class="fl">0.5</span>, <span class="fl">0.95</span><span class="op">)</span>,</span>
-<span>              pval.size <span class="op">=</span> <span class="fl">3.5</span></span>
-<span>            <span class="op">)</span><span class="op">)</span></span>
-<span>          <span class="op">}</span></span>
-<span>        <span class="op">}</span></span>
+<span>  <span class="va">gset</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="va">gse_rds_path</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">is.list</a></span><span class="op">(</span><span class="va">gset</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">gset</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/class.html" class="external-link">inherits</a></span><span class="op">(</span><span class="va">gset</span>, <span class="st">"ExpressionSet"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">gset</span> <span class="op">&lt;-</span> <span class="va">gset</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/class.html" class="external-link">inherits</a></span><span class="op">(</span><span class="va">gset</span>, <span class="st">"ExpressionSet"</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"RDS is not an ExpressionSet"</span><span class="op">)</span></span>
+<span>  <span class="va">expr</span> <span class="op">&lt;-</span> <span class="fu">Biobase</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Biobase/man/exprs.html" class="external-link">exprs</a></span><span class="op">(</span><span class="va">gset</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">is.matrix</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span><span class="op">)</span> <span class="op">!=</span> <span class="fl">2</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"exprs(gset) not a matrix"</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">expr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Transposed GSE253260 expression to genes × samples."</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">fd</span> <span class="op">&lt;-</span> <span class="fu">Biobase</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Biobase/man/featureData.html" class="external-link">fData</a></span><span class="op">(</span><span class="va">gset</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">fd</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">fd</span><span class="op">)</span> <span class="op">==</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">sym_col</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"symbol|SYMBOL|Gene.symbol"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">fd</span><span class="op">)</span>, ignore.case <span class="op">=</span> <span class="cn">TRUE</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">sym_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">symbols</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">fd</span><span class="op">[[</span><span class="va">sym_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"HGNChelper"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">checked</span> <span class="op">&lt;-</span> <span class="fu">HGNChelper</span><span class="fu">::</span><span class="fu"><a href="https://waldronlab.io/HGNChelper/reference/checkGeneSymbols.html" class="external-link">checkGeneSymbols</a></span><span class="op">(</span><span class="va">symbols</span>, unmapped.as.na <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="st">"Suggested.Symbol"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">checked</span><span class="op">)</span><span class="op">)</span> <span class="va">symbols</span> <span class="op">&lt;-</span> <span class="va">checked</span><span class="op">$</span><span class="va">Suggested.Symbol</span></span>
+<span>      <span class="op">}</span></span>
+<span>      <span class="va">symbols</span><span class="op">[</span><span class="va">symbols</span> <span class="op">==</span> <span class="st">""</span> <span class="op">|</span> <span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">symbols</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">symbols</span><span class="op">)</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">keep</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">symbols</span><span class="op">)</span></span>
+<span>        <span class="va">expr</span> <span class="op">&lt;-</span> <span class="va">expr</span><span class="op">[</span><span class="va">keep</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>        <span class="va">symbols</span> <span class="op">&lt;-</span> <span class="va">symbols</span><span class="op">[</span><span class="va">keep</span><span class="op">]</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/make.unique.html" class="external-link">make.unique</a></span><span class="op">(</span><span class="va">symbols</span><span class="op">)</span></span>
 <span>      <span class="op">}</span></span>
 <span>    <span class="op">}</span></span>
 <span>  <span class="op">}</span></span>
-<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"GSE253260 info RDS not found at "</span>, <span class="va">info_path_253260</span>, <span class="st">"; skipping KM plot."</span><span class="op">)</span></span>
+<span>  <span class="va">expr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span></span>
+<span>  <span class="va">expr</span><span class="op">[</span><span class="va">expr</span> <span class="op">&lt;</span> <span class="fl">0</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>  <span class="va">expr_tpm</span> <span class="op">&lt;&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">expr</span>, <span class="fl">2</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">denom</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">x</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="va">denom</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="va">x</span> <span class="kw">else</span> <span class="fl">1e6</span> <span class="op">*</span> <span class="va">x</span> <span class="op">/</span> <span class="va">denom</span></span>
+<span>  <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span><span class="op">}</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Primary (Drive RDS) failed: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="cn">FALSE</span></span>
+<span><span class="op">}</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## File downloaded:</span></span></code></pre>
+<pre><code><span><span class="co">## • <span style="color: #00BBBB;">GSE253260.rds</span> <span style="color: #555555;">&lt;id: 1ZBiFtZDTBKSpbLCgw6z_-qDF7WF2Sam5&gt;</span></span></span></code></pre>
+<pre><code><span><span class="co">## Saved locally as:</span></span></code></pre>
+<pre><code><span><span class="co">## • <span style="color: #0000BB;">./GSE253260.rds</span></span></span></code></pre>
+<pre><code><span><span class="co">## Loading required namespace: Biobase</span></span></code></pre>
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># ---- Fallback: GEO metadata + raw counts URL ----</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">primary_ok</span> <span class="op">&amp;&amp;</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Downloading GEO metadata for: "</span>, <span class="va">study</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"GEOquery"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">geo_ok</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="op">{</span></span>
+<span>      <span class="va">geo_data</span> <span class="op">&lt;-</span> <span class="fu">GEOquery</span><span class="fu">::</span><span class="fu"><a href="http://seandavi.github.io/GEOquery/reference/getGEO.html" class="external-link">getGEO</a></span><span class="op">(</span>GEO <span class="op">=</span> <span class="va">study</span>, GSEMatrix <span class="op">=</span> <span class="cn">TRUE</span>, getGPL <span class="op">=</span> <span class="cn">TRUE</span>, AnnotGPL <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">geo_data</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">gset</span> <span class="op">&lt;&lt;-</span> <span class="va">geo_data</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
+<span>      <span class="op">}</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">geo_data</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span>    <span class="op">}</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"getGEO failed: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="cn">FALSE</span></span>
+<span>    <span class="op">}</span><span class="op">)</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="va">geo_ok</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">}</span></span>
+<span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="va">geo_ok</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"data.table"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"org.Hs.eg.db"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">counts_url</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span>
+<span>      <span class="st">"https://www.ncbi.nlm.nih.gov/geo/download/?format=file&amp;type=rnaseq_counts"</span>,</span>
+<span>      <span class="st">"&amp;acc="</span>, <span class="va">study</span>,</span>
+<span>      <span class="st">"&amp;file="</span>, <span class="va">study</span>, <span class="st">"_raw_counts_GRCh38.p13_NCBI.tsv.gz"</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Attempting to download expression matrix from: "</span>, <span class="va">counts_url</span><span class="op">)</span></span>
+<span>    <span class="va">count_ok</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="op">{</span></span>
+<span>      <span class="va">expression</span> <span class="op">&lt;-</span> <span class="fu">data.table</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html" class="external-link">fread</a></span><span class="op">(</span><span class="va">counts_url</span>, header <span class="op">=</span> <span class="cn">TRUE</span>, colClasses <span class="op">=</span> <span class="st">"integer"</span><span class="op">)</span></span>
+<span>      <span class="va">expression</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">expression</span>, rownames <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="st">"org.Hs.eg.db"</span>, character.only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="va">gene_symbols</span> <span class="op">&lt;-</span> <span class="fu">AnnotationDbi</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/AnnotationDbi/man/AnnotationDb-class.html" class="external-link">mapIds</a></span><span class="op">(</span></span>
+<span>        <span class="va">org.Hs.eg.db</span>,</span>
+<span>        keys <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">expression</span><span class="op">)</span>,</span>
+<span>        column <span class="op">=</span> <span class="st">"SYMBOL"</span>,</span>
+<span>        keytype <span class="op">=</span> <span class="st">"ENTREZID"</span>,</span>
+<span>        multiVals <span class="op">=</span> <span class="st">"first"</span></span>
+<span>      <span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">expression</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">gene_symbols</span></span>
+<span>      <span class="va">expression</span> <span class="op">&lt;-</span> <span class="va">expression</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">expression</span><span class="op">)</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>      <span class="va">expression</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">expression</span><span class="op">)</span></span>
+<span>      <span class="va">expression</span><span class="op">[</span><span class="va">expression</span> <span class="op">&lt;</span> <span class="fl">0</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>      <span class="va">expr_tpm</span> <span class="op">&lt;&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">expression</span>, <span class="fl">2</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">denom</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">x</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="va">denom</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="va">x</span> <span class="kw">else</span> <span class="fl">1e6</span> <span class="op">*</span> <span class="va">x</span> <span class="op">/</span> <span class="va">denom</span></span>
+<span>      <span class="op">}</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span>    <span class="op">}</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Raw counts download/processing failed: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="cn">FALSE</span></span>
+<span>    <span class="op">}</span><span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="va">count_ok</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"GSE253260 expression loaded from GEO raw counts (fallback)."</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<p><img src="gse205154-bulk-survival_files/figure-html/gse253260-survival-1.png" class="r-plt" alt="" width="672" style="display: block; margin: auto;"></p>
-</div>
+<pre><code><span><span class="co">## Downloading GEO metadata for: GSE253260</span></span></code></pre>
+<pre><code><span><span class="co">## Setting options('download.file.method.GEOquery'='auto')</span></span></code></pre>
+<pre><code><span><span class="co">## Setting options('GEOquery.inmemory.gpl'=FALSE)</span></span></code></pre>
+<pre><code><span><span class="co">## Found 1 file(s)</span></span></code></pre>
+<pre><code><span><span class="co">## GSE253260_series_matrix.txt.gz</span></span></code></pre>
+<pre><code><span><span class="co">## Annotation GPL not available, so will use submitter GPL instead</span></span></code></pre>
+<pre><code><span><span class="co">## </span></span></code></pre>
+<pre><code><span><span class="co">## Attempting to download expression matrix from: https://www.ncbi.nlm.nih.gov/geo/download/?format=file&amp;type=rnaseq_counts&amp;acc=GSE253260&amp;file=GSE253260_raw_counts_GRCh38.p13_NCBI.tsv.gz</span></span></code></pre>
+<pre><code><span><span class="co">## 'select()' returned 1:1 mapping between keys and columns</span></span></code></pre>
+<pre><code><span><span class="co">## GSE253260 expression loaded from GEO raw counts (fallback).</span></span></code></pre>
+<div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"Could not load GSE253260 expression (Drive RDS and GEO raw counts both failed or unavailable)."</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">gset</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span><span class="st">"GSE253260 clinical metadata (gset) not available; need Drive RDS or successful getGEO."</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"GSE253260 TPM matrix: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span>, <span class="st">" genes × "</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span>, <span class="st">" samples"</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## GSE253260 TPM matrix: 37674 genes × 317 samples</span></span></code></pre>
+<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pheno</span> <span class="op">&lt;-</span> <span class="fu">Biobase</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/Biobase/man/phenoData.html" class="external-link">pData</a></span><span class="op">(</span><span class="va">gset</span><span class="op">)</span></span>
+<span><span class="va">pheno</span><span class="op">$</span><span class="va">geo_accession</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">pick_col</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">df</span>, <span class="va">patterns</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">cols</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">df</span><span class="op">)</span></span>
+<span>  <span class="va">hit</span> <span class="op">&lt;-</span> <span class="va">cols</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/outer.html" class="external-link">outer</a></span><span class="op">(</span><span class="va">patterns</span>, <span class="va">cols</span>, <span class="fu"><a href="https://rdrr.io/r/base/Vectorize.html" class="external-link">Vectorize</a></span><span class="op">(</span><span class="va">grepl</span>, SIMPLIFY <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span>, ignore.case <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>                    <span class="fl">2</span>, <span class="va">any</span><span class="op">)</span><span class="op">]</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">hit</span><span class="op">)</span><span class="op">)</span> <span class="va">hit</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="kw">else</span> <span class="cn">NA_character_</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">id_col</span>   <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sample"</span>, <span class="st">"patient"</span>, <span class="st">"id"</span>, <span class="st">"accession"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb36"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">age_col</span>  <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb38"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sex_col</span>  <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sex"</span>, <span class="st">"gender"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb40"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">os_t_col</span> <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"os_days"</span>, <span class="st">"os.time"</span>, <span class="st">"os"</span>, <span class="st">"overall.survival"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb42"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">os_e_col</span> <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"os_censor"</span>, <span class="st">"os_event"</span>, <span class="st">"os.status"</span>, <span class="st">"os_event"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb44"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pfs_t_col</span> <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pfs_days"</span>, <span class="st">"pfs.time"</span>, <span class="st">"pfs"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb46"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pfs_e_col</span> <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pfs_censor"</span>, <span class="st">"pfs_event"</span>, <span class="st">"pfs.status"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb48"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">stage_col</span> <span class="op">&lt;-</span> <span class="fu">pick_col</span><span class="op">(</span><span class="va">pheno</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"stage"</span>, <span class="st">"disease"</span>, <span class="st">"resectable"</span>, <span class="st">"borderline"</span>, <span class="st">"locally"</span>, <span class="st">"meta"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span>
+<span><span class="co">## Warning in FUN(newX[, i], ...): coercing argument of type 'list' to logical</span></span></code></pre>
+<div class="sourceCode" id="cb50"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sample_id</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">id_col</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">[[</span><span class="va">id_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="kw">else</span> <span class="va">pheno</span><span class="op">$</span><span class="va">geo_accession</span></span>
+<span></span>
+<span><span class="va">clin</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  geo_accession <span class="op">=</span> <span class="va">pheno</span><span class="op">$</span><span class="va">geo_accession</span>,</span>
+<span>  sample_id     <span class="op">=</span> <span class="va">sample_id</span>,</span>
+<span>  age           <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">age_col</span><span class="op">)</span><span class="op">)</span> <span class="va">pheno</span><span class="op">[[</span><span class="va">age_col</span><span class="op">]</span><span class="op">]</span> <span class="kw">else</span> <span class="cn">NA</span>,</span>
+<span>  sex           <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">sex_col</span><span class="op">)</span><span class="op">)</span> <span class="va">pheno</span><span class="op">[[</span><span class="va">sex_col</span><span class="op">]</span><span class="op">]</span> <span class="kw">else</span> <span class="cn">NA</span>,</span>
+<span>  OS_Days       <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">os_t_col</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">[[</span><span class="va">os_t_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="kw">else</span> <span class="cn">NA_real_</span>,</span>
+<span>  OS_Censor     <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">os_e_col</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">[[</span><span class="va">os_e_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="kw">else</span> <span class="cn">NA_integer_</span>,</span>
+<span>  PFS_Days      <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">pfs_t_col</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">[[</span><span class="va">pfs_t_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="kw">else</span> <span class="cn">NA_real_</span>,</span>
+<span>  PFS_Censor    <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">pfs_e_col</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">[[</span><span class="va">pfs_e_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="kw">else</span> <span class="cn">NA_integer_</span>,</span>
+<span>  stage_raw     <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">stage_col</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">pheno</span><span class="op">[[</span><span class="va">stage_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="kw">else</span> <span class="cn">NA_character_</span>,</span>
+<span>  stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">stage_map</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">x_low</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/chartr.html" class="external-link">tolower</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
+<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/case-and-replace-when.html" class="external-link">case_when</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"meta"</span>, <span class="va">x_low</span><span class="op">)</span> <span class="op">~</span> <span class="st">"Metastatic"</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"loc"</span>, <span class="va">x_low</span><span class="op">)</span>  <span class="op">~</span> <span class="st">"Locally Advanced"</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"border"</span>, <span class="va">x_low</span><span class="op">)</span> <span class="op">~</span> <span class="st">"Borderline"</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"res"</span>, <span class="va">x_low</span><span class="op">)</span>  <span class="op">~</span> <span class="st">"Resectable"</span>,</span>
+<span>    <span class="cn">TRUE</span> <span class="op">~</span> <span class="cn">NA_character_</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">clin</span><span class="op">$</span><span class="va">stage_group</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu">stage_map</span><span class="op">(</span><span class="va">clin</span><span class="op">$</span><span class="va">stage_raw</span><span class="op">)</span>,</span>
+<span>                           levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Resectable"</span>, <span class="st">"Borderline"</span>, <span class="st">"Locally Advanced"</span>, <span class="st">"Metastatic"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">common_samples</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">expr_tpm</span><span class="op">)</span>, <span class="va">clin</span><span class="op">$</span><span class="va">sample_id</span><span class="op">)</span></span>
+<span><span class="va">clin</span> <span class="op">&lt;-</span> <span class="va">clin</span><span class="op">[</span><span class="va">clin</span><span class="op">$</span><span class="va">sample_id</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">common_samples</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span><span class="va">clin</span> <span class="op">&lt;-</span> <span class="va">clin</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">common_samples</span>, <span class="va">clin</span><span class="op">$</span><span class="va">sample_id</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">clin</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">clin</span><span class="op">$</span><span class="va">sample_id</span></span>
+<span><span class="va">expr_tpm</span> <span class="op">&lt;-</span> <span class="va">expr_tpm</span><span class="op">[</span>, <span class="va">common_samples</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span></code></pre></div>
+<div class="sourceCode" id="cb51"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/therneau/survival" class="external-link">survival</a></span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rpkgs.datanovia.com/survminer/index.html" class="external-link">survminer</a></span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">dat_os</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">clin</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">OS_Days</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">OS_Censor</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">stage_group</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat_os</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">10</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">fit_os</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">OS_Days</span>, <span class="va">OS_Censor</span><span class="op">)</span> <span class="op">~</span> <span class="va">stage_group</span>, data <span class="op">=</span> <span class="va">dat_os</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/survminer/man/ggsurvplot.html" class="external-link">ggsurvplot</a></span><span class="op">(</span></span>
+<span>    <span class="va">fit_os</span>,</span>
+<span>    data <span class="op">=</span> <span class="va">dat_os</span>,</span>
+<span>    title <span class="op">=</span> <span class="st">"GSE253260: Overall survival by disease stage"</span>,</span>
+<span>    xlab <span class="op">=</span> <span class="st">"Time (days)"</span>,</span>
+<span>    ylab <span class="op">=</span> <span class="st">"Survival probability"</span>,</span>
+<span>    legend.title <span class="op">=</span> <span class="st">"Stage"</span>,</span>
+<span>    risk.table <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">dat_pfs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">clin</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">PFS_Days</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">PFS_Censor</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">stage_group</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat_pfs</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">10</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">fit_pfs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">PFS_Days</span>, <span class="va">PFS_Censor</span><span class="op">)</span> <span class="op">~</span> <span class="va">stage_group</span>, data <span class="op">=</span> <span class="va">dat_pfs</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/survminer/man/ggsurvplot.html" class="external-link">ggsurvplot</a></span><span class="op">(</span></span>
+<span>    <span class="va">fit_pfs</span>,</span>
+<span>    data <span class="op">=</span> <span class="va">dat_pfs</span>,</span>
+<span>    title <span class="op">=</span> <span class="st">"GSE253260: Progression-free survival by disease stage"</span>,</span>
+<span>    xlab <span class="op">=</span> <span class="st">"Time (days)"</span>,</span>
+<span>    ylab <span class="op">=</span> <span class="st">"PFS probability"</span>,</span>
+<span>    legend.title <span class="op">=</span> <span class="st">"Stage"</span>,</span>
+<span>    risk.table <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb52"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://brooksbenard.github.io/PhenoMapR">PhenoMapR</a></span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">non_met_idx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">clin</span><span class="op">$</span><span class="va">stage_group</span> <span class="op">!=</span> <span class="st">"Metastatic"</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">clin</span><span class="op">$</span><span class="va">stage_group</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">met_idx</span>     <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">clin</span><span class="op">$</span><span class="va">stage_group</span> <span class="op">==</span> <span class="st">"Metastatic"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">scores_nonmet</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="va">scores_met</span>    <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">non_met_idx</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">expr_nonmet</span> <span class="op">&lt;-</span> <span class="va">expr_tpm</span><span class="op">[</span>, <span class="va">non_met_idx</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>  <span class="va">scores_nonmet</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
+<span>    expression  <span class="op">=</span> <span class="va">expr_nonmet</span>,</span>
+<span>    reference   <span class="op">=</span> <span class="st">"precog"</span>,</span>
+<span>    cancer_type <span class="op">=</span> <span class="st">"Pancreatic"</span>,</span>
+<span>    verbose     <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
+<pre><code><span><span class="co">## 7426 genes used for scoring against PancreaticCalculating scores...</span></span>
+<span><span class="co">## Completed scoring for Pancreatic</span></span></code></pre>
+<div class="sourceCode" id="cb55"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">met_idx</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">expr_met</span> <span class="op">&lt;-</span> <span class="va">expr_tpm</span><span class="op">[</span>, <span class="va">met_idx</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>  <span class="va">scores_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
+<span>    expression  <span class="op">=</span> <span class="va">expr_met</span>,</span>
+<span>    reference   <span class="op">=</span> <span class="st">"precog"</span>,</span>
+<span>    cancer_type <span class="op">=</span> <span class="st">"Pancreatic_Metastasis"</span>,</span>
+<span>    verbose     <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
+<pre><code><span><span class="co">## 3007 genes used for scoring against Pancreatic_MetastasisCalculating scores...</span></span>
+<span><span class="co">## Completed scoring for Pancreatic_Metastasis</span></span></code></pre>
+<div class="sourceCode" id="cb58"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">clin</span><span class="op">$</span><span class="va">score_Pancreatic</span> <span class="op">&lt;-</span> <span class="cn">NA_real_</span></span>
+<span><span class="va">clin</span><span class="op">$</span><span class="va">score_Pancreatic_Met</span> <span class="op">&lt;-</span> <span class="cn">NA_real_</span></span>
+<span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">scores_nonmet</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">col_pan</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"Pancreatic$"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_nonmet</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">col_pan</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">clin</span><span class="op">$</span><span class="va">score_Pancreatic</span><span class="op">[</span><span class="va">non_met_idx</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">scores_nonmet</span><span class="op">[</span>, <span class="va">col_pan</span><span class="op">]</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">scores_met</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">col_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"Pancreatic_Metastasis"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_met</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">col_met</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">clin</span><span class="op">$</span><span class="va">score_Pancreatic_Met</span><span class="op">[</span><span class="va">met_idx</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">scores_met</span><span class="op">[</span>, <span class="va">col_met</span><span class="op">]</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb59"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dat_nonmet</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">clin</span>, <span class="va">stage_group</span> <span class="op">!=</span> <span class="st">"Metastatic"</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">stage_group</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">score_Pancreatic</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat_nonmet</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">dat_nonmet</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">stage_group</span>, y <span class="op">=</span> <span class="va">score_Pancreatic</span>, fill <span class="op">=</span> <span class="va">stage_group</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_violin.html" class="external-link">geom_violin</a></span><span class="op">(</span>trim <span class="op">=</span> <span class="cn">FALSE</span>, alpha <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_boxplot.html" class="external-link">geom_boxplot</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.2</span>, outlier.size <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span></span>
+<span>      title <span class="op">=</span> <span class="st">"GSE253260: PRECOG Pancreatic score by disease stage (non-metastatic)"</span>,</span>
+<span>      x <span class="op">=</span> <span class="st">"Stage"</span>, y <span class="op">=</span> <span class="st">"PhenoMapR score"</span></span>
+<span>    <span class="op">)</span> <span class="op">+</span></span>
+<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p><img src="gse205154-bulk-survival_files/figure-html/gse253260-nonmet-plots-1.png" class="r-plt" alt="" width="672" style="display: block; margin: auto;"></p>
+<div class="sourceCode" id="cb60"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dat_nonmet_os</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">dat_nonmet</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">OS_Days</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">OS_Censor</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat_nonmet_os</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">10</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">median_cut</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="va">dat_nonmet_os</span><span class="op">$</span><span class="va">score_Pancreatic</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">dat_nonmet_os</span><span class="op">$</span><span class="va">score_grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">dat_nonmet_os</span><span class="op">$</span><span class="va">score_Pancreatic</span> <span class="op">&gt;=</span> <span class="va">median_cut</span>, <span class="st">"High"</span>, <span class="st">"Low"</span><span class="op">)</span></span>
+<span></span>
+<span>  <span class="va">fit_nonmet</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">OS_Days</span>, <span class="va">OS_Censor</span><span class="op">)</span> <span class="op">~</span> <span class="va">score_grp</span>, data <span class="op">=</span> <span class="va">dat_nonmet_os</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/survminer/man/ggsurvplot.html" class="external-link">ggsurvplot</a></span><span class="op">(</span></span>
+<span>    <span class="va">fit_nonmet</span>,</span>
+<span>    data <span class="op">=</span> <span class="va">dat_nonmet_os</span>,</span>
+<span>    title <span class="op">=</span> <span class="st">"GSE253260 (non-metastatic): OS by PRECOG Pancreatic score (median split)"</span>,</span>
+<span>    xlab <span class="op">=</span> <span class="st">"Time (days)"</span>, ylab <span class="op">=</span> <span class="st">"Survival probability"</span>,</span>
+<span>    legend.title <span class="op">=</span> <span class="st">"Score group"</span>, legend.labs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"High"</span>, <span class="st">"Low"</span><span class="op">)</span>,</span>
+<span>    risk.table <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb61"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dat_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">clin</span>, <span class="va">stage_group</span> <span class="op">==</span> <span class="st">"Metastatic"</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">score_Pancreatic_Met</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">dat_met_os</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/subset.html" class="external-link">subset</a></span><span class="op">(</span><span class="va">dat_met</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">OS_Days</span><span class="op">)</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">OS_Censor</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat_met_os</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">10</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">median_cut_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/median.html" class="external-link">median</a></span><span class="op">(</span><span class="va">dat_met_os</span><span class="op">$</span><span class="va">score_Pancreatic_Met</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">dat_met_os</span><span class="op">$</span><span class="va">score_grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">dat_met_os</span><span class="op">$</span><span class="va">score_Pancreatic_Met</span> <span class="op">&gt;=</span> <span class="va">median_cut_met</span>, <span class="st">"High"</span>, <span class="st">"Low"</span><span class="op">)</span></span>
+<span></span>
+<span>  <span class="va">fit_met</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">OS_Days</span>, <span class="va">OS_Censor</span><span class="op">)</span> <span class="op">~</span> <span class="va">score_grp</span>, data <span class="op">=</span> <span class="va">dat_met_os</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/survminer/man/ggsurvplot.html" class="external-link">ggsurvplot</a></span><span class="op">(</span></span>
+<span>    <span class="va">fit_met</span>,</span>
+<span>    data <span class="op">=</span> <span class="va">dat_met_os</span>,</span>
+<span>    title <span class="op">=</span> <span class="st">"GSE253260 (metastatic): OS by PRECOG Pancreatic_Metastasis score (median split)"</span>,</span>
+<span>    xlab <span class="op">=</span> <span class="st">"Time (days)"</span>, ylab <span class="op">=</span> <span class="st">"Survival probability"</span>,</span>
+<span>    legend.title <span class="op">=</span> <span class="st">"Score group"</span>, legend.labs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"High"</span>, <span class="st">"Low"</span><span class="op">)</span>,</span>
+<span>    risk.table <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="summary">7. Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
@@ -538,7 +1236,7 @@ Research</em> (2025). <a href="https://precog.stanford.edu/" class="external-lin
 <div class="section level2">
 <h2 id="session-info">Session Info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h2>
-<div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb62"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## R version 4.5.3 (2026-03-11)</span></span>
 <span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
@@ -558,29 +1256,64 @@ Research</em> (2025). <a href="https://precog.stanford.edu/" class="external-lin
 <span><span class="co">## tzcode source: system (glibc)</span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## attached base packages:</span></span>
-<span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
+<span><span class="co">## [1] stats4    stats     graphics  grDevices utils     datasets  methods  </span></span>
+<span><span class="co">## [8] base     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## other attached packages:</span></span>
-<span><span class="co">## [1] survminer_0.5.2 ggpubr_0.6.3    survival_3.8-6  ggplot2_4.0.2  </span></span>
-<span><span class="co">## [5] PhenoMapR_0.1.0</span></span>
+<span><span class="co">##  [1] org.Hs.eg.db_3.22.0  AnnotationDbi_1.72.0 IRanges_2.44.0      </span></span>
+<span><span class="co">##  [4] S4Vectors_0.48.0     Biobase_2.70.0       BiocGenerics_0.56.0 </span></span>
+<span><span class="co">##  [7] generics_0.1.4       survminer_0.5.2      ggpubr_0.6.3        </span></span>
+<span><span class="co">## [10] survival_3.8-6       ggplot2_4.0.2        PhenoMapR_0.1.0     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
-<span><span class="co">##  [1] sass_0.4.10        generics_0.1.4     tidyr_1.3.2        rstatix_0.7.3     </span></span>
-<span><span class="co">##  [5] lattice_0.22-9     digest_0.6.39      magrittr_2.0.4     evaluate_1.0.5    </span></span>
-<span><span class="co">##  [9] grid_4.5.3         RColorBrewer_1.1-3 fastmap_1.2.0      jsonlite_2.0.0    </span></span>
-<span><span class="co">## [13] Matrix_1.7-4       backports_1.5.0    Formula_1.2-5      googledrive_2.1.2 </span></span>
-<span><span class="co">## [17] gridExtra_2.3      httr_1.4.8         purrr_1.2.1        scales_1.4.0      </span></span>
-<span><span class="co">## [21] textshaping_1.0.5  jquerylib_0.1.4    abind_1.4-8        cli_3.6.5         </span></span>
-<span><span class="co">## [25] rlang_1.1.7        splines_4.5.3      withr_3.0.2        cachem_1.1.0      </span></span>
-<span><span class="co">## [29] yaml_2.3.12        otel_0.2.0         tools_4.5.3        gargle_1.6.1      </span></span>
-<span><span class="co">## [33] ggsignif_0.6.4     dplyr_1.2.0        curl_7.0.0         broom_1.0.12      </span></span>
-<span><span class="co">## [37] vctrs_0.7.1        R6_2.6.1           lifecycle_1.0.5    fs_1.6.7          </span></span>
-<span><span class="co">## [41] car_3.1-5          htmlwidgets_1.6.4  ragg_1.5.1         pkgconfig_2.0.3   </span></span>
-<span><span class="co">## [45] desc_1.4.3         pkgdown_2.2.0      pillar_1.11.1      bslib_0.10.0      </span></span>
-<span><span class="co">## [49] gtable_0.3.6       glue_1.8.0         systemfonts_1.3.2  xfun_0.56         </span></span>
-<span><span class="co">## [53] tibble_3.3.1       tidyselect_1.2.1   knitr_1.51         farver_2.1.2      </span></span>
-<span><span class="co">## [57] htmltools_0.5.9    carData_3.0-6      rmarkdown_2.30     labeling_0.4.3    </span></span>
-<span><span class="co">## [61] compiler_4.5.3     S7_0.2.1</span></span></code></pre>
+<span><span class="co">##  [1] DBI_1.3.0                   gridExtra_2.3              </span></span>
+<span><span class="co">##  [3] httr2_1.2.2                 rlang_1.1.7                </span></span>
+<span><span class="co">##  [5] magrittr_2.0.4              otel_0.2.0                 </span></span>
+<span><span class="co">##  [7] matrixStats_1.5.0           compiler_4.5.3             </span></span>
+<span><span class="co">##  [9] RSQLite_2.4.6               png_0.1-8                  </span></span>
+<span><span class="co">## [11] systemfonts_1.3.2           vctrs_0.7.1                </span></span>
+<span><span class="co">## [13] crayon_1.5.3                pkgconfig_2.0.3            </span></span>
+<span><span class="co">## [15] fastmap_1.2.0               backports_1.5.0            </span></span>
+<span><span class="co">## [17] XVector_0.50.0              labeling_0.4.3             </span></span>
+<span><span class="co">## [19] rmarkdown_2.30              tzdb_0.5.0                 </span></span>
+<span><span class="co">## [21] ragg_1.5.1                  bit_4.6.0                  </span></span>
+<span><span class="co">## [23] purrr_1.2.1                 xfun_0.56                  </span></span>
+<span><span class="co">## [25] cachem_1.1.0                jsonlite_2.0.0             </span></span>
+<span><span class="co">## [27] blob_1.3.0                  DelayedArray_0.36.0        </span></span>
+<span><span class="co">## [29] broom_1.0.12                R6_2.6.1                   </span></span>
+<span><span class="co">## [31] bslib_0.10.0                RColorBrewer_1.1-3         </span></span>
+<span><span class="co">## [33] limma_3.66.0                car_3.1-5                  </span></span>
+<span><span class="co">## [35] GenomicRanges_1.62.1        jquerylib_0.1.4            </span></span>
+<span><span class="co">## [37] Seqinfo_1.0.0               SummarizedExperiment_1.40.0</span></span>
+<span><span class="co">## [39] knitr_1.51                  R.utils_2.13.0             </span></span>
+<span><span class="co">## [41] readr_2.2.0                 rentrez_1.2.4              </span></span>
+<span><span class="co">## [43] Matrix_1.7-4                splines_4.5.3              </span></span>
+<span><span class="co">## [45] tidyselect_1.2.1            abind_1.4-8                </span></span>
+<span><span class="co">## [47] yaml_2.3.12                 curl_7.0.0                 </span></span>
+<span><span class="co">## [49] lattice_0.22-9              tibble_3.3.1               </span></span>
+<span><span class="co">## [51] KEGGREST_1.50.0             withr_3.0.2                </span></span>
+<span><span class="co">## [53] S7_0.2.1                    evaluate_1.0.5             </span></span>
+<span><span class="co">## [55] desc_1.4.3                  xml2_1.5.2                 </span></span>
+<span><span class="co">## [57] Biostrings_2.78.0           pillar_1.11.1              </span></span>
+<span><span class="co">## [59] MatrixGenerics_1.22.0       carData_3.0-6              </span></span>
+<span><span class="co">## [61] hms_1.1.4                   scales_1.4.0               </span></span>
+<span><span class="co">## [63] glue_1.8.0                  tools_4.5.3                </span></span>
+<span><span class="co">## [65] data.table_1.18.2.1         ggsignif_0.6.4             </span></span>
+<span><span class="co">## [67] GEOquery_2.78.0             fs_1.6.7                   </span></span>
+<span><span class="co">## [69] XML_3.99-0.22               grid_4.5.3                 </span></span>
+<span><span class="co">## [71] tidyr_1.3.2                 googledrive_2.1.2          </span></span>
+<span><span class="co">## [73] Formula_1.2-5               cli_3.6.5                  </span></span>
+<span><span class="co">## [75] rappdirs_0.3.4              textshaping_1.0.5          </span></span>
+<span><span class="co">## [77] gargle_1.6.1                S4Arrays_1.10.1            </span></span>
+<span><span class="co">## [79] dplyr_1.2.0                 gtable_0.3.6               </span></span>
+<span><span class="co">## [81] R.methodsS3_1.8.2           rstatix_0.7.3              </span></span>
+<span><span class="co">## [83] sass_0.4.10                 digest_0.6.39              </span></span>
+<span><span class="co">## [85] SparseArray_1.10.9          htmlwidgets_1.6.4          </span></span>
+<span><span class="co">## [87] farver_2.1.2                memoise_2.0.1              </span></span>
+<span><span class="co">## [89] htmltools_0.5.9             pkgdown_2.2.0              </span></span>
+<span><span class="co">## [91] R.oo_1.27.1                 lifecycle_1.0.5            </span></span>
+<span><span class="co">## [93] httr_1.4.8                  statmod_1.5.1              </span></span>
+<span><span class="co">## [95] bit64_4.6.0-1</span></span></code></pre>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

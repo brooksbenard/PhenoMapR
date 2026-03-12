@@ -94,7 +94,7 @@ if (!has_data) {
 }
 ```
 
-    ## [Load GSE111672] Runtime: 0.42 s | Memory: 24.1 Mb
+    ## [Load GSE111672] Runtime: 0.41 s | Memory: 24.1 Mb
 
     ## Genes: 1500 | Cells: 6122 | Samples: 3
 
@@ -234,7 +234,7 @@ if (!is.na(group_col)) {
 report_timing("Marker analysis GSE111672", t0)
 ```
 
-    ## [Marker analysis GSE111672] Runtime: 1.04 s | Memory: -
+    ## [Marker analysis GSE111672] Runtime: 1.14 s | Memory: -
 
 ### Marker heatmap
 
@@ -340,7 +340,7 @@ if (requireNamespace("pheatmap", quietly = TRUE)) {
 report_timing("Heatmap GSE111672", t0)
 ```
 
-    ## [Heatmap GSE111672] Runtime: 2.12 s | Memory: -
+    ## [Heatmap GSE111672] Runtime: 2.22 s | Memory: -
 
 ### Proportion by sample and cell type
 
@@ -391,7 +391,7 @@ if (nrow(meta_plot) > 0) {
 report_timing("Proportion plot GSE111672", t0)
 ```
 
-    ## [Proportion plot GSE111672] Runtime: 3.13 s | Memory: -
+    ## [Proportion plot GSE111672] Runtime: 3.20 s | Memory: -
 
 ------------------------------------------------------------------------
 
@@ -461,7 +461,7 @@ if (!is.null(seurat2)) {
 
     ## Added 1 score column(s) to Seurat metadata
 
-    ## [Score CRA001160] Runtime: 0.74 s | Memory: 349.2 Mb
+    ## [Score CRA001160] Runtime: 0.75 s | Memory: 349.2 Mb
 
 ### Score by cell type (CRA001160)
 
@@ -500,7 +500,7 @@ report_timing("Cell type plot CRA001160", t0)
 
 ![](gse111672-single-cell_files/figure-html/score-by-celltype-cra001160-1.png)
 
-    ## [Cell type plot CRA001160] Runtime: 0.44 s | Memory: -
+    ## [Cell type plot CRA001160] Runtime: 0.39 s | Memory: -
 
 ### Prognostic markers (CRA001160)
 
@@ -536,7 +536,7 @@ report_timing("Marker analysis CRA001160", t0)
 
     ## Subsampled Other from 51697 to 5000 cells (memory limit)
 
-    ## [Marker analysis CRA001160] Runtime: 2.46 s | Memory: -
+    ## [Marker analysis CRA001160] Runtime: 2.29 s | Memory: -
 
 ### Marker heatmap (CRA001160)
 
@@ -639,7 +639,7 @@ report_timing("Heatmap CRA001160", t0)
 
 ![](gse111672-single-cell_files/figure-html/heatmap-markers-cra001160-1.png)
 
-    ## [Heatmap CRA001160] Runtime: 6.85 s | Memory: -
+    ## [Heatmap CRA001160] Runtime: 6.71 s | Memory: -
 
 ### Proportion by sample and cell type (CRA001160)
 
@@ -689,7 +689,7 @@ report_timing("Proportion plot CRA001160", t0)
 
 ![](gse111672-single-cell_files/figure-html/proportion-by-sample-celltype-cra001160-1.png)
 
-    ## [Proportion plot CRA001160] Runtime: 0.25 s | Memory: -
+    ## [Proportion plot CRA001160] Runtime: 0.23 s | Memory: -
 
 ------------------------------------------------------------------------
 
@@ -748,45 +748,45 @@ sessionInfo()
     ## [5] PhenoMapR_0.1.0   
     ## 
     ## loaded via a namespace (and not attached):
-    ##   [1] deldir_2.0-4           pbapply_1.7-4          gridExtra_2.3         
-    ##   [4] rematch2_2.1.2         rlang_1.1.7            magrittr_2.0.4        
-    ##   [7] RcppAnnoy_0.0.23       otel_0.2.0             spatstat.geom_3.7-0   
-    ##  [10] matrixStats_1.5.0      ggridges_0.5.7         compiler_4.5.3        
-    ##  [13] png_0.1-8              systemfonts_1.3.2      vctrs_0.7.1           
-    ##  [16] reshape2_1.4.5         stringr_1.6.0          pkgconfig_2.0.3       
-    ##  [19] fastmap_1.2.0          labeling_0.4.3         promises_1.5.0        
-    ##  [22] rmarkdown_2.30         ragg_1.5.1             fastSave_0.1.0        
-    ##  [25] purrr_1.2.1            xfun_0.56              cachem_1.1.0          
-    ##  [28] jsonlite_2.0.0         goftest_1.2-3          later_1.4.8           
-    ##  [31] spatstat.utils_3.2-2   irlba_2.3.7            parallel_4.5.3        
-    ##  [34] cluster_2.1.8.2        R6_2.6.1               ica_1.0-3             
-    ##  [37] spatstat.data_3.1-9    bslib_0.10.0           stringi_1.8.7         
-    ##  [40] RColorBrewer_1.1-3     reticulate_1.45.0      spatstat.univar_3.1-6 
-    ##  [43] parallelly_1.46.1      lmtest_0.9-40          jquerylib_0.1.4       
-    ##  [46] scattermore_1.2        Rcpp_1.1.1             knitr_1.51            
-    ##  [49] tensor_1.5.1           future.apply_1.20.2    zoo_1.8-15            
-    ##  [52] sctransform_0.4.3      httpuv_1.6.16          Matrix_1.7-4          
-    ##  [55] splines_4.5.3          igraph_2.2.2           tidyselect_1.2.1      
-    ##  [58] abind_1.4-8            yaml_2.3.12            spatstat.random_3.4-4 
-    ##  [61] spatstat.explore_3.7-0 codetools_0.2-20       miniUI_0.1.2          
-    ##  [64] listenv_0.10.1         lattice_0.22-9         tibble_3.3.1          
-    ##  [67] plyr_1.8.9             withr_3.0.2            shiny_1.13.0          
-    ##  [70] S7_0.2.1               ROCR_1.0-12            evaluate_1.0.5        
-    ##  [73] Rtsne_0.17             future_1.69.0          fastDummies_1.7.5     
-    ##  [76] desc_1.4.3             survival_3.8-6         polyclip_1.10-7       
-    ##  [79] fitdistrplus_1.2-6     pillar_1.11.1          KernSmooth_2.23-26    
-    ##  [82] plotly_4.12.0          generics_0.1.4         RcppHNSW_0.6.0        
-    ##  [85] paletteer_1.7.0        scales_1.4.0           globals_0.19.0        
-    ##  [88] xtable_1.8-8           glue_1.8.0             pheatmap_1.0.13       
-    ##  [91] lazyeval_0.2.2         tools_4.5.3            data.table_1.18.2.1   
-    ##  [94] RSpectra_0.16-2        RANN_2.6.2             fs_1.6.7              
-    ##  [97] dotCall64_1.2          cowplot_1.2.0          grid_4.5.3            
-    ## [100] tidyr_1.3.2            nlme_3.1-168           patchwork_1.3.2       
-    ## [103] presto_1.0.0           cli_3.6.5              spatstat.sparse_3.1-0 
-    ## [106] textshaping_1.0.5      spam_2.11-3            viridisLite_0.4.3     
-    ## [109] dplyr_1.2.0            uwot_0.2.4             gtable_0.3.6          
-    ## [112] sass_0.4.10            digest_0.6.39          prismatic_1.1.2       
-    ## [115] progressr_0.18.0       ggrepel_0.9.7          htmlwidgets_1.6.4     
-    ## [118] farver_2.1.2           htmltools_0.5.9        pkgdown_2.2.0         
-    ## [121] lifecycle_1.0.5        httr_1.4.8             mime_0.13             
-    ## [124] MASS_7.3-65
+    ##   [1] RColorBrewer_1.1-3     jsonlite_2.0.0         magrittr_2.0.4        
+    ##   [4] spatstat.utils_3.2-2   farver_2.1.2           rmarkdown_2.30        
+    ##   [7] fs_1.6.7               ragg_1.5.1             vctrs_0.7.1           
+    ##  [10] ROCR_1.0-12            spatstat.explore_3.7-0 paletteer_1.7.0       
+    ##  [13] htmltools_0.5.9        sass_0.4.10            sctransform_0.4.3     
+    ##  [16] parallelly_1.46.1      KernSmooth_2.23-26     bslib_0.10.0          
+    ##  [19] htmlwidgets_1.6.4      desc_1.4.3             ica_1.0-3             
+    ##  [22] plyr_1.8.9             plotly_4.12.0          zoo_1.8-15            
+    ##  [25] cachem_1.1.0           igraph_2.2.2           mime_0.13             
+    ##  [28] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-4          
+    ##  [31] R6_2.6.1               fastmap_1.2.0          fitdistrplus_1.2-6    
+    ##  [34] future_1.69.0          shiny_1.13.0           digest_0.6.39         
+    ##  [37] rematch2_2.1.2         patchwork_1.3.2        tensor_1.5.1          
+    ##  [40] prismatic_1.1.2        RSpectra_0.16-2        irlba_2.3.7           
+    ##  [43] textshaping_1.0.5      labeling_0.4.3         progressr_0.18.0      
+    ##  [46] spatstat.sparse_3.1-0  httr_1.4.8             polyclip_1.10-7       
+    ##  [49] abind_1.4-8            compiler_4.5.3         withr_3.0.2           
+    ##  [52] S7_0.2.1               fastSave_0.1.0         fastDummies_1.7.5     
+    ##  [55] MASS_7.3-65            tools_4.5.3            lmtest_0.9-40         
+    ##  [58] otel_0.2.0             httpuv_1.6.16          future.apply_1.20.2   
+    ##  [61] goftest_1.2-3          glue_1.8.0             nlme_3.1-168          
+    ##  [64] promises_1.5.0         grid_4.5.3             Rtsne_0.17            
+    ##  [67] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        
+    ##  [70] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           
+    ##  [73] data.table_1.18.2.1    spatstat.geom_3.7-0    RcppAnnoy_0.0.23      
+    ##  [76] ggrepel_0.9.7          RANN_2.6.2             pillar_1.11.1         
+    ##  [79] stringr_1.6.0          spam_2.11-3            RcppHNSW_0.6.0        
+    ##  [82] limma_3.66.0           later_1.4.8            splines_4.5.3         
+    ##  [85] dplyr_1.2.0            lattice_0.22-9         survival_3.8-6        
+    ##  [88] deldir_2.0-4           tidyselect_1.2.1       miniUI_0.1.2          
+    ##  [91] pbapply_1.7-4          knitr_1.51             gridExtra_2.3         
+    ##  [94] scattermore_1.2        xfun_0.56              statmod_1.5.1         
+    ##  [97] matrixStats_1.5.0      pheatmap_1.0.13        stringi_1.8.7         
+    ## [100] lazyeval_0.2.2         yaml_2.3.12            evaluate_1.0.5        
+    ## [103] codetools_0.2-20       tibble_3.3.1           cli_3.6.5             
+    ## [106] uwot_0.2.4             xtable_1.8-8           reticulate_1.45.0     
+    ## [109] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.1            
+    ## [112] globals_0.19.0         spatstat.random_3.4-4  png_0.1-8             
+    ## [115] spatstat.univar_3.1-6  parallel_4.5.3         pkgdown_2.2.0         
+    ## [118] presto_1.0.0           dotCall64_1.2          listenv_0.10.1        
+    ## [121] viridisLite_0.4.3      scales_1.4.0           ggridges_0.5.7        
+    ## [124] purrr_1.2.1            rlang_1.1.7            cowplot_1.2.0
