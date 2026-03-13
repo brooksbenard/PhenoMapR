@@ -402,7 +402,7 @@ if (nrow(meta_plot) > 0) {
     labs(x = "Sample", y = "Cell type", title = "By cell type and sample (CRA001160)")
 
   if (requireNamespace("patchwork", quietly = TRUE)) {
-    print(p_bar / p_dots + plot_layout(heights = c(1, 2))
+    print(p_bar / p_dots + plot_layout(heights = c(1, 2)))
   } else {
     print(p_bar)
     print(p_dots)
