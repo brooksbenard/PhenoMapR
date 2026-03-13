@@ -41,13 +41,13 @@ navbar:
     - text: Vignettes
       menu:
       - text: Single-cell example
-        href: articles/gse111672-single-cell.html
+        href: articles/single-cell.html
       - text: Spatial transcriptomics
         href: articles/spatial-transcriptomics.html
       - text: Bulk survival analysis
-        href: articles/gse205154-bulk-survival.html
+        href: articles/bulk-survival.html
       - text: Custom reference
-        href: articles/gse205154-custom-reference.html
+        href: articles/custom-reference.html
     - text: R functions
       href: reference/index.html
 
@@ -64,10 +64,10 @@ articles:
   - title: Vignettes
     desc: Tutorials and worked examples with PhenoMapR.
     contents:
-      - gse111672-single-cell
+      - single-cell
       - spatial-transcriptomics
-      - gse205154-bulk-survival
-      - gse205154-custom-reference
+      - bulk-survival
+      - custom-reference
 
 reference:
 - title: Prognostic scoring

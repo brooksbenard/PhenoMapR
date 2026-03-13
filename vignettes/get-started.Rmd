@@ -192,10 +192,10 @@ Detailed walkthroughs for the main uses of PhenoMapR (on the [pkgdown site](http
 
 | Vignette | Description |
 |----------|-------------|
-| **[Score Single-cell data](gse111672-single-cell.html)** | Score PAAD single cells with PRECOG **Pancreatic** using the included `PAAD_GSE111672_seurat.rds`; cell type score distributions and prognostic group marker analysis. Data: [GEO GSE111672](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE111672). |
+| **[Score Single-cell data](single-cell.html)** | Score PAAD single cells (CRA001160) with **TCGA** and **PRECOG** Pancreatic references; scatterplot and boxplots by cell type; prognostic markers and proportion by sample. Data: expression H5 + CellMetainfo from Drive. |
 | **[Score Spatial transcriptomics data](spatial-transcriptomics.html)** | Score spatial transcriptomics spots with PRECOG **Pancreatic**; score distributions, prognostic groups, and spatial maps of score and group on the tissue image. |
-| **[Score bulk expression samples](gse205154-bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data: [GEO GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154). |
-| **[Generate and use a custom reference signature](gse205154-custom-reference.html)** | Build a custom gene z-score reference from GSE205154 expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
+| **[Score bulk expression samples](bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data from Drive. |
+| **[Generate and use a custom reference signature](custom-reference.html)** | Build a custom gene z-score reference from bulk expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
 
 <!-- **Vignette data:** The article datasets are hosted on [Google Drive](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (too large for the repo). When you run or knit an article, missing files are downloaded automatically if the **googledrive** package is installed (e.g. `install.packages("PhenoMapR", dependencies = TRUE)`). You can also [download the files manually](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) into `vignettes/` and run from the package root. See `vignettes/README.md` in the repo for all options. -->
 

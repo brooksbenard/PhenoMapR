@@ -133,15 +133,20 @@ compute_scores <- function(expression_data,
     warning("Fewer than 50 overlapping genes between expression_data and prognostic_scores")
   }
   
-  # Use a consistent, explicit ordering
+  # Use a consistent, explicit ordering so row i of expression_data and
+  # element i of prognostic_scores always refer to the same gene (cross product is correct).
   common_genes <- sort(common_genes)
   expression_data <- expression_data[common_genes, , drop = FALSE]
   prognostic_scores <- prognostic_scores[common_genes]
-  
+  stopifnot(
+    identical(rownames(expression_data), names(prognostic_scores)),
+    identical(rownames(expression_data), common_genes)
+  )
+
   # For non-pseudobulk or when matrix is small, use vectorized crossprod
   if (!pseudobulk || ncol(expression_data) < 100) {
-    
-    # Convert to dense matrix if sparse
+
+    # crossprod(prognostic_scores, expression_data): (1 x n_genes) %*% (n_genes x n_cells) = (1 x n_cells)
     if (inherits(expression_data, "sparseMatrix")) {
       raw_sum <- as.numeric(
         Matrix::crossprod(prognostic_scores, expression_data)
