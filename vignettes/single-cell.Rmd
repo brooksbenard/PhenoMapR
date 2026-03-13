@@ -181,19 +181,38 @@ if (!is.null(celltype_original_col) && celltype_original_col %in% names(meta)) {
 
 In both TCGA and PRECOG results, we see that the Ductal cell type 2 is the most significantly associated cell type with an adverse prognostic signature in PAAD. This agrees with the results from SIDISH [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2), where they find over 55% of their high-risk cells were Ductal cell type 2. 
 
-## Cell type represntation in the most pehnotypically associated populations
+## Cell type representation in the most phenotypically associated populations
 
-```{r}
-# plot of cell type count in the top and bottom 5th percent of cells in the dataset.
+Cell type counts in the top 5% (Most Adverse) and bottom 5% (Most Favorable) of cells by PRECOG score.
 
-# Somethign like
-ggplot(BroadClassificationFish, aes(x = Net)) +
-  geom_col(data = subset(BroadClassificationFish, DayNight == "Day"), 
-           aes(y = Average, fill = 'Day')) +
-  geom_col(data = subset(BroadClassificationFish, DayNight == "Night"), 
-           aes(y = -Average, fill = 'Night')) + coord_flip() +
-  scale_y_continuous(breaks = seq(-20,20, by = 4),
-                     labels = (c(seq(20, 0, by = -4), seq(4,20,by=4))))
+```{r celltype-in-extreme-percentiles}
+q_lo <- quantile(meta[[score_precog_col]], 0.05, na.rm = TRUE)
+q_hi <- quantile(meta[[score_precog_col]], 0.95, na.rm = TRUE)
+pg_tmp <- ifelse(meta[[score_precog_col]] >= q_hi, "Most Adverse", ifelse(meta[[score_precog_col]] <= q_lo, "Most Favorable", NA))
+idx_extreme <- !is.na(pg_tmp)
+ct_in_extreme <- meta[idx_extreme, ]
+ct_in_extreme$pg <- pg_tmp[idx_extreme]
+ct_counts <- as.data.frame(table(Cell_type = ct_in_extreme[[celltype_col]], pg = ct_in_extreme$pg))
+ct_wide <- reshape(ct_counts, idvar = "Cell_type", timevar = "pg", direction = "wide")
+names(ct_wide) <- gsub("Freq\\.", "", names(ct_wide))
+for (c in c("Most Adverse", "Most Favorable")) {
+  if (!c %in% names(ct_wide)) ct_wide[[c]] <- 0
+}
+ct_wide$Cell_type <- factor(ct_wide$Cell_type, levels = ct_wide$Cell_type[order(ct_wide$`Most Adverse`, decreasing = TRUE)])
+ct_long <- rbind(
+  data.frame(Cell_type = ct_wide$Cell_type, pg = "Most Favorable", n = -ct_wide$`Most Favorable`),
+  data.frame(Cell_type = ct_wide$Cell_type, pg = "Most Adverse", n = ct_wide$`Most Adverse`)
+)
+ct_long$pg <- factor(ct_long$pg, levels = c("Most Favorable", "Most Adverse"))
+max_n <- max(abs(ct_long$n), 1)
+ggplot(ct_long, aes(x = Cell_type, y = n, fill = pg)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
+  scale_y_continuous(breaks = seq(-max_n, max_n, length.out = 5), labels = abs(seq(-max_n, max_n, length.out = 5))) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 9), legend.position = "right") +
+  labs(x = "Cell type", y = "Cell count (5th %ile)", title = "CRA001160: Cell type in adverse vs favorable extremes")
 ```
 
 ## Prognostic groups and marker genes
