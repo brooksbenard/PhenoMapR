@@ -24,6 +24,7 @@ Imports:
     progress
 Suggests:
     googledrive,
+    hdf5r,
     GEOquery,
     data.table,
     org.Hs.eg.db,
