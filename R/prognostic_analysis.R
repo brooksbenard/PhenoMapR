@@ -81,12 +81,15 @@ define_prognostic_groups <- function(scores,
 
 #' Find Unique Marker Genes for Adverse and Favorable Prognostic Groups
 #'
-#' Uses Seurat's \code{FindMarkers} to perform differential expression between
-#' the top (adverse) and bottom (favorable) prognostic groups versus the rest.
-#' Requires the Seurat package.
+#' Performs differential expression between the top (adverse) and bottom
+#' (favorable) prognostic groups versus the rest. For \code{Seurat} input,
+#' uses \code{Seurat::FindMarkers}. For matrix, \code{Matrix}, or
+#' \code{SingleCellExperiment} input, uses a Wilcoxon-based path (presto if
+#' available, else base R) and does not require Seurat.
 #'
-#' @param expression Expression matrix (genes x cells), a Seurat object, or a
-#'   SingleCellExperiment. Must match cells in \code{group_labels}.
+#' @param expression Expression matrix (genes x cells), a \code{Matrix}
+#'   (e.g. \code{dgCMatrix}), a Seurat object, or a SingleCellExperiment.
+#'   Must match cells in \code{group_labels}.
 #' @param group_labels Either a character vector of group labels
 #'   (\code{"Most Adverse"}, \code{"Most Favorable"}, \code{"Other"}) in the
 #'   same order as columns of \code{expression}, or a data.frame from
@@ -109,7 +112,7 @@ define_prognostic_groups <- function(scores,
 #' @param max_cells_per_ident When any prognostic group exceeds this many cells,
 #'   subsample to this limit before FindMarkers (default 5000). Reduces memory
 #'   for large objects. Set to \code{Inf} to disable.
-#' @param ... Additional arguments passed to \code{Seurat::FindMarkers}.
+#' @param ... Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).
 #'
 #' @return A list with:
 #'   \itemize{
@@ -149,9 +152,6 @@ find_prognostic_markers <- function(expression,
                                     verbose = TRUE,
                                     max_cells_per_ident = 5000L,
                                     ...) {
-  if (!requireNamespace("Seurat", quietly = TRUE)) {
-    stop("find_prognostic_markers() requires the Seurat package. Install with: install.packages('Seurat')")
-  }
   test.use <- match.arg(test.use)
 
   # Resolve expression and cell order
@@ -178,13 +178,33 @@ find_prognostic_markers <- function(expression,
   if (n_favorable < 5L) {
     warning("Fewer than 5 Most Favorable cells; marker results may be unreliable")
   }
+
+  # Non-Seurat path: matrix/Matrix/SCE — use internal Wilcoxon (or presto) without requiring Seurat
+  use_matrix_path <- !inherits(expression, "Seurat") || !requireNamespace("Seurat", quietly = TRUE)
+  if (use_matrix_path) {
+    if (verbose) {
+      message(glue::glue(
+        "Using matrix-based marker detection (no Seurat): Most Adverse n={n_adverse}, Most Favorable n={n_favorable}"
+      ))
+    }
+    out <- run_markers_on_matrix(
+      mat = expr_info$matrix,
+      group_vec = group_vec,
+      min.pct = min.pct,
+      logfc.threshold = logfc.threshold,
+      pval_threshold = pval_threshold,
+      max_cells_per_ident = max_cells_per_ident,
+      verbose = verbose
+    )
+    return(out)
+  }
+
+  # Seurat path
   if (verbose) {
     message(glue::glue(
       "Using Seurat FindMarkers: Most Adverse n={n_adverse}, Most Favorable n={n_favorable}"
     ))
   }
-
-  # Get or create Seurat object and add prognostic group
   seurat_obj <- get_or_create_seurat_for_markers(expression, expr_info, group_vec, assay, slot)
   meta_col <- "PhenoMapR_prognostic_group"
   Seurat::Idents(seurat_obj) <- seurat_obj[[meta_col]][, 1]
@@ -201,7 +221,6 @@ find_prognostic_markers <- function(expression,
     }
   }
 
-  # Subsample when any ident exceeds max_cells_per_ident (reduces memory for large objects)
   if (is.finite(max_cells_per_ident)) {
     idents <- as.character(Seurat::Idents(seurat_obj))
     cells_keep <- character(0)
@@ -226,7 +245,6 @@ find_prognostic_markers <- function(expression,
     )
   }
 
-  # Adverse vs rest
   gc(verbose = FALSE)
   assay_use <- assay %||% attr(seurat_obj, "PhenoMapR_assay") %||% "RNA"
   adverse_markers <- tryCatch(
@@ -251,7 +269,6 @@ find_prognostic_markers <- function(expression,
     }
   )
   gc(verbose = FALSE)
-  # Favorable vs rest
   favorable_markers <- tryCatch(
     Seurat::FindMarkers(
       seurat_obj,
@@ -274,12 +291,10 @@ find_prognostic_markers <- function(expression,
     }
   )
 
-  # Remove temporary metadata if we added it to the user's object
   if (inherits(expression, "Seurat") && meta_col %in% names(seurat_obj[[]])) {
     seurat_obj[[meta_col]] <- NULL
   }
 
-  # Standardize output columns to match documented format
   adverse_markers <- standardize_findmarkers_output(adverse_markers, pval_threshold)
   favorable_markers <- standardize_findmarkers_output(favorable_markers, pval_threshold)
 
@@ -326,6 +341,138 @@ standardize_findmarkers_output <- function(df, pval_threshold) {
 }
 
 
+#' Run marker detection on a matrix (no Seurat). Uses presto::wilcoxauc if available, else base Wilcoxon.
+#' @keywords internal
+run_markers_on_matrix <- function(mat,
+                                 group_vec,
+                                 min.pct = 0.1,
+                                 logfc.threshold = 0.25,
+                                 pval_threshold = 0.05,
+                                 max_cells_per_ident = 5000L,
+                                 verbose = TRUE) {
+  cell_ids <- colnames(mat)
+  if (is.null(cell_ids)) cell_ids <- paste0("Cell_", seq_len(ncol(mat)))
+  if (length(group_vec) != ncol(mat)) {
+    stop("Length of group_vec must match number of columns in expression matrix")
+  }
+  # Subsample per group
+  if (is.finite(max_cells_per_ident)) {
+    idx_keep <- integer(0)
+    for (grp in c("Most Adverse", "Most Favorable", "Other")) {
+      idx <- which(group_vec == grp)
+      if (length(idx) > max_cells_per_ident) {
+        idx <- idx[sample.int(length(idx), max_cells_per_ident)]
+        if (verbose) {
+          message(glue::glue("Subsampled {grp} from {sum(group_vec == grp)} to {max_cells_per_ident} cells (memory limit)"))
+        }
+      }
+      idx_keep <- c(idx_keep, idx)
+    }
+    mat <- mat[, idx_keep, drop = FALSE]
+    group_vec <- group_vec[idx_keep]
+  }
+  mat_dense <- as.matrix(mat)
+  genes <- rownames(mat_dense)
+  if (is.null(genes)) genes <- paste0("Gene_", seq_len(nrow(mat_dense)))
+
+  # Use presto if available (fast Wilcoxon). X = genes x cells, y = group labels
+  if (requireNamespace("presto", quietly = TRUE)) {
+    auc_out <- tryCatch(
+      presto::wilcoxauc(mat_dense, group_vec),
+      error = function(e) NULL
+    )
+    if (!is.null(auc_out) && nrow(auc_out) > 0) {
+      format_one_group <- function(ident) {
+        sub <- auc_out[auc_out$group == ident, , drop = FALSE]
+        if (nrow(sub) == 0) {
+          return(data.frame(
+            gene = character(0), avg_log2FC = numeric(0),
+            pct_in_group = numeric(0), pct_rest = numeric(0),
+            p_val = numeric(0), p_adj = numeric(0),
+            stringsAsFactors = FALSE
+          ))
+        }
+        sub$gene <- sub$feature
+        sub$avg_log2FC <- log2(exp(1)) * sub$logFC
+        sub$pct_in_group <- sub$pct_in
+        sub$pct_rest <- sub$pct_out
+        sub$p_val <- sub$pval
+        sub$p_adj <- sub$pval
+        if ("padj" %in% names(sub)) sub$p_adj <- sub$padj
+        sub <- sub[sub$p_val <= pval_threshold & abs(sub$avg_log2FC) >= logfc.threshold, , drop = FALSE]
+        sub <- sub[order(sub$p_val), , drop = FALSE]
+        sub[, c("gene", "avg_log2FC", "pct_in_group", "pct_rest", "p_val", "p_adj")]
+      }
+      adverse_markers <- format_one_group("Most Adverse")
+      favorable_markers <- format_one_group("Most Favorable")
+      return(list(adverse_markers = adverse_markers, favorable_markers = favorable_markers))
+    }
+  }
+
+  # Fallback: base R Wilcoxon per gene
+  adverse_idx <- group_vec == "Most Adverse"
+  favorable_idx <- group_vec == "Most Favorable"
+  rest_adverse <- !adverse_idx & !is.na(group_vec)
+  rest_favorable <- !favorable_idx & !is.na(group_vec)
+  n_adv <- sum(adverse_idx)
+  n_fav <- sum(favorable_idx)
+  if (n_adv < 2 || n_fav < 2) {
+    return(list(
+      adverse_markers = standardize_findmarkers_output(NULL, pval_threshold),
+      favorable_markers = standardize_findmarkers_output(NULL, pval_threshold)
+    ))
+  }
+  run_wilcox_one_vs_rest <- function(ident_label, is_in_group) {
+    in_grp <- mat_dense[, is_in_group, drop = FALSE]
+    out_grp <- mat_dense[, !is_in_group & !is.na(group_vec), drop = FALSE]
+    n_in <- ncol(in_grp)
+    n_out <- ncol(out_grp)
+    pct_in <- rowMeans(in_grp > 0, na.rm = TRUE)
+    pct_out <- rowMeans(out_grp > 0, na.rm = TRUE)
+    keep <- (pct_in >= min.pct | pct_out >= min.pct)
+    if (sum(keep) == 0) {
+      return(data.frame(
+        gene = character(0), avg_log2FC = numeric(0),
+        pct_in_group = numeric(0), pct_rest = numeric(0),
+        p_val = numeric(0), p_adj = numeric(0),
+        stringsAsFactors = FALSE
+      ))
+    }
+    genes_keep <- genes[keep]
+    pct_in <- pct_in[keep]
+    pct_out <- pct_out[keep]
+    in_grp <- in_grp[keep, , drop = FALSE]
+    out_grp <- out_grp[keep, , drop = FALSE]
+    p_vals <- numeric(length(genes_keep))
+    log2fc <- numeric(length(genes_keep))
+    for (i in seq_along(genes_keep)) {
+      x_in <- as.numeric(in_grp[i, ])
+      x_out <- as.numeric(out_grp[i, ])
+      wt <- tryCatch(stats::wilcox.test(x_in, x_out, alternative = "two.sided", exact = FALSE), error = function(e) NULL)
+      p_vals[i] <- if (!is.null(wt)) wt$p.value else NA_real_
+      m_in <- mean(x_in, na.rm = TRUE)
+      m_out <- mean(x_out, na.rm = TRUE)
+      log2fc[i] <- if (m_out > 0) log2((m_in + 1e-10) / (m_out + 1e-10)) else NA_real_
+    }
+    df <- data.frame(
+      gene = genes_keep,
+      avg_log2FC = log2fc,
+      pct_in_group = pct_in,
+      pct_rest = pct_out,
+      p_val = p_vals,
+      p_adj = p_vals,
+      stringsAsFactors = FALSE
+    )
+    df <- df[df$p_val <= pval_threshold & abs(df$avg_log2FC) >= logfc.threshold, , drop = FALSE]
+    df <- df[order(df$p_val), , drop = FALSE]
+    df
+  }
+  adverse_markers <- run_wilcox_one_vs_rest("Most Adverse", adverse_idx)
+  favorable_markers <- run_wilcox_one_vs_rest("Most Favorable", favorable_idx)
+  list(adverse_markers = adverse_markers, favorable_markers = favorable_markers)
+}
+
+
 #' Get existing Seurat object or create one from matrix/SCE; add prognostic group to metadata
 #' @keywords internal
 get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, assay, slot) {
@@ -363,6 +510,13 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
     if (is.data.frame(expression)) {
       expression <- as.matrix(expression)
     }
+    return(list(
+      matrix = expression,
+      cell_names = colnames(expression),
+      gene_names = rownames(expression)
+    ))
+  }
+  if (inherits(expression, "Matrix")) {
     return(list(
       matrix = expression,
       cell_names = colnames(expression),
@@ -419,7 +573,7 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
       gene_names = rownames(mat)
     ))
   }
-  stop("'expression' must be a matrix, data.frame, Seurat, or SingleCellExperiment")
+  stop("'expression' must be a matrix, Matrix, data.frame, Seurat, or SingleCellExperiment")
 }
 
 

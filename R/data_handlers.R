@@ -40,6 +40,10 @@ detect_input_type <- function(obj) {
   if (is.matrix(obj) || is.data.frame(obj)) {
     return("matrix")
   }
+  # Sparse matrices from Matrix package (e.g. dgCMatrix from Read10X_h5)
+  if (inherits(obj, "Matrix")) {
+    return("matrix")
+  }
 
   if (inherits(obj, "Seurat")) {
     # Check if it's spatial

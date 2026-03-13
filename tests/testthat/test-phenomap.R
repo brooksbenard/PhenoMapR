@@ -85,3 +85,22 @@ test_that("PhenoMap with matrix lacking colnames generates cell names and return
   expect_true(ncol(scores) >= 1)
 })
 
+test_that("PhenoMap accepts dgCMatrix (e.g. from Read10X_h5)", {
+  data(precog, package = "PhenoMapR", envir = environment())
+  genes <- rownames(precog)[seq_len(min(20, nrow(precog)))]
+  n_samp <- 4
+  # Sparse matrix with same structure as Read10X_h5 output
+  expr_dense <- matrix(
+    pmax(0, rnorm(length(genes) * n_samp)),
+    nrow = length(genes),
+    ncol = n_samp,
+    dimnames = list(genes, paste0("C", seq_len(n_samp)))
+  )
+  expr_sparse <- Matrix::Matrix(expr_dense, sparse = TRUE)
+  expect_s4_class(expr_sparse, "dgCMatrix")
+  scores <- PhenoMap(expression = expr_sparse, reference = "precog", cancer_type = "Breast", verbose = FALSE)
+  expect_s3_class(scores, "data.frame")
+  expect_equal(nrow(scores), n_samp)
+  expect_equal(rownames(scores), paste0("C", seq_len(n_samp)))
+})
+

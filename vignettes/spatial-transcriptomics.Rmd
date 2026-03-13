@@ -32,24 +32,21 @@ report_timing <- function(step_name, t0, obj = NULL) {
   message(sprintf("[%s] Runtime: %.2f s | Memory: %s", step_name, elapsed, mem_mb))
 }
 
-# Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
-spatial_subset <- system.file("extdata/vignette_subsets/HT270P1_processed_subset.rds", package = "PhenoMapR")
-use_subset <- nzchar(Sys.getenv("CI", "")) || nzchar(Sys.getenv("PKGDOWN_DEV_MODE", ""))
-rds_path <- if (use_subset && file.exists(spatial_subset)) spatial_subset else "vignettes/HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
-if (!file.exists(rds_path)) rds_path <- "Vignettes/HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
-if (!file.exists(rds_path)) rds_path <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
-if (!file.exists(rds_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
-  googledrive::drive_deauth()
-  googledrive::drive_download(googledrive::as_id("1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"), rds_path, overwrite = TRUE)
+# Vignette data: load from Google Drive only
+if (!requireNamespace("googledrive", quietly = TRUE)) {
+  stop("The 'googledrive' package is required. Install with: install.packages('googledrive')")
 }
-if (!file.exists(rds_path)) {
-  url <- Sys.getenv("PHENOMAPR_SPATIAL_RDS_URL", "")
-  if (nzchar(url)) tryCatch({ download.file(url, rds_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
-}
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
+if (!dir.exists(vignette_dir)) dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
+
+googledrive::drive_deauth()
+rds_path <- file.path(vignette_dir, "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds")
+googledrive::drive_download(googledrive::as_id("1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"), rds_path, overwrite = TRUE)
+
 has_data <- file.exists(rds_path)
 knitr::opts_chunk$set(eval = has_data)
 if (!has_data) {
-  message("HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds not found. See Vignettes/README.md for data instructions.")
+  message("Could not download spatial RDS from Google Drive.")
 } else {
   suppressMessages({
     seurat <- PhenoMapR::load_rds_fast(rds_path)

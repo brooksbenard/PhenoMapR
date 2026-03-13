@@ -23,34 +23,23 @@ Load the expression matrix and clinical info so we can score samples with PhenoM
 knitr::opts_chunk$set(fig.width = 6, fig.height = 6, fig.align = "center")
 suppressPackageStartupMessages(library(PhenoMapR))
 
-# Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
+# Vignette data: load from Google Drive only
+if (!requireNamespace("googledrive", quietly = TRUE)) {
+  stop("The 'googledrive' package is required. Install with: install.packages('googledrive')")
+}
 vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
-info_path <- file.path(vignette_dir, "GSE205154.info.txt")
+if (!dir.exists(vignette_dir)) dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
+
+googledrive::drive_deauth()
 matrix_path <- file.path(vignette_dir, "GSE205154.GPL20301.matrix.txt")
-if (!file.exists(info_path)) {
-  info_path <- "GSE205154.info.txt"
-  matrix_path <- "GSE205154.GPL20301.matrix.txt"
-}
-if (!file.exists(matrix_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
-  googledrive::drive_deauth()
-  googledrive::drive_download(googledrive::as_id("1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN"), matrix_path, overwrite = TRUE)
-}
-if (!file.exists(info_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
-  googledrive::drive_deauth()
-  googledrive::drive_download(googledrive::as_id("1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"), info_path, overwrite = TRUE)
-}
-if (!file.exists(matrix_path)) {
-  u <- Sys.getenv("PHENOMAPR_GSE205154_MATRIX_URL", "")
-  if (nzchar(u)) tryCatch({ download.file(u, matrix_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
-}
-if (!file.exists(info_path)) {
-  u <- Sys.getenv("PHENOMAPR_GSE205154_INFO_URL", "")
-  if (nzchar(u)) tryCatch({ download.file(u, info_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
-}
+info_path <- file.path(vignette_dir, "GSE205154.info.txt")
+googledrive::drive_download(googledrive::as_id("1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN"), matrix_path, overwrite = TRUE)
+googledrive::drive_download(googledrive::as_id("1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"), info_path, overwrite = TRUE)
+
 has_data <- file.exists(info_path) && file.exists(matrix_path)
 knitr::opts_chunk$set(eval = has_data)
 if (!has_data) {
-  message("GSE205154 data files not found. See Vignettes/README.md for download instructions.")
+  message("Could not download GSE205154 data files from Google Drive.")
 } else {
   # Clinical annotations: Array = sample ID, Tumor_Type = Primary/Met, OS_Time, OS_Status, Specimen_Site (when available)
   info <- read.delim(info_path, stringsAsFactors = FALSE, check.names = FALSE)

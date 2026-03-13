@@ -40,13 +40,13 @@ navbar:
       href: articles/get-started.html
     - text: Vignettes
       menu:
-      - text: Single-cell example (GSE111672)
+      - text: Single-cell example
         href: articles/gse111672-single-cell.html
       - text: Spatial transcriptomics
         href: articles/spatial-transcriptomics.html
-      - text: Bulk survival analysis (GSE205154)
+      - text: Bulk survival analysis
         href: articles/gse205154-bulk-survival.html
-      - text: Custom reference (GSE205154)
+      - text: Custom reference
         href: articles/gse205154-custom-reference.html
     - text: R functions
       href: reference/index.html

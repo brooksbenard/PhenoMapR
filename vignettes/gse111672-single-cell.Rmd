@@ -31,42 +31,29 @@ report_timing <- function(step_name, t0, obj = NULL) {
   message(sprintf("[%s] Runtime: %.2f s | Memory: %s", step_name, elapsed, mem_mb))
 }
 
-# Vignette data: local paths, then Google Drive (https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n)
-rds_subset <- system.file("extdata/vignette_subsets/PAAD_GSE111672_seurat_subset.rds", package = "PhenoMapR")
-use_subset <- nzchar(Sys.getenv("CI", "")) || nzchar(Sys.getenv("PKGDOWN_DEV_MODE", ""))
-rds_path <- if (use_subset && file.exists(rds_subset)) rds_subset else "vignettes/PAAD_GSE111672_seurat.rds"
-if (!file.exists(rds_path)) rds_path <- "Vignettes/PAAD_GSE111672_seurat.rds"
-if (!file.exists(rds_path)) rds_path <- "PAAD_GSE111672_seurat.rds"
-if (!file.exists(rds_path) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
-  googledrive::drive_deauth()
-  googledrive::drive_download(googledrive::as_id("1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"), rds_path, overwrite = TRUE)
+# Vignette data: load from Google Drive only
+if (!requireNamespace("googledrive", quietly = TRUE)) {
+  stop("The 'googledrive' package is required. Install with: install.packages('googledrive')")
 }
-if (!file.exists(rds_path)) {
-  url <- Sys.getenv("PHENOMAPR_GSE111672_RDS_URL", "")
-  if (nzchar(url)) tryCatch({ download.file(url, rds_path, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
-}
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
+if (!dir.exists(vignette_dir)) dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
+
+googledrive::drive_deauth()
+rds_path <- file.path(vignette_dir, "PAAD_GSE111672_seurat.rds")
+googledrive::drive_download(googledrive::as_id("1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c"), rds_path, overwrite = TRUE)
+
 has_data <- file.exists(rds_path)
 knitr::opts_chunk$set(eval = has_data)
 if (!has_data) {
-  message("PAAD_GSE111672_seurat.rds not found. See Vignettes/README.md for download instructions.")
+  message("Could not download PAAD_GSE111672_seurat.rds from Google Drive.")
 } else {
   t0 <- Sys.time()
   seurat <- PhenoMapR::load_rds_fast(rds_path)
   report_timing("Load GSE111672", t0, seurat)
 
   # Load CRA001160 early if available (for shared cell type palette alignment)
-  rds_subset2 <- system.file("extdata/vignette_subsets/PAAD_CRA001160_seurat_subset.rds", package = "PhenoMapR")
-  rds_path2 <- if (use_subset && file.exists(rds_subset2)) rds_subset2 else "vignettes/PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
-    googledrive::drive_deauth()
-    googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
-  }
-  if (!file.exists(rds_path2)) {
-    url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
-    if (nzchar(url2)) tryCatch({ download.file(url2, rds_path2, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
-  }
+  rds_path2 <- file.path(vignette_dir, "PAAD_CRA001160_seurat.rds")
+  googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
   if (file.exists(rds_path2)) {
     seurat2 <- PhenoMapR::load_rds_fast(rds_path2)
   } else {
@@ -326,17 +313,10 @@ report_timing("Proportion plot GSE111672", t0)
 
 ```{r load-cra001160}
 if (is.null(seurat2)) {
-  rds_path2 <- "vignettes/PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2)) rds_path2 <- "Vignettes/PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2)) rds_path2 <- "PAAD_CRA001160_seurat.rds"
-  if (!file.exists(rds_path2) && !nzchar(Sys.getenv("CI", "")) && requireNamespace("googledrive", quietly = TRUE)) {
-    googledrive::drive_deauth()
-    googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
-  }
-  if (!file.exists(rds_path2)) {
-    url2 <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", "")
-    if (nzchar(url2)) tryCatch({ download.file(url2, rds_path2, mode = "wb", quiet = TRUE) }, error = function(e) NULL)
-  }
+  vignette_dir2 <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
+  rds_path2 <- file.path(vignette_dir2, "PAAD_CRA001160_seurat.rds")
+  googledrive::drive_deauth()
+  googledrive::drive_download(googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"), rds_path2, overwrite = TRUE)
   if (file.exists(rds_path2)) {
     t0 <- Sys.time()
     seurat2 <- PhenoMapR::load_rds_fast(rds_path2)
