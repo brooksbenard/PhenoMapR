@@ -80,6 +80,17 @@ if (!has_data) {
   }
   if (is.null(celltype_col)) celltype_col <- names(meta)[2]
 
+  # Subsample cells for vignette runtime (avoid very large Seurat objects in CI/pkgdown)
+  max_cells <- 15000L
+  if (ncol(expr_mat) > max_cells) {
+    set.seed(1)
+    keep_cells <- sample(colnames(expr_mat), max_cells)
+    expr_mat <- expr_mat[, keep_cells, drop = FALSE]
+    meta <- meta[keep_cells, , drop = FALSE]
+    cell_ids <- colnames(expr_mat)
+    message(sprintf("Subsampled cells from %d to %d for vignette.", length(rownames(meta)), length(keep_cells)))
+  }
+
   # Build Seurat object; avoid double-normalization when data is already normalized (e.g. TISCH2)
   t0 <- Sys.time()
   already_norm <- PhenoMapR:::is_likely_normalized(expr_mat)
