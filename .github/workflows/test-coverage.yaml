@@ -27,6 +27,7 @@ jobs:
         with:
           extra-packages: any::covr
           dependency-type: "both"
+          pak-version: none
 
       - name: Run coverage and upload to Codecov
         run: covr::codecov(quiet = FALSE)

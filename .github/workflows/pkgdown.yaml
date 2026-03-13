@@ -29,6 +29,7 @@ jobs:
         with:
           extra-packages: any::remotes, any::pkgdown, local::.
           dependency-type: hard
+          pak-version: none
 
       - name: Ensure pkgdown >= 2.1.0
         run: |
