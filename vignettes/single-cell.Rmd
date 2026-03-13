@@ -101,6 +101,24 @@ We score each cell using both the **TCGA** (PAAD) and **PRECOG** (Pancreatic) me
 
 ```{r score-cells}
 t0 <- Sys.time()
+
+# Ensure the RNA data layer has gene names (required by PhenoMapR); if missing,
+# copy rownames from the counts layer.
+expr_data <- tryCatch(
+  Seurat::GetAssayData(seurat, layer = "data", assay = "RNA"),
+  error = function(e) NULL
+)
+if (!is.null(expr_data) && is.null(rownames(expr_data))) {
+  counts_data <- tryCatch(
+    Seurat::GetAssayData(seurat, layer = "counts", assay = "RNA"),
+    error = function(e) NULL
+  )
+  if (!is.null(counts_data) && !is.null(rownames(counts_data))) {
+    rownames(expr_data) <- rownames(counts_data)
+    seurat <- Seurat::SetAssayData(seurat, layer = "data", new.data = expr_data, assay = "RNA")
+  }
+}
+
 scores_tcga <- PhenoMap(
   expression = seurat,
   reference = "tcga",
