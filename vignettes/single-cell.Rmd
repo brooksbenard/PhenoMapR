@@ -80,11 +80,17 @@ if (!has_data) {
   }
   if (is.null(celltype_col)) celltype_col <- names(meta)[2]
 
-  # Build Seurat object
+  # Build Seurat object; avoid double-normalization when data is already normalized (e.g. TISCH2)
   t0 <- Sys.time()
-  seurat <- Seurat::CreateSeuratObject(counts = expr_mat, meta.data = meta, assay = "RNA", verbose = FALSE)
-  seurat <- Seurat::NormalizeData(seurat, verbose = FALSE)
-  report_timing("Create Seurat + normalize", t0, seurat)
+  already_norm <- PhenoMapR:::is_likely_normalized(expr_mat)
+  seurat <- Seurat::CreateSeuratObject(counts = expr_mat, meta.data = meta, assay = "RNA")
+  if (already_norm) {
+    Seurat::SetAssayData(seurat, layer = "data", new.data = expr_mat, assay = "RNA")
+    message("Data detected as already normalized (e.g. TISCH2); skipped NormalizeData to avoid double normalization.")
+  } else {
+    seurat <- Seurat::NormalizeData(seurat, verbose = FALSE)
+  }
+  report_timing(paste0("Create Seurat", if (already_norm) " (data as-is)" else " + normalize"), t0, seurat)
   message(sprintf("Cells: %d | Genes: %d | Cell type column: %s", ncol(seurat), nrow(seurat), celltype_col))
 }
 ```

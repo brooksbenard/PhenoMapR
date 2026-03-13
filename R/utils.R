@@ -328,6 +328,39 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Score D
 }
 
 
+#' Check if expression matrix is likely already normalized (e.g. TISCH2, log-norm)
+#'
+#' Used to avoid double-normalization when data is pre-normalized. Heuristic:
+#' samples values and returns TRUE if most are non-integer or range suggests
+#' log-scale (e.g. max moderate and not raw counts).
+#'
+#' @param x Matrix or Matrix (genes x cells).
+#' @param sample_cap Max number of values to sample (default 5000).
+#' @return TRUE if data is likely already normalized; FALSE if likely raw counts.
+#' @keywords internal
+is_likely_normalized <- function(x, sample_cap = 5000L) {
+  if (!is.matrix(x) && !inherits(x, "Matrix")) return(FALSE)
+  n <- as.numeric(nrow(x)) * as.numeric(ncol(x))
+  if (n == 0) return(FALSE)
+  if (n > sample_cap) {
+    idx <- sample.int(n, size = min(sample_cap, n), replace = FALSE)
+    vals <- as.numeric(x)[idx]
+  } else {
+    vals <- as.numeric(x)
+  }
+  vals <- vals[!is.na(vals) & is.finite(vals)]
+  if (length(vals) == 0) return(FALSE)
+  # Raw counts are typically integers; normalized/log data are non-integer
+  not_integer <- abs(vals - round(vals)) > 1e-6
+  pct_non_int <- mean(not_integer, na.rm = TRUE)
+  # Also: very large max often indicates raw counts
+  mx <- max(vals, na.rm = TRUE)
+  if (pct_non_int >= 0.5) return(TRUE)
+  if (mx < 50 && pct_non_int >= 0.1) return(TRUE)
+  FALSE
+}
+
+
 #' Validate Package Data
 #'
 #' Check that all required data objects are present and valid

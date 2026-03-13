@@ -489,13 +489,18 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
   # Matrix or SCE: create temporary Seurat object
   mat <- expr_info$matrix
   if (inherits(mat, "sparseMatrix")) {
-    obj <- Seurat::CreateSeuratObject(counts = mat, assay = "RNA", verbose = FALSE)
+    obj <- Seurat::CreateSeuratObject(counts = mat, assay = "RNA")
   } else {
-    obj <- Seurat::CreateSeuratObject(counts = as.matrix(mat), assay = "RNA", verbose = FALSE)
+    obj <- Seurat::CreateSeuratObject(counts = as.matrix(mat), assay = "RNA")
   }
-  # For matrix input, CreateSeuratObject only has "counts"; normalize if slot is "data"
+  # For matrix input, CreateSeuratObject only has "counts". Use "data" layer;
+  # avoid double-normalization when input is already normalized (e.g. TISCH2).
   if (slot == "data") {
-    obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+    if (is_likely_normalized(mat)) {
+      Seurat::SetAssayData(obj, layer = "data", new.data = mat, assay = "RNA")
+    } else {
+      obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+    }
   }
   obj[["PhenoMapR_prognostic_group"]] <- group_vec
   attr(obj, "PhenoMapR_assay") <- "RNA"
