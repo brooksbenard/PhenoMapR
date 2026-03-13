@@ -23,11 +23,14 @@ jobs:
         with:
           use-public-rspm: true
 
+      - name: Install pak (for setup-r-dependencies)
+        run: |
+          Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak", repos = "https://cloud.r-project.org")'
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::covr
           dependency-type: "both"
-          pak-version: none
 
       - name: Run coverage and upload to Codecov
         run: covr::codecov(quiet = FALSE)
