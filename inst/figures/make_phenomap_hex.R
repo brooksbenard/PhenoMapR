@@ -4,7 +4,7 @@ if (!requireNamespace("hexSticker", quietly = TRUE)) {
 
 library(hexSticker)
 
-hex_logo_path <- file.path("inst", "figures", "PhenoMapR_map_logo.png")
+hex_logo_path <- file.path("inst", "figures", "PhenoMapR_map_logo_2.png")
 
 sticker(
   hex_logo_path,
