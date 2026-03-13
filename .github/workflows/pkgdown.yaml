@@ -25,11 +25,14 @@ jobs:
         with:
           use-public-rspm: true
 
+      - name: Install pak (for setup-r-dependencies)
+        run: |
+          Rscript -e 'if (!requireNamespace("pak", quietly = TRUE)) install.packages("pak", repos = "https://cloud.r-project.org")'
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::remotes, any::pkgdown, local::.
           dependency-type: hard
-          pak-version: none
 
       - name: Ensure pkgdown >= 2.1.0
         run: |
