@@ -10,11 +10,11 @@ output:
 
 ## Overview
 
-This vignette demonstrates using PhenoMapR on single-cell pancreatic adenocarcinoma (PAAD) data from **CRA001160** (GSA/CNCB-NGDC). We load expression and cell metadata from Google Drive, score cells with both **TCGA** and **PRECOG** Pancreatic meta-z scores, compare the two references, then define prognostic groups, identify marker genes, and visualize proportions by sample and cell type using the original cell type annotations from the metadata file.
+This vignette demonstrates using PhenoMapR on a single-cell RNA-seq dataset. Here, we chose to highlight a pancreatic adenocarcinoma (PAAD) dataset from Peng et al. (*Cell Research* 2019; CRA001160) due to it's broad cell type representation, sample number, and inclusion of normal controls. Pre-processed expression and metadata were obtained from [TISCH2](https://tisch.compbio.cn/home/). We score cells with both **TCGA PAAD** and **PRECOG Pancreatic** meta-z scores, compare results between the two references, then define prognostic groups, identify marker genes, and visualize proportions by sample and cell type using the original cell type annotations from the metadata file. Finally, we compare our results with those of [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2) using their method **[SIDISH]**(https://www.nature.com/articles/s41467-025-66162-4) on the same dataset.
 
 ## CRA001160: Load data from Google Drive
 
-**CRA001160** is a single-cell RNA-seq dataset of pancreatic ductal adenocarcinoma from Peng et al. (*Cell Research* 2019). We download the expression matrix (10X H5) and cell metadata (TSV) from Google Drive, then build a Seurat object for scoring and visualization.
+We download the expression matrix (10X H5) and cell metadata (TSV) from Google Drive, then build a Seurat object for scoring and visualization.
 
 ### Download and load
 
@@ -36,6 +36,7 @@ if (!requireNamespace("googledrive", quietly = TRUE)) {
 vignette_dir <- if (dir.exists("vignettes")) "vignettes" else if (dir.exists("Vignettes")) "Vignettes" else "."
 if (!dir.exists(vignette_dir)) dir.create(vignette_dir, recursive = TRUE, showWarnings = FALSE)
 
+options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 # Expression matrix (10X H5)
 path_h5 <- file.path(vignette_dir, "PAAD_CRA001160_expression.h5")
@@ -79,9 +80,11 @@ if (!has_data) {
     }
   }
   if (is.null(celltype_col)) celltype_col <- names(meta)[2]
+  # Original cell type annotation (TISCH2 metadata) when present
+  celltype_original_col <- if ("Celltype (original)" %in% names(meta)) "Celltype (original)" else NULL
 
   # Subsample cells for vignette runtime (avoid very large Seurat objects in CI/pkgdown)
-  max_cells <- 15000L
+  max_cells <- 25000L
   if (ncol(expr_mat) > max_cells) {
     set.seed(1)
     keep_cells <- sample(colnames(expr_mat), max_cells)
@@ -222,6 +225,52 @@ ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
   labs(x = "Cell type (ordered by PRECOG median)", y = "PhenoMapR score", title = "CRA001160: Score distribution by reference and cell type")
 ```
 
+## Score distribution by Celltype (original)
+
+When the metadata includes **Celltype (original)** (TISCH2 original annotations), we show the same score distributions grouped by that column.
+
+```{r score-distribution-celltype-original}
+if (!is.null(celltype_original_col) && celltype_original_col %in% names(seurat@meta.data)) {
+  med_precog_orig <- setNames(
+    tapply(seurat@meta.data[[score_precog_col]], seurat@meta.data[[celltype_original_col]], median, na.rm = TRUE),
+    levels(factor(seurat@meta.data[[celltype_original_col]]))
+  )
+  med_precog_orig <- med_precog_orig[!is.na(med_precog_orig)]
+  ct_order_orig <- names(sort(med_precog_orig))
+  seurat@meta.data$celltype_original <- factor(seurat@meta.data[[celltype_original_col]], levels = ct_order_orig)
+
+  dl_orig <- rbind(
+    data.frame(
+      Reference = "TCGA PAAD",
+      Score = seurat@meta.data[[score_tcga_col]],
+      Cell_type = seurat@meta.data$celltype_original,
+      stringsAsFactors = FALSE
+    ),
+    data.frame(
+      Reference = "PRECOG Pancreatic",
+      Score = seurat@meta.data[[score_precog_col]],
+      Cell_type = seurat@meta.data$celltype_original,
+      stringsAsFactors = FALSE
+    )
+  )
+  dl_orig$Reference <- factor(dl_orig$Reference, levels = c("TCGA PAAD", "PRECOG Pancreatic"))
+  pal_ct_orig <- PhenoMapR::get_celltype_palette(ct_order_orig)
+  print(ggplot(dl_orig, aes(x = Cell_type, y = Score, fill = Cell_type)) +
+    geom_boxplot(outlier.alpha = 0.2) +
+    facet_wrap(~ Reference, ncol = 2, scales = "free_y") +
+    scale_fill_manual(values = pal_ct_orig, name = "Celltype (original)") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = "right",
+      strip.text = element_text(size = 12)
+    ) +
+    labs(x = "Celltype (original)", y = "PhenoMapR score", title = "CRA001160: Score by reference and Celltype (original)"))
+} else {
+  message("Celltype (original) not in metadata; skipping boxplots by original annotations.")
+}
+```
+
 ## Prognostic groups and marker genes
 
 We define Most Adverse and Most Favorable groups from the **PRECOG** score (5th/95th percentiles), then run marker identification (adverse vs rest, favorable vs rest) using the original cell type annotation for context.
@@ -283,9 +332,11 @@ if (is.null(markers)) {
   meta_ord <- seurat@meta.data[ord, ]
 
   score_vals <- meta_ord[[score_precog_col]]
+  # Use Celltype (original) for heatmap annotation when available
+  ct_anno_col <- if (!is.null(celltype_original_col) && celltype_original_col %in% names(meta_ord)) celltype_original_col else celltype_col
   ann_col <- data.frame(
     `PRECOG Score` = score_vals,
-    `Cell type` = factor(meta_ord[[celltype_col]]),
+    `Cell type` = factor(meta_ord[[ct_anno_col]]),
     `Prognostic group` = factor(meta_ord[[group_col]], levels = c("Most Adverse", "Other", "Most Favorable")),
     check.names = FALSE
   )
@@ -372,6 +423,10 @@ if (nrow(meta_plot) > 0) {
   message("No Most Adverse or Most Favorable cells found; proportion plot skipped.")
 }
 ```
+
+## Conclusions
+
+Here, we demonstrate that using PhenoMapR on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (malignant and ductal type 1). These results agree with those of Jolasun et al., however our PhenoMapR results provide an increased level of granularity compared to other methods, since we retain absolute and rank-orderd information regarding all cell's phenotype association. We also nominate those most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
 
 ## References
 
