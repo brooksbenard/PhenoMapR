@@ -137,7 +137,8 @@ scores_primary <- PhenoMap(
 
     ## Detected input type: matrix
 
-    ## 7376 genes used for scoring against PancreaticCalculating scores...
+    ## 7376 genes used for scoring against Pancreatic
+    ## Calculating scores...
     ## Completed scoring for Pancreatic
 
 ``` r
@@ -152,7 +153,8 @@ scores_met <- PhenoMap(
 
     ## Detected input type: matrix
 
-    ## 2997 genes used for scoring against Pancreatic_MetastasisCalculating scores...
+    ## 2997 genes used for scoring against Pancreatic_Metastasis
+    ## Calculating scores...
     ## Completed scoring for Pancreatic_Metastasis
 
 ``` r
@@ -1124,7 +1126,8 @@ if (length(non_met_idx) > 0) {
 
     ## Detected input type: matrix
 
-    ## 7426 genes used for scoring against PancreaticCalculating scores...
+    ## 7426 genes used for scoring against Pancreatic
+    ## Calculating scores...
     ## Completed scoring for Pancreatic
 
 ``` r
@@ -1141,7 +1144,8 @@ if (length(met_idx) > 0) {
 
     ## Detected input type: matrix
 
-    ## 3007 genes used for scoring against Pancreatic_MetastasisCalculating scores...
+    ## 3007 genes used for scoring against Pancreatic_Metastasis
+    ## Calculating scores...
     ## Completed scoring for Pancreatic_Metastasis
 
 ``` r

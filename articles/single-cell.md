@@ -92,7 +92,8 @@ scores_tcga <- PhenoMap(expression = expr_mat, reference = "tcga", cancer_type =
 
     ## Detected input type: matrix
 
-    ## 4844 genes used for scoring against PAADCalculating scores...
+    ## 4844 genes used for scoring against PAAD
+    ## Calculating scores...
     ## Completed scoring for PAAD
 
 ``` r
@@ -101,7 +102,8 @@ scores_precog <- PhenoMap(expression = expr_mat, reference = "precog", cancer_ty
 
     ## Detected input type: matrix
 
-    ## 6556 genes used for scoring against PancreaticCalculating scores...
+    ## 6556 genes used for scoring against Pancreatic
+    ## Calculating scores...
     ## Completed scoring for Pancreatic
 
 ``` r

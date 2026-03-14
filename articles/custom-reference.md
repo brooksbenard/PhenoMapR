@@ -144,7 +144,8 @@ scores_custom <- PhenoMap(
 
     ## Detected input type: matrix
 
-    ## 5317 genes used for scoring against survival_zCalculating scores...
+    ## 5317 genes used for scoring against survival_z
+    ## Calculating scores...
     ## Completed scoring for survival_z
 
 ``` r

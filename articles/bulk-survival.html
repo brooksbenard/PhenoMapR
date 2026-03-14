@@ -196,7 +196,8 @@ prognostic signatures and this should stratify outcomes.</p>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
-<pre><code><span><span class="co">## 7376 genes used for scoring against PancreaticCalculating scores...</span></span>
+<pre><code><span><span class="co">## 7376 genes used for scoring against Pancreatic</span></span>
+<span><span class="co">## Calculating scores...</span></span>
 <span><span class="co">## Completed scoring for Pancreatic</span></span></code></pre>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Score all samples using the Metastatic PAAD signature</span></span>
@@ -207,7 +208,8 @@ prognostic signatures and this should stratify outcomes.</p>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
-<pre><code><span><span class="co">## 2997 genes used for scoring against Pancreatic_MetastasisCalculating scores...</span></span>
+<pre><code><span><span class="co">## 2997 genes used for scoring against Pancreatic_Metastasis</span></span>
+<span><span class="co">## Calculating scores...</span></span>
 <span><span class="co">## Completed scoring for Pancreatic_Metastasis</span></span></code></pre>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># make a combined dataframe of sample clinical annotations and PhenoMap scores </span></span>
@@ -1120,7 +1122,8 @@ patients using PhenoMapR.</p>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
-<pre><code><span><span class="co">## 7426 genes used for scoring against PancreaticCalculating scores...</span></span>
+<pre><code><span><span class="co">## 7426 genes used for scoring against Pancreatic</span></span>
+<span><span class="co">## Calculating scores...</span></span>
 <span><span class="co">## Completed scoring for Pancreatic</span></span></code></pre>
 <div class="sourceCode" id="cb65"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">met_idx</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
@@ -1133,7 +1136,8 @@ patients using PhenoMapR.</p>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
 <pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
-<pre><code><span><span class="co">## 3007 genes used for scoring against Pancreatic_MetastasisCalculating scores...</span></span>
+<pre><code><span><span class="co">## 3007 genes used for scoring against Pancreatic_Metastasis</span></span>
+<span><span class="co">## Calculating scores...</span></span>
 <span><span class="co">## Completed scoring for Pancreatic_Metastasis</span></span></code></pre>
 <div class="sourceCode" id="cb68"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">clin</span><span class="op">$</span><span class="va">score_Pancreatic</span> <span class="op">&lt;-</span> <span class="cn">NA_real_</span></span>

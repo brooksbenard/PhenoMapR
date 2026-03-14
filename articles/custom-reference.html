@@ -209,7 +209,8 @@ metastatic samples only.</li>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## Detected input type: matrix</span></span></code></pre>
-<pre><code><span><span class="co">## 5317 genes used for scoring against survival_zCalculating scores...</span></span>
+<pre><code><span><span class="co">## 5317 genes used for scoring against survival_z</span></span>
+<span><span class="co">## Calculating scores...</span></span>
 <span><span class="co">## Completed scoring for survival_z</span></span></code></pre>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">col_custom</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"survival_z|weighted_sum"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">scores_custom</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
