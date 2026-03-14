@@ -103,6 +103,14 @@ test_that("load_rds_fast errors on missing file", {
   expect_error(load_rds_fast("/nonexistent/path/to/file.rds"), "File not found")
 })
 
+test_that("load_rds_fast loads existing RDS (base readRDS fallback)", {
+  f <- tempfile(fileext = ".rds")
+  on.exit(unlink(f))
+  saveRDS(1:5, f)
+  out <- load_rds_fast(f, install_if_missing = FALSE)
+  expect_identical(out, 1:5)
+})
+
 test_that("plot_score_distribution uses first column when score_column NULL and data.frame", {
   df <- data.frame(a = 1:5, b = 10:14)
   p <- plot_score_distribution(df)
@@ -113,4 +121,30 @@ test_that("plot_score_distribution handles all NA scores", {
   df <- data.frame(score = rep(NA_real_, 5))
   p <- plot_score_distribution(df)
   expect_s3_class(p, "ggplot")
+})
+
+test_that("plot_score_distribution accepts main and base_size", {
+  p <- plot_score_distribution(c(1, 2, 3), main = "My title", base_size = 12)
+  expect_s3_class(p, "ggplot")
+})
+
+test_that("get_top_prognostic_genes direction both", {
+  out <- get_top_prognostic_genes("precog", "Breast", n = 5, direction = "both")
+  expect_s3_class(out, "data.frame")
+  expect_true(nrow(out) <= 5)
+  expect_true("z_score" %in% names(out))
+})
+
+test_that("get_top_prognostic_genes errors on unknown cancer_type", {
+  expect_error(
+    get_top_prognostic_genes("precog", "NotACancerType", n = 5),
+    "not found|Available"
+  )
+})
+
+test_that("get_top_prognostic_genes errors on unknown reference", {
+  expect_error(
+    get_top_prognostic_genes("unknown_ref", "Breast", n = 5),
+    "Unknown reference"
+  )
 })

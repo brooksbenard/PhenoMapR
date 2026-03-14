@@ -50,7 +50,8 @@ Suggests:
     pkgdown (>= 2.1.0),
     HGNChelper,
     survival,
-    survminer
+    survminer,
+    ggpubr
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave

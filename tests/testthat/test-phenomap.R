@@ -104,3 +104,114 @@ test_that("PhenoMap accepts dgCMatrix (e.g. from Read10X_h5)", {
   expect_equal(rownames(scores), paste0("C", seq_len(n_samp)))
 })
 
+test_that("PhenoMap with TCGA reference returns scores", {
+  data(tcga, package = "PhenoMapR", envir = environment())
+  genes <- rownames(tcga)[seq_len(min(25, nrow(tcga)))]
+  if (!"PAAD" %in% colnames(tcga)) skip("TCGA PAAD not in tcga data")
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * 4)),
+    nrow = length(genes),
+    ncol = 4,
+    dimnames = list(genes, paste0("S", 1:4))
+  )
+  scores <- PhenoMap(expression = expr, reference = "tcga", cancer_type = "PAAD", verbose = FALSE)
+  expect_s3_class(scores, "data.frame")
+  expect_equal(nrow(scores), 4)
+  expect_true(any(grepl("PAAD|weighted_sum", colnames(scores))))
+})
+
+test_that("PhenoMap verbose=TRUE runs without error", {
+  custom_ref <- data.frame(row.names = c("G1", "G2", "G3"), s = c(2, -1, 2))
+  expr <- matrix(pmax(0, rnorm(3 * 3)), 3, 3, dimnames = list(c("G1", "G2", "G3"), c("C1", "C2", "C3")))
+  capture.output(scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = TRUE))
+  expect_s3_class(scores, "data.frame")
+})
+
+test_that("PhenoMap with matrix containing NA warns", {
+  custom_ref <- data.frame(row.names = c("A", "B"), s = c(1, -1))
+  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("A", "B"), c("C1", "C2", "C3")))
+  expr[1, 1] <- NA_real_
+  expect_warning(
+    scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE),
+    "NA"
+  )
+  expect_s3_class(scores, "data.frame")
+})
+
+test_that("PhenoMap with matrix containing negative values warns", {
+  custom_ref <- data.frame(row.names = c("A", "B"), s = c(1, -1))
+  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("A", "B"), c("C1", "C2", "C3")))
+  expr[1, 1] <- -0.5
+  expect_warning(
+    scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE),
+    "negative"
+  )
+  expect_s3_class(scores, "data.frame")
+})
+
+test_that("PhenoMap with custom ref and no genes passing z cutoff warns", {
+  custom_ref <- data.frame(row.names = c("G1", "G2"), s = c(0.5, -0.5))
+  expr <- matrix(1, nrow = 2, ncol = 2, dimnames = list(c("G1", "G2"), c("C1", "C2")))
+  expect_warning(
+    scores <- PhenoMap(expression = expr, reference = custom_ref, z_score_cutoff = 10, verbose = FALSE),
+    "No genes pass|z-score cutoff"
+  )
+  expect_s3_class(scores, "data.frame")
+})
+
+test_that("PhenoMap with custom ref and no common genes warns", {
+  custom_ref <- data.frame(row.names = c("X", "Y", "Z"), s = c(3, -2, 2))
+  expr <- matrix(1, nrow = 2, ncol = 2, dimnames = list(c("A", "B"), c("C1", "C2")))
+  expect_warning(
+    scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE),
+    "No common genes"
+  )
+  expect_s3_class(scores, "data.frame")
+})
+
+test_that("PhenoMap errors when pseudobulk TRUE but group_by NULL", {
+  custom_ref <- data.frame(row.names = c("G1"), s = 1)
+  expr <- matrix(1, nrow = 1, ncol = 2, dimnames = list("G1", c("C1", "C2")))
+  expect_error(
+    PhenoMap(expression = expr, reference = custom_ref, pseudobulk = TRUE, verbose = FALSE),
+    "group_by"
+  )
+})
+
+test_that("PhenoMap with Seurat slot counts uses counts layer", {
+  skip_if_not_installed("Seurat")
+  data(precog, package = "PhenoMapR", envir = environment())
+  genes <- rownames(precog)[seq_len(min(30, nrow(precog)))]
+  n_cells <- 5
+  counts <- matrix(
+    pmax(0, as.integer(rnorm(length(genes) * n_cells, 50, 20))),
+    nrow = length(genes),
+    ncol = n_cells,
+    dimnames = list(genes, paste0("C", seq_len(n_cells)))
+  )
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = counts, assay = "RNA"))
+  scores <- PhenoMap(expression = obj, reference = "precog", cancer_type = "Breast", assay = "RNA", slot = "counts", verbose = FALSE)
+  expect_s3_class(scores, "data.frame")
+  expect_equal(nrow(scores), n_cells)
+})
+
+test_that("PhenoMap with ici_precog returns scores when column matches", {
+  data(ici, package = "PhenoMapR", envir = environment())
+  if (ncol(ici) == 0) skip("ICI data has no columns")
+  cols <- colnames(ici)
+  metastatic_col <- cols[grepl("_Metastatic_", cols)][1]
+  if (is.na(metastatic_col)) skip("No ICI metastatic column found")
+  cancer_type <- sub("_.+", "", metastatic_col)
+  cancer_type <- paste0(cancer_type, "_Metastatic")
+  genes <- rownames(ici)[seq_len(min(25, nrow(ici)))]
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * 4)),
+    nrow = length(genes),
+    ncol = 4,
+    dimnames = list(genes, paste0("S", 1:4))
+  )
+  scores <- PhenoMap(expression = expr, reference = "ici_precog", cancer_type = cancer_type, verbose = FALSE)
+  expect_s3_class(scores, "data.frame")
+  expect_equal(nrow(scores), 4)
+})
+

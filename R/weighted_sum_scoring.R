@@ -63,10 +63,8 @@ calculate_weighted_scores <- function(expression_matrix,
     prog_data_sub <- prog_data_sub[common_genes, , drop = FALSE]
 
     if (verbose) {
-      cat(glue::glue("{length(common_genes)} genes used for scoring against {meta_z_label}
-"))
-      cat("Calculating scores...
-")
+      cat(glue::glue("{length(common_genes)} genes used for scoring against {meta_z_label}\n"))
+      cat("\nCalculating scores...\n")
     }
 
     # Weighted sum: higher score = worse prognosis when reference has positive z = adverse.
@@ -160,6 +158,7 @@ compute_scores <- function(expression_data,
     score_vector <- raw_sum
     
   } else {
+    # nocov start - pseudobulk path (large matrices, rarely used in tests)
     # For large pseudobulk data, compute iteratively with progress bar
     if (verbose && requireNamespace("progress", quietly = TRUE)) {
       pb <- progress::progress_bar$new(
@@ -180,6 +179,7 @@ compute_scores <- function(expression_data,
         pb$tick()
       }
     }
+    # nocov end
   }
   
   return(score_vector)

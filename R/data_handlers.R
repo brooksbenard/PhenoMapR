@@ -57,16 +57,19 @@ detect_input_type <- function(obj) {
     return("sce")
   }
 
+  # nocov start - optional SpatialExperiment (not in default test deps)
   if (inherits(obj, "SpatialExperiment")) {
     return("spatial_experiment")
   }
+  # nocov end
 
-  # Check for AnnData (Python object via reticulate)
+  # nocov start - optional AnnData/reticulate (not in default test deps)
   if (inherits(obj, "python.builtin.object")) {
     if (reticulate::py_has_attr(obj, "X") && reticulate::py_has_attr(obj, "obs")) {
       return("anndata")
     }
   }
+  # nocov end
 
   stop("Unable to detect input type. Supported: matrix, Seurat, SingleCellExperiment, SpatialExperiment, AnnData")
 }
@@ -250,6 +253,7 @@ process_sce <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NUL
 #' Process SpatialExperiment Object
 #'
 #' @keywords internal
+# nocov start - optional SpatialExperiment
 process_spatial_experiment <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NULL) {
 
   if (!requireNamespace("SpatialExperiment", quietly = TRUE)) {
@@ -259,11 +263,13 @@ process_spatial_experiment <- function(obj, pseudobulk, group_by, assay, genes_t
   # SpatialExperiment inherits from SCE, so use same processing
   process_sce(obj, pseudobulk, group_by, assay, genes_to_extract)
 }
+# nocov end
 
 
 #' Process AnnData Object
 #'
 #' @keywords internal
+# nocov start - optional AnnData/reticulate
 process_anndata <- function(obj, pseudobulk, group_by) {
 
   if (!requireNamespace("reticulate", quietly = TRUE)) {
@@ -312,6 +318,7 @@ process_anndata <- function(obj, pseudobulk, group_by) {
     gene_names = rownames(expr_matrix)
   )
 }
+# nocov end
 
 
 #' Validate Expression Matrix

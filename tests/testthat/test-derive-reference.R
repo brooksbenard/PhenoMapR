@@ -115,3 +115,51 @@ test_that("derive_reference_from_bulk uses first phenotype column when sample_id
   )
   expect_s3_class(ref, "data.frame")
 })
+
+test_that("derive_reference_from_bulk survival phenotype returns data.frame", {
+  skip_if_not_installed("survival")
+  set.seed(5)
+  n_samp <- 30
+  n_genes <- 20
+  expr <- matrix(rnorm(n_samp * n_genes), nrow = n_samp, ncol = n_genes)
+  rownames(expr) <- paste0("S", seq_len(n_samp))
+  colnames(expr) <- paste0("G", seq_len(n_genes))
+  pheno <- data.frame(
+    sample_id = rownames(expr),
+    time = runif(n_samp, 1, 10),
+    event = sample(c(0, 1), n_samp, replace = TRUE),
+    stringsAsFactors = FALSE
+  )
+  ref <- derive_reference_from_bulk(
+    bulk_expression = expr,
+    phenotype = pheno,
+    sample_id_column = "sample_id",
+    phenotype_type = "survival",
+    survival_time = "time",
+    survival_event = "event",
+    verbose = FALSE
+  )
+  expect_s3_class(ref, "data.frame")
+  expect_true(nrow(ref) >= 1)
+})
+
+test_that("derive_reference_from_bulk phenotype_type auto infers binary", {
+  set.seed(6)
+  expr <- matrix(rnorm(15 * 8), 15, 8)
+  rownames(expr) <- paste0("S", seq_len(15))
+  colnames(expr) <- paste0("G", seq_len(8))
+  pheno <- data.frame(
+    sample_id = rownames(expr),
+    y = rep(c(0, 1), length.out = 15),
+    stringsAsFactors = FALSE
+  )
+  ref <- derive_reference_from_bulk(
+    bulk_expression = expr,
+    phenotype = pheno,
+    sample_id_column = "sample_id",
+    phenotype_column = "y",
+    phenotype_type = "auto",
+    verbose = FALSE
+  )
+  expect_s3_class(ref, "data.frame")
+})
