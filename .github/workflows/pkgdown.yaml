@@ -56,7 +56,7 @@ jobs:
         run: |
           mkdir -p man/figures
           cp -n inst/figures/*.png man/figures/ 2>/dev/null || true
-          cp -n inst/figures/PhenoMapR_logo.png man/figures/logo.png 2>/dev/null || true
+          cp -f inst/figures/PhenoMapR_logo.png man/figures/logo.png
 
       - name: Verify vignettes exist before build
         run: |
