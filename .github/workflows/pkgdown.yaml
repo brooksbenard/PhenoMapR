@@ -47,11 +47,16 @@ jobs:
           Rscript -e 'if (!requireNamespace("googledrive", quietly = TRUE)) install.packages("googledrive", repos = "https://cloud.r-project.org")'
           Rscript -e 'if (!requireNamespace("hdf5r", quietly = TRUE)) install.packages("hdf5r", repos = "https://cloud.r-project.org")'
 
+      - name: Build hex sticker from PhenoMapR_map_logo_2.png
+        run: |
+          Rscript -e 'if (!requireNamespace("hexSticker", quietly = TRUE)) install.packages("hexSticker", repos = "https://cloud.r-project.org")'
+          Rscript inst/figures/make_phenomap_hex.R
+
       - name: Copy inst/figures to man/figures for pkgdown home images
         run: |
           mkdir -p man/figures
           cp -n inst/figures/*.png man/figures/ 2>/dev/null || true
-          cp -n inst/figures/PhenoMapR_map_logo_2.png man/figures/logo.png 2>/dev/null || true
+          cp -n inst/figures/PhenoMapR_logo.png man/figures/logo.png 2>/dev/null || true
 
       - name: Verify vignettes exist before build
         run: |
