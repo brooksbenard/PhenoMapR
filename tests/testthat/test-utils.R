@@ -148,3 +148,66 @@ test_that("get_top_prognostic_genes errors on unknown reference", {
     "Unknown reference"
   )
 })
+
+test_that("get_top_prognostic_genes with pediatric and ici references", {
+  peds_types <- list_cancer_types("pediatric_precog")
+  if (length(peds_types) > 0) {
+    peds <- get_top_prognostic_genes("pediatric_precog", peds_types[1], n = 3)
+    expect_s3_class(peds, "data.frame")
+    expect_true(nrow(peds) <= 3)
+  }
+  ici_types <- list_cancer_types("ici_precog")
+  if (length(ici_types) > 0) {
+    ici_out <- get_top_prognostic_genes("ici_precog", ici_types[1], n = 3)
+    expect_s3_class(ici_out, "data.frame")
+  }
+})
+
+test_that("get_gene_coverage with pediatric and ici aliases", {
+  genes <- c("TP53", "MYC")
+  out_ped <- get_gene_coverage(genes, reference = "pediatric")
+  expect_s3_class(out_ped, "data.frame")
+  expect_equal(out_ped$reference[1], "pediatric_precog")
+  out_ici <- get_gene_coverage(genes, reference = "ici")
+  expect_equal(out_ici$reference[1], "ici_precog")
+})
+
+test_that("is_likely_normalized returns TRUE for non-integer matrix", {
+  x <- matrix(c(1.5, 2.3, 3.1, 4.2), 2, 2)
+  expect_true(PhenoMapR:::is_likely_normalized(x))
+})
+
+test_that("is_likely_normalized returns FALSE for integer count-like matrix", {
+  x <- matrix(c(100, 200, 150, 300), 2, 2)
+  expect_false(PhenoMapR:::is_likely_normalized(x))
+})
+
+test_that("is_likely_normalized returns FALSE for non-matrix", {
+  expect_false(PhenoMapR:::is_likely_normalized(1:10))
+})
+
+test_that("is_likely_normalized returns FALSE for zero-size matrix", {
+  z <- matrix(numeric(0), 0, 0)
+  expect_false(PhenoMapR:::is_likely_normalized(z))
+})
+
+test_that("is_likely_normalized returns FALSE when all values NA or Inf", {
+  x <- matrix(c(NA, Inf, -Inf), 1, 3)
+  expect_false(PhenoMapR:::is_likely_normalized(x))
+})
+
+test_that("is_likely_normalized returns TRUE for small non-integer (mx < 50, pct >= 0.1)", {
+  x <- matrix(c(1, 2.5, 3, 4, 5), 1, 5)
+  expect_true(PhenoMapR:::is_likely_normalized(x))
+})
+
+test_that("is_likely_normalized with large matrix uses sampling", {
+  set.seed(42)
+  x <- matrix(rnorm(200 * 100), 200, 100)
+  expect_true(PhenoMapR:::is_likely_normalized(x, sample_cap = 1000L))
+})
+
+test_that("validate_package_data runs without error", {
+  expect_invisible(PhenoMapR:::validate_package_data())
+  expect_true(PhenoMapR:::validate_package_data())
+})

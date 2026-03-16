@@ -34,3 +34,29 @@ test_that("normalize_scores with constant vector warns", {
   expect_warning(z <- normalize_scores(rep(5, 3)), "Standard deviation is 0")
   expect_equal(z, rep(5, 3))
 })
+
+test_that("calculate_weighted_scores errors when reference_data is not data.frame or matrix", {
+  expr <- matrix(1, nrow = 2, ncol = 2, dimnames = list(c("A", "B"), c("C1", "C2")))
+  expect_error(
+    PhenoMapR:::calculate_weighted_scores(expr, reference_data = list(), verbose = FALSE),
+    "reference_data must be a data.frame or matrix"
+  )
+})
+
+test_that("compute_scores errors when expression_data has no rownames", {
+  expr <- matrix(1:4, 2, 2)
+  scores <- setNames(c(1, -1), c("A", "B"))
+  expect_error(
+    PhenoMapR:::compute_scores(expr, scores, pseudobulk = FALSE, verbose = FALSE),
+    "rownames"
+  )
+})
+
+test_that("compute_scores errors when prognostic_scores has no names", {
+  expr <- matrix(1:4, 2, 2, dimnames = list(c("A", "B"), c("C1", "C2")))
+  scores <- c(1, -1)
+  expect_error(
+    PhenoMapR:::compute_scores(expr, scores, pseudobulk = FALSE, verbose = FALSE),
+    "named"
+  )
+})

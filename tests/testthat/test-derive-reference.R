@@ -163,3 +163,21 @@ test_that("derive_reference_from_bulk phenotype_type auto infers binary", {
   )
   expect_s3_class(ref, "data.frame")
 })
+
+test_that("derive_reference_from_bulk errors when phenotype has no rows", {
+  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("S1", "S2"), c("G1", "G2", "G3")))
+  pheno <- data.frame(sample_id = character(0), y = numeric(0))
+  expect_error(
+    derive_reference_from_bulk(expr, pheno, phenotype_column = "y", phenotype_type = "binary", verbose = FALSE),
+    "no rows"
+  )
+})
+
+test_that("derive_reference_from_bulk errors when sample_id_column not found", {
+  expr <- matrix(rnorm(6), 2, 3, dimnames = list(c("S1", "S2"), c("G1", "G2", "G3")))
+  pheno <- data.frame(id = c("S1", "S2"), y = c(0, 1))
+  expect_error(
+    derive_reference_from_bulk(expr, pheno, sample_id_column = "wrong_col", phenotype_column = "y", phenotype_type = "binary", verbose = FALSE),
+    "Sample ID column|not found"
+  )
+})

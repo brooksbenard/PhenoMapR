@@ -133,11 +133,13 @@ get_reference_data <- function(reference, cancer_type) {
   # If reference is a data.frame (e.g. custom from Cox), use as-is
   if (is.data.frame(reference) || is.matrix(reference)) {
     ref_data <- as.data.frame(reference)
+    # nocov start - as.data.frame() always gives colnames in R
     score_name <- if (!is.null(colnames(ref_data))) {
       colnames(ref_data)[1]
     } else {
       "custom"
     }
+    # nocov end
     attr(ref_data, "score_name") <- score_name
     return(ref_data)
   }

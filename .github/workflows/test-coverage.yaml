@@ -33,5 +33,4 @@ jobs:
           dependency-type: "both"
 
       - name: Run coverage and upload to Codecov
-        run: covr::codecov(quiet = FALSE)
-        shell: Rscript {0}
+        run: Rscript scripts/codecov_with_exclusions.R

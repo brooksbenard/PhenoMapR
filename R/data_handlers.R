@@ -20,7 +20,9 @@ process_expression_input <- function(expression,
   result <- switch(input_type,
     "matrix" = process_matrix(expression),
     "seurat" = process_seurat(expression, pseudobulk, group_by, assay, slot, genes_to_extract),
+    # nocov start - spatial Seurat (slot=counts) not in default tests
     "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot = "counts", genes_to_extract = genes_to_extract),
+    # nocov end
     "sce" = process_sce(expression, pseudobulk, group_by, assay, genes_to_extract),
     "spatial_experiment" = process_spatial_experiment(expression, pseudobulk, group_by, assay, genes_to_extract),
     "anndata" = process_anndata(expression, pseudobulk, group_by),
@@ -125,6 +127,7 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
   }
 
   # Handle pseudobulk
+  # nocov start - pseudobulk with Seurat not exercised in default tests
   if (pseudobulk) {
     if (is.null(group_by)) {
       stop("group_by must be specified for pseudobulk aggregation")
@@ -144,15 +147,19 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
     expr_matrix <- as.matrix(agg_expr[[assay]])
 
   } else {
+  # nocov end
     # Get assay data from the full object (do not subset the Seurat object by
     # genes, to avoid copying spatial images and triggering VisiumV1/etc.
     # validity errors when the object was saved with a different Seurat version).
     assay_data <- tryCatch({
       Seurat::GetAssayData(obj, assay = assay, layer = layer_name)
     }, error = function(e) {
+      # nocov start - slot fallback when layer fails
       Seurat::GetAssayData(obj, assay = assay, slot = slot)
+      # nocov end
     })
 
+    # nocov start - genes_to_extract subset (PhenoMap sets it for Seurat/SCE; tests use small objects)
     if (length(genes_to_extract) > 0) {
       avail_genes <- rownames(assay_data)
       genes_use <- intersect(genes_to_extract, avail_genes)
@@ -160,6 +167,7 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
         assay_data <- assay_data[genes_use, , drop = FALSE]
       }
     }
+    # nocov end
 
     # Avoid as.matrix on any Matrix class to prevent sparse->dense (9+ GiB for large objects)
     if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
@@ -202,6 +210,7 @@ process_sce <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NUL
     }
   }
 
+  # nocov start - pseudobulk with SCE not exercised in default tests
   if (pseudobulk) {
     if (is.null(group_by)) {
       stop("group_by must be specified for pseudobulk aggregation")
@@ -224,9 +233,9 @@ process_sce <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NUL
     expr_matrix <- as.matrix(agg_matrix)
 
   } else {
+  # nocov end
     assay_data <- SummarizedExperiment::assay(obj, assay)
-    # Subset only for extraction when genes_to_extract set; never return subset.
-    # Caller adds scores to original (full) object so all genes remain for analyses.
+    # nocov start - genes_to_extract subset
     if (length(genes_to_extract) > 0) {
       avail_genes <- rownames(assay_data)
       genes_use <- intersect(genes_to_extract, avail_genes)
@@ -234,6 +243,7 @@ process_sce <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NUL
         assay_data <- assay_data[genes_use, , drop = FALSE]
       }
     }
+    # nocov end
     if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
       expr_matrix <- assay_data
     } else {

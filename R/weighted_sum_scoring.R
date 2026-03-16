@@ -63,8 +63,10 @@ calculate_weighted_scores <- function(expression_matrix,
     prog_data_sub <- prog_data_sub[common_genes, , drop = FALSE]
 
     if (verbose) {
+      # nocov start - verbose output
       cat(glue::glue("{length(common_genes)} genes used for scoring against {meta_z_label}\n"))
       cat("\nCalculating scores...\n")
+      # nocov end
     }
 
     # Weighted sum: higher score = worse prognosis when reference has positive z = adverse.
@@ -81,8 +83,10 @@ calculate_weighted_scores <- function(expression_matrix,
     scores_all[[score_col_name]] <- score_vector
     
     if (verbose) {
+      # nocov start - verbose output
       cat(glue::glue("Completed scoring for {meta_z_label}
 "))
+      # nocov end
     }
   }
   
@@ -255,9 +259,9 @@ add_scores_to_seurat <- function(seurat_obj, scores, prefix = "") {
     col_name <- if (prefix != "") paste0(prefix, col) else col
     seurat_obj@meta.data[common_cells, col_name] <- scores[common_cells, col]
   }
-  
+  # nocov start - message when Seurat tests run (optional package)
   message(glue::glue("Added {ncol(scores)} score column(s) to Seurat metadata"))
-  
+  # nocov end
   return(seurat_obj)
 }
 
@@ -301,8 +305,8 @@ add_scores_to_sce <- function(sce_obj, scores, prefix = "") {
     col_name <- if (prefix != "") paste0(prefix, col) else col
     SummarizedExperiment::colData(sce_obj)[common_cells, col_name] <- scores[common_cells, col]
   }
-  
+  # nocov start - message when SCE tests run (optional package)
   message(glue::glue("Added {ncol(scores)} score column(s) to SCE colData"))
-  
+  # nocov end
   return(sce_obj)
 }

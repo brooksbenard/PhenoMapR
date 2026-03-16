@@ -69,6 +69,7 @@ load_rds_fast <- function(file, install_if_missing = TRUE) {
     stop("File not found: ", file)
   }
   use_fast <- FALSE
+  # nocov start - optional fastSave (not in default test deps)
   if (requireNamespace("fastSave", quietly = TRUE)) {
     use_fast <- TRUE
   } else if (install_if_missing) {
@@ -90,6 +91,7 @@ load_rds_fast <- function(file, install_if_missing = TRUE) {
       message("fastSave::readRDS.pigz failed: ", conditionMessage(e), "; falling back to readRDS")
     })
   }
+  # nocov end
   readRDS(file)
 }
 

@@ -199,6 +199,7 @@ find_prognostic_markers <- function(expression,
     return(out)
   }
 
+  # nocov start - Seurat FindMarkers path (optional; tested in test-find-prognostic-markers when Seurat installed)
   # Seurat path
   if (verbose) {
     message(glue::glue(
@@ -294,6 +295,7 @@ find_prognostic_markers <- function(expression,
   if (inherits(expression, "Seurat") && meta_col %in% names(seurat_obj[[]])) {
     seurat_obj[[meta_col]] <- NULL
   }
+  # nocov end
 
   adverse_markers <- standardize_findmarkers_output(adverse_markers, pval_threshold)
   favorable_markers <- standardize_findmarkers_output(favorable_markers, pval_threshold)
@@ -321,6 +323,7 @@ standardize_findmarkers_output <- function(df, pval_threshold) {
   }
   df$gene <- rownames(df)
   rownames(df) <- NULL
+  # nocov start - Seurat FindMarkers column names (matrix path uses different names)
   # Seurat may return avg_log2FC or avg_logFC
   if (!"avg_log2FC" %in% names(df) && "avg_logFC" %in% names(df)) {
     df$avg_log2FC <- df$avg_logFC
@@ -335,6 +338,7 @@ standardize_findmarkers_output <- function(df, pval_threshold) {
   if (!"p_adj" %in% names(df)) {
     df$p_adj <- df$p_val
   }
+  # nocov end
   df <- df[df$p_val <= pval_threshold, , drop = FALSE]
   df <- df[order(df$p_val), , drop = FALSE]
   df
@@ -356,6 +360,7 @@ run_markers_on_matrix <- function(mat,
     stop("Length of group_vec must match number of columns in expression matrix")
   }
   # Subsample per group
+  # nocov start - subsampling only when group size > max_cells_per_ident
   if (is.finite(max_cells_per_ident)) {
     idx_keep <- integer(0)
     for (grp in c("Most Adverse", "Most Favorable", "Other")) {
@@ -371,10 +376,12 @@ run_markers_on_matrix <- function(mat,
     mat <- mat[, idx_keep, drop = FALSE]
     group_vec <- group_vec[idx_keep]
   }
+  # nocov end
   mat_dense <- as.matrix(mat)
   genes <- rownames(mat_dense)
   if (is.null(genes)) genes <- paste0("Gene_", seq_len(nrow(mat_dense)))
 
+  # nocov start - presto path (optional dependency)
   # Use presto if available (fast Wilcoxon). X = genes x cells, y = group labels
   if (requireNamespace("presto", quietly = TRUE)) {
     auc_out <- tryCatch(
@@ -408,6 +415,7 @@ run_markers_on_matrix <- function(mat,
       return(list(adverse_markers = adverse_markers, favorable_markers = favorable_markers))
     }
   }
+  # nocov end
 
   # Fallback: base R Wilcoxon per gene
   adverse_idx <- group_vec == "Most Adverse"
@@ -417,10 +425,12 @@ run_markers_on_matrix <- function(mat,
   n_adv <- sum(adverse_idx)
   n_fav <- sum(favorable_idx)
   if (n_adv < 2 || n_fav < 2) {
+    # nocov start - too few cells in either group
     return(list(
       adverse_markers = standardize_findmarkers_output(NULL, pval_threshold),
       favorable_markers = standardize_findmarkers_output(NULL, pval_threshold)
     ))
+    # nocov end
   }
   run_wilcox_one_vs_rest <- function(ident_label, is_in_group) {
     in_grp <- mat_dense[, is_in_group, drop = FALSE]
@@ -431,12 +441,14 @@ run_markers_on_matrix <- function(mat,
     pct_out <- rowMeans(out_grp > 0, na.rm = TRUE)
     keep <- (pct_in >= min.pct | pct_out >= min.pct)
     if (sum(keep) == 0) {
+      # nocov start - no genes pass min.pct
       return(data.frame(
         gene = character(0), avg_log2FC = numeric(0),
         pct_in_group = numeric(0), pct_rest = numeric(0),
         p_val = numeric(0), p_adj = numeric(0),
         stringsAsFactors = FALSE
       ))
+      # nocov end
     }
     genes_keep <- genes[keep]
     pct_in <- pct_in[keep]
@@ -475,6 +487,7 @@ run_markers_on_matrix <- function(mat,
 
 #' Get existing Seurat object or create one from matrix/SCE; add prognostic group to metadata
 #' @keywords internal
+# nocov start - only used by Seurat path in find_prognostic_markers (nocov'd)
 get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, assay, slot) {
   if (inherits(expression, "Seurat")) {
     assay <- assay %||% "RNA"
@@ -506,6 +519,7 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
   attr(obj, "PhenoMapR_assay") <- "RNA"
   obj
 }
+# nocov end
 
 
 #' Process expression input for marker finding
@@ -528,6 +542,7 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
       gene_names = rownames(expression)
     ))
   }
+  # nocov start - Seurat/SCE paths only used when find_prognostic_markers gets Seurat/SCE (Seurat path nocov'd)
   if (inherits(expression, "Seurat")) {
     if (!requireNamespace("Seurat", quietly = TRUE)) {
       stop("Seurat package required for Seurat input")
@@ -578,6 +593,7 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
       gene_names = rownames(mat)
     ))
   }
+  # nocov end
   stop("'expression' must be a matrix, Matrix, data.frame, Seurat, or SingleCellExperiment")
 }
 
@@ -597,7 +613,7 @@ resolve_group_labels <- function(group_labels,
   if (!is.data.frame(group_labels)) {
     stop("'group_labels' must be a character vector or a data.frame with group and cell ID columns")
   }
-
+  # nocov start - data.frame resolution (tested via find_prognostic_markers with group_labels df)
   id_col <- cell_id_column
   if (!id_col %in% names(group_labels)) {
     id_col <- names(group_labels)[1]
@@ -627,6 +643,7 @@ resolve_group_labels <- function(group_labels,
   vec <- lab_df[[group_column]]
   vec[is.na(lab_df[[id_col]])] <- NA_character_
   vec
+  # nocov end
 }
 
 

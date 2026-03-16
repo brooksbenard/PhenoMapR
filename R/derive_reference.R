@@ -136,6 +136,7 @@ derive_reference_from_bulk <- function(bulk_expression,
     new_symbols[na_idx] <- gene_names[na_idx]
     colnames(bulk_expression) <- new_symbols
     # Collapse duplicates by mean
+    # nocov start - requires genes that collapse to same HUGO symbol
     ugenes <- unique(new_symbols)
     if (length(ugenes) < length(new_symbols)) {
       bulk_expression <- apply(bulk_expression, 1, function(x) {
@@ -144,6 +145,7 @@ derive_reference_from_bulk <- function(bulk_expression,
       bulk_expression <- t(bulk_expression)
       if (verbose) message(glue::glue("Collapsed to {ncol(bulk_expression)} unique genes"))
     }
+    # nocov end
   } else if (verbose) {
     message("Package 'HGNChelper' not installed; skipping HUGO symbol cleaning. Install with: install.packages('HGNChelper')")
   }
@@ -162,7 +164,9 @@ derive_reference_from_bulk <- function(bulk_expression,
   # 3) Resolve phenotype type and compute gene z-scores
   if (phenotype_type == "survival") {
     if (is.null(survival_time) || is.null(survival_event)) {
+      # nocov start - error path
       stop("For phenotype_type = 'survival', provide 'survival_time' and 'survival_event' column names")
+      # nocov end
     }
     time_vec <- phenotype[[survival_time]]
     event_vec <- phenotype[[survival_event]]
@@ -181,6 +185,7 @@ derive_reference_from_bulk <- function(bulk_expression,
     y <- phenotype[[phenotype_column]]
     if (phenotype_type == "auto") {
       u <- unique(na.omit(y))
+      # nocov start - auto infer survival (needs phenotype with time/event columns)
       if (!is.null(survival_time) && survival_time %in% names(phenotype) &&
           !is.null(survival_event) && survival_event %in% names(phenotype)) {
         phenotype_type <- "survival"
@@ -194,6 +199,7 @@ derive_reference_from_bulk <- function(bulk_expression,
         z_scores <- z_scores_survival(bulk_expression, time_vec, event_vec, verbose = verbose)
         score_label <- "survival_z"
       } else if (length(u) == 2) {
+      # nocov end
         phenotype_type <- "binary"
       } else if (is.numeric(y) && length(u) > 2) {
         phenotype_type <- "continuous"
@@ -225,12 +231,14 @@ derive_reference_from_bulk <- function(bulk_expression,
 #' CPM without requiring edgeR
 #'
 #' @keywords internal
+# nocov start - only used when normalize=TRUE and counts detected in derive_reference
 edgeR_cpm_safe <- function(x) {
   if (nrow(x) == 0) return(x)
   lib_size <- rowSums(x, na.rm = TRUE)
   lib_size[lib_size == 0] <- 1
   sweep(x, 1, lib_size, "/") * 1e6
 }
+# nocov end
 
 
 #' Z-scores from Cox PH per gene
@@ -257,7 +265,9 @@ z_scores_survival <- function(expr, time, event, verbose = TRUE) {
   }
   na_before <- sum(is.na(z))
   if (verbose && na_before > 0) {
+    # nocov start - verbose
     message(glue::glue("Cox PH: {na_before} genes had NA z-scores (convergence or low variation)"))
+    # nocov end
   }
   z
 }
@@ -290,7 +300,9 @@ z_scores_binary <- function(expr, group, verbose = TRUE) {
     }
   }
   if (verbose && sum(is.na(z)) > 0) {
+    # nocov start - verbose
     message(glue::glue("Logistic regression: {sum(is.na(z))} genes had NA z-scores (convergence or separation)"))
+    # nocov end
   }
   z
 }

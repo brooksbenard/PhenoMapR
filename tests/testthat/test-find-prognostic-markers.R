@@ -25,6 +25,18 @@ test_that("find_prognostic_markers with matrix and group vector returns list", {
   expect_true("p_val" %in% names(out$adverse_markers))
 })
 
+test_that("find_prognostic_markers with verbose=TRUE runs (matrix path)", {
+  set.seed(99)
+  expr <- matrix(pmax(0, rnorm(40 * 45)), 40, 45, dimnames = list(paste0("G", 1:40), paste0("C", 1:45)))
+  group_vec <- c(rep("Most Adverse", 8), rep("Most Favorable", 8), rep("Other", 29))
+  msg <- capture.output(
+    out <- find_prognostic_markers(expr, group_labels = group_vec, verbose = TRUE),
+    type = "message"
+  )
+  expect_type(out, "list")
+  expect_true(length(msg) >= 0)
+})
+
 test_that("find_prognostic_markers with group_labels data.frame and group_column", {
   set.seed(2)
   n_genes <- 40

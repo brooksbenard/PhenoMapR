@@ -72,6 +72,45 @@ test_that("PhenoMap accepts data.frame expression (process_matrix path)", {
   expect_equal(nrow(scores), 4)
 })
 
+test_that("get_reference_data with matrix returns data.frame and score_name from colnames", {
+  ref_mat <- matrix(c(1.5, -1, 2), ncol = 1)
+  rownames(ref_mat) <- c("G1", "G2", "G3")
+  ref_data <- PhenoMapR:::get_reference_data(ref_mat, cancer_type = NULL)
+  expect_s3_class(ref_data, "data.frame")
+  expect_equal(nrow(ref_data), 3)
+  expect_true(!is.null(attr(ref_data, "score_name")))
+})
+
+test_that("get_reference_data errors when reference is not character or data.frame", {
+  expect_error(
+    PhenoMapR:::get_reference_data(list(a = 1), cancer_type = NULL),
+    "must be one of|data.frame"
+  )
+  expect_error(
+    PhenoMapR:::get_reference_data(c("precog", "tcga"), cancer_type = NULL),
+    "must be one of|data.frame"
+  )
+})
+
+test_that("extract_ici_column errors on NA cancer_type", {
+  mock_ici <- data.frame(a = 1:3, row.names = paste0("G", 1:3))
+  expect_error(PhenoMapR:::extract_ici_column(mock_ici, NA_character_), "ICI PRECOG label is NA")
+})
+
+test_that("extract_ici_column warns when multiple columns match", {
+  mock_ici <- data.frame(
+    KIRC_some_Primary_x = 1:3,
+    KIRC_other_Primary_y = 4:6,
+    row.names = paste0("G", 1:3)
+  )
+  expect_warning(
+    out <- PhenoMapR:::extract_ici_column(mock_ici, "KIRC"),
+    "Multiple ICI columns"
+  )
+  expect_equal(ncol(out), 1)
+  expect_equal(colnames(out), "KIRC_some_Primary_x")
+})
+
 test_that("PhenoMap with matrix lacking colnames generates cell names and returns scores", {
   custom_ref <- data.frame(row.names = c("A", "B"), s = c(3, -2))
   expr <- matrix(1, nrow = 2, ncol = 3)
