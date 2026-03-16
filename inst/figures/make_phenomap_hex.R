@@ -25,9 +25,11 @@ sticker(
   p_size = 20,
   p_color = "#36454f",
   s_x = 1,
-  s_y = 0.72,
-  s_width = 0.6,
-  s_height = 0.6,
+  # Place the graphic slightly lower and larger so it fills the bottom
+  # portion of the hex (map and pins more prominent, less white space).
+  s_y = 0.68,
+  s_width = 0.8,
+  s_height = 0.8,
   h_fill = "#fff",
   h_color = "#536878",
   filename = file.path("inst", "figures", "PhenoMapR_logo.png")
