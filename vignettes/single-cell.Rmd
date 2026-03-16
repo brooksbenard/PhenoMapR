@@ -367,7 +367,7 @@ if (is.null(markers)) {
 
 Stacked bar (top): proportion of Most Adverse and Most Favorable cells (5th percentile) per sample. Below: proportion within each sample and cell type.
 
-```{r proportion-by-sample-celltype}
+```{r proportion-by-sample-celltype, fig.height=6}
 sample_col <- NULL
 for (cand in c("Sample", "sample", "Patient", "patient", "Sample_ID", "orig.ident")) {
   if (cand %in% names(meta)) {
