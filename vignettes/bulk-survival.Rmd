@@ -543,46 +543,53 @@ if (nrow(dat_pfs) >= 10) {
 ```{r gse253260-phenomap}
 suppressPackageStartupMessages(library(PhenoMapR))
 
-non_met_idx <- which(clin$stage_group != "Metastatic" & !is.na(clin$stage_group))
-met_idx     <- which(clin$stage_group == "Metastatic")
+if (nrow(clin) == 0) {
+  message("No overlapping samples between expression and clinical metadata for GSE253260; skipping PhenoMap scoring/KM plots.")
+  clin$score_Pancreatic <- numeric(0)
+  clin$score_Pancreatic_Met <- numeric(0)
+} else {
+  non_met_idx <- which(clin$stage_group != "Metastatic" & !is.na(clin$stage_group))
+  met_idx     <- which(clin$stage_group == "Metastatic")
 
-scores_nonmet <- NULL
-scores_met    <- NULL
+  scores_nonmet <- NULL
+  scores_met    <- NULL
 
-if (length(non_met_idx) > 0) {
-  expr_nonmet <- expr_tpm[, non_met_idx, drop = FALSE]
-  scores_nonmet <- PhenoMap(
-    expression  = expr_nonmet,
-    reference   = "precog",
-    cancer_type = "Pancreatic",
-    verbose     = TRUE
-  )
-}
-
-if (length(met_idx) > 0) {
-  expr_met <- expr_tpm[, met_idx, drop = FALSE]
-  scores_met <- PhenoMap(
-    expression  = expr_met,
-    reference   = "precog",
-    cancer_type = "Pancreatic_Metastasis",
-    verbose     = TRUE
-  )
-}
-
-clin$score_Pancreatic <- NA_real_
-clin$score_Pancreatic_Met <- NA_real_
-
-if (!is.null(scores_nonmet)) {
-  col_pan <- grep("Pancreatic$", colnames(scores_nonmet), value = TRUE)[1]
-  if (!is.na(col_pan)) {
-    clin$score_Pancreatic[non_met_idx] <- scores_nonmet[, col_pan]
+  if (length(non_met_idx) > 0) {
+    expr_nonmet <- expr_tpm[, non_met_idx, drop = FALSE]
+    scores_nonmet <- PhenoMap(
+      expression  = expr_nonmet,
+      reference   = "precog",
+      cancer_type = "Pancreatic",
+      verbose     = TRUE
+    )
   }
-}
 
-if (!is.null(scores_met)) {
-  col_met <- grep("Pancreatic_Metastasis", colnames(scores_met), value = TRUE)[1]
-  if (!is.na(col_met)) {
-    clin$score_Pancreatic_Met[met_idx] <- scores_met[, col_met]
+  if (length(met_idx) > 0) {
+    expr_met <- expr_tpm[, met_idx, drop = FALSE]
+    scores_met <- PhenoMap(
+      expression  = expr_met,
+      reference   = "precog",
+      cancer_type = "Pancreatic_Metastasis",
+      verbose     = TRUE
+    )
+  }
+
+  # Initialize score columns with correct length (avoids assignment errors when nrow(clin) == 0)
+  clin$score_Pancreatic <- rep(NA_real_, nrow(clin))
+  clin$score_Pancreatic_Met <- rep(NA_real_, nrow(clin))
+
+  if (!is.null(scores_nonmet)) {
+    col_pan <- grep("Pancreatic$", colnames(scores_nonmet), value = TRUE)[1]
+    if (!is.na(col_pan)) {
+      clin$score_Pancreatic[non_met_idx] <- scores_nonmet[, col_pan]
+    }
+  }
+
+  if (!is.null(scores_met)) {
+    col_met <- grep("Pancreatic_Metastasis", colnames(scores_met), value = TRUE)[1]
+    if (!is.na(col_met)) {
+      clin$score_Pancreatic_Met[met_idx] <- scores_met[, col_met]
+    }
   }
 }
 ```
