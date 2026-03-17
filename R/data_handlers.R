@@ -18,7 +18,7 @@ process_expression_input <- function(expression,
   }
 
   result <- switch(input_type,
-    "matrix" = process_matrix(expression),
+    "matrix" = process_matrix(expression, verbose = verbose),
     "seurat" = process_seurat(expression, pseudobulk, group_by, assay, slot, genes_to_extract),
     # nocov start - spatial Seurat (slot=counts) not in default tests
     "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot = "counts", genes_to_extract = genes_to_extract),
@@ -77,16 +77,70 @@ detect_input_type <- function(obj) {
 }
 
 
+#' Validate expression matrix axes and gene ID format
+#'
+#' Ensures genes are rows and samples/cells/spots are columns (heuristic: orders of
+#' magnitude more genes than samples). If the matrix appears transposed, it is
+#' transposed and a message is printed. Also checks for ENSG-style rownames and
+#' warns the user to convert to HUGO symbols.
+#'
+#' @param mat Matrix (or matrix-coercible object) with rownames and colnames.
+#' @param verbose If TRUE, print a message when transposing.
+#' @return The matrix, possibly transposed; rownames must be gene IDs, colnames sample IDs.
+#' @keywords internal
+validate_expression_axes_and_ids <- function(mat, verbose = TRUE) {
+  n_genes <- nrow(mat)
+  n_samples <- ncol(mat)
+
+  # Heuristic: expect orders of magnitude more genes than samples (e.g. 10x or more).
+  # If instead samples >> genes, treat as samples × genes and transpose.
+  if (n_genes > 0 && n_samples > 0 && !is.null(rownames(mat)) && !is.null(colnames(mat))) {
+    if (n_samples > 10 * n_genes) {
+      if (isTRUE(verbose)) {
+        message(
+          "Expression format transposed so rows are gene IDs and columns are samples ",
+          "(number of samples is much greater than number of rows)."
+        )
+      }
+      mat <- t(mat)
+      n_genes <- ncol(mat)
+      n_samples <- nrow(mat)
+    }
+    # Sanity check: after correction we should have many more genes than samples
+    if (n_genes > 0 && n_samples > 0 && n_genes < 5 * n_samples && isTRUE(verbose)) {
+      message(
+        "Note: number of rows is not much larger than number of columns. ",
+        "Please ensure rows are gene IDs and columns are samples/cells/spots."
+      )
+    }
+  }
+
+  gene_ids <- rownames(mat)
+  if (!is.null(gene_ids) && length(gene_ids) > 0) {
+    prop_ensg <- mean(grepl("^ENSG\\d", gene_ids))
+    if (is.finite(prop_ensg) && prop_ensg > 0.5) {
+      warning(
+        "Gene names appear to be Ensembl/ENSG IDs (e.g., 'ENSG...'). ",
+        "Please convert to HUGO gene symbols before using PhenoMapR (e.g., with biomaRt or AnnotationDbi)."
+      )
+    }
+  }
+
+  mat
+}
+
+
 #' Process Matrix Input
 #'
 #' @keywords internal
-process_matrix <- function(mat) {
+process_matrix <- function(mat, verbose = TRUE) {
 
   if (is.data.frame(mat)) {
     mat <- as.matrix(mat)
   }
 
-  # Ensure genes are rows, samples are columns
+  mat <- validate_expression_axes_and_ids(mat, verbose = verbose)
+
   if (is.null(rownames(mat))) {
     stop("Matrix must have gene names as rownames")
   }

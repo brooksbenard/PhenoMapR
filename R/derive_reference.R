@@ -89,7 +89,7 @@ derive_reference_from_bulk <- function(bulk_expression,
 
   # Ensure samples are rows, genes are columns
   if (is.null(gene_axis)) {
-    gene_axis <- if (nrow(bulk_expression) >= ncol(bulk_expression)) "cols" else "rows"
+    gene_axis <- if (nrow(bulk_expression) >= ncol(bulk_expression)) "rows" else "cols"
   }
   if (gene_axis == "rows") {
     bulk_expression <- t(bulk_expression)

@@ -159,8 +159,7 @@ p <- ggplot(df, aes(x = .data$cancer_type, y = .data$database, fill = .data$fill
   coord_fixed(ratio = 1) +
   labs(
     x = NULL,
-    y = NULL,
-    title = "Reference coverage: cancer types available for scoring"
+    y = NULL
   ) +
   theme_minimal(base_size = 14) +
   theme(

@@ -181,3 +181,15 @@ test_that("derive_reference_from_bulk errors when sample_id_column not found", {
     "Sample ID column|not found"
   )
 })
+
+test_that("plot_reference_signature runs with derive_reference output", {
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+  ref <- data.frame(z = rnorm(60), row.names = paste0("G", 1:60))
+  colnames(ref)[1] <- "Survival z-score"
+  pdf(NULL)
+  out <- plot_reference_signature(ref, n_label = 5L, row_title = "Survival z-score")
+  dev.off()
+  expect_true(inherits(out, "HeatmapList"))
+})
+

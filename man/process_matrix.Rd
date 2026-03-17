@@ -4,7 +4,7 @@
 \alias{process_matrix}
 \title{Process Matrix Input}
 \usage{
-process_matrix(mat)
+process_matrix(mat, verbose = TRUE)
 }
 \description{
 Process Matrix Input

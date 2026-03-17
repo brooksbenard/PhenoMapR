@@ -9,8 +9,10 @@ The vignettes use data files that are too large for GitHub. You can place them l
 | `PAAD_CRA001160_expression.h5` | `1PolTXggREz8XmhutCLTQJGCfKxFAzqMl` | Single-cell (CRA001160) |
 | `PAAD_CRA001160_CellMetainfo_table.tsv` | `17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu` | Single-cell (CRA001160) |
 | `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj` | Spatial transcriptomics |
-| `GSE205154.GPL20301.matrix.txt` | `1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN` | Bulk survival & Custom reference |
-| `GSE205154.info.txt` | `1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ` | Bulk survival & Custom reference |
+| `GSE205154.GPL20301.matrix.txt` | `1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN` | Bulk survival |
+| `GSE205154.info.txt` | `1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ` | Bulk survival |
+| `GSE253260_expression.rds` | `1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R` | Custom reference |
+| `GSE253260_info.rds` | `1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f` | Custom reference |
 
 ---
 
@@ -44,7 +46,7 @@ You can supply **direct download** URLs via environment variables. This is usefu
    - The **file ID** is the part between `/d/` and `/view` (e.g. `XXXXXXXXXX`).
    - The **direct download URL** is: `https://drive.google.com/uc?export=download&id=XXXXXXXXXX`
 3. Do the same for the file in **Spatial_Transcriptomics** (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`).
-4. (Optional) For **Bulk_Expression**, get direct download URLs for `GSE205154.GPL20301.matrix.txt` and `GSE205154.info.txt` the same way.
+4. (Optional) For **Bulk_Expression**, get direct download URLs for `GSE205154.GPL20301.matrix.txt`, `GSE205154.info.txt`, and `GSE253260.rds` the same way.
 
 ### Step 2: Set the URLs and run the vignettes
 
@@ -57,7 +59,9 @@ Sys.setenv(
   PHENOMAPR_CRA001160_META_URL  = "https://drive.google.com/uc?export=download&id=17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
   PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj",
   PHENOMAPR_GSE205154_MATRIX_URL = "https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN",
-  PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"
+  PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ",
+  PHENOMAPR_GSE253260_EXPR_URL   = "https://drive.google.com/uc?export=download&id=1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R",
+  PHENOMAPR_GSE253260_INFO_URL   = "https://drive.google.com/uc?export=download&id=1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"
 )
 
 # Then knit or run the vignettes, e.g.:
@@ -75,6 +79,8 @@ export PHENOMAPR_CRA001160_META_URL="https://drive.google.com/uc?export=download
 export PHENOMAPR_SPATIAL_RDS_URL="https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"
 export PHENOMAPR_GSE205154_MATRIX_URL="https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN"
 export PHENOMAPR_GSE205154_INFO_URL="https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"
+export PHENOMAPR_GSE253260_EXPR_URL="https://drive.google.com/uc?export=download&id=1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"
+export PHENOMAPR_GSE253260_INFO_URL="https://drive.google.com/uc?export=download&id=1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"
 R
 ```
 
@@ -96,4 +102,6 @@ env:
   PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}
   PHENOMAPR_GSE205154_MATRIX_URL: ${{ secrets.PHENOMAPR_GSE205154_MATRIX_URL }}
   PHENOMAPR_GSE205154_INFO_URL: ${{ secrets.PHENOMAPR_GSE205154_INFO_URL }}
+  PHENOMAPR_GSE253260_EXPR_URL: ${{ secrets.PHENOMAPR_GSE253260_EXPR_URL }}
+  PHENOMAPR_GSE253260_INFO_URL: ${{ secrets.PHENOMAPR_GSE253260_INFO_URL }}
 ```
