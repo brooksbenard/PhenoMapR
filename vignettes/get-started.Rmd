@@ -2,7 +2,7 @@
 title: "Overview"
 output:
   html_document:
-    code_folding: hide
+    # code_folding: hide
     toc: true
     toc_float: true
 ---
@@ -11,14 +11,15 @@ output:
 
 <img src="../man/figures/PhenoMapR_stacked_modalities.png" alt="PhenoMapR stacked modalities" align="right" width="390" />
 
-Single-cell and spatial transcriptomics methods provide an improved resolution and understanding of the cell types and spatial organization underlying healthy and malignant biology. However, many single-cell and spatial studies lack sufficient sample size for robust associations between a sample phenotype (e.g. overall survival) and cell types or spatial locations. In contrast, lower resolution methods such as bulk gene expression profiling have been applied at scale in large, clinically-annotated datasets, providing robust signatures for phenotype associations such as outcomes across cancers (e.g. [PRECOG 2.0](https://precog.stanford.edu/)). **PhenoMapR bridges this gap between the improved resolution of single-cell/spatial approaches and the phenotype signals identified across bulk expression studies** by mapping the phenotypic signal directly onto individual cells and spatial locations. Although developed with a cancer-centric focus, PhenoMapR can be used to map any phenotypic signal associated with bulk expression datasets across transcriptomic data modalities.
+Single-cell and spatial transcriptomics methods provide an improved resolution and understanding of the cell types and spatial organization underlying healthy and malignant biology. However, many single-cell and spatial studies lack sufficient sample size for robust associations between a sample phenotype (e.g. overall survival) and cell types or spatial locations. In contrast, lower resolution methods such as bulk gene expression profiling have been applied at scale in large, clinically-annotated datasets, providing robust signatures for phenotype associations such as outcomes across cancers (e.g. [PRECOG 2.0](https://precog.stanford.edu/)). **PhenoMapR bridges this gap between the improved resolution of single-cell/spatial approaches and the robust phenotype signals identified across bulk expression studies by mapping the phenotypic signal directly onto individual cells and spatial locations**. Although developed with a cancer-centric focus, `PhenoMapR` can be used to map any phenotypic signal associated with bulk expression datasets across transcriptomic data modalities.
 
---- 
+<!-- ---  -->
 
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
 
 ## Features
 
-PhenoMapR is intended to be a flexible framework for mapping phenotypic signal between gene expression data acquired and stored in different formats. Some of the main features of PhenoMapR are:
+`PhenoMapR` is intended to be a flexible framework for mapping phenotypic signal between gene expression data acquired and stored in different formats. Some of the main features are:
 
 | Feature | Description |
 |:----------|:-------------|
@@ -27,18 +28,21 @@ PhenoMapR is intended to be a flexible framework for mapping phenotypic signal b
 | **Flexible Scoring** | Score bulk, single-cell, and spatial inputs. For single-cell and spatial data, pseudobulk scoring can also be performed |
 | **Custom Signatures** | Not interested in cancer? Generate and/or use your own z-score phenotype references |
 | **Marker Gene Identification** | Automated marker gene identification of phenotype associated cells/spots |
+| **Visualization** | Summary plots for dataset results (marker gene heatmaps, cell type score enrichment, etc.) |
 | **Efficient** | Optimized approach for ultra-fast scoring |
 
---- 
+<!-- ---  -->
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
+
 
 ## Getting Started
 
-The primary function of PhenoMapR is **`PhenoMap()`**. The basic use of this function takes a gene expression file **+** a reference phenotype signature and generates a dataframe of PhenoMapR score per sample/cell/spot. For single-cell and spatial inputs, a sample-level PhenoMapR score can be generated using the pseudobulk argument.
+The primary function of PhenoMapR is **`PhenoMap()`**. The basic use of this function takes a gene expression file **+** a reference phenotype signature and generates a PhenoMapR score per sample/cell/spot. For single-cell and spatial inputs, a sample-level PhenoMapR score can be generated using the pseudobulk argument.
 
 **`PhenoMap()` arguments:**
 
 | Argument | Description |
-|----------|-------------|
+|:----------|:-------------|
 | **expression** | Expression data (matrix, Seurat, SCE, etc.) |
 | **reference** | Reference dataset name or custom data.frame |
 | **cancer_type** | Cancer type label (required for built-in references) |
@@ -49,10 +53,13 @@ The primary function of PhenoMapR is **`PhenoMap()`**. The basic use of this fun
 | **slot** | Seurat slot ("data", "counts", "scale.data") |
 | **verbose** | Print progress messages |
 
-For the simplest use case of PhenoMapR, impliment the following:
-
+For the simplest use case of PhenoMapR, implement the following:
 ```r
-# Load PhenoMapR in your R session using:
+# Download PhenoMapR using the following:
+if (!require(devtools)) install.packages("devtools")
+devtools::install_github("brooksbenard/PhenoMapR")
+
+# Load PhenoMapR in your R session:
 library(PhenoMapR)
 
 # Score samples in a bulk expression matrix
@@ -72,9 +79,11 @@ scores <- PhenoMap(
 )
 ```
 
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
+
 ## Supported Input Types
 
-Each input type is summarized below; expand a section to see example code.
+`PhenoMapR` is designed to work on a range of gene expression input formats. The primary requirement, regardless of input type, is that the expression data takes the form of `Genes (rownames) x Samples/Cells/Spots (colnames)`.
 
 <details>
 <summary><strong> Matrix/Data.frame</strong></summary>
@@ -163,48 +172,41 @@ scores <- PhenoMap(
 
 </details>
 
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
+
 ## Built-in Reference Datasets
 
-Prognostic meta-z scores for adult, pediatric, and immunotherapy references in PhenoMapR are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)).
+`PhenoMapR` comes pre-loaded with a comprehensive suite of pan-cancer meta-z signatures for gene expression and outcomes across adult, pediatric, and immunotherapy-treated cohorts. These databases are sourced from **PRECOG 2.0** ([Benard et al., *Nucleic Acids Research* 2026](https://academic.oup.com/nar/article/54/D1/D1579/8324954)). PRECOG 2.0 includes 335 cancer datasets with survival or response data for >46,000 patients, covering ~55 malignancies.
 
-Cancer types available for scoring in each built-in database (TCGA, Adult PRECOG, Pediatric PRECOG, ICI PRECOG). Use `list_cancer_types("precog")` (or `"tcga"`, `"pediatric_precog"`, `"ici_precog"`) to see labels for your reference of choice.
-
+To see cancer types available for scoring in each built-in database (TCGA, Adult PRECOG, Pediatric PRECOG, ICI PRECOG), use **`list_cancer_types("precog")`** (or `"tcga"`, `"pediatric_precog"`, `"ici_precog"`) to see cancer labels for your reference of choice.
 <div class="reference-coverage-plot">
-
 ![Reference coverage by database and cancer type](../man/figures/reference_coverage.png)
 
 </div>
 
-## Under the hood
-At a high level, PhenoMapR:
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
 
-- **Processes the input gene expression data** into a cleaned format by updating gene IDs and normalizing the expression.
-- **Selects pan-cancer prognostic meta-z scores** from PRECOG/TCGA based on input cancer type.
+## Under the hood
+At a high level, `PhenoMapR`:
+
+- **Processes the input gene expression data** into a cleaned format by updating gene IDs and normalizing the expression (if needed).
+- **Selects pan-cancer prognostic meta-z score signatures** from PRECOG/TCGA based on input cancer type.
 - **Filters to strongly prognostic genes** (by |z-score|) and keeps intersecting genes between reference and query data.
 - **Computes weighted-sum scores** per sample/cell/spot, where weights are prognostic z-scores. Scores are computed almost instantly by taking the cross product of the expression matrix and z-score signature vector.
-- **Optionally defines prognostic groups and markers**, by slicing the score distribution (e.g. top/bottom 5%) and running differential expression.
+- **Optionally defines prognostic groups and markers** by slicing the score distribution (e.g. top/bottom 5%) and running `Seurat::FindAllMArkers()`.
 
 ![PhenoMapR schematic](../man/figures/PhenoMapR_schematic.png)
 
-## Vignettes
-
-Detailed walkthroughs for the main uses of PhenoMapR (on the [pkgdown site](https://brooksbenard.github.io/PhenoMapR/articles/index.html) and in the repo under `vignettes/` [here](https://github.com/brooksbenard/PhenoMapR/tree/main/vignettes)):
-
-| Vignette | Description |
-|----------|-------------|
-| **[Score Single-cell data](single-cell.html)** | Score PAAD single cells (CRA001160) with **TCGA** and **PRECOG** Pancreatic references; scatterplot and boxplots by cell type; prognostic markers and proportion by sample. Data: expression H5 + CellMetainfo from Drive. |
-| **[Score Spatial transcriptomics data](spatial-transcriptomics.html)** | Score spatial transcriptomics spots with PRECOG **Pancreatic**; score distributions, prognostic groups, and spatial maps of score and group on the tissue image. |
-| **[Score bulk expression samples](bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. Data from Drive. |
-| **[Generate and use a custom reference signature](custom-reference.html)** | Build a custom gene z-score reference from bulk expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
-
-<!-- **Vignette data:** The article datasets are hosted on [Google Drive](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (too large for the repo). When you run or knit an article, missing files are downloaded automatically if the **googledrive** package is installed (e.g. `install.packages("PhenoMapR", dependencies = TRUE)`). You can also [download the files manually](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) into `vignettes/` and run from the package root. See `vignettes/README.md` in the repo for all options. -->
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
 
 ## Advanced Usage
 
-Although developed to provide a cancer-centric focus, PhenoMapR has some broad functionality that can be applied outside of cancer. 
+`PhenoMapR` was built with the primary goal of helping to quickly identify samples, cells, and spatial locations that might be most therapeutically relevant in cancer. It accomplishes this, in part, by incorporating the most comprehensive databases of gene expression associations with outcomes across cancers (TCGA and PRECOG). However, rare cancer types not included in TCGA/PRECOG and emerging immunotherapy datasets will provide valuable resources from which to derive robust prognostic signatures. To remain flexible in this evolving landscape, we provide functionality in `PhenoMapR` to use and derive custom reference signatures from proprietary and emerging bulk expression datasets.
+
+*Additionally, although developed with a cancer-centric focus*, `PhenoMapR` has some broad functionality that can be applied outside of cancer. 
 
 ### Custom Reference Data
-Maybe you have a specific gene signature or pre-computed z-score phenotype reference you would like to score against. Simply upload your custom reference signature (rownames are HUGO IDs and columns are z-scores).
+Maybe you have a specific gene signature or pre-computed gene z-score phenotype reference you would like to score against. Simply upload your custom reference signature (rownames are HUGO IDs and columns are z-scores) and score your input expression data.
 ```r
 # Create custom z-score reference
 custom_ref <- data.frame(
@@ -220,7 +222,7 @@ scores <- PhenoMap(
 ```
 
 ### Derive reference from bulk expression and phenotype
-If you have bulk expression (samples × genes) and a phenotype (e.g. clinical response (R/NR), time-to-survival (with censor), or any other continuous phenotype, the PhenoMapR **`derive_reference_from_bulk()`** function allows you to derive gene-level z-scores and use them as the reference for scoring bulk, single-cell, or spatial input data. The function cleans gene names to currently approved HUGO symbols, checks/normalizes expression, then computes association z-scores (Cox for survival, logistic regression for binary, correlation for continuous).
+If you have bulk expression (samples × genes) and a phenotype (e.g. clinical response (R/NR), time-to-survival (with censor), or any other continuous phenotype), the `PhenoMapR` **`derive_reference_from_bulk()`** function allows you to derive gene-level z-scores and use them as the reference for scoring bulk, single-cell, or spatial input data. The function cleans gene names to currently approved HUGO symbols, checks/normalizes expression, then computes gene association z-scores (Cox for survival, logistic regression for binary, correlation for continuous).
 ```r
 # Bulk: samples in rows, genes in columns
 bulk_expr <- matrix(...)   # e.g. 50 samples × 5000 genes
@@ -244,10 +246,10 @@ scores <- PhenoMap(expression = my_seurat, reference = ref)
 
 For survival, provide `survival_time` and `survival_event` column names and set `phenotype_type = "survival"`. Optional: install `HGNChelper` for HUGO symbol cleaning and `survival` for Cox models.
 
-### Pseudobulk Aggregation
-Many single-cell and spatial datasets include multiple samples. It is fair to assume that the cell/spot score distribution might be heavily weighted by the sample from which they came. To rank samples in a dataset based on their overall phenotype score, setting **`pseudobulk = TRUE`** and selecting the sample/patient metadata label will perform pseudobulking of cells/spots and perform the **`PhenoMap()**` function on the aggregate expression profile of each sample in the dataset. This may help identify if the most phenotypically relevant cells/spots in the dataset are enriched in samples with a phenotype skew (e.g. more adverse cells being enriched in more adversely prognostic patients).
+### Pseudobulk Aggregation and Scoring
+Many single-cell and spatial datasets include multiple samples. It is fair to assume that the cell/spot score distribution across a dataset might be heavily skewed by the sample from which they came. To rank samples in a dataset based on their overall phenotype score, set **`pseudobulk = TRUE`** and select the sample/patient metadata label to perform pseudobulking of cells/spots. The **`PhenoMap()`** function will then score the aggregate expression profile of each sample in the dataset. **`plot_pseudobulk_scores()`** can be used to visualize the sample score distribution for your dataset. This may help identify if the most phenotypically relevant cells/spots in the dataset are enriched in samples with a phenotype skew (e.g. more adverse cells being enriched in more adversely prognostic patients).
 ```r
-# Aggregate single cells by patient before scoring
+# Aggregate single cells by sample to score samples rather than cells/spots
 scores <- PhenoMap(
   seurat_obj,
   reference = "tcga",
@@ -258,7 +260,7 @@ scores <- PhenoMap(
 ```
 
 ### Normalize Scores
-The weighted-sum scoring approach generates absolute values as output. The **`normalize_scores()`** function converts scores to a z-score for sample-level relative comparisons.
+The weighted-sum scoring approach of `PhenoMapR` generates absolute values as output. Negative scores reflect an overall favorable signature while positive scores reflect a more adverse signature. The **`normalize_scores()`** function converts PhenoMap scores to z-scores for sample-level relative comparisons.
 ```r
 scores_df <- PhenoMap(...)
 
@@ -267,13 +269,17 @@ scores_df$score_zscore <- normalize_scores(scores_df[, 1])
 ```
 
 ### Prognostic Groups and Marker Genes
-Define the top and bottom 5% prognostic cells per dataset (adverse = highest scores, favorable = lowest) and find unique marker genes using **Seurat's FindMarkers** (requires Seurat):
+A major advantage of `PhenoMapR` is the ability to rank-order all samples/cells/locations based on their PhenoMap score. To help characterize the samples/cells/spots that are most phenotypically relevant, we provide some high-level analysis functions:
+
+The **`define_prognostic_groups()`** function uses a heuristic threshold that defines the top and bottom n% prognostic cells per dataset (adverse = highest scores, favorable = lowest). This function defaults to selecting the top and bottom 5th percentile to label as "adverse" and "favoable", however the user can dynamically set this threshold based on their desired stringency.
+
+The **`find_prognostic_markers()`** function takes the group labels from **`define_prognostic_groups()`** and finds unique marker genes for those populations using **Seurat's FindMarkers** (requires Seurat):
 ```r
 # Score and define groups (top 5% = adverse, bottom 5% = favorable)
 scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 groups <- define_prognostic_groups(scores, percentile = 0.05)
 
-# One group column per score; values: "adverse", "favorable", "middle"
+# One group column per score; values: "adverse", "favorable", "other"
 table(groups$prognostic_group_weighted_sum_score_precog_BRCA)
 
 # Find marker genes via Seurat::FindMarkers (adverse vs rest, favorable vs rest)
@@ -287,12 +293,30 @@ head(markers$adverse_markers)   # genes enriched in top 5% (worst prognosis)
 head(markers$favorable_markers) # genes enriched in bottom 5% (best prognosis)
 ```
 
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
+
+## Vignettes
+
+Detailed walkthroughs for the main uses of `PhenoMapR` (on the [pkgdown site](https://brooksbenard.github.io/PhenoMapR/articles/index.html) and in the repo under `vignettes/` [here](https://github.com/brooksbenard/PhenoMapR/tree/main/vignettes)):
+
+| Vignette | Description |
+|----------|-------------|
+| **[Score Single-cell data](single-cell.html)** | Score a pancreatic cancer single cell dataset (CRA001160) with **TCGA** and **PRECOG** Pancreatic references; scatterplot and boxplots by cell type; prognostic markers and proportion by sample. |
+| **[Score Spatial transcriptomics data](spatial-transcriptomics.html)** | Process a spatial transcriptomics sample from HTAN with PRECOG **Pancreatic**; score distributions, prognostic groups, and spatial maps of score and group on the tissue image. |
+| **[Score bulk expression data](bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. |
+| **[Generate and use a custom reference signature](custom-reference.html)** | Build a custom gene z-score reference from bulk expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
+
+<!-- **Vignette data:** The article datasets are hosted on [Google Drive](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (too large for the repo). When you run or knit an article, missing files are downloaded automatically if the **googledrive** package is installed (e.g. `install.packages("PhenoMapR", dependencies = TRUE)`). You can also [download the files manually](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) into `vignettes/` and run from the package root. See `vignettes/README.md` in the repo for all options. -->
+
+<hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
+
+
 ## Citation
 
-If you use PhenoMapR, please cite the software and the reference datasets you use.
+If you use `PhenoMapR`, please cite the software and the reference datasets you use.
 
 **PhenoMapR (software)**  
-Benard B. PhenoMapR: map phenotypes from bulk gene expression onto single cell, spatial, and bulk transcriptomics. *R package*. https://github.com/brooksbenard/PhenoMapR. See also `CITATION.cff` in the repository for machine-readable citation.
+Benard B. PhenoMapR: Phenotype mapping from bulk gene expression onto single cell, spatial, and bulk transcriptomics. *R package*. https://github.com/brooksbenard/PhenoMapR. See also `CITATION.cff` in the repository for machine-readable citation.
 
 **Reference datasets**
 

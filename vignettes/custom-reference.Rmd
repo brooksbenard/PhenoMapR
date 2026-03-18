@@ -20,6 +20,9 @@ This vignette uses the following pre-processed data:
 2. **Derive a custom gene z-score reference** from expression and overall survival with **`derive_reference_from_bulk()`**.
 3. Score samples with the resulting custom reference.
 4. Stratify GSE253260 overall survival by its **own** custom signature score (median split).
+5. Inspect cohort-wide score distribution by disease stage and overall survival by stage.
+6. **KM within each disease stage** using the cohort-wide score and cohort-wide median split.
+7. **Derive stage-specific** custom references and re-stratify survival within each stage by stage-specific median.
 
 ## 1. Load expression and phenotype data
 Load the pre-processed bulk gene expression and sample annotations. This dataset contains a range of patients across different disease stages, and we will get back to this later in the vignette.
@@ -49,7 +52,8 @@ googledrive::drive_download(
   overwrite = TRUE
 )
 
-pheno <- readRDS("GSE253260_info.rds")
+pheno <- readRDS("GSE253260_info.rds") %>%
+  dplyr::filter(geo_accession %in% rownames(bulk_mat))
 
 # Plot cohort demographics
 dat_demo <- pheno %>%
@@ -151,83 +155,7 @@ suppressPackageStartupMessages({
   library(grid)
 })
 
-# # Using the output of derive_reference_from_bulk() from above
-# df_z <- data.frame(gene = rownames(ref_custom), z = as.numeric(ref_custom[[1]]))
-# df_z <- df_z[is.finite(df_z$z) & !is.na(df_z$gene) & nzchar(df_z$gene), ]
-# df_z <- df_z[order(df_z$z), ]
-# df_z$sig <- abs(df_z$z) > 2
-# 
-# # 1xN matrix, columns ordered by z
-# mat <- matrix(df_z$z, nrow = 1)
-# colnames(mat) <- df_z$gene
-# rownames(mat) <- "Survival z-score"
-# 
-# # label top/bottom 15 by z
-# lab_n <- min(15L, floor(ncol(mat) / 2L))
-# mark_at <- c(seq_len(lab_n), (ncol(mat) - lab_n + 1L):ncol(mat))
-# mark_labels <- colnames(mat)[mark_at]
-# 
-# col_fun <- circlize::colorRamp2(
-#   c(min(df_z$z), 0, max(df_z$z)),
-#   c("#2166AC", "white", "#B2182B")
-# )
-# 
-# # |z|>2 indicator: thin bar on top
-# sig_dir <- ifelse(df_z$z <= -2, "neg",
-#            ifelse(df_z$z >= 2,  "pos", "none"))
-# 
-# # Top annotation (marks for gene labels)
-# ha_top <- HeatmapAnnotation(
-#   marks = anno_mark(
-#     at = mark_at,
-#     labels = mark_labels,
-#     side = "top",
-#     labels_gp = gpar(fontsize = 8),
-#     link_gp = gpar(col = "grey50", lwd = 0.6),
-#     padding = unit(2, "mm")
-#   ),
-#   which = "column",
-#   annotation_height = unit(22, "mm"),
-#   show_annotation_name = FALSE
-# )
-# 
-# # Bottom annotation (significance strip)
-# ha_bottom <- HeatmapAnnotation(
-#   `|z|>2` = anno_simple(
-#     sig_dir,
-#     col = c(
-#       "none" = "transparent",
-#       "neg"  = "#2166AC",  # blue for z < -2
-#       "pos"  = "#B2182B"   # red  for z > 2
-#     ),
-#     height = unit(3, "mm"),  # Made taller for visibility
-#     border = FALSE
-#   ),
-#   which = "column",
-#   show_annotation_name = TRUE,  # Show the "|z|>2" label
-#   annotation_name_side = "right"
-# )
-# 
-# # Create heatmap with BOTH annotations
-# ht <- Heatmap(
-#   mat,
-#   col = col_fun,
-#   cluster_rows = FALSE,
-#   cluster_columns = FALSE,
-#   show_row_names = FALSE,
-#   show_column_names = FALSE,
-#   top_annotation = ha_top,
-#   bottom_annotation = ha_bottom,  # Add bottom annotation
-#   heatmap_legend_param = list(
-#     title = "Survival z-score",
-#     direction = "horizontal",  # Make legend horizontal
-#     title_position = "topcenter"
-#   )
-# )
-# 
-# # Draw with legend at bottom
-# draw(ht, heatmap_legend_side = "bottom")
-
+# Using the output of derive_reference_from_bulk() from above, plot the signature heatmap
 plot_reference_signature(ref_custom, row_title = "Survival z-score")
 
 ```
@@ -250,7 +178,7 @@ pheno$score_custom <- scores_custom[match(pheno$geo_accession, rownames(scores_c
 ```
 
 
-Next, we plot the 
+Next, we plot the score distributions across the cohort, colored by median split
 ```{r score-distribution, fig.width=9, fig.height=3, fig.align='center'}
 suppressPackageStartupMessages(library(ggplot2))
 
@@ -520,7 +448,108 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
 }
 ```
 
-## 7. Stage-specific custom references and within-stage re-stratification
+## 7. KM within each disease stage (cohort-wide median split)
+We next ask whether the cohort-wide custom score stratifies survival **within** each disease stage. For each stage we keep the same cohort-wide score and the same cohort-wide median: samples above the overall median are "High", below are "Low". KM is then run separately in each stage.
+
+```{r km-within-stage-cohort-median, fig.width=10, fig.height=8}
+if (!requireNamespace("survminer", quietly = TRUE)) {
+  message("Package 'survminer' not installed; skipping within-stage KM (cohort median).")
+} else if (!requireNamespace("patchwork", quietly = TRUE)) {
+  message("Package 'patchwork' not installed; skipping within-stage KM (cohort median).")
+} else {
+  suppressPackageStartupMessages(library(survival))
+  suppressPackageStartupMessages(library(survminer))
+  suppressPackageStartupMessages(library(patchwork))
+  suppressPackageStartupMessages(library(dplyr))
+
+  stage_map <- function(x) {
+    x_low <- tolower(x)
+    dplyr::case_when(
+      grepl("meta", x_low) ~ "Metastatic",
+      grepl("loc", x_low)  ~ "Locally Advanced",
+      grepl("border", x_low) ~ "Borderline",
+      grepl("res", x_low)  ~ "Resectable",
+      TRUE ~ NA_character_
+    )
+  }
+  pal_stage <- c(
+    "Resectable" = "#74B9FF",
+    "Borderline" = "#26A69A",
+    "Locally Advanced" = "#F39C12",
+    "Metastatic" = "#FF6B6B"
+  )
+
+  # Build per-sample data: stage, OS (months), cohort-wide score
+  os_time_raw <- suppressWarnings(as.numeric(pheno$OS_Time))
+  os_event_raw <- suppressWarnings(as.integer(pheno$OS_Censor))
+  time_mo <- os_time_raw
+  if (is.finite(max(time_mo, na.rm = TRUE)) && max(time_mo, na.rm = TRUE) > 400) {
+    time_mo <- time_mo / 30.4375
+  }
+  dat_ws <- data.frame(
+    geo_accession = as.character(pheno$geo_accession),
+    stage_group = factor(stage_map(pheno$Disease_Stage), levels = names(pal_stage)),
+    time_months = time_mo,
+    OS_event = os_event_raw,
+    score_custom = pheno$score_custom,
+    stringsAsFactors = FALSE
+  )
+  dat_ws <- subset(dat_ws, !is.na(stage_group) & !is.na(time_months) & !is.na(OS_event) & is.finite(score_custom))
+
+  med_cohort <- median(pheno$score_custom, na.rm = TRUE)
+  dat_ws$grp <- factor(
+    ifelse(dat_ws$score_custom >= med_cohort, "High", "Low"),
+    levels = c("Low", "High")
+  )
+
+  plots_cohort <- list()
+  for (st in names(pal_stage)) {
+    dat_st <- subset(dat_ws, stage_group == st)
+    if (nrow(dat_st) < 8) next
+    if (length(unique(dat_st$grp)) < 2) next
+
+    fit <- survfit(Surv(time_months, OS_event) ~ grp, data = dat_st)
+    lr <- survdiff(Surv(time_months, OS_event) ~ grp, data = dat_st)
+    p_lr <- 1 - pchisq(lr$chisq, df = 1)
+    cox <- coxph(Surv(time_months, OS_event) ~ grp, data = dat_st)
+    hr <- exp(coef(cox))[1]
+    ci <- as.vector(exp(confint(cox)))[1:2]
+    label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+                     format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
+    max_t <- max(dat_st$time_months, na.rm = TRUE)
+
+    col_high <- pal_stage[[st]]
+    col_low <- grDevices::adjustcolor(col_high, alpha.f = 0.55)
+
+    p <- ggsurvplot(
+      fit,
+      data = dat_st,
+      palette = unname(c(col_low, col_high)),
+      risk.table = FALSE,
+      legend.title = "Cohort-wide score",
+      legend.labs = c("Low", "High"),
+      title = st,
+      xlab = "Time (months)",
+      ylab = "Overall survival probability",
+      pval = label,
+      pval.coord = c(max_t * 0.55, 0.95),
+      pval.size = 5
+    )
+    p$plot <- p$plot + ggplot2::aes(linetype = grp) +
+      ggplot2::scale_linetype_manual(values = c("Low" = "solid", "High" = "dashed")) +
+      ggplot2::guides(color = "none")
+    plots_cohort[[st]] <- p$plot
+  }
+
+  if (length(plots_cohort) > 0) {
+    ordered <- plots_cohort[intersect(names(pal_stage), names(plots_cohort))]
+    print(wrap_plots(ordered, ncol = 2))
+  }
+}
+```
+
+## 8. Stage-specific custom references and within-stage re-stratification
+We now derive **stage-specific** survival signatures: for each disease stage we fit a Cox model on that stage only, obtain a stage-specific z-score reference, score only that stage’s samples with that reference, and stratify by the **stage-specific** median (High/Low within that stage). This tests whether a signature tailored to each stage can further stratify survival within that stage.
 
 ```{r stage-specific-custom, fig.width=10, fig.height=8}
 if (!requireNamespace("survminer", quietly = TRUE)) {
@@ -629,9 +658,9 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
 }
 ```
 
-## 8 Conclusions
+## 9. Conclusions
 
-## 9. References
+## 10. References
 
 - Nicole et al Predictive genomic and transcriptomic analysis on endoscopic ultrasound-guided fine needle aspiration materials from primary pancreatic adenocarcinoma: a prospective multicentre study **GSE253260**: [GEO: GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE253260).
 
