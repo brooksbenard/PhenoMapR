@@ -86,47 +86,36 @@ derive_reference_from_bulk <- function(bulk_expression,
     stop("'bulk_expression' must be a matrix or data.frame")
   }
 
-  # Expected input: genes (rows) x samples (columns). Heuristic: if there are not
-  # far more genes than samples, assume user provided samples x genes and transpose.
-  n_row <- nrow(bulk_expression)
-  n_col <- ncol(bulk_expression)
-  if (n_row > 0 && n_col > 0 && !is.null(rownames(bulk_expression)) && !is.null(colnames(bulk_expression))) {
-    if (n_row < 10 * n_col) {
-      if (verbose) {
+  # Expected input: genes (rows) x samples (columns).
+  #
+  # Heuristic: there should be far more genes than samples. If instead the number
+  # of columns is orders of magnitude larger than the number of rows, the matrix
+  # is likely samples x genes and should be transposed.
+  if (nrow(bulk_expression) > 0 && ncol(bulk_expression) > 0 &&
+      !is.null(rownames(bulk_expression)) && !is.null(colnames(bulk_expression))) {
+    if (ncol(bulk_expression) > 10 * nrow(bulk_expression)) {
+      if (isTRUE(verbose)) {
         message(
           "Expression format transposed: expected genes as rows and samples as columns ",
-          "(many more rows than columns). Matrix was transposed."
+          "(far more genes than samples)."
         )
       }
       bulk_expression <- t(bulk_expression)
-      # After transpose: rows = samples, cols = genes
-      sample_ids <- rownames(bulk_expression)
-      gene_names <- colnames(bulk_expression)
-      if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(nrow(bulk_expression)))
-      if (is.null(gene_names)) gene_names <- paste0("G", seq_len(ncol(bulk_expression)))
-      rownames(bulk_expression) <- sample_ids
-      colnames(bulk_expression) <- gene_names
-    } else {
-      # Input is genes x samples. Transpose to samples x genes for downstream.
-      gene_names <- rownames(bulk_expression)
-      sample_ids <- colnames(bulk_expression)
-      if (is.null(gene_names)) gene_names <- paste0("G", seq_len(nrow(bulk_expression)))
-      if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(ncol(bulk_expression)))
-      bulk_expression <- t(bulk_expression)
-      rownames(bulk_expression) <- sample_ids
-      colnames(bulk_expression) <- gene_names
     }
-  } else {
-    # No dimnames: assume genes x samples, transpose to samples x genes
-    gene_names <- rownames(bulk_expression)
-    sample_ids <- colnames(bulk_expression)
-    if (is.null(gene_names)) gene_names <- paste0("G", seq_len(nrow(bulk_expression)))
-    if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(ncol(bulk_expression)))
-    bulk_expression <- t(bulk_expression)
-    rownames(bulk_expression) <- sample_ids
-    colnames(bulk_expression) <- gene_names
   }
-  # Now: rows = samples, cols = genes
+
+  # At this point: genes x samples (or best-effort if dimnames missing).
+  gene_names <- rownames(bulk_expression)
+  sample_ids <- colnames(bulk_expression)
+  if (is.null(gene_names)) gene_names <- paste0("G", seq_len(nrow(bulk_expression)))
+  if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(ncol(bulk_expression)))
+  rownames(bulk_expression) <- gene_names
+  colnames(bulk_expression) <- sample_ids
+
+  # Downstream modeling expects samples x genes
+  bulk_expression <- t(bulk_expression)
+  rownames(bulk_expression) <- sample_ids
+  colnames(bulk_expression) <- gene_names
 
   phenotype <- as.data.frame(phenotype)
   if (nrow(phenotype) == 0) stop("'phenotype' has no rows")

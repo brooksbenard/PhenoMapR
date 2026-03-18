@@ -13,7 +13,7 @@ Here, we use the [GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=
 
 This vignette uses the following pre-processed data:
 
-- `GSE253260_expression.rds` (expression matrix, genes × samples)
+- `GSE253260_expression.rds` (expression matrix, samples × genes)
 - `GSE253260_info.rds` (clinical metadata)
 
 1. Load expression and sample annotations and visualize metadata.
@@ -131,7 +131,8 @@ Before we perform any subset-specific analyses, we will first use all patients i
 Expression for **`derive_reference_from_bulk()`** must be **genes as rows and samples as columns**. Sample IDs in the phenotype must match the **column names** of the expression matrix. For the phenotype dataframe, specify the sample ID column, phenotype type (here, overall survival), and the column names for time and event.
 ```{r derive-ref, fig.align='center'}
 ref_custom <- suppressWarnings(derive_reference_from_bulk(
-    bulk_expression = bulk_mat,
+    # derive_reference_from_bulk expects genes × samples; downloaded matrix is samples × genes
+    bulk_expression = t(bulk_mat),
     phenotype = pheno,
     sample_id_column = "geo_accession",
     phenotype_type = "survival",
@@ -347,7 +348,7 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
     " (", sprintf("%.2f", ci[, 1]), "-", sprintf("%.2f", ci[, 2]), ")"
   )
   label <- paste0(
-    "p = ", format.pval(p_lr, digits = 2, eps = 0.001),
+    "p ", format.pval(p_lr, digits = 2, eps = 0.001),
     "\n", paste(hr_lines, collapse = "\n")
   )
   max_t <- max(dat_stage$time_months, na.rm = TRUE)
