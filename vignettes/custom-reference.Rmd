@@ -4,12 +4,14 @@ output:
   html_document:
     # code_folding: hide
     toc: true
+    toc_float: true
+    toc_collapsed: true
 ---
 
 ## Overview
 Some rare cancer types are not represented in TCGA or PRECOG and are therefore not available for the built-in reference scoring in **`PhenoMapR`**. Additionally, you might have a proprietary dataset (cancer or not) with bulk gene expression and sample annotations that you would like to use as a phenotype signature reference. For these cases, **`PhenoMapR`** provides functionality to take a gene expression file and a sample annotation file and will generate gene-level z-scores for your phenotype of interest. This is performed with the **`derive_reference_from_bulk()`** function.
 
-Here, we use the [GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE253260) dataset to demonstrate how **`PhenoMapR`** generates phenotype signatures for use in downstream **`PhenoMap()`** scoring. GSE253260 contains bulk RNA-seq data for 317 PDAC samples with survival and other clinical annotations. 
+Here, we use the [GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE253260) dataset to demonstrate how **`PhenoMapR`** generates phenotype signatures for use in downstream **`PhenoMap()`** scoring. GSE253260 contains bulk RNA-seq data for 317 PDAC samples with survival and other clinical annotations. [[1]](#ref1)
 
 This vignette uses the following pre-processed data:
 
@@ -668,7 +670,10 @@ In this vignette, we demonstrated how to generate a custom phenotype signature u
 
 ## 10. References
 
-Nicole et al. Predictive genomic and transcriptomic analysis on endoscopic ultrasound-guided fine needle aspiration materials from primary pancreatic adenocarcinoma: a prospective multicentre study. **GSE253260**: [GEO: GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE253260).
+<a id="ref1"></a>
+**[1]** Nicolle, R. et al. Predictive genomic and transcriptomic analysis on endoscopic 
+ultrasound-guided fine needle aspiration materials from primary pancreatic 
+adenocarcinoma: A prospective multicentre study. EBioMedicine 108, 105339. (2024).
 
 ## Session Info
 
