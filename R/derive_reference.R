@@ -1,21 +1,24 @@
 #' Derive Reference Z-Scores from Bulk Expression and Phenotype
 #'
-#' When you have bulk expression (samples × genes) and a phenotype (binary,
-#' continuous, or survival), this function computes gene-level association
-#' z-scores that can be used as a custom reference in \code{\link{PhenoMap}}.
+#' When you have bulk expression (**genes as rows, samples as columns**) and a
+#' phenotype (binary, continuous, or survival), this function computes gene-level
+#' association z-scores that can be used as a custom reference in \code{\link{PhenoMap}}.
 #'
-#' Steps: (1) clean gene names to approved HUGO symbols, (2) check if expression
-#' is already normalized/scaled and normalize if needed, (3) compute phenotype
-#' association z-scores per gene (Cox for survival, logistic regression for
-#' binary, correlation for continuous).
+#' Steps: (1) ensure genes × samples format (transpose with message if heuristic
+#' suggests the matrix was provided as samples × genes), (2) clean gene names to
+#' approved HUGO symbols, (3) check if expression is normalized and normalize
+#' if needed, (4) compute phenotype association z-scores per gene (Cox for
+#' survival, logistic regression for binary, correlation for continuous).
 #'
-#' @param bulk_expression Matrix or data.frame. Bulk expression with **samples as
-#'   rows** and **genes as columns**. Can also be genes × samples; the function
-#'   will detect and transpose so that rows = samples.
+#' @param bulk_expression Matrix or data.frame. Bulk expression with **genes as
+#'   rows** and **samples as columns**. If the matrix appears to be samples ×
+#'   genes (e.g. fewer rows than columns), the function will transpose and
+#'   message the user.
 #' @param phenotype Data.frame with sample identifiers and phenotype column(s).
-#'   Must align with \code{bulk_expression} by sample ID (see \code{sample_id_column}).
+#'   Must align with \code{bulk_expression} by sample ID (see \code{sample_id_column});
+#'   sample IDs must match the **column names** of \code{bulk_expression}.
 #' @param sample_id_column Character. Column name in \code{phenotype} that
-#'   matches rownames (or colnames if transposed) of \code{bulk_expression}.
+#'   matches the column names of \code{bulk_expression} (sample IDs).
 #'   If \code{NULL}, the first column of \code{phenotype} is used.
 #' @param phenotype_column Character. Column name in \code{phenotype} for the
 #'   outcome. For \code{phenotype_type = "survival"} this is ignored; use
@@ -30,9 +33,6 @@
 #' @param survival_event Character. Column name in \code{phenotype} for event
 #'   indicator (0/1 or FALSE/TRUE). Required when
 #'   \code{phenotype_type = "survival"}.
-#' @param gene_axis Character. Either \code{"rows"} (genes are rows) or
-#'   \code{"cols"} (genes are columns). If \code{NULL}, guessed by dimensions
-#'   (if nrow > ncol, assume samples × genes).
 #' @param normalize Logical. If \code{TRUE}, run normalization when expression
 #'   looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.
 #' @param hugo_species Character. Species for HUGO symbol cleaning:
@@ -45,10 +45,10 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Simulated bulk: 50 samples × 100 genes
+#' # Simulated bulk: genes (rows) x samples (columns)
 #' set.seed(1)
-#' bulk <- matrix(rnorm(50 * 100), 50, 100,
-#'   dimnames = list(paste0("S", 1:50), paste0("G", 1:100)))
+#' bulk <- matrix(rnorm(100 * 50), 100, 50,
+#'   dimnames = list(paste0("G", 1:100), paste0("S", 1:50)))
 #' pheno <- data.frame(
 #'   sample_id = paste0("S", 1:50),
 #'   response = sample(c("R", "NR"), 50, replace = TRUE))
@@ -72,7 +72,6 @@ derive_reference_from_bulk <- function(bulk_expression,
                                        phenotype_type = c("auto", "survival", "binary", "continuous"),
                                        survival_time = NULL,
                                        survival_event = NULL,
-                                       gene_axis = NULL,
                                        normalize = TRUE,
                                        hugo_species = c("human", "mouse"),
                                        verbose = TRUE) {
@@ -87,20 +86,47 @@ derive_reference_from_bulk <- function(bulk_expression,
     stop("'bulk_expression' must be a matrix or data.frame")
   }
 
-  # Ensure samples are rows, genes are columns
-  if (is.null(gene_axis)) {
-    gene_axis <- if (nrow(bulk_expression) >= ncol(bulk_expression)) "rows" else "cols"
-  }
-  if (gene_axis == "rows") {
+  # Expected input: genes (rows) x samples (columns). Heuristic: if there are not
+  # far more genes than samples, assume user provided samples x genes and transpose.
+  n_row <- nrow(bulk_expression)
+  n_col <- ncol(bulk_expression)
+  if (n_row > 0 && n_col > 0 && !is.null(rownames(bulk_expression)) && !is.null(colnames(bulk_expression))) {
+    if (n_row < 10 * n_col) {
+      if (verbose) {
+        message(
+          "Expression format transposed: expected genes as rows and samples as columns ",
+          "(many more rows than columns). Matrix was transposed."
+        )
+      }
+      bulk_expression <- t(bulk_expression)
+      # After transpose: rows = samples, cols = genes
+      sample_ids <- rownames(bulk_expression)
+      gene_names <- colnames(bulk_expression)
+      if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(nrow(bulk_expression)))
+      if (is.null(gene_names)) gene_names <- paste0("G", seq_len(ncol(bulk_expression)))
+      rownames(bulk_expression) <- sample_ids
+      colnames(bulk_expression) <- gene_names
+    } else {
+      # Input is genes x samples. Transpose to samples x genes for downstream.
+      gene_names <- rownames(bulk_expression)
+      sample_ids <- colnames(bulk_expression)
+      if (is.null(gene_names)) gene_names <- paste0("G", seq_len(nrow(bulk_expression)))
+      if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(ncol(bulk_expression)))
+      bulk_expression <- t(bulk_expression)
+      rownames(bulk_expression) <- sample_ids
+      colnames(bulk_expression) <- gene_names
+    }
+  } else {
+    # No dimnames: assume genes x samples, transpose to samples x genes
+    gene_names <- rownames(bulk_expression)
+    sample_ids <- colnames(bulk_expression)
+    if (is.null(gene_names)) gene_names <- paste0("G", seq_len(nrow(bulk_expression)))
+    if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(ncol(bulk_expression)))
     bulk_expression <- t(bulk_expression)
+    rownames(bulk_expression) <- sample_ids
+    colnames(bulk_expression) <- gene_names
   }
   # Now: rows = samples, cols = genes
-  sample_ids <- rownames(bulk_expression)
-  gene_names <- colnames(bulk_expression)
-  if (is.null(sample_ids)) sample_ids <- paste0("S", seq_len(nrow(bulk_expression)))
-  if (is.null(gene_names)) gene_names <- paste0("G", seq_len(ncol(bulk_expression)))
-  rownames(bulk_expression) <- sample_ids
-  colnames(bulk_expression) <- gene_names
 
   phenotype <- as.data.frame(phenotype)
   if (nrow(phenotype) == 0) stop("'phenotype' has no rows")

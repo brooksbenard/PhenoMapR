@@ -222,13 +222,13 @@ scores <- PhenoMap(
 ```
 
 ### Derive reference from bulk expression and phenotype
-If you have bulk expression (samples × genes) and a phenotype (e.g. clinical response (R/NR), time-to-survival (with censor), or any other continuous phenotype), the `PhenoMapR` **`derive_reference_from_bulk()`** function allows you to derive gene-level z-scores and use them as the reference for scoring bulk, single-cell, or spatial input data. The function cleans gene names to currently approved HUGO symbols, checks/normalizes expression, then computes gene association z-scores (Cox for survival, logistic regression for binary, correlation for continuous).
+If you have bulk expression (**genes as rows, samples as columns**) and a phenotype (e.g. clinical response (R/NR), time-to-survival (with censor), or any other continuous phenotype), the `PhenoMapR` **`derive_reference_from_bulk()`** function derives gene-level z-scores for use as the reference when scoring bulk, single-cell, or spatial data. The function expects genes as rows and samples as columns; if the matrix appears to be the opposite, it will transpose and message. It then cleans gene names to approved HUGO symbols (if `HGNChelper` is installed), checks/normalizes expression, and computes gene association z-scores (Cox for survival, logistic regression for binary, correlation for continuous).
 ```r
-# Bulk: samples in rows, genes in columns
-bulk_expr <- matrix(...)   # e.g. 50 samples × 5000 genes
+# Bulk: genes (rows) x samples (columns); sample IDs = colnames
+bulk_expr <- matrix(...)   # e.g. 5000 genes x 50 samples
 pheno <- data.frame(
-  sample_id = rownames(bulk_expr),
-  response = c("R", "NR", ...)  # or time + event for survival
+  sample_id = colnames(bulk_expr),   # must match expression column names
+  response = c("R", "NR", ...)       # or time + event for survival
 )
 
 # Derive reference z-scores

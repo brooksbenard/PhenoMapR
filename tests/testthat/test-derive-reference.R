@@ -2,15 +2,15 @@
 # Minimal tests for derive_reference_from_bulk (binary and continuous)
 
 test_that("derive_reference_from_bulk returns data.frame for binary phenotype", {
-  # Samples in rows, genes in columns
+  # Genes (rows) x samples (columns)
   set.seed(1)
   n_samp <- 20
   n_genes <- 10
-  expr <- matrix(rnorm(n_samp * n_genes), nrow = n_samp, ncol = n_genes)
-  rownames(expr) <- paste0("S", seq_len(n_samp))
-  colnames(expr) <- paste0("G", seq_len(n_genes))
+  expr <- matrix(rnorm(n_genes * n_samp), nrow = n_genes, ncol = n_samp)
+  rownames(expr) <- paste0("G", seq_len(n_genes))
+  colnames(expr) <- paste0("S", seq_len(n_samp))
   pheno <- data.frame(
-    sample_id = rownames(expr),
+    sample_id = colnames(expr),
     response = rep(c("R", "NR"), each = 10),
     stringsAsFactors = FALSE
   )
@@ -20,7 +20,6 @@ test_that("derive_reference_from_bulk returns data.frame for binary phenotype", 
     sample_id_column = "sample_id",
     phenotype_column = "response",
     phenotype_type = "binary",
-    gene_axis = "cols",
     verbose = FALSE
   )
   expect_s3_class(ref, "data.frame")
@@ -29,7 +28,8 @@ test_that("derive_reference_from_bulk returns data.frame for binary phenotype", 
 })
 
 test_that("derive_reference_from_bulk errors when no sample overlap", {
-  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("A", "B"), c("G1", "G2", "G3")))
+  # Genes x samples; colnames = sample IDs. No overlap with pheno.
+  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("G1", "G2"), c("A", "B", "C")))
   pheno <- data.frame(sample_id = c("X", "Y"), y = c(1, 0))
   expect_error(
     derive_reference_from_bulk(expr, pheno, sample_id_column = "sample_id",
@@ -50,11 +50,11 @@ test_that("derive_reference_from_bulk continuous phenotype returns data.frame", 
   set.seed(2)
   n_samp <- 25
   n_genes <- 15
-  expr <- matrix(rnorm(n_samp * n_genes), nrow = n_samp, ncol = n_genes)
-  rownames(expr) <- paste0("S", seq_len(n_samp))
-  colnames(expr) <- paste0("G", seq_len(n_genes))
+  expr <- matrix(rnorm(n_genes * n_samp), nrow = n_genes, ncol = n_samp)
+  rownames(expr) <- paste0("G", seq_len(n_genes))
+  colnames(expr) <- paste0("S", seq_len(n_samp))
   pheno <- data.frame(
-    sample_id = rownames(expr),
+    sample_id = colnames(expr),
     continuous_y = rnorm(n_samp),
     stringsAsFactors = FALSE
   )
@@ -64,7 +64,6 @@ test_that("derive_reference_from_bulk continuous phenotype returns data.frame", 
     sample_id_column = "sample_id",
     phenotype_column = "continuous_y",
     phenotype_type = "continuous",
-    gene_axis = "cols",
     verbose = FALSE
   )
   expect_s3_class(ref, "data.frame")
@@ -72,7 +71,7 @@ test_that("derive_reference_from_bulk continuous phenotype returns data.frame", 
   expect_true(ncol(ref) >= 1)
 })
 
-test_that("derive_reference_from_bulk with gene_axis rows (genes as rows) works", {
+test_that("derive_reference_from_bulk accepts genes as rows and samples as columns", {
   set.seed(3)
   n_genes <- 8
   n_samp <- 12
@@ -90,7 +89,6 @@ test_that("derive_reference_from_bulk with gene_axis rows (genes as rows) works"
     sample_id_column = "id",
     phenotype_column = "y",
     phenotype_type = "binary",
-    gene_axis = "rows",
     verbose = FALSE
   )
   expect_s3_class(ref, "data.frame")
@@ -99,11 +97,12 @@ test_that("derive_reference_from_bulk with gene_axis rows (genes as rows) works"
 
 test_that("derive_reference_from_bulk uses first phenotype column when sample_id_column NULL", {
   set.seed(4)
-  expr <- matrix(rnorm(10 * 5), 10, 5)
-  rownames(expr) <- paste0("S", 1:10)
-  colnames(expr) <- paste0("G", 1:5)
+  # Genes x samples (enough genes so heuristic does not transpose)
+  expr <- matrix(rnorm(100 * 10), 100, 10)
+  rownames(expr) <- paste0("G", seq_len(100))
+  colnames(expr) <- paste0("S", 1:10)
   pheno <- data.frame(
-    sample_id = rownames(expr),
+    sample_id = colnames(expr),
     response = rep(c("A", "B"), each = 5),
     stringsAsFactors = FALSE
   )
@@ -113,7 +112,6 @@ test_that("derive_reference_from_bulk uses first phenotype column when sample_id
     sample_id_column = NULL,
     phenotype_column = "response",
     phenotype_type = "binary",
-    gene_axis = "cols",
     verbose = FALSE
   )
   expect_s3_class(ref, "data.frame")
@@ -124,11 +122,11 @@ test_that("derive_reference_from_bulk survival phenotype returns data.frame", {
   set.seed(5)
   n_samp <- 30
   n_genes <- 20
-  expr <- matrix(rnorm(n_samp * n_genes), nrow = n_samp, ncol = n_genes)
-  rownames(expr) <- paste0("S", seq_len(n_samp))
-  colnames(expr) <- paste0("G", seq_len(n_genes))
+  expr <- matrix(rnorm(n_genes * n_samp), nrow = n_genes, ncol = n_samp)
+  rownames(expr) <- paste0("G", seq_len(n_genes))
+  colnames(expr) <- paste0("S", seq_len(n_samp))
   pheno <- data.frame(
-    sample_id = rownames(expr),
+    sample_id = colnames(expr),
     time = runif(n_samp, 1, 10),
     event = sample(c(0, 1), n_samp, replace = TRUE),
     stringsAsFactors = FALSE
@@ -140,7 +138,6 @@ test_that("derive_reference_from_bulk survival phenotype returns data.frame", {
     phenotype_type = "survival",
     survival_time = "time",
     survival_event = "event",
-    gene_axis = "cols",
     verbose = FALSE
   )
   expect_s3_class(ref, "data.frame")
@@ -149,12 +146,12 @@ test_that("derive_reference_from_bulk survival phenotype returns data.frame", {
 
 test_that("derive_reference_from_bulk phenotype_type auto infers binary", {
   set.seed(6)
-  # Samples as rows, genes as columns (15 samples x 8 genes)
-  expr <- matrix(rnorm(15 * 8), 15, 8)
-  rownames(expr) <- paste0("S", seq_len(15))
-  colnames(expr) <- paste0("G", seq_len(8))
+  # Genes (rows) x samples (columns)
+  expr <- matrix(rnorm(100 * 15), 100, 15)
+  rownames(expr) <- paste0("G", seq_len(100))
+  colnames(expr) <- paste0("S", seq_len(15))
   pheno <- data.frame(
-    sample_id = rownames(expr),
+    sample_id = colnames(expr),
     y = rep(c(0, 1), length.out = 15),
     stringsAsFactors = FALSE
   )
@@ -164,14 +161,14 @@ test_that("derive_reference_from_bulk phenotype_type auto infers binary", {
     sample_id_column = "sample_id",
     phenotype_column = "y",
     phenotype_type = "auto",
-    gene_axis = "cols",
     verbose = FALSE
   )
   expect_s3_class(ref, "data.frame")
 })
 
 test_that("derive_reference_from_bulk errors when phenotype has no rows", {
-  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("S1", "S2"), c("G1", "G2", "G3")))
+  # Genes x samples
+  expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("G1", "G2"), c("S1", "S2", "S3")))
   pheno <- data.frame(sample_id = character(0), y = numeric(0))
   expect_error(
     derive_reference_from_bulk(expr, pheno, phenotype_column = "y", phenotype_type = "binary", verbose = FALSE),
@@ -180,7 +177,8 @@ test_that("derive_reference_from_bulk errors when phenotype has no rows", {
 })
 
 test_that("derive_reference_from_bulk errors when sample_id_column not found", {
-  expr <- matrix(rnorm(6), 2, 3, dimnames = list(c("S1", "S2"), c("G1", "G2", "G3")))
+  # Genes x samples (enough genes so no transpose)
+  expr <- matrix(rnorm(20 * 2), 20, 2, dimnames = list(paste0("G", 1:20), c("S1", "S2")))
   pheno <- data.frame(id = c("S1", "S2"), y = c(0, 1))
   expect_error(
     derive_reference_from_bulk(expr, pheno, sample_id_column = "wrong_col", phenotype_column = "y", phenotype_type = "binary", verbose = FALSE),

@@ -96,7 +96,6 @@ ref_custom <- derive_reference_from_bulk(
   phenotype_type = "survival",
   survival_time = "survival_time",
   survival_event = "survival_event",
-  gene_axis = "cols",
   verbose = TRUE
 )
 cat("Custom reference: first 5 genes\n")

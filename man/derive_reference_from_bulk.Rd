@@ -12,22 +12,23 @@ derive_reference_from_bulk(
   phenotype_type = c("auto", "survival", "binary", "continuous"),
   survival_time = NULL,
   survival_event = NULL,
-  gene_axis = NULL,
   normalize = TRUE,
   hugo_species = c("human", "mouse"),
   verbose = TRUE
 )
 }
 \arguments{
-\item{bulk_expression}{Matrix or data.frame. Bulk expression with \strong{samples as
-rows} and \strong{genes as columns}. Can also be genes × samples; the function
-will detect and transpose so that rows = samples.}
+\item{bulk_expression}{Matrix or data.frame. Bulk expression with \strong{genes as
+rows} and \strong{samples as columns}. If the matrix appears to be samples ×
+genes (e.g. fewer rows than columns), the function will transpose and
+message the user.}
 
 \item{phenotype}{Data.frame with sample identifiers and phenotype column(s).
-Must align with \code{bulk_expression} by sample ID (see \code{sample_id_column}).}
+Must align with \code{bulk_expression} by sample ID (see \code{sample_id_column});
+sample IDs must match the \strong{column names} of \code{bulk_expression}.}
 
 \item{sample_id_column}{Character. Column name in \code{phenotype} that
-matches rownames (or colnames if transposed) of \code{bulk_expression}.
+matches the column names of \code{bulk_expression} (sample IDs).
 If \code{NULL}, the first column of \code{phenotype} is used.}
 
 \item{phenotype_column}{Character. Column name in \code{phenotype} for the
@@ -47,10 +48,6 @@ time-to-event (e.g. overall survival time). Required when
 indicator (0/1 or FALSE/TRUE). Required when
 \code{phenotype_type = "survival"}.}
 
-\item{gene_axis}{Character. Either \code{"rows"} (genes are rows) or
-\code{"cols"} (genes are columns). If \code{NULL}, guessed by dimensions
-(if nrow > ncol, assume samples × genes).}
-
 \item{normalize}{Logical. If \code{TRUE}, run normalization when expression
 looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.}
 
@@ -65,22 +62,23 @@ phenotype-association z-scores, suitable for \code{reference} in
 \code{\link{PhenoMap}}.
 }
 \description{
-When you have bulk expression (samples × genes) and a phenotype (binary,
-continuous, or survival), this function computes gene-level association
-z-scores that can be used as a custom reference in \code{\link{PhenoMap}}.
+When you have bulk expression (\strong{genes as rows, samples as columns}) and a
+phenotype (binary, continuous, or survival), this function computes gene-level
+association z-scores that can be used as a custom reference in \code{\link{PhenoMap}}.
 }
 \details{
-Steps: (1) clean gene names to approved HUGO symbols, (2) check if expression
-is already normalized/scaled and normalize if needed, (3) compute phenotype
-association z-scores per gene (Cox for survival, logistic regression for
-binary, correlation for continuous).
+Steps: (1) ensure genes × samples format (transpose with message if heuristic
+suggests the matrix was provided as samples × genes), (2) clean gene names to
+approved HUGO symbols, (3) check if expression is normalized and normalize
+if needed, (4) compute phenotype association z-scores per gene (Cox for
+survival, logistic regression for binary, correlation for continuous).
 }
 \examples{
 \dontrun{
-# Simulated bulk: 50 samples × 100 genes
+# Simulated bulk: genes (rows) x samples (columns)
 set.seed(1)
-bulk <- matrix(rnorm(50 * 100), 50, 100,
-  dimnames = list(paste0("S", 1:50), paste0("G", 1:100)))
+bulk <- matrix(rnorm(100 * 50), 100, 50,
+  dimnames = list(paste0("G", 1:100), paste0("S", 1:50)))
 pheno <- data.frame(
   sample_id = paste0("S", 1:50),
   response = sample(c("R", "NR"), 50, replace = TRUE))

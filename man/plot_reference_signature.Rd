@@ -37,8 +37,8 @@ or \code{"right"} (default \code{"bottom"}).}
 \code{heatmap_legend_param}).}
 }
 \value{
-The return value of \code{ComplexHeatmap::draw()} (invisibly), so the
-plot is drawn in the current device.
+The return value of \code{ComplexHeatmap::draw()} (a \code{HeatmapList}
+object), invisibly. The plot is drawn in the current device.
 }
 \description{
 Takes the gene z-score data.frame returned by \code{\link{derive_reference_from_bulk}}

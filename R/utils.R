@@ -296,7 +296,7 @@ get_top_prognostic_genes <- function(reference,
 #' @param base_size Base font size for the plot (default 14)
 #'
 #' @export
-plot_score_distribution <- function(scores, score_column = NULL, main = "Score Distribution", base_size = 14) {
+plot_score_distribution <- function(scores, score_column = NULL, main = "Phenotype gene z-score distribution", base_size = 14) {
 
   if (is.data.frame(scores)) {
     if (is.null(score_column)) {
@@ -320,10 +320,9 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Score D
       mid = score_mid,
       high = score_high,
       midpoint = med,
-      name = "Score"
+      name = "Z-score"
     ) +
-    ggplot2::geom_vline(xintercept = med, color = "grey25", linewidth = 1, linetype = 2) +
-    ggplot2::labs(title = main, x = "Score", y = "Frequency") +
+    ggplot2::labs(title = main, x = "Z-score", y = "Frequency") +
     ggplot2::theme_minimal(base_size = base_size)
 
   p

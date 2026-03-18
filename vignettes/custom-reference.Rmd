@@ -21,7 +21,7 @@ This vignette uses the following pre-processed data:
 3. Score samples with the resulting custom reference.
 4. Stratify GSE253260 overall survival by its **own** custom signature score (median split).
 5. Inspect cohort-wide score distribution by disease stage and overall survival by stage.
-6. **KM within each disease stage** using the cohort-wide score and cohort-wide median split.
+6. **KM within each disease stage** using the cohort-wide score and a stage-specific median split.
 7. **Derive stage-specific** custom references and re-stratify survival within each stage by stage-specific median.
 
 ## 1. Load expression and phenotype data
@@ -128,7 +128,7 @@ p_stage <- ggplot(dat_stage, aes(x = Stage)) +
 ## 2. Derive a cohort-wide custom reference signature
 Before we perform any subset-specific analyses, we will first use all patients in the dataset to derive a survival phenotype z-score signature from the expression data.
 
-Expression for **`derive_reference_from_bulk()`** must be **samples × genes**. For the phenotype dataframe provided, the user needs to specify the sample mapping column, type of phenotype being ussed (in this case it's overall survival), as well as the column names for the phenotype information.
+Expression for **`derive_reference_from_bulk()`** must be **genes as rows and samples as columns**. Sample IDs in the phenotype must match the **column names** of the expression matrix. For the phenotype dataframe, specify the sample ID column, phenotype type (here, overall survival), and the column names for time and event.
 ```{r derive-ref, fig.align='center'}
 ref_custom <- suppressWarnings(derive_reference_from_bulk(
     bulk_expression = bulk_mat,
@@ -276,7 +276,7 @@ if (nrow(dat_os) >= 10) {
       palette = unname(pal_km[c("Low", "High")]),
       risk.table = FALSE,
       pval = label,
-      pval.coord = c(max_t * 0.65, 0.95),
+      pval.coord = c(max_t * 0.45, 0.95),
       pval.size = 3.5
     )
     print(p)
@@ -291,78 +291,9 @@ if (nrow(dat_os) >= 10) {
 The sample PhenoMapR scores successfully stratify outcomes across the cohort.
 
 
-## 5. Cohort-wide custom score distribution by disease stage
-As mentioned earlier (section 1), this dataset contains patients with a range of disease stages, reflecting significant differences in prognostic risk that could influence the PhenoMapR score assignment. To check if patients with a more adverse PhenoMapR score are enriched in patients with more aggressive disease, we plot the PhenoMapR score distribution across the four disease stage groups.
-```{r custom-score-hist, fig.width=7, fig.height=3, fig.align='center'}
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(ggsignif))
-
-stage_map <- function(x) {
-  x_low <- tolower(x)
-  dplyr::case_when(
-    grepl("meta", x_low) ~ "Metastatic",
-    grepl("loc", x_low)  ~ "Locally Advanced",
-    grepl("border", x_low) ~ "Borderline",
-    grepl("res", x_low)  ~ "Resectable",
-    TRUE ~ NA_character_
-  )
-}
-
-pal_stage <- c(
-  "Resectable" = "#74B9FF",
-  "Borderline" = "#26A69A",
-  "Locally Advanced" = "#F39C12",
-  "Metastatic" = "#FF6B6B"
-)
-
-dat_hist <- dat_os %>%
-  mutate(
-    geo_accession = as.character(geo_accession),
-    stage_group = factor(stage_map(pheno$Disease_Stage[match(geo_accession, pheno$geo_accession)]),
-                         levels = names(pal_stage))
-  ) %>%
-  filter(!is.na(stage_group))
-
-if (nrow(dat_hist) > 0) {
-  # ggplot(dat_hist, aes(x = stage_group, y = score_custom, fill = stage_group)) +
-  #   geom_violin(trim = FALSE, alpha = 0.85, color = NA) +
-  #   geom_boxplot(width = 0.15, outlier.size = 0.4, alpha = 0.9) +
-  #   scale_fill_manual(values = pal_stage, drop = FALSE) +
-  #   theme_minimal() +
-  #   theme(legend.position = "none") +
-  #   labs(
-  #     x = "Disease stage",
-  #     y = "Cohort-wide custom signature score"
-  #   )
-  library(ggsignif)
-
-ggplot(dat_hist, aes(x = stage_group, y = score_custom, fill = stage_group)) +
-  geom_violin(trim = FALSE, alpha = 0.85, color = NA) +
-  geom_boxplot(width = 0.15, outlier.size = 0.4, alpha = 0.9) +
-  scale_fill_manual(values = pal_stage, drop = FALSE) +
-  geom_signif(
-    comparisons = combn(levels(dat_hist$stage_group), 2, simplify = FALSE),
-    test = "wilcox.test",
-    map_signif_level = TRUE,  # TRUE converts p to *, **, ***
-    textsize = 3,
-    step_increase = 0.08,  # Vertical spacing between brackets
-    tip_length = 0.01
-  ) +
-  theme_minimal() +
-  theme(legend.position = "none") +
-  labs(
-    x = "Disease stage",
-    y = "Cohort-wide custom signature score"
-  )
-}
-```
-Interestingly, it does not appear that any of the disease risk groups are enriched for favorable or adverse PhenoMapR scores. This suggests that PhenoMapR identifies potentially stage agnostic prognostic signals and might be able to refine the risk within each stage.
-
-
-## 6. Overall survival by disease stage
-Before we test whether the PhenoMapR score can stratify outcomes within each stage, we first confirm that the four different disease stages have significantly different overall survival results.
-```{r km-by-stage, fig.width=7, fig.height=3, fig.align='center'}
+## 5. Overall survival by disease stage
+As mentioned earlier (Section 1), this dataset contains patients with a range of disease stages, reflecting significant differences in prognostic risk that could influence the PhenoMapR score assignment. Before we test whether the PhenoMapR score is correlated with disease stage, we first confirm that the four different disease stages have significantly different overall survival results.
+```{r km-by-stage, fig.width=7, fig.height=5, fig.align='center'}
 suppressPackageStartupMessages(library(survival))
 suppressPackageStartupMessages(library(dplyr))
 
@@ -434,7 +365,7 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
       xlab = "Time (months)",
       ylab = "Overall survival probability",
       pval = label,
-      pval.coord = c(max_t * 0.55, 0.95),
+      pval.coord = c(max_t * 0.42, 0.90),
       pval.size = 4
     )
     print(p)
@@ -447,15 +378,76 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
   }
 }
 ```
+Indeed, the disease stages provide robust survival stratification.
 
-## 7. KM within each disease stage (cohort-wide median split)
-We next ask whether the cohort-wide custom score stratifies survival **within** each disease stage. For each stage we keep the same cohort-wide score and the same cohort-wide median: samples above the overall median are "High", below are "Low". KM is then run separately in each stage.
+
+## 6. Cohort-wide custom score distribution by disease stage
+To check if patients with a more adverse PhenoMapR score are enriched in patients with more aggressive disease, we plot the PhenoMapR score distribution across the four disease stage groups.
+```{r custom-score-hist, fig.width=7, fig.height=3, fig.align='center'}
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggsignif))
+
+stage_map <- function(x) {
+  x_low <- tolower(x)
+  dplyr::case_when(
+    grepl("meta", x_low) ~ "Metastatic",
+    grepl("loc", x_low)  ~ "Locally Advanced",
+    grepl("border", x_low) ~ "Borderline",
+    grepl("res", x_low)  ~ "Resectable",
+    TRUE ~ NA_character_
+  )
+}
+
+pal_stage <- c(
+  "Resectable" = "#74B9FF",
+  "Borderline" = "#26A69A",
+  "Locally Advanced" = "#F39C12",
+  "Metastatic" = "#FF6B6B"
+)
+
+dat_hist <- dat_os %>%
+  mutate(
+    geo_accession = as.character(geo_accession),
+    stage_group = factor(stage_map(pheno$Disease_Stage[match(geo_accession, pheno$geo_accession)]),
+                         levels = names(pal_stage))
+  ) %>%
+  filter(!is.na(stage_group))
+
+if (nrow(dat_hist) > 0) {
+  library(ggsignif)
+
+ggplot(dat_hist, aes(x = stage_group, y = score_custom, fill = stage_group)) +
+  geom_violin(trim = FALSE, alpha = 0.85, color = NA) +
+  geom_boxplot(width = 0.15, outlier.size = 0.4, alpha = 0.9) +
+  scale_fill_manual(values = pal_stage, drop = FALSE) +
+  geom_signif(
+    comparisons = combn(levels(dat_hist$stage_group), 2, simplify = FALSE),
+    test = "wilcox.test",
+    map_signif_level = TRUE,  # TRUE converts p to *, **, ***
+    textsize = 3,
+    step_increase = 0.08,  # Vertical spacing between brackets
+    tip_length = 0.01
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(
+    x = "Disease stage",
+    y = "Cohort-wide custom signature score"
+  )
+}
+```
+Interestingly, it does not appear that any of the disease risk groups are enriched for favorable or adverse PhenoMapR scores. This suggests that PhenoMapR identifies potentially stage agnostic prognostic signals and might be able to refine the risk within each stage.
+
+
+## 7. KM within each disease stage (stage-specific median split)
+We next ask whether the cohort-wide custom score stratifies survival **within** each disease stage. For each stage we use the **median of the cohort-wide score within that stage**: samples above that stage’s median are "High", below are "Low". KM is then run separately in each stage.
 
 ```{r km-within-stage-cohort-median, fig.width=10, fig.height=8}
 if (!requireNamespace("survminer", quietly = TRUE)) {
-  message("Package 'survminer' not installed; skipping within-stage KM (cohort median).")
+  message("Package 'survminer' not installed; skipping within-stage KM.")
 } else if (!requireNamespace("patchwork", quietly = TRUE)) {
-  message("Package 'patchwork' not installed; skipping within-stage KM (cohort median).")
+  message("Package 'patchwork' not installed; skipping within-stage KM.")
 } else {
   suppressPackageStartupMessages(library(survival))
   suppressPackageStartupMessages(library(survminer))
@@ -496,16 +488,16 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
   )
   dat_ws <- subset(dat_ws, !is.na(stage_group) & !is.na(time_months) & !is.na(OS_event) & is.finite(score_custom))
 
-  med_cohort <- median(pheno$score_custom, na.rm = TRUE)
-  dat_ws$grp <- factor(
-    ifelse(dat_ws$score_custom >= med_cohort, "High", "Low"),
-    levels = c("Low", "High")
-  )
-
   plots_cohort <- list()
   for (st in names(pal_stage)) {
     dat_st <- subset(dat_ws, stage_group == st)
     if (nrow(dat_st) < 8) next
+    # Median within this stage; split High/Low by that median
+    med_stage <- median(dat_st$score_custom, na.rm = TRUE)
+    dat_st$grp <- factor(
+      ifelse(dat_st$score_custom >= med_stage, "High", "Low"),
+      levels = c("Low", "High")
+    )
     if (length(unique(dat_st$grp)) < 2) next
 
     fit <- survfit(Surv(time_months, OS_event) ~ grp, data = dat_st)
@@ -526,30 +518,40 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
       data = dat_st,
       palette = unname(c(col_low, col_high)),
       risk.table = FALSE,
-      legend.title = "Cohort-wide score",
-      legend.labs = c("Low", "High"),
+      legend.title = NULL,
+      legend.labs = NULL,
       title = st,
       xlab = "Time (months)",
       ylab = "Overall survival probability",
       pval = label,
-      pval.coord = c(max_t * 0.55, 0.95),
+      pval.coord = c(max_t * 0.42, 0.90),
       pval.size = 5
     )
     p$plot <- p$plot + ggplot2::aes(linetype = grp) +
-      ggplot2::scale_linetype_manual(values = c("Low" = "solid", "High" = "dashed")) +
+      ggplot2::scale_linetype_manual(
+        values = c("Low" = "solid", "High" = "dashed"),
+        name = "Score strata",
+        labels = c("Low" = "Below median", "High" = "Above median"),
+        guide = ggplot2::guide_legend(
+          override.aes = list(color = c("grey70", "grey20"))
+        )
+      ) +
       ggplot2::guides(color = "none")
     plots_cohort[[st]] <- p$plot
   }
 
   if (length(plots_cohort) > 0) {
     ordered <- plots_cohort[intersect(names(pal_stage), names(plots_cohort))]
-    print(wrap_plots(ordered, ncol = 2))
+    print(wrap_plots(ordered, ncol = 2, guides = "collect") &
+            ggplot2::theme(legend.position = "bottom"))
   }
 }
 ```
+It does not appear that the cohort-wide signature provides robust stratification of samples within each disease stage. 
+
 
 ## 8. Stage-specific custom references and within-stage re-stratification
-We now derive **stage-specific** survival signatures: for each disease stage we fit a Cox model on that stage only, obtain a stage-specific z-score reference, score only that stage’s samples with that reference, and stratify by the **stage-specific** median (High/Low within that stage). This tests whether a signature tailored to each stage can further stratify survival within that stage.
+We now derive **stage-specific** survival signatures: for each disease stage we fit a Cox model on that stage only, obtain a stage-specific z-score reference, score only that stage’s samples with that reference, and stratify by the **stage-specific** median (High/Low within that stage). This tests whether a signature tailored to each stage can further stratify survival within that disease stage
 
 ```{r stage-specific-custom, fig.width=10, fig.height=8}
 if (!requireNamespace("survminer", quietly = TRUE)) {
@@ -571,7 +573,7 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
     keep_ids <- intersect(rownames(bulk_mat), dat_st$geo_accession)
     if (length(keep_ids) < 10) next
 
-    bulk_st <- bulk_mat[keep_ids, , drop = FALSE] # samples × genes
+    bulk_st <- bulk_mat[keep_ids, , drop = FALSE] # subset to stage samples (rows = samples if bulk_mat is samples×genes)
     pheno_st <- data.frame(
       sample_id = keep_ids,
       survival_time = dat_st$time_months[match(keep_ids, dat_st$geo_accession)],
@@ -590,14 +592,13 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
         phenotype_type = "survival",
         survival_time = "survival_time",
         survival_event = "survival_event",
-        gene_axis = "cols",
         verbose = FALSE
       )
     )
 
     # Score only within this stage using its own signature
     scores_st <- PhenoMap(
-      expression = t(bulk_st), # genes × samples
+      expression = t(bulk_st), # PhenoMap expects genes × samples
       reference = ref_st,
       z_score_cutoff = 2,
       verbose = FALSE
@@ -637,7 +638,7 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
       xlab = "Time (months)",
       ylab = "Overall survival probability",
       pval = label,
-      pval.coord = c(max_t * 0.55, 0.95),
+      pval.coord = c(max_t * 0.42, 0.90),
       pval.size = 5
     )
 
@@ -657,12 +658,16 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
   }
 }
 ```
+It appears that stage-specific **`PhenoMapR`** signature generation and scoring significantly separates all but the metastatic patients. Interestingly, it seems that the robustness of survival stratification decreases with increasing disease stage severity, possibly suggesting that applying **`PhenoMapR`** to traditionally lower risk populations might identify patients who are actually higher risk.
+
 
 ## 9. Conclusions
+In this vignette, we demonstrated how to generate a custom phenotype signature using bulk expression and sample annotations using **`PhenoMapR`**. The resulting signature successfully stratified a cohort of 317 pancreatic cancer patients and did not enrich for specific disease stage patients, suggesting that the **`PhenoMapR`** score captured stage agnostic signatures. Additionally, we applied stage-specific signature generation and scoring of patients using **`PhenoMapR`** and show that the results further stratify all but the metastatic stage patients. 
+
 
 ## 10. References
 
-- Nicole et al Predictive genomic and transcriptomic analysis on endoscopic ultrasound-guided fine needle aspiration materials from primary pancreatic adenocarcinoma: a prospective multicentre study **GSE253260**: [GEO: GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE253260).
+Nicole et al. Predictive genomic and transcriptomic analysis on endoscopic ultrasound-guided fine needle aspiration materials from primary pancreatic adenocarcinoma: a prospective multicentre study. **GSE253260**: [GEO: GSE253260](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE253260).
 
 ## Session Info
 
