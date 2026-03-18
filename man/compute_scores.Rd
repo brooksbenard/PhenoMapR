@@ -17,4 +17,9 @@ score(cell) = sum over genes of \code{expression[gene, cell] * meta_z[gene]}.
 Implemented via cross product for efficiency: \code{crossprod(meta_z, expression)}
 yields one value per cell. Higher score = worse prognosis (adverse).
 }
+\details{
+This helper explicitly aligns gene IDs between \code{expression_data} and
+\code{prognostic_scores} so that the cross-product is always computed with
+a consistent gene order.
+}
 \keyword{internal}

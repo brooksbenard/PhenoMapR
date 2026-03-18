@@ -21,8 +21,9 @@ find_prognostic_markers(
 )
 }
 \arguments{
-\item{expression}{Expression matrix (genes x cells), a Seurat object, or a
-SingleCellExperiment. Must match cells in \code{group_labels}.}
+\item{expression}{Expression matrix (genes x cells), a \code{Matrix}
+(e.g. \code{dgCMatrix}), a Seurat object, or a SingleCellExperiment.
+Must match cells in \code{group_labels}.}
 
 \item{group_labels}{Either a character vector of group labels
 (\code{"Most Adverse"}, \code{"Most Favorable"}, \code{"Other"}) in the
@@ -57,7 +58,7 @@ Passed to \code{FindMarkers}.}
 subsample to this limit before FindMarkers (default 5000). Reduces memory
 for large objects. Set to \code{Inf} to disable.}
 
-\item{...}{Additional arguments passed to \code{Seurat::FindMarkers}.}
+\item{...}{Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).}
 }
 \value{
 A list with:
@@ -71,9 +72,11 @@ Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
 }
 \description{
-Uses Seurat's \code{FindMarkers} to perform differential expression between
-the top (adverse) and bottom (favorable) prognostic groups versus the rest.
-Requires the Seurat package.
+Performs differential expression between the top (adverse) and bottom
+(favorable) prognostic groups versus the rest. For \code{Seurat} input,
+uses \code{Seurat::FindMarkers}. For matrix, \code{Matrix}, or
+\code{SingleCellExperiment} input, uses a Wilcoxon-based path (presto if
+available, else base R) and does not require Seurat.
 }
 \examples{
 \dontrun{
