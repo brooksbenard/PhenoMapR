@@ -97,6 +97,7 @@ reference:
   desc: Derive reference z-scores from bulk expression and phenotype.
   contents:
   - derive_reference_from_bulk
+  - plot_reference_signature
 - title: Prognostic group analysis
   desc: Define adverse/favorable groups and find marker genes.
   contents:
