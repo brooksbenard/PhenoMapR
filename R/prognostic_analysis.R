@@ -98,6 +98,16 @@ define_prognostic_groups <- function(scores,
 #'   column containing \code{"Most Adverse"} / \code{"Most Favorable"} / \code{"Other"}.
 #' @param cell_id_column If \code{group_labels} is a data.frame, the column
 #'   name for cell/sample IDs (default \code{"cell_id"}).
+#' @param marker_scope Either:
+#'   \itemize{
+#'     \item \code{"phenotype_groups"}: find markers for the adverse and favorable
+#'       phenotype groups globally (cell type agnostic; default).
+#'     \item \code{"cell_type_specific"}: find markers separately within each
+#'       cell type, comparing the adverse phenotype group vs the rest and the
+#'       favorable phenotype group vs the rest, *within the same cell type*.
+#'   }
+#' @param cell_type_column When \code{marker_scope = "cell_type_specific"}, the
+#'   column in \code{group_labels} that contains cell type labels.
 #' @param assay Assay name for Seurat/SCE (e.g. \code{"RNA"}).
 #' @param slot Layer for Seurat: \code{"data"}, \code{"counts"}, or
 #'   \code{"scale.data"} (default \code{"data"}).
@@ -123,6 +133,9 @@ define_prognostic_groups <- function(scores,
 #'   }
 #'   Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 #'   \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
+#'   When \code{marker_scope = "cell_type_specific"}, the returned data.frames
+#'   additionally include a \code{cell_type} column with the cell type for each
+#'   marker result.
 #'
 #' @examples
 #' \dontrun{
@@ -143,6 +156,8 @@ find_prognostic_markers <- function(expression,
                                     group_labels,
                                     group_column = NULL,
                                     cell_id_column = "cell_id",
+                                    marker_scope = c("phenotype_groups", "cell_type_specific"),
+                                    cell_type_column = NULL,
                                     assay = NULL,
                                     slot = "data",
                                     test.use = c("wilcox", "t", "roc", "negbinom", "poisson", "LR"),
@@ -153,6 +168,7 @@ find_prognostic_markers <- function(expression,
                                     max_cells_per_ident = 5000L,
                                     ...) {
   test.use <- match.arg(test.use)
+  marker_scope <- match.arg(marker_scope)
 
   # Resolve expression and cell order
   expr_info <- process_expression_for_markers(
@@ -170,6 +186,34 @@ find_prognostic_markers <- function(expression,
     cell_id_column = cell_id_column
   )
 
+  # Optional: resolve cell type labels for cell-type-specific marker detection
+  cell_type_vec <- NULL
+  if (marker_scope == "cell_type_specific") {
+    if (!is.data.frame(group_labels)) {
+      stop(
+        "marker_scope = 'cell_type_specific' requires 'group_labels' to be a data.frame ",
+        "with at least the cell id column and a cell type column."
+      )
+    }
+    cols <- infer_group_labels_columns(
+      group_labels = group_labels,
+      cell_id_column = cell_id_column,
+      group_column = group_column
+    )
+    cell_type_column_use <- cell_type_column %||%
+      infer_cell_type_column(
+        group_labels = group_labels,
+        id_col = cols$id_col,
+        group_column = cols$group_column
+      )
+    cell_type_vec <- resolve_labels_from_df(
+      group_labels = group_labels,
+      cell_ids = cell_ids,
+      id_col = cols$id_col,
+      label_column = cell_type_column_use
+    )
+  }
+
   n_adverse <- sum(group_vec == "Most Adverse", na.rm = TRUE)
   n_favorable <- sum(group_vec == "Most Favorable", na.rm = TRUE)
   if (n_adverse < 5L) {
@@ -179,23 +223,38 @@ find_prognostic_markers <- function(expression,
     warning("Fewer than 5 Most Favorable cells; marker results may be unreliable")
   }
 
-  # Non-Seurat path: matrix/Matrix/SCE — use internal Wilcoxon (or presto) without requiring Seurat
-  use_matrix_path <- !inherits(expression, "Seurat") || !requireNamespace("Seurat", quietly = TRUE)
+  # Non-Seurat path: matrix/Matrix/SCE — use internal Wilcoxon (or presto) without requiring Seurat.
+  # Also forced for cell-type-specific mode to avoid repeated Seurat metadata/idents reshaping.
+  use_matrix_path <- marker_scope == "cell_type_specific" ||
+    !inherits(expression, "Seurat") || !requireNamespace("Seurat", quietly = TRUE)
   if (use_matrix_path) {
     if (verbose) {
       message(glue::glue(
         "Using matrix-based marker detection (no Seurat): Most Adverse n={n_adverse}, Most Favorable n={n_favorable}"
       ))
     }
-    out <- run_markers_on_matrix(
-      mat = expr_info$matrix,
-      group_vec = group_vec,
-      min.pct = min.pct,
-      logfc.threshold = logfc.threshold,
-      pval_threshold = pval_threshold,
-      max_cells_per_ident = max_cells_per_ident,
-      verbose = verbose
-    )
+    if (marker_scope == "cell_type_specific") {
+      out <- run_markers_on_matrix_by_celltype(
+        mat = expr_info$matrix,
+        group_vec = group_vec,
+        cell_type_vec = cell_type_vec,
+        min.pct = min.pct,
+        logfc.threshold = logfc.threshold,
+        pval_threshold = pval_threshold,
+        max_cells_per_ident = max_cells_per_ident,
+        verbose = verbose
+      )
+    } else {
+      out <- run_markers_on_matrix(
+        mat = expr_info$matrix,
+        group_vec = group_vec,
+        min.pct = min.pct,
+        logfc.threshold = logfc.threshold,
+        pval_threshold = pval_threshold,
+        max_cells_per_ident = max_cells_per_ident,
+        verbose = verbose
+      )
+    }
     return(out)
   }
 
@@ -304,6 +363,74 @@ find_prognostic_markers <- function(expression,
     adverse_markers = adverse_markers,
     favorable_markers = favorable_markers
   )
+}
+
+
+#' Infer helper columns from a group_labels data.frame
+#'
+#' @keywords internal
+infer_group_labels_columns <- function(group_labels, cell_id_column, group_column) {
+  id_col <- cell_id_column
+  if (!id_col %in% names(group_labels)) id_col <- names(group_labels)[1]
+
+  if (is.null(group_column)) {
+    group_candidates <- setdiff(names(group_labels), id_col)
+    group_candidates <- group_candidates[
+      vapply(group_labels[group_candidates], function(x) {
+        is.character(x) && all(unique(x) %in% c("Most Adverse", "Most Favorable", "Other", NA_character_), na.rm = TRUE)
+      }, logical(1))
+    ]
+    if (length(group_candidates) == 0) {
+      stop("No column in 'group_labels' contains only 'Most Adverse'/'Most Favorable'/'Other'. Specify 'group_column'.")
+    }
+    if (length(group_candidates) > 1) {
+      stop("Multiple group columns found. Specify 'group_column'.")
+    }
+    group_column <- group_candidates
+  }
+
+  list(id_col = id_col, group_column = group_column)
+}
+
+
+#' Infer which column contains cell type labels
+#'
+#' @keywords internal
+infer_cell_type_column <- function(group_labels, id_col, group_column) {
+  candidates <- setdiff(names(group_labels), c(id_col, group_column))
+  if (length(candidates) == 0) {
+    stop("marker_scope='cell_type_specific' requires a cell type column in 'group_labels' (other than the cell id and group columns).")
+  }
+
+  # Prefer non-group columns with multiple unique values
+  group_vals <- c("Most Adverse", "Most Favorable", "Other")
+  scored <- sapply(candidates, function(cc) {
+    x <- group_labels[[cc]]
+    if (!is.character(x) && !is.factor(x)) return(0)
+    x_u <- unique(x)
+    x_u <- x_u[!is.na(x_u)]
+    # Reject if all values are just the phenotype group strings
+    if (length(x_u) == 0) return(0)
+    if (all(x_u %in% group_vals)) return(0)
+    length(x_u)
+  })
+  if (all(scored == 0)) {
+    stop("marker_scope='cell_type_specific' could not infer a cell type column in 'group_labels'. Please pass 'cell_type_column'.")
+  }
+  candidates[which.max(scored)]
+}
+
+
+#' Resolve a label column from group_labels data.frame to match cell_ids
+#'
+#' @keywords internal
+resolve_labels_from_df <- function(group_labels, cell_ids, id_col, label_column) {
+  lab_df <- group_labels[, c(id_col, label_column), drop = FALSE]
+  lab_df <- lab_df[lab_df[[id_col]] %in% cell_ids, , drop = FALSE]
+  lab_df <- lab_df[match(cell_ids, lab_df[[id_col]]), , drop = FALSE]
+  vec <- lab_df[[label_column]]
+  vec[is.na(lab_df[[id_col]])] <- NA
+  vec
 }
 
 
@@ -481,6 +608,85 @@ run_markers_on_matrix <- function(mat,
   }
   adverse_markers <- run_wilcox_one_vs_rest("Most Adverse", adverse_idx)
   favorable_markers <- run_wilcox_one_vs_rest("Most Favorable", favorable_idx)
+  list(adverse_markers = adverse_markers, favorable_markers = favorable_markers)
+}
+
+
+#' Run marker detection on a matrix by cell type
+#'
+#' For each cell type, compute markers for:
+#'   - Most Adverse within that cell type vs all other groups within that cell type
+#'   - Most Favorable within that cell type vs all other groups within that cell type
+#'
+#' @keywords internal
+run_markers_on_matrix_by_celltype <- function(mat,
+                                               group_vec,
+                                               cell_type_vec,
+                                               min.pct = 0.1,
+                                               logfc.threshold = 0.25,
+                                               pval_threshold = 0.05,
+                                               max_cells_per_ident = 5000L,
+                                               verbose = TRUE) {
+  cell_ids <- colnames(mat)
+  if (is.null(cell_ids)) cell_ids <- paste0("Cell_", seq_len(ncol(mat)))
+  if (length(group_vec) != ncol(mat)) {
+    stop("Length of 'group_vec' must match number of columns in expression matrix")
+  }
+  if (length(cell_type_vec) != ncol(mat)) {
+    stop("Length of 'cell_type_vec' must match number of columns in expression matrix")
+  }
+
+  cell_type_vec <- as.character(cell_type_vec)
+  cell_types <- sort(unique(cell_type_vec[!is.na(cell_type_vec)]))
+  if (length(cell_types) == 0) {
+    return(list(
+      adverse_markers = standardize_findmarkers_output(NULL, pval_threshold),
+      favorable_markers = standardize_findmarkers_output(NULL, pval_threshold)
+    ))
+  }
+
+  adverse_all <- list()
+  favorable_all <- list()
+
+  for (ct in cell_types) {
+    idx_ct <- which(cell_type_vec == ct)
+    if (length(idx_ct) < 4) next
+
+    res_ct <- run_markers_on_matrix(
+      mat = mat[, idx_ct, drop = FALSE],
+      group_vec = group_vec[idx_ct],
+      min.pct = min.pct,
+      logfc.threshold = logfc.threshold,
+      pval_threshold = pval_threshold,
+      max_cells_per_ident = max_cells_per_ident,
+      verbose = verbose
+    )
+
+    adverse_ct <- res_ct$adverse_markers
+    favorable_ct <- res_ct$favorable_markers
+    adverse_ct$cell_type <- ct
+    favorable_ct$cell_type <- ct
+    adverse_all[[ct]] <- adverse_ct
+    favorable_all[[ct]] <- favorable_ct
+  }
+
+  adverse_markers <- if (length(adverse_all) > 0) {
+    do.call(rbind, adverse_all)
+  } else {
+    standardize_findmarkers_output(NULL, pval_threshold)
+  }
+  favorable_markers <- if (length(favorable_all) > 0) {
+    do.call(rbind, favorable_all)
+  } else {
+    standardize_findmarkers_output(NULL, pval_threshold)
+  }
+
+  # Ensure consistent column order (cell_type at end)
+  if (!"cell_type" %in% names(adverse_markers)) adverse_markers$cell_type <- NA_character_
+  if (!"cell_type" %in% names(favorable_markers)) favorable_markers$cell_type <- NA_character_
+  adverse_markers <- adverse_markers[, c(setdiff(names(adverse_markers), "cell_type"), "cell_type"), drop = FALSE]
+  favorable_markers <- favorable_markers[, c(setdiff(names(favorable_markers), "cell_type"), "cell_type"), drop = FALSE]
+
   list(adverse_markers = adverse_markers, favorable_markers = favorable_markers)
 }
 

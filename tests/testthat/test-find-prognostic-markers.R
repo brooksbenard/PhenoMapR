@@ -63,6 +63,49 @@ test_that("find_prognostic_markers with group_labels data.frame and group_column
   expect_named(out, c("adverse_markers", "favorable_markers"))
 })
 
+test_that("find_prognostic_markers supports cell_type_specific marker detection", {
+  set.seed(6)
+  n_genes <- 20
+  n_cells <- 12
+  expr <- matrix(
+    pmax(0, rnorm(n_genes * n_cells)),
+    nrow = n_genes,
+    ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
+  )
+  # Two cell types with exactly 2 adverse, 2 favorable, 2 other per type
+  cell_type <- c(rep("T", 6), rep("B", 6))
+  pg <- c(
+    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2),
+    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2)
+  )
+  groups_df <- data.frame(
+    cell_id = colnames(expr),
+    pg = pg,
+    cell_type = cell_type,
+    stringsAsFactors = FALSE
+  )
+
+  out <- find_prognostic_markers(
+    expr,
+    group_labels = groups_df,
+    group_column = "pg",
+    cell_id_column = "cell_id",
+    marker_scope = "cell_type_specific",
+    cell_type_column = "cell_type",
+    min.pct = 0,
+    logfc.threshold = 0,
+    pval_threshold = 1,
+    max_cells_per_ident = Inf,
+    verbose = FALSE
+  )
+
+  expect_type(out, "list")
+  expect_named(out, c("adverse_markers", "favorable_markers"))
+  expect_true("cell_type" %in% names(out$adverse_markers))
+  expect_true(all(unique(out$adverse_markers$cell_type) %in% c("T", "B")))
+})
+
 test_that("find_prognostic_markers errors when group_labels length mismatch", {
   expr <- matrix(1, nrow = 5, ncol = 10, dimnames = list(paste0("G", 1:5), paste0("C", 1:10)))
   group_vec <- rep("Other", 5)

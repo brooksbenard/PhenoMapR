@@ -9,6 +9,8 @@ find_prognostic_markers(
   group_labels,
   group_column = NULL,
   cell_id_column = "cell_id",
+  marker_scope = c("phenotype_groups", "cell_type_specific"),
+  cell_type_column = NULL,
   assay = NULL,
   slot = "data",
   test.use = c("wilcox", "t", "roc", "negbinom", "poisson", "LR"),
@@ -35,6 +37,18 @@ column containing \code{"Most Adverse"} / \code{"Most Favorable"} / \code{"Other
 
 \item{cell_id_column}{If \code{group_labels} is a data.frame, the column
 name for cell/sample IDs (default \code{"cell_id"}).}
+
+\item{marker_scope}{Either:
+\itemize{
+\item \code{"phenotype_groups"}: find markers for the adverse and favorable
+phenotype groups globally (cell type agnostic; default).
+\item \code{"cell_type_specific"}: find markers separately within each
+cell type, comparing the adverse phenotype group vs the rest and the
+favorable phenotype group vs the rest, \emph{within the same cell type}.
+}}
+
+\item{cell_type_column}{When \code{marker_scope = "cell_type_specific"}, the
+column in \code{group_labels} that contains cell type labels.}
 
 \item{assay}{Assay name for Seurat/SCE (e.g. \code{"RNA"}).}
 
@@ -70,6 +84,9 @@ the favorable (bottom score) group (vs rest).
 }
 Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
+When \code{marker_scope = "cell_type_specific"}, the returned data.frames
+additionally include a \code{cell_type} column with the cell type for each
+marker result.
 }
 \description{
 Performs differential expression between the top (adverse) and bottom
