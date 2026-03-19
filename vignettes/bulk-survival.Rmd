@@ -8,6 +8,10 @@ output:
     toc_collapsed: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+```
+
 ## Overview
 
 This vignette shows how to **apply PhenoMapR to score bulk RNA-seq samples** using the built-in pan-cancer outcomes meta-z score signatures from [PRECOG](https://precog.stanford.edu/) [[1]](#ref1). We use the [GSE205154](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE205154) dataset: **289 primary and metastatic pancreatic ductal adenocarcinoma (PAAD)** samples with gene expression and overall survival (Link et al.) [[2]](#ref2). After scoring samples with **`PhenoMapR`**’s built-in PRECOG references, we stratify by **`PhenoMapR`** score and demonstrate that this separates survival in both primary and metastatic groups.

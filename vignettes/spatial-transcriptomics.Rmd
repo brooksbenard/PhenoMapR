@@ -8,6 +8,10 @@ output:
     toc_collapsed: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+```
+
 ## Overview
 
 This vignette demonstrates using PhenoMapR on **spatial transcriptomics** data. We use the processed spatial object **HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed** (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`) to score spots with the PRECOG **Pancreatic** reference, define adverse vs. favorable prognostic groups, and visualize both score distributions and **where** PhenoMapR scores localize on the tissue image. The workflow mirrors the single-cell vignette but adds spatial plots to show score and prognostic group across the slide.

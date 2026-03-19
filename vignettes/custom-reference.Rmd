@@ -8,6 +8,10 @@ output:
     toc_collapsed: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+```
+
 ## Overview
 Some rare cancer types are not represented in TCGA or PRECOG and are therefore not available for the built-in reference scoring in **`PhenoMapR`**. Additionally, you might have a proprietary dataset (cancer or not) with bulk gene expression and sample annotations that you would like to use as a phenotype signature reference. For these cases, **`PhenoMapR`** provides functionality to take a gene expression file and a sample annotation file and will generate gene-level z-scores for your phenotype of interest. This is performed with the **`derive_reference_from_bulk()`** function.
 
@@ -236,7 +240,7 @@ if (nrow(dat_sc) > 0) {
 ```
 
 ## 4. Survival anlaysis by PhenoMapR score assignment
-PhenoMapR scores samples based on the weighted-sum of a sample's gene expression levels and the weights from the phenotype reference signature. Because the signature used to score samples in the dataset was derived from the expression associations with survival across the datasets, the PhenoMapR score should stratify outcomes. We perform Kaplan–Meier analysis using a PhenoMapR median split.
+**`PhenoMapR`** scores samples based on the weighted-sum of a sample's gene expression levels and the weights from the phenotype reference signature. Because the signature used to score samples in the dataset was derived from the expression associations with survival across the datasets, the **`PhenoMapR`** score should stratify outcomes. We perform Kaplan–Meier analysis using a **`PhenoMapR`** median split.
 
 ```{r km-custom, fig.width=5, fig.height=4, fig.align='center'}
 suppressPackageStartupMessages(library(survival))
@@ -291,11 +295,11 @@ if (nrow(dat_os) >= 10) {
   }
 }
 ```
-The sample PhenoMapR scores successfully stratify outcomes across the cohort.
+The sample **`PhenoMapR`** scores successfully stratify outcomes across the cohort.
 
 
 ## 5. Overall survival by disease stage
-As mentioned earlier (Section 1), this dataset contains patients with a range of disease stages, reflecting significant differences in prognostic risk that could influence the PhenoMapR score assignment. Before we test whether the PhenoMapR score is correlated with disease stage, we first confirm that the four different disease stages have significantly different overall survival results.
+As mentioned earlier (Section 1), this dataset contains patients with a range of disease stages, reflecting significant differences in prognostic risk that could influence the **`PhenoMapR`** score assignment. Before we test whether the **`PhenoMapR`** score is correlated with disease stage, we first confirm that the four different disease stages have significantly different overall survival results.
 ```{r km-by-stage, fig.width=7, fig.height=5, fig.align='center'}
 suppressPackageStartupMessages(library(survival))
 suppressPackageStartupMessages(library(dplyr))
@@ -385,7 +389,7 @@ Indeed, the disease stages provide robust survival stratification.
 
 
 ## 6. Cohort-wide custom score distribution by disease stage
-To check if patients with a more adverse PhenoMapR score are enriched in patients with more aggressive disease, we plot the PhenoMapR score distribution across the four disease stage groups.
+To check if patients with a more adverse **`PhenoMapR`** score are enriched in patients with more aggressive disease, we plot the **`PhenoMapR`** score distribution across the four disease stage groups.
 ```{r custom-score-hist, fig.width=7, fig.height=3, fig.align='center'}
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
@@ -440,10 +444,10 @@ ggplot(dat_hist, aes(x = stage_group, y = score_custom, fill = stage_group)) +
   )
 }
 ```
-Interestingly, it does not appear that any of the disease risk groups are enriched for favorable or adverse PhenoMapR scores. This suggests that PhenoMapR identifies potentially stage agnostic prognostic signals and might be able to refine the risk within each stage.
+Interestingly, it does not appear that any of the disease risk groups are enriched for favorable or adverse **`PhenoMapR`** scores. This suggests that **`PhenoMapR`** identifies potentially stage agnostic prognostic signals and might be able to refine the risk within each stage.
 
 
-## 7. KM within each disease stage (stage-specific median split)
+## 7. Survival within each disease stage (stage-specific median split)
 We next ask whether the cohort-wide custom score stratifies survival **within** each disease stage. For each stage we use the **median of the cohort-wide score within that stage**: samples above that stage’s median are "High", below are "Low". KM is then run separately in each stage.
 
 ```{r km-within-stage-cohort-median, fig.width=10, fig.height=8}

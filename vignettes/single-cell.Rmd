@@ -500,6 +500,9 @@ pheatmap::pheatmap(
 )
   
 ```
+It's clear from the heatmap that the cell type driving the favorable prognostic signal is the Acinar cell type. Cell-type specific marker identification within the most prgnostic group would further resolve other cell type markers associated with favorable outcomes in this dataset. 
+
+
 
 ## Dataset summary of PhenoMapR results
 
@@ -563,7 +566,12 @@ if (nrow(meta_plot) > 0) {
   p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
     geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
     scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-    scale_x_continuous(breaks = seq_along(sample_lev), labels = sample_lev) +
+    scale_x_continuous(
+      breaks = seq_along(sample_lev),
+      labels = sample_lev,
+      limits = c(0.5, length(sample_lev) + 0.5),
+      expand = c(0, 0)
+    ) +
     scale_y_continuous(expand = c(0, 0)) +
     theme_minimal() +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
@@ -573,7 +581,12 @@ if (nrow(meta_plot) > 0) {
     geom_point(alpha = 0.85) +
     scale_color_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
     scale_size_continuous(range = c(0, 5), name = "Proportion") +
-    scale_x_continuous(breaks = seq_along(sample_lev), labels = sample_lev) +
+    scale_x_continuous(
+      breaks = seq_along(sample_lev),
+      labels = sample_lev,
+      limits = c(0.5, length(sample_lev) + 0.5),
+      expand = c(0, 0)
+    ) +
     theme_minimal() +
     theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
     labs(x = NULL, y = "Cell type", title = NULL)
@@ -594,7 +607,12 @@ if (nrow(meta_plot) > 0) {
       geom_point(alpha = 0.85) +
       scale_color_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
       scale_size_continuous(range = c(0, 5), name = "Proportion") +
-      scale_x_continuous(breaks = seq_along(sample_lev), labels = sample_lev) +
+      scale_x_continuous(
+        breaks = seq_along(sample_lev),
+        labels = sample_lev,
+        limits = c(0.5, length(sample_lev) + 0.5),
+        expand = c(0, 0)
+      ) +
       theme_minimal() +
       theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), 
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -622,7 +640,7 @@ if (nrow(meta_plot) > 0) {
 
 ## Conclusions
 
-Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (malignant and ductal type 1). These results agree with those of Jolasun et al., however our **PhenoMapR`** results provide an increased level of granularity compared to other methods, since we retain absolute and rank-ordered information regarding all cell's phenotype association. We also nominate those most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
+Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (malignant and ductal type 1). These results agree with those of Jolasun et al., however our **PhenoMapR`** results provide an increased level of granularity compared to other methods, since we retain absolute and rank-ordered information regarding all cell's phenotype association. We also nominate cells most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
 
 ## References
 
