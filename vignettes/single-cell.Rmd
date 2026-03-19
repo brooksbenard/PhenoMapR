@@ -609,6 +609,11 @@ if (!is.na(group_col) && !is.null(group_col)) {
       mat_scaled[mat_scaled > 3] <- 3
 
       create_diverging_palette <- function(values) {
+        values <- as.numeric(values)
+        values[!is.finite(values)] <- NA_real_
+        if (all(is.na(values))) {
+          return(list(colors = colorRampPalette(c("#F7F7F7", "#B2182B"))(100)))
+        }
         min_val <- min(values, na.rm = TRUE)
         max_val <- max(values, na.rm = TRUE)
         if (min_val >= 0) {
@@ -621,12 +626,16 @@ if (!is.na(group_col) && !is.null(group_col)) {
         list(colors = colors)
       }
 
-      score_palette_ct <- create_diverging_palette(meta[cell_order, score_precog_col])$colors
+      score_ann <- as.numeric(meta[cell_order, score_precog_col])
+      score_ann[!is.finite(score_ann)] <- NA_real_
+      if (all(is.na(score_ann))) score_ann <- rep(0, length(score_ann))
+
+      score_palette_ct <- create_diverging_palette(score_ann)$colors
       pal_group <- c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC")
       pal_celltype_ct <- pal_cells[levels(factor(meta$celltype_original))]
 
       ann_col_ct <- data.frame(
-        `PhenoMapR score` = meta[cell_order, score_precog_col],
+        `PhenoMapR score` = score_ann,
         `Cell type` = factor(meta[cell_order, "celltype_original"]),
         `Phenotype group` = factor(meta[cell_order, group_col], levels = group_levels),
         check.names = FALSE
