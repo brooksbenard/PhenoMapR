@@ -227,17 +227,17 @@ if (n_levels >= 2L && n_levels <= 100L) {
 }
 ```
 
-## Define prognostic groups
+## Define phenotype groups
 
 Label spots as Most Adverse (top 5%), Most Favorable (bottom 5%), or Other, then attach to metadata for spatial plotting.
 
 ```{r prognostic-groups}
 scores_df <- seurat@meta.data[, grep("weighted_sum_score", names(seurat@meta.data)), drop = FALSE]
-groups <- PhenoMapR::define_prognostic_groups(scores_df, percentile = 0.05)
+groups <- PhenoMapR::define_phenotype_groups(scores_df, percentile = 0.05)
 suppressMessages(seurat <- AddMetaData(seurat, groups))
 
-group_col <- paste0("prognostic_group_", score_col)
-if (!group_col %in% names(seurat@meta.data)) group_col <- grep("prognostic_group", names(seurat@meta.data), value = TRUE)[1]
+group_col <- paste0("phenotype_group_", score_col)
+if (!group_col %in% names(seurat@meta.data)) group_col <- grep("phenotype_group", names(seurat@meta.data), value = TRUE)[1]
 table(seurat@meta.data[[group_col]], useNA = "ifany")
 ```
 
@@ -441,16 +441,16 @@ if (!is.null(group_col)) {
   group_vec <- seurat@meta.data[cells, group_col]
   group_df <- data.frame(
     cell_id = cells,
-    prognostic_group = as.character(group_vec),
+    phenotype_group = as.character(group_vec),
     stringsAsFactors = FALSE
   )
   for (a in unique(c(assay_use, "RNA", "SCT"))) {
     if (!a %in% names(seurat@assays)) next
     markers <- tryCatch(
-      PhenoMapR::find_prognostic_markers(
+      PhenoMapR::find_phenotype_markers(
         seurat,
         group_labels = group_df,
-        group_column = "prognostic_group",
+        group_column = "phenotype_group",
         cell_id_column = "cell_id",
         assay = a,
         slot = "data",
@@ -458,7 +458,7 @@ if (!is.null(group_col)) {
         verbose = FALSE
       ),
       error = function(e) {
-        message("find_prognostic_markers (assay ", a, ") error: ", conditionMessage(e))
+        message("find_phenotype_markers (assay ", a, ") error: ", conditionMessage(e))
         NULL
       }
     )
@@ -552,7 +552,7 @@ if (exists("markers") && !is.null(markers)) {
   mat_scaled <- mat_scaled[, ord, drop = FALSE]
   meta_ord <- meta[ord, , drop = FALSE]
 
-  group_col_heatmap <- paste0("prognostic_group_", score_col)
+  group_col_heatmap <- paste0("phenotype_group_", score_col)
   if (!group_col_heatmap %in% names(meta_ord)) group_col_heatmap <- group_col
 
   if (requireNamespace("pheatmap", quietly = TRUE)) {

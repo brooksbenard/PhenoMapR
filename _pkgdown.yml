@@ -98,11 +98,11 @@ reference:
   contents:
   - derive_reference_from_bulk
   - plot_reference_signature
-- title: Prognostic group analysis
+- title: Phenotype group analysis
   desc: Define adverse/favorable groups and find marker genes.
   contents:
-  - define_prognostic_groups
-  - find_prognostic_markers
+  - define_phenotype_groups
+  - find_phenotype_markers
 - title: Visualization
   contents:
   - plot_score_distribution

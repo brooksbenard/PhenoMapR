@@ -1,9 +1,9 @@
-#' Define Prognostic Groups (Top and Bottom Percentile)
+#' Define Phenotype Groups (Top and Bottom Percentile)
 #'
 #' For each score column (dataset), labels cells as adverse (top percentile,
 #' highest scores), favorable (bottom percentile, lowest scores), or middle.
 #'
-#' @param scores Data.frame of prognostic scores from \code{PhenoMap}.
+#' @param scores Data.frame of phenotype scores from \code{PhenoMap}.
 #'   Rows = cells/samples, columns = score variables (e.g. weighted_sum_score_precog_BRCA).
 #' @param percentile Fraction of cells in each tail (default 0.05 for top and bottom 5%).
 #' @param score_columns Character vector of score column names to use. If NULL,
@@ -12,7 +12,7 @@
 #' @return A data.frame with:
 #'   \itemize{
 #'     \item \code{cell_id}: same as row names of \code{scores}
-#'     \item For each score column: a \code{prognostic_group_<name>} column with
+#'     \item For each score column: a \code{phenotype_group_<name>} column with
 #'       values \code{"Most Adverse"} (top percentile), \code{"Most Favorable"}
 #'       (bottom percentile), or \code{"Other"}
 #'   }
@@ -20,12 +20,12 @@
 #' @examples
 #' \dontrun{
 #' scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
-#' groups <- define_prognostic_groups(scores, percentile = 0.05)
-#' table(groups$prognostic_group_weighted_sum_score_precog_BRCA)
+#' groups <- define_phenotype_groups(scores, percentile = 0.05)
+#' table(groups$phenotype_group_weighted_sum_score_precog_BRCA)
 #' }
 #'
 #' @export
-define_prognostic_groups <- function(scores,
+define_phenotype_groups <- function(scores,
                                      percentile = 0.05,
                                      score_columns = NULL) {
   if (!is.data.frame(scores)) {
@@ -60,7 +60,7 @@ define_prognostic_groups <- function(scores,
 
     n <- sum(!is.na(v))
     if (n == 0) {
-      out[[paste0("prognostic_group_", col)]] <- NA_character_
+      out[[paste0("phenotype_group_", col)]] <- NA_character_
       next
     }
 
@@ -72,17 +72,17 @@ define_prognostic_groups <- function(scores,
     group[!is.na(v) & v >= q_hi] <- "Most Adverse"
     group[is.na(v)] <- NA_character_
 
-    out[[paste0("prognostic_group_", col)]] <- group
+    out[[paste0("phenotype_group_", col)]] <- group
   }
 
   return(out)
 }
 
 
-#' Find Unique Marker Genes for Adverse and Favorable Prognostic Groups
+#' Find Unique Marker Genes for Adverse and Favorable Phenotype Groups
 #'
 #' Performs differential expression between the top (adverse) and bottom
-#' (favorable) prognostic groups versus the rest. For \code{Seurat} input,
+#' (favorable) phenotype groups versus the rest. For \code{Seurat} input,
 #' uses \code{Seurat::FindMarkers}. For matrix, \code{Matrix}, or
 #' \code{SingleCellExperiment} input, uses a Wilcoxon-based path (presto if
 #' available, else base R) and does not require Seurat.
@@ -93,7 +93,7 @@ define_prognostic_groups <- function(scores,
 #' @param group_labels Either a character vector of group labels
 #'   (\code{"Most Adverse"}, \code{"Most Favorable"}, \code{"Other"}) in the
 #'   same order as columns of \code{expression}, or a data.frame from
-#'   \code{define_prognostic_groups()} (see \code{group_column}).
+#'   \code{define_phenotype_groups()} (see \code{group_column}).
 #' @param group_column If \code{group_labels} is a data.frame, the name of the
 #'   column containing \code{"Most Adverse"} / \code{"Most Favorable"} / \code{"Other"}.
 #' @param cell_id_column If \code{group_labels} is a data.frame, the column
@@ -119,7 +119,7 @@ define_prognostic_groups <- function(scores,
 #'   Passed to \code{FindMarkers}.
 #' @param pval_threshold Maximum unadjusted p-value to include (default 0.05).
 #' @param verbose Print progress messages (default TRUE).
-#' @param max_cells_per_ident When any prognostic group exceeds this many cells,
+#' @param max_cells_per_ident When any phenotype group exceeds this many cells,
 #'   subsample to this limit before FindMarkers (default 5000). Reduces memory
 #'   for large objects. Set to \code{Inf} to disable.
 #' @param ... Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).
@@ -140,11 +140,11 @@ define_prognostic_groups <- function(scores,
 #' @examples
 #' \dontrun{
 #' scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
-#' groups <- define_prognostic_groups(scores, percentile = 0.05)
-#' markers <- find_prognostic_markers(
+#' groups <- define_phenotype_groups(scores, percentile = 0.05)
+#' markers <- find_phenotype_markers(
 #'   seurat_obj,
 #'   group_labels = groups,
-#'   group_column = "prognostic_group_weighted_sum_score_precog_BRCA",
+#'   group_column = "phenotype_group_weighted_sum_score_precog_BRCA",
 #'   cell_id_column = "cell_id"
 #' )
 #' head(markers$adverse_markers)
@@ -152,7 +152,7 @@ define_prognostic_groups <- function(scores,
 #' }
 #'
 #' @export
-find_prognostic_markers <- function(expression,
+find_phenotype_markers <- function(expression,
                                     group_labels,
                                     group_column = NULL,
                                     cell_id_column = "cell_id",
@@ -258,7 +258,7 @@ find_prognostic_markers <- function(expression,
     return(out)
   }
 
-  # nocov start - Seurat FindMarkers path (optional; tested in test-find-prognostic-markers when Seurat installed)
+  # nocov start - Seurat FindMarkers path (optional; tested in test-find-phenotype-markers when Seurat installed)
   # Seurat path
   if (verbose) {
     message(glue::glue(
@@ -266,7 +266,7 @@ find_prognostic_markers <- function(expression,
     ))
   }
   seurat_obj <- get_or_create_seurat_for_markers(expression, expr_info, group_vec, assay, slot)
-  meta_col <- "PhenoMapR_prognostic_group"
+  meta_col <- "PhenoMapR_phenotype_group"
   Seurat::Idents(seurat_obj) <- seurat_obj[[meta_col]][, 1]
   assay_use <- assay %||% attr(seurat_obj, "PhenoMapR_assay") %||% "RNA"
   if (slot_use == "counts" && inherits(seurat_obj, "Seurat")) {
@@ -691,9 +691,9 @@ run_markers_on_matrix_by_celltype <- function(mat,
 }
 
 
-#' Get existing Seurat object or create one from matrix/SCE; add prognostic group to metadata
+#' Get existing Seurat object or create one from matrix/SCE; add phenotype group to metadata
 #' @keywords internal
-# nocov start - only used by Seurat path in find_prognostic_markers (nocov'd)
+# nocov start - only used by Seurat path in find_phenotype_markers (nocov'd)
 get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, assay, slot) {
   if (inherits(expression, "Seurat")) {
     assay <- assay %||% "RNA"
@@ -701,7 +701,7 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
     # Ensure cells in same order as expr_info
     cell_ids <- expr_info$cell_names
     obj <- obj[, cell_ids]
-    obj[["PhenoMapR_prognostic_group"]] <- group_vec
+    obj[["PhenoMapR_phenotype_group"]] <- group_vec
     attr(obj, "PhenoMapR_assay") <- assay
     return(obj)
   }
@@ -721,7 +721,7 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
       obj <- Seurat::NormalizeData(obj, verbose = FALSE)
     }
   }
-  obj[["PhenoMapR_prognostic_group"]] <- group_vec
+  obj[["PhenoMapR_phenotype_group"]] <- group_vec
   attr(obj, "PhenoMapR_assay") <- "RNA"
   obj
 }
@@ -748,7 +748,7 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
       gene_names = rownames(expression)
     ))
   }
-  # nocov start - Seurat/SCE paths only used when find_prognostic_markers gets Seurat/SCE (Seurat path nocov'd)
+  # nocov start - Seurat/SCE paths only used when find_phenotype_markers gets Seurat/SCE (Seurat path nocov'd)
   if (inherits(expression, "Seurat")) {
     if (!requireNamespace("Seurat", quietly = TRUE)) {
       stop("Seurat package required for Seurat input")
@@ -819,7 +819,7 @@ resolve_group_labels <- function(group_labels,
   if (!is.data.frame(group_labels)) {
     stop("'group_labels' must be a character vector or a data.frame with group and cell ID columns")
   }
-  # nocov start - data.frame resolution (tested via find_prognostic_markers with group_labels df)
+  # nocov start - data.frame resolution (tested via find_phenotype_markers with group_labels df)
   id_col <- cell_id_column
   if (!id_col %in% names(group_labels)) {
     id_col <- names(group_labels)[1]

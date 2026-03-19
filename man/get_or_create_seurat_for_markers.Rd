@@ -2,11 +2,11 @@
 % Please edit documentation in R/prognostic_analysis.R
 \name{get_or_create_seurat_for_markers}
 \alias{get_or_create_seurat_for_markers}
-\title{Get existing Seurat object or create one from matrix/SCE; add prognostic group to metadata}
+\title{Get existing Seurat object or create one from matrix/SCE; add phenotype group to metadata}
 \usage{
 get_or_create_seurat_for_markers(expression, expr_info, group_vec, assay, slot)
 }
 \description{
-Get existing Seurat object or create one from matrix/SCE; add prognostic group to metadata
+Get existing Seurat object or create one from matrix/SCE; add phenotype group to metadata
 }
 \keyword{internal}
