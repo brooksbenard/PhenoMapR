@@ -106,6 +106,49 @@ test_that("find_phenotype_markers supports cell_type_specific marker detection",
   expect_true(all(unique(out$adverse_markers$cell_type) %in% c("T", "B")))
 })
 
+test_that("find_phenotype_markers cell_type_specific handles empty per-cell-type results", {
+  set.seed(66)
+  n_genes <- 30
+  n_cells <- 24
+  expr <- matrix(
+    pmax(0, rnorm(n_genes * n_cells)),
+    nrow = n_genes,
+    ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
+  )
+  # T cells have adverse/favorable/other; B cells have only "Other"
+  groups_df <- data.frame(
+    cell_id = colnames(expr),
+    pg = c(
+      rep("Most Adverse", 4), rep("Most Favorable", 4), rep("Other", 4),
+      rep("Other", 12)
+    ),
+    cell_type = c(rep("T", 12), rep("B", 12)),
+    stringsAsFactors = FALSE
+  )
+
+  expect_no_error({
+    out <- find_phenotype_markers(
+      expr,
+      group_labels = groups_df,
+      group_column = "pg",
+      cell_id_column = "cell_id",
+      marker_scope = "cell_type_specific",
+      cell_type_column = "cell_type",
+      min.pct = 0,
+      logfc.threshold = 0,
+      pval_threshold = 1,
+      max_cells_per_ident = Inf,
+      verbose = FALSE
+    )
+  })
+
+  expect_type(out, "list")
+  expect_named(out, c("adverse_markers", "favorable_markers"))
+  expect_true("cell_type" %in% names(out$adverse_markers))
+  expect_true("cell_type" %in% names(out$favorable_markers))
+})
+
 test_that("find_phenotype_markers errors when group_labels length mismatch", {
   expr <- matrix(1, nrow = 5, ncol = 10, dimnames = list(paste0("G", 1:5), paste0("C", 1:10)))
   group_vec <- rep("Other", 5)

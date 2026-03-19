@@ -664,8 +664,16 @@ run_markers_on_matrix_by_celltype <- function(mat,
 
     adverse_ct <- res_ct$adverse_markers
     favorable_ct <- res_ct$favorable_markers
-    adverse_ct$cell_type <- ct
-    favorable_ct$cell_type <- ct
+    if (nrow(adverse_ct) > 0) {
+      adverse_ct$cell_type <- rep(ct, nrow(adverse_ct))
+    } else {
+      adverse_ct$cell_type <- character(0)
+    }
+    if (nrow(favorable_ct) > 0) {
+      favorable_ct$cell_type <- rep(ct, nrow(favorable_ct))
+    } else {
+      favorable_ct$cell_type <- character(0)
+    }
     adverse_all[[ct]] <- adverse_ct
     favorable_all[[ct]] <- favorable_ct
   }

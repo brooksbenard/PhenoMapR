@@ -502,6 +502,169 @@ pheatmap::pheatmap(
 ```
 It's clear from the heatmap that the cell type driving the favorable prognostic signal is the Acinar cell type. Cell-type specific marker identification within the most prgnostic group would further resolve other cell type markers associated with favorable outcomes in this dataset. 
 
+## Cell-type-specific phenotype marker genes
+The `find_phenotype_markers()` function can also identify marker genes **within each cell type** for the phenotype tail groups (Most Adverse vs rest, and Most Favorable vs rest). We visualize the top marker genes per cell type and phenotype bin in a heatmap that includes *all* cells, ordered by:
+1) phenotype bin (Most Adverse, Other, Most Favorable), then
+2) cell type, then
+3) phenotype score.
+
+```{r celltype-specific-phenotype-markers, cache = FALSE, fig.align='center'}
+if (!is.na(group_col) && !is.null(group_col)) {
+  group_df <- data.frame(
+    cell_id = meta$Cell,
+    phenotype_group = meta[[group_col]],
+    cell_type = meta$celltype_original,
+    stringsAsFactors = FALSE
+  )
+
+  markers_ct <- find_phenotype_markers(
+    expr_mat,
+    group_labels = group_df,
+    group_column = "phenotype_group",
+    cell_id_column = "cell_id",
+    cell_type_column = "cell_type",
+    marker_scope = "cell_type_specific",
+    max_cells_per_ident = 5000L,
+    verbose = FALSE
+  )
+
+  n_top_ct <- 5L
+  if (!is.null(markers_ct) &&
+      nrow(markers_ct$adverse_markers) > 0 &&
+      nrow(markers_ct$favorable_markers) > 0) {
+
+    adverse_df <- markers_ct$adverse_markers
+    favorable_df <- markers_ct$favorable_markers
+
+    pcol_ad <- if ("p_adj" %in% names(adverse_df)) "p_adj" else "p_val"
+    pcol_fv <- if ("p_adj" %in% names(favorable_df)) "p_adj" else "p_val"
+
+    gene_ids <- rownames(expr_mat)
+    ct_levels <- sort(unique(c(adverse_df$cell_type, favorable_df$cell_type)))
+
+    gene_info <- list()
+    for (ct in ct_levels) {
+      df_ct <- adverse_df[adverse_df$cell_type == ct, , drop = FALSE]
+      if (nrow(df_ct) > 0) {
+        if ("avg_log2FC" %in% names(df_ct)) df_ct <- df_ct[df_ct$avg_log2FC > 0, , drop = FALSE]
+        df_ct <- df_ct[order(df_ct[[pcol_ad]], -abs(df_ct$avg_log2FC)), , drop = FALSE]
+        top_genes <- head(df_ct$gene, n_top_ct)
+        top_genes <- top_genes[top_genes %in% gene_ids]
+        if (length(top_genes) > 0) {
+          gene_info[[length(gene_info) + 1]] <- data.frame(
+            gene = top_genes,
+            cell_type = ct,
+            phenotype_bin = "Most Adverse",
+            row_id = paste(ct, "Most Adverse", top_genes, sep = "__"),
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+
+      df_ct <- favorable_df[favorable_df$cell_type == ct, , drop = FALSE]
+      if (nrow(df_ct) > 0) {
+        if ("avg_log2FC" %in% names(df_ct)) df_ct <- df_ct[df_ct$avg_log2FC > 0, , drop = FALSE]
+        df_ct <- df_ct[order(df_ct[[pcol_fv]], -abs(df_ct$avg_log2FC)), , drop = FALSE]
+        top_genes <- head(df_ct$gene, n_top_ct)
+        top_genes <- top_genes[top_genes %in% gene_ids]
+        if (length(top_genes) > 0) {
+          gene_info[[length(gene_info) + 1]] <- data.frame(
+            gene = top_genes,
+            cell_type = ct,
+            phenotype_bin = "Most Favorable",
+            row_id = paste(ct, "Most Favorable", top_genes, sep = "__"),
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+    }
+
+    gene_info <- do.call(rbind, gene_info)
+    if (is.null(gene_info) || nrow(gene_info) == 0) {
+      message("No cell-type-specific phenotype marker genes selected; skipping heatmap.")
+    } else {
+      # Column ordering: phenotype bin -> cell type -> ordered by phenotype score
+      group_levels <- c("Most Favorable", "Other", "Most Adverse")
+      celltype_levels <- levels(factor(meta$celltype_original))
+      score_vec <- meta[[score_precog_col]]
+      group_vec <- meta[[group_col]]
+      ct_vec <- meta$celltype_original
+      cell_ids <- meta$Cell
+
+      cell_order <- character(0)
+      for (g in group_levels) {
+        for (ct in celltype_levels) {
+          idx <- which(group_vec == g & ct_vec == ct)
+          if (length(idx) == 0) next
+          idx <- idx[order(score_vec[idx], na.last = TRUE)]
+          cell_order <- c(cell_order, cell_ids[idx])
+        }
+      }
+      cell_order <- c(cell_order, setdiff(colnames(expr_mat), cell_order))
+
+      mat_raw <- as.matrix(expr_mat[gene_info$gene, cell_order, drop = FALSE])
+      rownames(mat_raw) <- gene_info$row_id
+      mat_scaled <- t(scale(t(mat_raw)))
+      mat_scaled[mat_scaled < -3] <- -3
+      mat_scaled[mat_scaled > 3] <- 3
+
+      create_diverging_palette <- function(values) {
+        min_val <- min(values, na.rm = TRUE)
+        max_val <- max(values, na.rm = TRUE)
+        if (min_val >= 0) {
+          colors <- colorRampPalette(c("#F7F7F7", "#B2182B"))(100)
+        } else if (max_val <= 0) {
+          colors <- colorRampPalette(c("#2166AC", "#F7F7F7"))(100)
+        } else {
+          colors <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+        }
+        list(colors = colors)
+      }
+
+      score_palette_ct <- create_diverging_palette(meta[cell_order, score_precog_col])$colors
+      pal_group <- c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC")
+      pal_celltype_ct <- pal_cells[levels(factor(meta$celltype_original))]
+
+      ann_col_ct <- data.frame(
+        `PhenoMapR score` = meta[cell_order, score_precog_col],
+        `Cell type` = factor(meta[cell_order, "celltype_original"]),
+        `Phenotype group` = factor(meta[cell_order, group_col], levels = group_levels),
+        check.names = FALSE
+      )
+      rownames(ann_col_ct) <- cell_order
+
+      ann_colors_ct <- list(
+        `PhenoMapR score` = score_palette_ct,
+        `Cell type` = pal_celltype_ct,
+        `Phenotype group` = pal_group
+      )
+
+      heatmap_colors_ct <- if (requireNamespace("paletteer", quietly = TRUE)) {
+        colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
+      } else {
+        colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+      }
+
+      pheatmap::pheatmap(
+        mat_scaled,
+        scale = "none",
+        cluster_cols = FALSE,
+        cluster_rows = FALSE,
+        show_colnames = FALSE,
+        annotation_col = ann_col_ct,
+        annotation_colors = ann_colors_ct,
+        color = heatmap_colors_ct,
+        breaks = seq(-3, 3, length.out = 101),
+        main = "Cell-type-specific phenotype marker genes",
+        fontsize_row = 7
+      )
+    }
+  } else {
+    message("Cell-type-specific marker results were empty; skipping heatmap.")
+  }
+}
+```
+
 
 
 ## Dataset summary of PhenoMapR results
@@ -640,7 +803,7 @@ if (nrow(meta_plot) > 0) {
 
 ## Conclusions
 
-Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (malignant and ductal type 1). These results agree with those of Jolasun et al., however our **PhenoMapR`** results provide an increased level of granularity compared to other methods, since we retain absolute and rank-ordered information regarding all cell's phenotype association. We also nominate cells most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
+Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (malignant and ductal type 1). These results agree with those of Jolasun et al., however our **`PhenoMapR`** results provide an increased level of granularity compared to other methods, since we retain absolute and rank-ordered information regarding all cell's phenotype association. We also nominate cells most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
 
 ## References
 
