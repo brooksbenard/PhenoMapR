@@ -8,7 +8,12 @@ calculate_weighted_scores <- function(expression_matrix,
                                       z_score_cutoff = 2,
                                       pseudobulk = FALSE,
                                       score_name = "weighted_sum_score",
+                                      reference_sign = 1L,
                                       verbose = TRUE) {
+  reference_sign <- as.integer(reference_sign)[1L]
+  if (!reference_sign %in% c(-1L, 1L)) {
+    stop("'reference_sign' must be 1 or -1")
+  }
   
   # Validate inputs
   validate_expression_matrix(expression_matrix)
@@ -61,6 +66,10 @@ calculate_weighted_scores <- function(expression_matrix,
 
     expression_data <- expression_matrix[common_genes, , drop = FALSE]
     prog_data_sub <- prog_data_sub[common_genes, , drop = FALSE]
+
+    if (reference_sign == -1L) {
+      prog_data_sub[, 1] <- -as.numeric(prog_data_sub[, 1])
+    }
 
     if (verbose) {
       # nocov start - verbose output

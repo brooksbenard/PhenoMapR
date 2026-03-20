@@ -1,6 +1,6 @@
 Package: PhenoMapR
 Type: Package
-Title: Weighted Sum Scoring for Prognostic Gene Signatures
+Title: Mapping Phenotypic Signal From Bulk Expression Across Single Cell and Spatial Transcriptomics Data
 Version: 0.1.0
 Authors@R: c(
     person("Brooks", "Benard", email = "bbenard@stanford.edu", 

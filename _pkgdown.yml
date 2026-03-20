@@ -103,6 +103,7 @@ reference:
   contents:
   - define_phenotype_groups
   - find_phenotype_markers
+  - plot_phenotype_markers
 - title: Visualization
   contents:
   - plot_score_distribution

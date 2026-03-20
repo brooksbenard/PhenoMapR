@@ -37,11 +37,25 @@
 #'   looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.
 #' @param hugo_species Character. Species for HUGO symbol cleaning:
 #'   \code{"human"} or \code{"mouse"} (default \code{"human"}).
+#' @param binary_positive_reference For \code{phenotype_type} \code{"binary"} only:
+#'   which level of the binary factor should correspond to the \strong{positive}
+#'   outcome in logistic regression (\code{y = 1}), so that genes with
+#'   \strong{positive} z-scores are those whose \strong{higher} expression is
+#'   associated with that level. Use \code{"first"} when the first level of
+#'   \code{factor(..., levels = c(...))} is your phenotype of interest (e.g.
+#'   \code{mutated} vs \code{wt}); use \code{"second"} for the legacy convention
+#'   (second level coded as \code{y = 1}). Default \code{"second"} preserves
+#'   behaviour from previous versions when levels were implicit (e.g. alphabetical).
 #' @param verbose Logical. Print progress messages (default \code{TRUE}).
 #'
 #' @return A data.frame with genes as rownames and a single column of
 #'   phenotype-association z-scores, suitable for \code{reference} in
-#'   \code{\link{PhenoMap}}.
+#'   \code{\link{PhenoMap}}. When scoring with \code{\link{PhenoMap}}, a
+#'   \strong{positive} weighted sum means higher expression of genes with
+#'   \strong{positive} reference z is associated with the level you chose via
+#'   \code{binary_positive_reference} (for binary phenotypes). Use
+#'   \code{PhenoMap(..., reference_sign = -1)} if you need to flip the sign of
+#'   the entire reference after the fact.
 #'
 #' @examples
 #' \dontrun{
@@ -74,10 +88,12 @@ derive_reference_from_bulk <- function(bulk_expression,
                                        survival_event = NULL,
                                        normalize = TRUE,
                                        hugo_species = c("human", "mouse"),
+                                       binary_positive_reference = c("second", "first"),
                                        verbose = TRUE) {
 
   phenotype_type <- match.arg(phenotype_type)
   hugo_species <- match.arg(hugo_species)
+  binary_positive_reference <- match.arg(binary_positive_reference)
 
   if (is.data.frame(bulk_expression)) {
     bulk_expression <- as.matrix(bulk_expression)
@@ -227,7 +243,12 @@ derive_reference_from_bulk <- function(bulk_expression,
       bulk_expression <- bulk_expression[keep, , drop = FALSE]
       y <- y[keep]
       if (phenotype_type == "binary") {
-        z_scores <- z_scores_binary(bulk_expression, y, verbose = verbose)
+        z_scores <- z_scores_binary(
+          bulk_expression,
+          y,
+          verbose = verbose,
+          binary_positive_reference = binary_positive_reference
+        )
         score_label <- paste0(phenotype_column, "_z")
       } else {
         z_scores <- z_scores_continuous(bulk_expression, y, verbose = verbose)
@@ -291,14 +312,26 @@ z_scores_survival <- function(expr, time, event, verbose = TRUE) {
 #' Z-scores from logistic regression per gene (binary outcome)
 #'
 #' @keywords internal
-z_scores_binary <- function(expr, group, verbose = TRUE) {
+z_scores_binary <- function(expr,
+                            group,
+                            verbose = TRUE,
+                            binary_positive_reference = c("second", "first")) {
+  binary_positive_reference <- match.arg(binary_positive_reference)
   expr <- as.matrix(expr)
-  group <- as.factor(group)
+  if (!is.factor(group)) {
+    group <- as.factor(group)
+  } else {
+    group <- droplevels(group)
+  }
   levs <- levels(group)
   if (length(levs) != 2) {
     stop("Binary phenotype must have exactly 2 levels; found ", length(levs))
   }
-  y <- as.integer(group == levs[2])
+  if (binary_positive_reference == "first") {
+    y <- as.integer(group == levs[1])
+  } else {
+    y <- as.integer(group == levs[2])
+  }
   n_genes <- ncol(expr)
   z <- setNames(rep(NA_real_, n_genes), colnames(expr))
   for (j in seq_len(n_genes)) {

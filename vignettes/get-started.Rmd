@@ -223,12 +223,15 @@ scores <- PhenoMap(
 
 ### Derive reference from bulk expression and phenotype
 If you have bulk expression (**genes as rows, samples as columns**) and a phenotype (e.g. clinical response (R/NR), time-to-survival (with censor), or any other continuous phenotype), the `PhenoMapR` **`derive_reference_from_bulk()`** function derives gene-level z-scores for use as the reference when scoring bulk, single-cell, or spatial data. The function expects genes as rows and samples as columns; if the matrix appears to be the opposite, it will transpose and message. It then cleans gene names to approved HUGO symbols (if `HGNChelper` is installed), checks/normalizes expression, and computes gene association z-scores (Cox for survival, logistic regression for binary, correlation for continuous).
+
+**Binary phenotypes and sign:** Encode the outcome as a **factor** with `levels` in the order you care about. Set **`binary_positive_reference = "first"`** so that the **first** level is the “positive” phenotype in the logistic model: genes with **positive** z-scores are those whose **higher** expression is associated with that first level (e.g. `factor(c("wt","mut",...), levels = c("mut", "wt"))` if *mutated* is the phenotype of interest for positive scores). The default **`binary_positive_reference = "second"`** matches older behaviour (second level coded as the positive class). After deriving the reference, **`PhenoMap(..., reference_sign = -1)`** flips all reference z-scores at scoring time if you need the opposite sign without re-fitting.
 ```r
 # Bulk: genes (rows) x samples (columns); sample IDs = colnames
 bulk_expr <- matrix(...)   # e.g. 5000 genes x 50 samples
 pheno <- data.frame(
   sample_id = colnames(bulk_expr),   # must match expression column names
-  response = c("R", "NR", ...)       # or time + event for survival
+  # Put the phenotype of interest FIRST so positive scores align with it:
+  response = factor(..., levels = c("mutated", "wildtype"))
 )
 
 # Derive reference z-scores
@@ -237,7 +240,8 @@ ref <- derive_reference_from_bulk(
   phenotype = pheno,
   sample_id_column = "sample_id",
   phenotype_column = "response",
-  phenotype_type = "binary"   # or "survival", "continuous", "auto"
+  phenotype_type = "binary",
+  binary_positive_reference = "first"
 )
 
 # Score single-cell or spatial data with the derived reference

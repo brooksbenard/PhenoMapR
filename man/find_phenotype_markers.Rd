@@ -19,6 +19,7 @@ find_phenotype_markers(
   pval_threshold = 0.05,
   verbose = TRUE,
   max_cells_per_ident = 5000L,
+  validate_expression_axes = TRUE,
   ...
 )
 }
@@ -73,6 +74,11 @@ Passed to \code{FindMarkers}.}
 subsample to this limit before FindMarkers (default 5000). Reduces memory
 for large objects. Set to \code{Inf} to disable.}
 
+\item{validate_expression_axes}{If TRUE (default), check that the expression
+matrix is genes \eqn{\times} cells (transpose when a clear samples \eqn{\times}
+genes layout is detected) and normalize colnames for ID matching. Use
+log-normalized (e.g. log1p CPM) \code{data} for matrix input when possible.}
+
 \item{...}{Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).}
 }
 \value{
@@ -97,6 +103,14 @@ uses \code{Seurat::FindMarkers}. For matrix, \code{Matrix}, or
 \code{SingleCellExperiment} input, uses a Wilcoxon-based path (presto if
 available, else base R) and does not require Seurat.
 }
+\details{
+Phenotype tails (e.g. top/bottom 5\\%) come from \code{\link{define_phenotype_groups}()}.
+For \code{marker_scope = "cell_type_specific"}, each test compares cells in
+\strong{(that cell type \eqn{\cap} adverse or favorable tail)} to \strong{all
+other cells}. \code{group_labels} cell IDs must match \code{colnames(expression)}
+(after trimming); use the same identifiers you used when building the score
+table and phenotype groups.
+}
 \examples{
 \dontrun{
 scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
@@ -111,4 +125,7 @@ head(markers$adverse_markers)
 head(markers$favorable_markers)
 }
 
+}
+\seealso{
+\code{\link{plot_phenotype_markers}()} for heatmaps of marker expression.
 }

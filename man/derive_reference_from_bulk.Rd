@@ -14,6 +14,7 @@ derive_reference_from_bulk(
   survival_event = NULL,
   normalize = TRUE,
   hugo_species = c("human", "mouse"),
+  binary_positive_reference = c("second", "first"),
   verbose = TRUE
 )
 }
@@ -54,12 +55,27 @@ looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.}
 \item{hugo_species}{Character. Species for HUGO symbol cleaning:
 \code{"human"} or \code{"mouse"} (default \code{"human"}).}
 
+\item{binary_positive_reference}{For \code{phenotype_type} \code{"binary"} only:
+which level of the binary factor should correspond to the \strong{positive}
+outcome in logistic regression (\code{y = 1}), so that genes with
+\strong{positive} z-scores are those whose \strong{higher} expression is
+associated with that level. Use \code{"first"} when the first level of
+\code{factor(..., levels = c(...))} is your phenotype of interest (e.g.
+\code{mutated} vs \code{wt}); use \code{"second"} for the legacy convention
+(second level coded as \code{y = 1}). Default \code{"second"} preserves
+behaviour from previous versions when levels were implicit (e.g. alphabetical).}
+
 \item{verbose}{Logical. Print progress messages (default \code{TRUE}).}
 }
 \value{
 A data.frame with genes as rownames and a single column of
 phenotype-association z-scores, suitable for \code{reference} in
-\code{\link{PhenoMap}}.
+\code{\link{PhenoMap}}. When scoring with \code{\link{PhenoMap}}, a
+\strong{positive} weighted sum means higher expression of genes with
+\strong{positive} reference z is associated with the level you chose via
+\code{binary_positive_reference} (for binary phenotypes). Use
+\code{PhenoMap(..., reference_sign = -1)} if you need to flip the sign of
+the entire reference after the fact.
 }
 \description{
 When you have bulk expression (\strong{genes as rows, samples as columns}) and a

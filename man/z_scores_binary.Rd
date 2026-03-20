@@ -4,7 +4,12 @@
 \alias{z_scores_binary}
 \title{Z-scores from logistic regression per gene (binary outcome)}
 \usage{
-z_scores_binary(expr, group, verbose = TRUE)
+z_scores_binary(
+  expr,
+  group,
+  verbose = TRUE,
+  binary_positive_reference = c("second", "first")
+)
 }
 \description{
 Z-scores from logistic regression per gene (binary outcome)

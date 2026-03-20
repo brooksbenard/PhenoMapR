@@ -21,6 +21,40 @@ test_that("PhenoMap with few overlapping genes warns", {
   expect_equal(nrow(scores), 4)
 })
 
+test_that("PhenoMap reference_sign = -1 negates scores relative to reference_sign = 1", {
+  custom_ref <- data.frame(
+    row.names = paste0("G", 1:20),
+    s = c(rep(3, 10), rep(-3, 10))
+  )
+  expr <- matrix(
+    pmax(0, rnorm(20 * 5)),
+    nrow = 20,
+    ncol = 5,
+    dimnames = list(paste0("G", 1:20), paste0("C", 1:5))
+  )
+  expect_warning(
+    s1 <- PhenoMap(
+      expression = expr,
+      reference = custom_ref,
+      z_score_cutoff = 2,
+      verbose = FALSE,
+      reference_sign = 1L
+    ),
+    "Fewer than 50 overlapping"
+  )
+  expect_warning(
+    s2 <- PhenoMap(
+      expression = expr,
+      reference = custom_ref,
+      z_score_cutoff = 2,
+      verbose = FALSE,
+      reference_sign = -1L
+    ),
+    "Fewer than 50 overlapping"
+  )
+  expect_equal(s1[[1]], -s2[[1]])
+})
+
 test_that("normalize_scores with NA in input", {
   x <- c(1, 2, NA, 4, 5)
   z <- normalize_scores(x)

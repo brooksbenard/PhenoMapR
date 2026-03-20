@@ -28,7 +28,8 @@ suppressPackageStartupMessages(library(ggpubr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(patchwork))
-suppressPackageStartupMessages(library(pheatmap))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(circlize))
 
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
@@ -395,110 +396,39 @@ groups <- define_phenotype_groups(scores_df, percentile = 0.05, score_columns = 
 group_col <- grep("phenotype_group", names(groups), value = TRUE)[1]
 meta[[group_col]] <- groups[rownames(meta), group_col]
 
-markers <- NULL
-if (!is.na(group_col)) {
-  markers <- find_phenotype_markers(expr_mat, group_labels = meta[[group_col]], max_cells_per_ident = 5000L)
+  markers <- NULL
+
+  markers <- find_phenotype_markers(
+    expr_mat,
+    group_labels = meta[[group_col]],
+    pval_threshold = 0.05,
+    max_cells_per_ident = 5000L
+  )
   if (!is.null(markers)) {
     message("Adverse markers (top 5):"); print(head(markers$adverse_markers, 5))
     message("Favorable markers (top 5):"); print(head(markers$favorable_markers, 5))
   }
-}
 ```
 
 ## Marker genes heatmap
 
-After identifying marker genes for the adverse and favorable **`PhenoMapR`** populations, we select the top genes and vizualize their relative expression levels across all cells in the dataset. 
+After identifying marker genes for the adverse and favorable **`PhenoMapR`** populations, we take up to **20** positive markers per tail with **FDR < 0.05** and the **largest `avg_log2FC`** (same thresholds as the cell-type–specific heatmap). The helper **`plot_phenotype_markers()`** subsets the expression matrix to those genes and the ordered cells, then applies **row-wise `scale`** only to that submatrix. **ComplexHeatmap** shows favorable-marker rows, then adverse-marker rows, with **`anno_mark`** for the top five genes in each block.
 
-```{r heatmap-markers, fig.align='center'}
-  n_top <- 15
-  adverse_pos <- markers$adverse_markers[markers$adverse_markers$avg_log2FC > 0, ]
-  favorable_pos <- markers$favorable_markers[markers$favorable_markers$avg_log2FC > 0, ]
-  top_genes <- unique(c(
-    head(adverse_pos$gene[order(adverse_pos$p_adj)], n_top),
-    head(favorable_pos$gene[order(favorable_pos$p_adj)], n_top)
-  ))
-  top_genes <- top_genes[top_genes %in% rownames(expr_mat)]
-  if (length(top_genes) == 0) top_genes <- head(rownames(expr_mat), 20)
-
-  mat <- as.matrix(expr_mat[top_genes, , drop = FALSE])
-  mat_scaled <- t(scale(t(mat)))
-  mat_scaled[mat_scaled < -3] <- -3
-  mat_scaled[mat_scaled > 3] <- 3
-
-  ord <- order(meta[[score_precog_col]])
-  mat_scaled <- mat_scaled[, ord, drop = FALSE]
-  meta_ord <- meta[ord, ]
-
-  # Use raw (un-normalized) PhenoMapR scores for the heatmap annotation.
-  # Clip to a symmetric range so the color scale is centered at 0 (blue < 0, white = 0, red > 0).
-  create_diverging_palette <- function(values) {
-  # Get range
-  min_val <- min(values, na.rm = TRUE)
-  max_val <- max(values, na.rm = TRUE)
-  
-  # Determine breaks
-  if (min_val >= 0) {
-    # Only positive values
-    breaks <- seq(0, max_val, length.out = 100)
-    colors <- colorRampPalette(c("#F7F7F7", "#B2182B"))(100)
-  } else if (max_val <= 0) {
-    # Only negative values
-    breaks <- seq(min_val, 0, length.out = 100)
-    colors <- colorRampPalette(c("#2166AC", "#F7F7F7"))(100)
-  } else {
-    # Both positive and negative
-    # Make symmetric around 0 for balanced colors
-    abs_max <- max(abs(min_val), abs(max_val))
-    breaks <- seq(-abs_max, abs_max, length.out = 100)
-    colors <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
-  }
-  
-  list(breaks = breaks, colors = colors)
-} 
-# Create the palette
-score_palette <- create_diverging_palette(meta_ord[[score_precog_col]])
-
-ann_col <- data.frame(
-  `PhenoMapR score` = meta_ord[[score_precog_col]],
-  `Cell type` = factor(meta_ord$celltype_original),
-  `Prognostic group` = factor(meta_ord[[group_col]], levels = c("Most Adverse", "Other", "Most Favorable")),
-  check.names = FALSE
-)
-rownames(ann_col) <- colnames(mat_scaled)
-
-pal_group <- c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC")
-
-# Ensure alignment
-celltype_levels <- levels(meta_ord$celltype_original)
-pal_celltype <- pal_cells[celltype_levels]
-
-
-ann_colors <- list(
-  `PhenoMapR score` = score_palette$colors,  # Use the colors from your function
-  `Cell type` = pal_celltype,
-  `Prognostic group` = pal_group
-)
-
-heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
-  colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
-} else {
-  colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
-}
-
-pheatmap::pheatmap(
-  mat_scaled,
-  scale = "none",
-  cluster_cols = FALSE,
-  cluster_rows = FALSE,
-  show_colnames = FALSE,
-  annotation_col = ann_col,
-  annotation_colors = ann_colors,
-  color = heatmap_colors,
-  breaks = seq(-3, 3, length.out = 101),
-  main = "Top adverse & favorable PhenoMapR marker genes",
-  fontsize_row = 8
-)
-  
+```{r heatmap-markers, fig.align='center', fig.width=12, fig.height=8}
+  plot_phenotype_markers(
+    markers = markers,
+    expr_mat = expr_mat,
+    meta = meta,
+    cell_id_col = "Cell",
+    group_col = group_col,
+    score_col = score_precog_col,
+    celltype_col = "celltype_original",
+    celltype_palette = pal_cells,
+    heatmap_type = "global",
+    top_n_markers = 20L,
+    n_mark_labels = 5L,
+    p_adj_threshold = 0.05
+  )
 ```
 It's clear from the heatmap that the cell type driving the favorable prognostic signal is the Acinar cell type. Cell-type specific marker identification within the most prgnostic group would further resolve other cell type markers associated with favorable outcomes in this dataset. 
 
@@ -508,193 +438,43 @@ The `find_phenotype_markers()` function can also identify marker genes **for eac
 2) cell type, then
 3) phenotype score.
 
-```{r celltype-specific-phenotype-markers, cache = FALSE, fig.align='center'}
-if (!is.na(group_col) && !is.null(group_col)) {
-  group_df <- data.frame(
-    cell_id = meta$Cell,
-    phenotype_group = meta[[group_col]],
-    cell_type = meta$celltype_original,
-    stringsAsFactors = FALSE
-  )
+For the heatmap, we take up to **20** positive markers per cell type and phenotype tail with the **largest `avg_log2FC`**, restricting to genes that are **FDR-significant** (`p_adj` from Benjamini–Hochberg `< 0.05`). Rows follow the same column order: **Most Favorable** (each cell type), **Other** cells, **Most Adverse** (each cell type). **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** draws row splits between blocks; **`anno_mark`** labels the **top five** genes (by log2FC) within each (phenotype tail × cell type) group, with **cell type** and **phenotype** strips on the left.
 
-  markers_ct <- find_phenotype_markers(
-    expr_mat,
-    group_labels = group_df,
-    group_column = "phenotype_group",
-    cell_id_column = "cell_id",
-    cell_type_column = "cell_type",
-    marker_scope = "cell_type_specific",
-    max_cells_per_ident = 5000L,
-    verbose = FALSE
-  )
+```{r celltype-specific-phenotype-markers, cache = FALSE, fig.align='center', fig.width=14, fig.height=10}
+group_df <- data.frame(
+  cell_id = meta$Cell,
+  phenotype_group = meta[[group_col]],
+  cell_type = meta$celltype_original,
+  stringsAsFactors = FALSE
+)
 
-  n_top_ct <- 5L
-  if (!is.null(markers_ct) &&
-      nrow(markers_ct$adverse_markers) > 0 &&
-      nrow(markers_ct$favorable_markers) > 0) {
+markers_ct <- find_phenotype_markers(
+  expr_mat,
+  group_labels = group_df,
+  group_column = "phenotype_group",
+  cell_id_column = "cell_id",
+  cell_type_column = "cell_type",
+  marker_scope = "cell_type_specific",
+  pval_threshold = 0.05,
+  max_cells_per_ident = 5000L,
+  verbose = FALSE
+)
 
-    adverse_df <- markers_ct$adverse_markers
-    favorable_df <- markers_ct$favorable_markers
+plot_phenotype_markers(
+  markers = markers_ct,
+  expr_mat = expr_mat,
+  meta = meta,
+  cell_id_col = "Cell",
+  group_col = group_col,
+  score_col = score_precog_col,
+  celltype_col = "celltype_original",
+  celltype_palette = pal_cells,
+  heatmap_type = "cell_type_specific",
+  top_n_markers = 20L,
+  n_mark_labels = 5L,
+  p_adj_threshold = 0.05
+)
 
-    # Top heatmap markers: largest positive log2FC among genes with p_adj < 0.01
-    pick_top_markers <- function(df, n_keep, valid_genes) {
-      req <- c("gene", "avg_log2FC", "p_adj")
-      if (!all(req %in% names(df))) {
-        return(character(0))
-      }
-      df <- df[
-        is.finite(df$avg_log2FC) & df$avg_log2FC > 0 &
-          is.finite(df$p_adj) & df$p_adj < 0.01,
-        ,
-        drop = FALSE
-      ]
-      if (nrow(df) == 0) {
-        return(character(0))
-      }
-      df <- df[order(-df$avg_log2FC, df$p_adj), , drop = FALSE]
-      g <- head(df$gene, n_keep)
-      g[g %in% valid_genes]
-    }
-
-    gene_ids <- rownames(expr_mat)
-    ct_levels <- sort(unique(c(adverse_df$cell_type, favorable_df$cell_type)))
-
-    gene_info <- list()
-    for (ct in ct_levels) {
-      df_ct <- adverse_df[adverse_df$cell_type == ct, , drop = FALSE]
-      if (nrow(df_ct) > 0) {
-        top_genes <- pick_top_markers(df_ct, n_top_ct, gene_ids)
-        if (length(top_genes) > 0) {
-          gene_info[[length(gene_info) + 1]] <- data.frame(
-            gene = top_genes,
-            cell_type = ct,
-            phenotype_bin = "Most Adverse",
-            row_id = paste(ct, "Most Adverse", top_genes, sep = "__"),
-            stringsAsFactors = FALSE
-          )
-        }
-      }
-
-      df_ct <- favorable_df[favorable_df$cell_type == ct, , drop = FALSE]
-      if (nrow(df_ct) > 0) {
-        top_genes <- pick_top_markers(df_ct, n_top_ct, gene_ids)
-        if (length(top_genes) > 0) {
-          gene_info[[length(gene_info) + 1]] <- data.frame(
-            gene = top_genes,
-            cell_type = ct,
-            phenotype_bin = "Most Favorable",
-            row_id = paste(ct, "Most Favorable", top_genes, sep = "__"),
-            stringsAsFactors = FALSE
-          )
-        }
-      }
-    }
-
-    gene_info <- do.call(rbind, gene_info)
-    if (is.null(gene_info) || nrow(gene_info) == 0) {
-      message("No cell-type-specific phenotype marker genes selected; skipping heatmap.")
-    } else {
-      # Column ordering: phenotype bin -> cell type -> ordered by phenotype score
-      group_levels <- c("Most Favorable", "Other", "Most Adverse")
-      celltype_levels <- levels(factor(meta$celltype_original))
-      # Row ordering matches column grouping: phenotype bin -> cell type
-      gene_info$phenotype_bin <- factor(gene_info$phenotype_bin, levels = group_levels)
-      gene_info$cell_type <- factor(gene_info$cell_type, levels = celltype_levels)
-      gene_info <- gene_info[order(gene_info$phenotype_bin, gene_info$cell_type), , drop = FALSE]
-
-      block_key <- paste(as.character(gene_info$phenotype_bin), as.character(gene_info$cell_type), sep = "||")
-      block_sizes <- as.numeric(table(factor(block_key, levels = unique(block_key))))
-      gaps_row <- cumsum(block_sizes)
-      if (length(gaps_row) > 0) gaps_row <- gaps_row[-length(gaps_row)]
-
-      score_vec <- meta[[score_precog_col]]
-      group_vec <- meta[[group_col]]
-      ct_vec <- meta$celltype_original
-      cell_ids <- meta$Cell
-
-      cell_order <- character(0)
-      for (g in group_levels) {
-        for (ct in celltype_levels) {
-          idx <- which(group_vec == g & ct_vec == ct)
-          if (length(idx) == 0) next
-          idx <- idx[order(score_vec[idx], na.last = TRUE)]
-          cell_order <- c(cell_order, cell_ids[idx])
-        }
-      }
-      cell_order <- c(cell_order, setdiff(colnames(expr_mat), cell_order))
-      meta_idx <- match(cell_order, meta$Cell)
-
-      mat_raw <- as.matrix(expr_mat[gene_info$gene, cell_order, drop = FALSE])
-      rownames(mat_raw) <- make.unique(gene_info$gene)
-      mat_scaled <- t(scale(t(mat_raw)))
-      # mat_scaled[mat_scaled < -3] <- -3
-      # mat_scaled[mat_scaled > 3] <- 3
-
-      create_diverging_palette <- function(values) {
-        values <- as.numeric(values)
-        values[!is.finite(values)] <- NA_real_
-        if (all(is.na(values))) {
-          return(list(colors = colorRampPalette(c("#F7F7F7", "#B2182B"))(100)))
-        }
-        min_val <- min(values, na.rm = TRUE)
-        max_val <- max(values, na.rm = TRUE)
-        if (min_val >= 0) {
-          colors <- colorRampPalette(c("#F7F7F7", "#B2182B"))(100)
-        } else if (max_val <= 0) {
-          colors <- colorRampPalette(c("#2166AC", "#F7F7F7"))(100)
-        } else {
-          colors <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
-        }
-        list(colors = colors)
-      }
-
-      score_ann <- as.numeric(meta[[score_precog_col]][meta_idx])
-      score_ann[!is.finite(score_ann)] <- NA_real_
-      if (all(is.na(score_ann))) score_ann <- rep(0, length(score_ann))
-
-      score_palette_ct <- create_diverging_palette(score_ann)$colors
-      pal_group <- c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC")
-      pal_celltype_ct <- pal_cells[levels(factor(meta$celltype_original))]
-
-      ann_col_ct <- data.frame(
-        `PhenoMapR score` = score_ann,
-        `Cell type` = factor(meta$celltype_original[meta_idx], levels = levels(factor(meta$celltype_original))),
-        `Phenotype group` = factor(meta[[group_col]][meta_idx], levels = group_levels),
-        check.names = FALSE
-      )
-      rownames(ann_col_ct) <- cell_order
-
-      ann_colors_ct <- list(
-        `PhenoMapR score` = score_palette_ct,
-        `Cell type` = pal_celltype_ct,
-        `Phenotype group` = pal_group
-      )
-
-      heatmap_colors_ct <- if (requireNamespace("paletteer", quietly = TRUE)) {
-        colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
-      } else {
-        colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
-      }
-
-      pheatmap::pheatmap(
-        mat_scaled,
-        scale = "none",
-        cluster_cols = FALSE,
-        cluster_rows = FALSE,
-        # gaps_row = gaps_row,
-        show_colnames = FALSE,
-        annotation_col = ann_col_ct,
-        annotation_colors = ann_colors_ct,
-        color = heatmap_colors_ct,
-        # breaks = seq(-3, 3, length.out = 101),
-        main = "Cell-type-specific phenotype marker genes",
-        fontsize_row = 4
-      )
-    }
-  } else {
-    message("Cell-type-specific marker results were empty; skipping heatmap.")
-  }
-}
 ```
 
 

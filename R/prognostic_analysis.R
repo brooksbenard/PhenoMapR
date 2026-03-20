@@ -123,6 +123,17 @@ define_phenotype_groups <- function(scores,
 #' @param max_cells_per_ident When any phenotype group exceeds this many cells,
 #'   subsample to this limit before FindMarkers (default 5000). Reduces memory
 #'   for large objects. Set to \code{Inf} to disable.
+#' @param validate_expression_axes If TRUE (default), check that the expression
+#'   matrix is genes \eqn{\times} cells (transpose when a clear samples \eqn{\times}
+#'   genes layout is detected) and normalize colnames for ID matching. Use
+#'   log-normalized (e.g. log1p CPM) \code{data} for matrix input when possible.
+#' @details
+#' Phenotype tails (e.g. top/bottom 5\%) come from \code{\link{define_phenotype_groups}()}.
+#' For \code{marker_scope = "cell_type_specific"}, each test compares cells in
+#' \strong{(that cell type \eqn{\cap} adverse or favorable tail)} to \strong{all
+#' other cells}. \code{group_labels} cell IDs must match \code{colnames(expression)}
+#' (after trimming); use the same identifiers you used when building the score
+#' table and phenotype groups.
 #' @param ... Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).
 #'
 #' @return A list with:
@@ -153,6 +164,8 @@ define_phenotype_groups <- function(scores,
 #' head(markers$favorable_markers)
 #' }
 #'
+#' @seealso \code{\link{plot_phenotype_markers}()} for heatmaps of marker expression.
+#'
 #' @export
 find_phenotype_markers <- function(expression,
                                     group_labels,
@@ -168,6 +181,7 @@ find_phenotype_markers <- function(expression,
                                     pval_threshold = 0.05,
                                     verbose = TRUE,
                                     max_cells_per_ident = 5000L,
+                                    validate_expression_axes = TRUE,
                                     ...) {
   test.use <- match.arg(test.use)
   marker_scope <- match.arg(marker_scope)
@@ -176,7 +190,9 @@ find_phenotype_markers <- function(expression,
   expr_info <- process_expression_for_markers(
     expression,
     assay = assay,
-    slot = slot
+    slot = slot,
+    validate_axes = validate_expression_axes,
+    verbose = verbose
   )
   cell_ids <- expr_info$cell_names
   slot_use <- expr_info$slot_used %||% slot
@@ -214,6 +230,26 @@ find_phenotype_markers <- function(expression,
       id_col = cols$id_col,
       label_column = cell_type_column_use
     )
+  }
+
+  if (mean(is.na(group_vec)) > 0.05) {
+    warning(
+      "More than 5% of cells have NA phenotype group after matching group_labels to expression columns."
+    )
+  }
+
+  if (marker_scope == "cell_type_specific" && verbose) {
+    if (is_likely_normalized(expr_info$matrix)) {
+      message(
+        "Expression appears log-normalized; Wilcoxon tests use values as-is (log-normalized assay recommended for interpretable log2 fold change)."
+      )
+    }
+    n_na_ct <- sum(is.na(cell_type_vec))
+    if (n_na_ct > 0L) {
+      message(glue::glue(
+        "{n_na_ct} cell(s) have missing cell type after matching group_labels; excluded from cell-type-specific contrasts."
+      ))
+    }
   }
 
   n_adverse <- sum(group_vec == "Most Adverse", na.rm = TRUE)
@@ -427,11 +463,22 @@ infer_cell_type_column <- function(group_labels, id_col, group_column) {
 #'
 #' @keywords internal
 resolve_labels_from_df <- function(group_labels, cell_ids, id_col, label_column) {
+  cell_ids_s <- sanitize_cell_ids_vec(cell_ids)
   lab_df <- group_labels[, c(id_col, label_column), drop = FALSE]
-  lab_df <- lab_df[lab_df[[id_col]] %in% cell_ids, , drop = FALSE]
-  lab_df <- lab_df[match(cell_ids, lab_df[[id_col]]), , drop = FALSE]
-  vec <- lab_df[[label_column]]
-  vec[is.na(lab_df[[id_col]])] <- NA
+  lab_df[[id_col]] <- sanitize_cell_ids_vec(lab_df[[id_col]])
+  dup <- duplicated(lab_df[[id_col]], fromLast = FALSE)
+  if (any(dup)) {
+    lab_df <- lab_df[!dup, , drop = FALSE]
+  }
+  lab_df <- lab_df[lab_df[[id_col]] %in% cell_ids_s, , drop = FALSE]
+  mi <- match(cell_ids_s, lab_df[[id_col]])
+  vec <- lab_df[[label_column]][mi]
+  if (any(is.na(mi))) {
+    n_miss <- sum(is.na(mi))
+    warning(glue::glue(
+      "{n_miss} cell(s) in expression have no matching cell_id in group_labels; '{label_column}' set to NA."
+    ))
+  }
   vec
 }
 
@@ -891,12 +938,44 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
 # nocov end
 
 
-#' Process expression input for marker finding
+#' Sanitize cell/sample IDs for matching metadata to matrix columns
 #' @keywords internal
-process_expression_for_markers <- function(expression, assay = NULL, slot = "data") {
+#' @noRd
+sanitize_cell_ids_vec <- function(x) {
+  if (is.null(x)) {
+    return(x)
+  }
+  trimws(as.character(x))
+}
+
+
+#' Process expression input for marker finding
+#'
+#' Ensures genes x cells orientation (when possible), sane colnames for matching
+#' \code{group_labels}, and supports log-normalized matrices as-is for Wilcoxon tests.
+#'
+#' @keywords internal
+#' @noRd
+process_expression_for_markers <- function(expression,
+                                            assay = NULL,
+                                            slot = "data",
+                                            validate_axes = TRUE,
+                                            verbose = TRUE) {
   if (is.matrix(expression) || is.data.frame(expression)) {
     if (is.data.frame(expression)) {
       expression <- as.matrix(expression)
+    }
+    if (isTRUE(validate_axes)) {
+      expression <- validate_expression_axes_and_ids(expression, verbose = verbose)
+    }
+    if (!is.null(colnames(expression))) {
+      colnames(expression) <- sanitize_cell_ids_vec(colnames(expression))
+    }
+    if (!is.null(rownames(expression))) {
+      rownames(expression) <- as.character(rownames(expression))
+    }
+    if (storage.mode(expression) != "double") {
+      storage.mode(expression) <- "double"
     }
     return(list(
       matrix = expression,
@@ -905,6 +984,15 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
     ))
   }
   if (inherits(expression, "Matrix")) {
+    if (isTRUE(validate_axes)) {
+      expression <- validate_expression_axes_and_ids(expression, verbose = verbose)
+    }
+    if (!is.null(colnames(expression))) {
+      colnames(expression) <- sanitize_cell_ids_vec(colnames(expression))
+    }
+    if (!is.null(rownames(expression))) {
+      rownames(expression) <- as.character(rownames(expression))
+    }
     return(list(
       matrix = expression,
       cell_names = colnames(expression),
@@ -941,6 +1029,18 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
       if (!is.null(mat) && (nrow(mat) > 0 && ncol(mat) > 0)) slot_used <- "counts"
     }
     mat <- as.matrix(mat)
+    if (isTRUE(validate_axes)) {
+      mat <- validate_expression_axes_and_ids(mat, verbose = verbose)
+    }
+    if (!is.null(colnames(mat))) {
+      colnames(mat) <- sanitize_cell_ids_vec(colnames(mat))
+    }
+    if (!is.null(rownames(mat))) {
+      rownames(mat) <- as.character(rownames(mat))
+    }
+    if (storage.mode(mat) != "double") {
+      storage.mode(mat) <- "double"
+    }
     return(list(
       matrix = mat,
       cell_names = colnames(mat),
@@ -956,6 +1056,18 @@ process_expression_for_markers <- function(expression, assay = NULL, slot = "dat
     anames <- SummarizedExperiment::assayNames(expression)
     if (!assay %in% anames) assay <- anames[1]
     mat <- as.matrix(SummarizedExperiment::assay(expression, assay))
+    if (isTRUE(validate_axes)) {
+      mat <- validate_expression_axes_and_ids(mat, verbose = verbose)
+    }
+    if (!is.null(colnames(mat))) {
+      colnames(mat) <- sanitize_cell_ids_vec(colnames(mat))
+    }
+    if (!is.null(rownames(mat))) {
+      rownames(mat) <- as.character(rownames(mat))
+    }
+    if (storage.mode(mat) != "double") {
+      storage.mode(mat) <- "double"
+    }
     return(list(
       matrix = mat,
       cell_names = colnames(mat),
@@ -977,7 +1089,7 @@ resolve_group_labels <- function(group_labels,
     if (length(group_labels) != length(cell_ids)) {
       stop("Length of 'group_labels' must match number of cells in expression")
     }
-    return(group_labels)
+    return(as.character(group_labels))
   }
   if (!is.data.frame(group_labels)) {
     stop("'group_labels' must be a character vector or a data.frame with group and cell ID columns")
@@ -1006,11 +1118,25 @@ resolve_group_labels <- function(group_labels,
     stop(glue::glue("'group_column' '{group_column}' not found in group_labels"))
   }
 
+  cell_ids_s <- sanitize_cell_ids_vec(cell_ids)
   lab_df <- group_labels[, c(id_col, group_column), drop = FALSE]
-  lab_df <- lab_df[lab_df[[id_col]] %in% cell_ids, , drop = FALSE]
-  lab_df <- lab_df[match(cell_ids, lab_df[[id_col]]), , drop = FALSE]
-  vec <- lab_df[[group_column]]
-  vec[is.na(lab_df[[id_col]])] <- NA_character_
+  lab_df[[id_col]] <- sanitize_cell_ids_vec(lab_df[[id_col]])
+  dup <- duplicated(lab_df[[id_col]], fromLast = FALSE)
+  if (any(dup)) {
+    warning(
+      "Duplicate cell_id rows in group_labels; using the first occurrence for each cell_id."
+    )
+    lab_df <- lab_df[!dup, , drop = FALSE]
+  }
+  lab_df <- lab_df[lab_df[[id_col]] %in% cell_ids_s, , drop = FALSE]
+  mi <- match(cell_ids_s, lab_df[[id_col]])
+  vec <- lab_df[[group_column]][mi]
+  if (any(is.na(mi))) {
+    n_miss <- sum(is.na(mi))
+    warning(glue::glue(
+      "{n_miss} cell(s) in expression have no matching cell_id in group_labels; phenotype group set to NA."
+    ))
+  }
   vec
   # nocov end
 }

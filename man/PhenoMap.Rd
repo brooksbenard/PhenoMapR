@@ -13,7 +13,8 @@ PhenoMap(
   group_by = NULL,
   assay = NULL,
   slot = "data",
-  verbose = TRUE
+  verbose = TRUE,
+  reference_sign = 1L
 )
 }
 \arguments{
@@ -52,12 +53,23 @@ In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot.
 The function handles both automatically.}
 
 \item{verbose}{Logical. Print progress messages (default: TRUE)}
+
+\item{reference_sign}{Multiply all reference gene z-scores by this value before
+the weighted sum. Use \code{1} (default) or \code{-1} to flip the sign of
+resulting PhenoMap scores without changing the reference matrix (e.g. if you
+want positive scores to mean the opposite association). For custom references
+from \code{\link{derive_reference_from_bulk}}, prefer setting
+\code{binary_positive_reference} so the reference itself matches your factor
+levels (first level = positive association when \code{"first"}).}
 }
 \value{
 A data.frame with samples/cells as rows and score columns. Column
 names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}.
-\strong{Directionality}: higher score = worse prognosis (adverse); lower score =
-better prognosis (favorable), matching positive reference z = worse survival.
+\strong{Directionality (built-in PRECOG/TCGA/ICI references)}: higher score =
+worse prognosis (adverse); lower score = better prognosis (favorable),
+matching positive reference z = worse survival. \strong{Custom references} from
+\code{\link{derive_reference_from_bulk}} follow the sign convention you chose
+there (see \code{binary_positive_reference}) times \code{reference_sign}.
 For Seurat/SCE objects, scoring may use only reference genes internally for
 memory efficiency. Always add scores to the \strong{same (full) object} using
 \code{add_scores_to_seurat} or \code{add_scores_to_sce} so that all genes

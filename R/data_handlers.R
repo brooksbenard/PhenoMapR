@@ -103,8 +103,9 @@ validate_expression_axes_and_ids <- function(mat, verbose = TRUE) {
         )
       }
       mat <- t(mat)
-      n_genes <- ncol(mat)
-      n_samples <- nrow(mat)
+      # After transpose: rows = genes, columns = cells/samples
+      n_genes <- nrow(mat)
+      n_samples <- ncol(mat)
     }
     # Sanity check: after correction we should have many more genes than samples
     if (n_genes > 0 && n_samples > 0 && n_genes < 5 * n_samples && isTRUE(verbose)) {

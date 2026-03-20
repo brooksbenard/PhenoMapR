@@ -1,6 +1,51 @@
 # test-derive-reference.R
 # Minimal tests for derive_reference_from_bulk (binary and continuous)
 
+test_that("derive_reference_from_bulk binary_positive_reference first vs second negates z vector", {
+  skip_if_not_installed("stats")
+  set.seed(42)
+  n_samp <- 20
+  n_genes <- 5
+  expr <- matrix(rnorm(n_genes * n_samp), nrow = n_genes, ncol = n_samp)
+  rownames(expr) <- paste0("G", seq_len(n_genes))
+  colnames(expr) <- paste0("S", seq_len(n_samp))
+  # First gene high in first 10 samples (level A); low in last 10 (level B)
+  expr[1, 1:10] <- expr[1, 1:10] + 5
+  pheno <- data.frame(
+    sample_id = colnames(expr),
+    grp = factor(rep(c("A", "B"), each = 10), levels = c("A", "B")),
+    stringsAsFactors = FALSE
+  )
+  ref_first <- derive_reference_from_bulk(
+    bulk_expression = expr,
+    phenotype = pheno,
+    sample_id_column = "sample_id",
+    phenotype_column = "grp",
+    phenotype_type = "binary",
+    binary_positive_reference = "first",
+    normalize = FALSE,
+    verbose = FALSE
+  )
+  ref_second <- derive_reference_from_bulk(
+    bulk_expression = expr,
+    phenotype = pheno,
+    sample_id_column = "sample_id",
+    phenotype_column = "grp",
+    phenotype_type = "binary",
+    binary_positive_reference = "second",
+    normalize = FALSE,
+    verbose = FALSE
+  )
+  z1 <- stats::setNames(ref_first[[1]], rownames(ref_first))
+  z2 <- stats::setNames(ref_second[[1]], rownames(ref_second))
+  common <- intersect(names(z1), names(z2))
+  z1 <- unname(z1[common])
+  z2 <- unname(z2[common])
+  ok <- is.finite(z1) & is.finite(z2)
+  expect_true(sum(ok) >= 1)
+  expect_equal(z1[ok], -z2[ok], tolerance = 1e-5)
+})
+
 test_that("derive_reference_from_bulk returns data.frame for binary phenotype", {
   # Genes (rows) x samples (columns)
   set.seed(1)

@@ -10,6 +10,7 @@ calculate_weighted_scores(
   z_score_cutoff = 2,
   pseudobulk = FALSE,
   score_name = "weighted_sum_score",
+  reference_sign = 1L,
   verbose = TRUE
 )
 }
