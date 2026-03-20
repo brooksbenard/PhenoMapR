@@ -85,6 +85,13 @@ For \code{heatmap_type = "global"}, rows are favorable-marker genes then
 adverse-only genes (no duplicate genes in the adverse block). For
 \code{cell_type_specific}, rows follow phenotype bin then cell type, matching
 column order.
+
+Column annotations (top to bottom): phenotype group, cell type, PhenoMapR
+score; annotation names are drawn on the right. Row \code{anno_mark} gene
+labels only (no colored row strips). Heatmap and annotation legends are
+drawn on the right (\code{merge_legend = TRUE}). Scaled expression uses
+ColorBrewer \strong{RdGy} (11-class): red (low) through white to gray (high).
+No extra gap is inserted between row-split groups (\code{row_gap = 0}).
 }
 \seealso{
 \code{\link{find_phenotype_markers}()}

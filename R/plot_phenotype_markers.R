@@ -45,6 +45,13 @@
 #' \code{cell_type_specific}, rows follow phenotype bin then cell type, matching
 #' column order.
 #'
+#' Column annotations (top to bottom): phenotype group, cell type, PhenoMapR
+#' score; annotation names are drawn on the right. Row \code{anno_mark} gene
+#' labels only (no colored row strips). Heatmap and annotation legends are
+#' drawn on the right (\code{merge_legend = TRUE}). Scaled expression uses
+#' ColorBrewer \strong{RdGy} (11-class): red (low) through white to gray (high).
+#' No extra gap is inserted between row-split groups (\code{row_gap = 0}).
+#'
 #' @seealso \code{\link{find_phenotype_markers}()}
 #' @export
 plot_phenotype_markers <- function(markers,
@@ -181,8 +188,12 @@ plot_phenotype_markers <- function(markers,
     )
     marker_tail <- c(rep("Most Favorable", n_fav), rep("Most Adverse", n_adv))
 
+    # Top stack (bottom to top): score → cell type → phenotype group
     ha_top <- ComplexHeatmap::HeatmapAnnotation(
-      `PhenoMapR score` = ComplexHeatmap::anno_simple(score_ann, col = score_col_fun),
+      `PhenoMapR score` = ComplexHeatmap::anno_simple(
+        score_ann,
+        col = score_col_fun
+      ),
       `Cell type` = ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
@@ -193,11 +204,10 @@ plot_phenotype_markers <- function(markers,
         col = pal_group,
         width = grid::unit(3, "mm")
       ),
-      annotation_name_side = "left",
+      annotation_name_side = "right",
       show_annotation_name = TRUE
     )
 
-    pal_marker_row <- c(`Most Favorable` = "#2166AC", `Most Adverse` = "#B2182B")
     ha_left <- ComplexHeatmap::rowAnnotation(
       marks = ComplexHeatmap::anno_mark(
         at = marks_at_g,
@@ -207,18 +217,11 @@ plot_phenotype_markers <- function(markers,
         link_gp = grid::gpar(col = "grey50", lwd = 0.6),
         padding = grid::unit(1, "mm")
       ),
-      `Marker contrast` = ComplexHeatmap::anno_simple(
-        marker_tail, col = pal_marker_row, width = grid::unit(3, "mm")
-      ),
-      show_annotation_name = TRUE,
-      annotation_name_side = "top"
+      show_annotation_name = FALSE
     )
 
     row_split_g <- factor(marker_tail, levels = c("Most Favorable", "Most Adverse"))
-    hm_col_fun <- circlize::colorRamp2(
-      c(scale_clip[1], 0, scale_clip[2]),
-      c("#2166AC", "#F7F7F7", "#B2182B")
-    )
+    hm_col_fun <- .scaled_expr_col_fun_rdgy11(scale_clip)
 
     ct <- column_title %||% "Global phenotype marker genes (favorable vs adverse)"
 
@@ -231,7 +234,7 @@ plot_phenotype_markers <- function(markers,
       cluster_columns = FALSE,
       row_split = row_split_g,
       cluster_row_slices = FALSE,
-      row_gap = grid::unit(1.5, "mm"),
+      row_gap = grid::unit(0, "mm"),
       show_column_names = FALSE,
       show_row_names = FALSE,
       top_annotation = ha_top,
@@ -239,8 +242,9 @@ plot_phenotype_markers <- function(markers,
       column_title = ct,
       heatmap_legend_param = list(
         title = "Scaled expr",
-        direction = "horizontal",
-        title_position = "topcenter"
+        direction = "vertical",
+        title_position = "leftcenter-rot",
+        legend_height = grid::unit(3, "cm")
       )
     )
   } else {
@@ -307,7 +311,10 @@ plot_phenotype_markers <- function(markers,
     }
 
     ha_top <- ComplexHeatmap::HeatmapAnnotation(
-      `PhenoMapR score` = ComplexHeatmap::anno_simple(score_ann, col = score_col_fun),
+      `PhenoMapR score` = ComplexHeatmap::anno_simple(
+        score_ann,
+        col = score_col_fun
+      ),
       `Cell type` = ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
@@ -318,7 +325,7 @@ plot_phenotype_markers <- function(markers,
         col = pal_group,
         width = grid::unit(3, "mm")
       ),
-      annotation_name_side = "left",
+      annotation_name_side = "right",
       show_annotation_name = TRUE
     )
 
@@ -333,24 +340,10 @@ plot_phenotype_markers <- function(markers,
         link_gp = grid::gpar(col = "grey50", lwd = 0.6),
         padding = grid::unit(1, "mm")
       ),
-      `Cell type` = ComplexHeatmap::anno_simple(
-        as.character(gene_info$cell_type),
-        col = pal_celltype,
-        width = grid::unit(3, "mm")
-      ),
-      `Phenotype` = ComplexHeatmap::anno_simple(
-        as.character(gene_info$phenotype_bin),
-        col = pal_group,
-        width = grid::unit(3, "mm")
-      ),
-      show_annotation_name = TRUE,
-      annotation_name_side = "top"
+      show_annotation_name = FALSE
     )
 
-    hm_col_fun <- circlize::colorRamp2(
-      c(scale_clip[1], 0, scale_clip[2]),
-      c("#2166AC", "#F7F7F7", "#B2182B")
-    )
+    hm_col_fun <- .scaled_expr_col_fun_rdgy11(scale_clip)
 
     ct <- column_title %||% "Cell-type-specific phenotype marker genes"
 
@@ -363,7 +356,7 @@ plot_phenotype_markers <- function(markers,
       cluster_columns = FALSE,
       row_split = row_split,
       cluster_row_slices = FALSE,
-      row_gap = grid::unit(1.5, "mm"),
+      row_gap = grid::unit(0, "mm"),
       show_column_names = FALSE,
       show_row_names = FALSE,
       top_annotation = ha_top,
@@ -371,16 +364,41 @@ plot_phenotype_markers <- function(markers,
       column_title = ct,
       heatmap_legend_param = list(
         title = "Scaled expr",
-        direction = "horizontal",
-        title_position = "topcenter"
+        direction = "vertical",
+        title_position = "leftcenter-rot",
+        legend_height = grid::unit(3, "cm")
       )
     )
   }
 
   if (isTRUE(draw)) {
-    ComplexHeatmap::draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right")
+    ComplexHeatmap::draw(
+      ht,
+      heatmap_legend_side = "right",
+      annotation_legend_side = "right",
+      merge_legend = TRUE,
+      legend_grouping = "original"
+    )
   }
   invisible(ht)
+}
+
+
+#' ColorBrewer diverging \code{RdGy} palette, 11 classes (low = red, high = gray).
+#' Hex values from \code{RColorBrewer::brewer.pal(11, "RdGy")} (no runtime dependency).
+#'
+#' @noRd
+#' @keywords internal
+.rdgy11_brewer <- c(
+  "#67001F", "#B2182B", "#D6604D", "#F4A582", "#FDDBC7", "#FFFFFF",
+  "#E0E0E0", "#BABABA", "#878787", "#4D4D4D", "#1A1A1A"
+)
+
+#' @noRd
+#' @keywords internal
+.scaled_expr_col_fun_rdgy11 <- function(scale_clip) {
+  breaks <- seq(scale_clip[1], scale_clip[2], length.out = 11L)
+  circlize::colorRamp2(breaks, .rdgy11_brewer)
 }
 
 
