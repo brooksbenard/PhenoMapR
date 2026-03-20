@@ -102,9 +102,10 @@ define_phenotype_groups <- function(scores,
 #'   \itemize{
 #'     \item \code{"phenotype_groups"}: find markers for the adverse and favorable
 #'       phenotype groups globally (cell type agnostic; default).
-#'     \item \code{"cell_type_specific"}: find markers separately within each
-#'       cell type, comparing the adverse phenotype group vs the rest and the
-#'       favorable phenotype group vs the rest, *within the same cell type*.
+#'     \item \code{"cell_type_specific"}: for each cell type, find markers for
+#'       cells of that type in the adverse (or favorable) phenotype tail vs
+#'       \strong{all other cells} in the dataset (other types and other
+#'       phenotype groups combined).
 #'   }
 #' @param cell_type_column When \code{marker_scope = "cell_type_specific"}, the
 #'   column in \code{group_labels} that contains cell type labels.
@@ -133,9 +134,10 @@ define_phenotype_groups <- function(scores,
 #'   }
 #'   Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 #'   \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
-#'   When \code{marker_scope = "cell_type_specific"}, the returned data.frames
-#'   additionally include a \code{cell_type} column with the cell type for each
-#'   marker result.
+#'   When \code{marker_scope = "cell_type_specific"}, each row is one gene for
+#'   one cell type; the \code{cell_type} column identifies which type the
+#'   contrast was anchored on (adverse/favorable cells of that type vs all
+#'   other cells).
 #'
 #' @examples
 #' \dontrun{
@@ -612,11 +614,156 @@ run_markers_on_matrix <- function(mat,
 }
 
 
+#' One contrast: (cell type == ct AND phenotype tail) vs all other cells
+#'
+#' Marker genes are for cells in the phenotype tail within a cell type vs the
+#' entire rest of the cohort (other cell types and other phenotype groups),
+#' not vs only other phenotype groups within the same cell type.
+#'
+#' @keywords internal
+#' @noRd
+run_celltype_phenotype_vs_rest <- function(mat,
+                                           group_vec,
+                                           cell_type_vec,
+                                           cell_type_label,
+                                           phenotype_tail,
+                                           min.pct = 0.1,
+                                           logfc.threshold = 0.25,
+                                           pval_threshold = 0.05,
+                                           max_cells_per_ident = 5000L,
+                                           verbose = TRUE) {
+  empty_markers <- function() {
+    data.frame(
+      gene = character(0),
+      avg_log2FC = numeric(0),
+      pct_in_group = numeric(0),
+      pct_rest = numeric(0),
+      p_val = numeric(0),
+      p_adj = numeric(0),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  cell_type_vec <- as.character(cell_type_vec)
+  is_in <- !is.na(cell_type_vec) & !is.na(group_vec) &
+    (cell_type_vec == cell_type_label) & (group_vec == phenotype_tail)
+  in_i <- which(is_in)
+  out_i <- which(!is_in & !is.na(group_vec))
+
+  if (length(in_i) < 2L || length(out_i) < 2L) {
+    return(empty_markers())
+  }
+
+  if (is.finite(max_cells_per_ident)) {
+    if (length(in_i) > max_cells_per_ident) {
+      in_i <- in_i[sample.int(length(in_i), max_cells_per_ident)]
+      if (verbose) {
+        message(glue::glue(
+          "Subsampled '{cell_type_label}' {phenotype_tail} cells to {max_cells_per_ident} (memory limit)"
+        ))
+      }
+    }
+    if (length(out_i) > max_cells_per_ident) {
+      out_i <- out_i[sample.int(length(out_i), max_cells_per_ident)]
+      if (verbose) {
+        message(glue::glue(
+          "Subsampled rest-of-cohort cells for '{cell_type_label}' {phenotype_tail} contrast to {max_cells_per_ident} (memory limit)"
+        ))
+      }
+    }
+  }
+
+  ord <- c(in_i, out_i)
+  mat_sub <- mat[, ord, drop = FALSE]
+  is_in_sub <- c(rep(TRUE, length(in_i)), rep(FALSE, length(out_i)))
+
+  mat_dense <- as.matrix(mat_sub)
+  genes <- rownames(mat_dense)
+  if (is.null(genes)) genes <- paste0("Gene_", seq_len(nrow(mat_dense)))
+
+  # nocov start - presto path (optional)
+  if (requireNamespace("presto", quietly = TRUE)) {
+    y <- factor(
+      ifelse(is_in_sub, "target", "rest"),
+      levels = c("target", "rest")
+    )
+    auc_out <- tryCatch(
+      presto::wilcoxauc(mat_dense, y),
+      error = function(e) NULL
+    )
+    if (!is.null(auc_out) && nrow(auc_out) > 0) {
+      sub <- auc_out[auc_out$group == "target", , drop = FALSE]
+      if (nrow(sub) == 0) {
+        return(empty_markers())
+      }
+      sub$gene <- sub$feature
+      sub$avg_log2FC <- log2(exp(1)) * sub$logFC
+      sub$pct_in_group <- sub$pct_in
+      sub$pct_rest <- sub$pct_out
+      sub$p_val <- sub$pval
+      sub$p_adj <- stats::p.adjust(sub$p_val, method = "BH")
+      sub <- sub[
+        sub$p_val <= pval_threshold & abs(sub$avg_log2FC) >= logfc.threshold,
+        ,
+        drop = FALSE
+      ]
+      sub <- sub[order(sub$p_val), , drop = FALSE]
+      return(sub[, c("gene", "avg_log2FC", "pct_in_group", "pct_rest", "p_val", "p_adj")])
+    }
+  }
+  # nocov end
+
+  in_grp <- mat_dense[, is_in_sub, drop = FALSE]
+  out_grp <- mat_dense[, !is_in_sub, drop = FALSE]
+  pct_in <- rowMeans(in_grp > 0, na.rm = TRUE)
+  pct_out <- rowMeans(out_grp > 0, na.rm = TRUE)
+  keep <- (pct_in >= min.pct | pct_out >= min.pct)
+  if (sum(keep) == 0) {
+    return(empty_markers())
+  }
+  genes_keep <- genes[keep]
+  pct_in <- pct_in[keep]
+  pct_out <- pct_out[keep]
+  in_grp <- in_grp[keep, , drop = FALSE]
+  out_grp <- out_grp[keep, , drop = FALSE]
+  p_vals <- numeric(length(genes_keep))
+  log2fc <- numeric(length(genes_keep))
+  for (i in seq_along(genes_keep)) {
+    x_in <- as.numeric(in_grp[i, ])
+    x_out <- as.numeric(out_grp[i, ])
+    wt <- tryCatch(
+      stats::wilcox.test(x_in, x_out, alternative = "two.sided", exact = FALSE),
+      error = function(e) NULL
+    )
+    p_vals[i] <- if (!is.null(wt)) wt$p.value else NA_real_
+    m_in <- mean(x_in, na.rm = TRUE)
+    m_out <- mean(x_out, na.rm = TRUE)
+    log2fc[i] <- if (m_out > 0) log2((m_in + 1e-10) / (m_out + 1e-10)) else NA_real_
+  }
+  df <- data.frame(
+    gene = genes_keep,
+    avg_log2FC = log2fc,
+    pct_in_group = pct_in,
+    pct_rest = pct_out,
+    p_val = p_vals,
+    stringsAsFactors = FALSE
+  )
+  df$p_adj <- stats::p.adjust(df$p_val, method = "BH")
+  df <- df[
+    df$p_val <= pval_threshold & abs(df$avg_log2FC) >= logfc.threshold,
+    ,
+    drop = FALSE
+  ]
+  df <- df[order(df$p_val), , drop = FALSE]
+  df
+}
+
+
 #' Run marker detection on a matrix by cell type
 #'
 #' For each cell type, compute markers for:
-#'   - Most Adverse within that cell type vs all other groups within that cell type
-#'   - Most Favorable within that cell type vs all other groups within that cell type
+#'   - (That cell type AND Most Adverse) vs all other cells
+#'   - (That cell type AND Most Favorable) vs all other cells
 #'
 #' @keywords internal
 run_markers_on_matrix_by_celltype <- function(mat,
@@ -627,8 +774,6 @@ run_markers_on_matrix_by_celltype <- function(mat,
                                                pval_threshold = 0.05,
                                                max_cells_per_ident = 5000L,
                                                verbose = TRUE) {
-  cell_ids <- colnames(mat)
-  if (is.null(cell_ids)) cell_ids <- paste0("Cell_", seq_len(ncol(mat)))
   if (length(group_vec) != ncol(mat)) {
     stop("Length of 'group_vec' must match number of columns in expression matrix")
   }
@@ -649,12 +794,24 @@ run_markers_on_matrix_by_celltype <- function(mat,
   favorable_all <- list()
 
   for (ct in cell_types) {
-    idx_ct <- which(cell_type_vec == ct)
-    if (length(idx_ct) < 4) next
-
-    res_ct <- run_markers_on_matrix(
-      mat = mat[, idx_ct, drop = FALSE],
-      group_vec = group_vec[idx_ct],
+    adverse_ct <- run_celltype_phenotype_vs_rest(
+      mat = mat,
+      group_vec = group_vec,
+      cell_type_vec = cell_type_vec,
+      cell_type_label = ct,
+      phenotype_tail = "Most Adverse",
+      min.pct = min.pct,
+      logfc.threshold = logfc.threshold,
+      pval_threshold = pval_threshold,
+      max_cells_per_ident = max_cells_per_ident,
+      verbose = verbose
+    )
+    favorable_ct <- run_celltype_phenotype_vs_rest(
+      mat = mat,
+      group_vec = group_vec,
+      cell_type_vec = cell_type_vec,
+      cell_type_label = ct,
+      phenotype_tail = "Most Favorable",
       min.pct = min.pct,
       logfc.threshold = logfc.threshold,
       pval_threshold = pval_threshold,
@@ -662,8 +819,6 @@ run_markers_on_matrix_by_celltype <- function(mat,
       verbose = verbose
     )
 
-    adverse_ct <- res_ct$adverse_markers
-    favorable_ct <- res_ct$favorable_markers
     if (nrow(adverse_ct) > 0) {
       adverse_ct$cell_type <- rep(ct, nrow(adverse_ct))
     } else {

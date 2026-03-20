@@ -18,8 +18,8 @@ run_markers_on_matrix_by_celltype(
 \description{
 For each cell type, compute markers for:
 \itemize{
-\item Most Adverse within that cell type vs all other groups within that cell type
-\item Most Favorable within that cell type vs all other groups within that cell type
+\item (That cell type AND Most Adverse) vs all other cells
+\item (That cell type AND Most Favorable) vs all other cells
 }
 }
 \keyword{internal}

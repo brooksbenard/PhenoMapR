@@ -42,9 +42,10 @@ name for cell/sample IDs (default \code{"cell_id"}).}
 \itemize{
 \item \code{"phenotype_groups"}: find markers for the adverse and favorable
 phenotype groups globally (cell type agnostic; default).
-\item \code{"cell_type_specific"}: find markers separately within each
-cell type, comparing the adverse phenotype group vs the rest and the
-favorable phenotype group vs the rest, \emph{within the same cell type}.
+\item \code{"cell_type_specific"}: for each cell type, find markers for
+cells of that type in the adverse (or favorable) phenotype tail vs
+\strong{all other cells} in the dataset (other types and other
+phenotype groups combined).
 }}
 
 \item{cell_type_column}{When \code{marker_scope = "cell_type_specific"}, the
@@ -84,9 +85,10 @@ the favorable (bottom score) group (vs rest).
 }
 Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
-When \code{marker_scope = "cell_type_specific"}, the returned data.frames
-additionally include a \code{cell_type} column with the cell type for each
-marker result.
+When \code{marker_scope = "cell_type_specific"}, each row is one gene for
+one cell type; the \code{cell_type} column identifies which type the
+contrast was anchored on (adverse/favorable cells of that type vs all
+other cells).
 }
 \description{
 Performs differential expression between the top (adverse) and bottom
