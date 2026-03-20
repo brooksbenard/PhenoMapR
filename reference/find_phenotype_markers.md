@@ -62,9 +62,10 @@ find_phenotype_markers(
   - `"phenotype_groups"`: find markers for the adverse and favorable
     phenotype groups globally (cell type agnostic; default).
 
-  - `"cell_type_specific"`: find markers separately within each cell
-    type, comparing the adverse phenotype group vs the rest and the
-    favorable phenotype group vs the rest, *within the same cell type*.
+  - `"cell_type_specific"`: for each cell type, find markers for cells
+    of that type in the adverse (or favorable) phenotype tail vs **all
+    other cells** in the dataset (other types and other phenotype groups
+    combined).
 
 - cell_type_column:
 
@@ -127,9 +128,9 @@ A list with:
 
 Each data.frame has columns: `gene`, `avg_log2FC`, `pct_in_group`,
 `pct_rest`, `p_val`, `p_adj`. When
-`marker_scope = "cell_type_specific"`, the returned data.frames
-additionally include a `cell_type` column with the cell type for each
-marker result.
+`marker_scope = "cell_type_specific"`, each row is one gene for one cell
+type; the `cell_type` column identifies which type the contrast was
+anchored on (adverse/favorable cells of that type vs all other cells).
 
 ## Examples
 

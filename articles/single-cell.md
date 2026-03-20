@@ -583,12 +583,13 @@ associated with favorable outcomes in this dataset.
 
 The
 [`find_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/find_phenotype_markers.md)
-function can also identify marker genes **within each cell type** for
-the phenotype tail groups (Most Adverse vs rest, and Most Favorable vs
-rest). We visualize the top marker genes per cell type and phenotype bin
-in a heatmap that includes *all* cells, ordered by: 1) phenotype bin
-(Most Adverse, Other, Most Favorable), then 2) cell type, then 3)
-phenotype score.
+function can also identify marker genes **for each cell type** by
+contrasting cells in that type within the phenotype tail (Most Adverse
+or Most Favorable) against **all other cells in the dataset** (other
+cell types and other phenotype groups). We visualize the top marker
+genes per cell type and phenotype bin in a heatmap that includes *all*
+cells, ordered by: 1) phenotype bin (Most Favorable, Other, Most
+Adverse), then 2) cell type, then 3) phenotype score.
 
 ``` r
 if (!is.na(group_col) && !is.null(group_col)) {
@@ -618,8 +619,25 @@ if (!is.na(group_col) && !is.null(group_col)) {
     adverse_df <- markers_ct$adverse_markers
     favorable_df <- markers_ct$favorable_markers
 
-    pcol_ad <- if ("p_adj" %in% names(adverse_df)) "p_adj" else "p_val"
-    pcol_fv <- if ("p_adj" %in% names(favorable_df)) "p_adj" else "p_val"
+    # Top heatmap markers: largest positive log2FC among genes with p_adj < 0.01
+    pick_top_markers <- function(df, n_keep, valid_genes) {
+      req <- c("gene", "avg_log2FC", "p_adj")
+      if (!all(req %in% names(df))) {
+        return(character(0))
+      }
+      df <- df[
+        is.finite(df$avg_log2FC) & df$avg_log2FC > 0 &
+          is.finite(df$p_adj) & df$p_adj < 0.01,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(df) == 0) {
+        return(character(0))
+      }
+      df <- df[order(-df$avg_log2FC, df$p_adj), , drop = FALSE]
+      g <- head(df$gene, n_keep)
+      g[g %in% valid_genes]
+    }
 
     gene_ids <- rownames(expr_mat)
     ct_levels <- sort(unique(c(adverse_df$cell_type, favorable_df$cell_type)))
@@ -628,10 +646,7 @@ if (!is.na(group_col) && !is.null(group_col)) {
     for (ct in ct_levels) {
       df_ct <- adverse_df[adverse_df$cell_type == ct, , drop = FALSE]
       if (nrow(df_ct) > 0) {
-        if ("avg_log2FC" %in% names(df_ct)) df_ct <- df_ct[df_ct$avg_log2FC > 0, , drop = FALSE]
-        df_ct <- df_ct[order(df_ct[[pcol_ad]], -abs(df_ct$avg_log2FC)), , drop = FALSE]
-        top_genes <- head(df_ct$gene, n_top_ct)
-        top_genes <- top_genes[top_genes %in% gene_ids]
+        top_genes <- pick_top_markers(df_ct, n_top_ct, gene_ids)
         if (length(top_genes) > 0) {
           gene_info[[length(gene_info) + 1]] <- data.frame(
             gene = top_genes,
@@ -645,10 +660,7 @@ if (!is.na(group_col) && !is.null(group_col)) {
 
       df_ct <- favorable_df[favorable_df$cell_type == ct, , drop = FALSE]
       if (nrow(df_ct) > 0) {
-        if ("avg_log2FC" %in% names(df_ct)) df_ct <- df_ct[df_ct$avg_log2FC > 0, , drop = FALSE]
-        df_ct <- df_ct[order(df_ct[[pcol_fv]], -abs(df_ct$avg_log2FC)), , drop = FALSE]
-        top_genes <- head(df_ct$gene, n_top_ct)
-        top_genes <- top_genes[top_genes %in% gene_ids]
+        top_genes <- pick_top_markers(df_ct, n_top_ct, gene_ids)
         if (length(top_genes) > 0) {
           gene_info[[length(gene_info) + 1]] <- data.frame(
             gene = top_genes,
@@ -668,6 +680,16 @@ if (!is.na(group_col) && !is.null(group_col)) {
       # Column ordering: phenotype bin -> cell type -> ordered by phenotype score
       group_levels <- c("Most Favorable", "Other", "Most Adverse")
       celltype_levels <- levels(factor(meta$celltype_original))
+      # Row ordering matches column grouping: phenotype bin -> cell type
+      gene_info$phenotype_bin <- factor(gene_info$phenotype_bin, levels = group_levels)
+      gene_info$cell_type <- factor(gene_info$cell_type, levels = celltype_levels)
+      gene_info <- gene_info[order(gene_info$phenotype_bin, gene_info$cell_type), , drop = FALSE]
+
+      block_key <- paste(as.character(gene_info$phenotype_bin), as.character(gene_info$cell_type), sep = "||")
+      block_sizes <- as.numeric(table(factor(block_key, levels = unique(block_key))))
+      gaps_row <- cumsum(block_sizes)
+      if (length(gaps_row) > 0) gaps_row <- gaps_row[-length(gaps_row)]
+
       score_vec <- meta[[score_precog_col]]
       group_vec <- meta[[group_col]]
       ct_vec <- meta$celltype_original
@@ -683,12 +705,13 @@ if (!is.na(group_col) && !is.null(group_col)) {
         }
       }
       cell_order <- c(cell_order, setdiff(colnames(expr_mat), cell_order))
+      meta_idx <- match(cell_order, meta$Cell)
 
       mat_raw <- as.matrix(expr_mat[gene_info$gene, cell_order, drop = FALSE])
-      rownames(mat_raw) <- gene_info$row_id
+      rownames(mat_raw) <- make.unique(gene_info$gene)
       mat_scaled <- t(scale(t(mat_raw)))
-      mat_scaled[mat_scaled < -3] <- -3
-      mat_scaled[mat_scaled > 3] <- 3
+      # mat_scaled[mat_scaled < -3] <- -3
+      # mat_scaled[mat_scaled > 3] <- 3
 
       create_diverging_palette <- function(values) {
         values <- as.numeric(values)
@@ -708,7 +731,7 @@ if (!is.na(group_col) && !is.null(group_col)) {
         list(colors = colors)
       }
 
-      score_ann <- as.numeric(meta[cell_order, score_precog_col])
+      score_ann <- as.numeric(meta[[score_precog_col]][meta_idx])
       score_ann[!is.finite(score_ann)] <- NA_real_
       if (all(is.na(score_ann))) score_ann <- rep(0, length(score_ann))
 
@@ -718,8 +741,8 @@ if (!is.na(group_col) && !is.null(group_col)) {
 
       ann_col_ct <- data.frame(
         `PhenoMapR score` = score_ann,
-        `Cell type` = factor(meta[cell_order, "celltype_original"]),
-        `Phenotype group` = factor(meta[cell_order, group_col], levels = group_levels),
+        `Cell type` = factor(meta$celltype_original[meta_idx], levels = levels(factor(meta$celltype_original))),
+        `Phenotype group` = factor(meta[[group_col]][meta_idx], levels = group_levels),
         check.names = FALSE
       )
       rownames(ann_col_ct) <- cell_order
@@ -741,13 +764,14 @@ if (!is.na(group_col) && !is.null(group_col)) {
         scale = "none",
         cluster_cols = FALSE,
         cluster_rows = FALSE,
+        # gaps_row = gaps_row,
         show_colnames = FALSE,
         annotation_col = ann_col_ct,
         annotation_colors = ann_colors_ct,
         color = heatmap_colors_ct,
-        breaks = seq(-3, 3, length.out = 101),
+        # breaks = seq(-3, 3, length.out = 101),
         main = "Cell-type-specific phenotype marker genes",
-        fontsize_row = 7
+        fontsize_row = 4
       )
     }
   } else {

@@ -2,11 +2,9 @@
 
 For each cell type, compute markers for:
 
-- Most Adverse within that cell type vs all other groups within that
-  cell type
+- (That cell type AND Most Adverse) vs all other cells
 
-- Most Favorable within that cell type vs all other groups within that
-  cell type
+- (That cell type AND Most Favorable) vs all other cells
 
 ## Usage
 

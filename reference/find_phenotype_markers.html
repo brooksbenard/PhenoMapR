@@ -112,9 +112,10 @@ name for cell/sample IDs (default <code>"cell_id"</code>).</p></dd>
 <dt id="arg-marker-scope">marker_scope<a class="anchor" aria-label="anchor" href="#arg-marker-scope"></a></dt>
 <dd><p>Either:</p><ul><li><p><code>"phenotype_groups"</code>: find markers for the adverse and favorable
 phenotype groups globally (cell type agnostic; default).</p></li>
-<li><p><code>"cell_type_specific"</code>: find markers separately within each
-cell type, comparing the adverse phenotype group vs the rest and the
-favorable phenotype group vs the rest, <em>within the same cell type</em>.</p></li>
+<li><p><code>"cell_type_specific"</code>: for each cell type, find markers for
+cells of that type in the adverse (or favorable) phenotype tail vs
+<strong>all other cells</strong> in the dataset (other types and other
+phenotype groups combined).</p></li>
 </ul></dd>
 
 
@@ -173,9 +174,10 @@ the adverse (top score) group (vs rest).</p></li>
 the favorable (bottom score) group (vs rest).</p></li>
 </ul><p>Each data.frame has columns: <code>gene</code>, <code>avg_log2FC</code>,
 <code>pct_in_group</code>, <code>pct_rest</code>, <code>p_val</code>, <code>p_adj</code>.
-When <code>marker_scope = "cell_type_specific"</code>, the returned data.frames
-additionally include a <code>cell_type</code> column with the cell type for each
-marker result.</p>
+When <code>marker_scope = "cell_type_specific"</code>, each row is one gene for
+one cell type; the <code>cell_type</code> column identifies which type the
+contrast was anchored on (adverse/favorable cells of that type vs all
+other cells).</p>
     </div>
 
     <div class="section level2">
