@@ -140,14 +140,14 @@ score column across **all** cells in `meta`. Row annotations: for
 `left_annotation`, the first track is leftmost (farthest from the
 matrix), so `anno_mark` is listed first and phenotype/cell-type strips
 last (adjacent to the heatmap); for `right_annotation`, strips are first
-(next to the heatmap) and marks last. Adverse-tail strips and gene marks
-on the **left**, favorable-tail strips and gene marks on the **right**
-(global and cell-type-specific; favorable `anno_mark` uses
-`side = "right"`). Row-split slice titles are suppressed. Heatmap fill
-uses ColorBrewer **RdGy** (11-class): **high** scaled expression = red,
-**low** = black. Heatmap and column annotation legends merge on the
-right (`merge_legends = TRUE`; extra right `padding` for PDFs).
-`row_gap = 0` between split blocks.
+(next to the heatmap) and marks last. Favorable-tail strips and gene
+marks on the **left**, adverse-tail strips and gene marks on the
+**right** (global and cell-type-specific; favorable `anno_mark` uses
+`side = "left"`, adverse uses `side = "right"`). Row-split slice titles
+are suppressed. Heatmap fill uses ColorBrewer **RdGy** (11-class):
+**high** scaled expression = red, **low** = black. Heatmap and column
+annotation legends merge on the right (`merge_legends = TRUE`; extra
+right `padding` for PDFs). `row_gap = 0` between split blocks.
 
 ## See also
 
