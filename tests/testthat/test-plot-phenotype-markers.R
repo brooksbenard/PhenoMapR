@@ -1,5 +1,21 @@
 # plot_phenotype_markers — requires ComplexHeatmap + circlize (Suggests)
 
+test_that(".global_marker_heatmap_cell_order sorts columns by score low to high", {
+  meta <- data.frame(
+    id = paste0("C", 1:5),
+    s = c(3, 1, 2, NA, 0),
+    stringsAsFactors = FALSE
+  )
+  expr <- matrix(1, nrow = 2, ncol = 5, dimnames = list(c("G1", "G2"), paste0("C", 1:5)))
+  o <- PhenoMapR:::.global_marker_heatmap_cell_order(
+    meta = meta,
+    expr_mat = expr,
+    cell_id_col = "id",
+    score_col = "s"
+  )
+  expect_equal(o$cell_order, c("C5", "C2", "C3", "C1", "C4"))
+})
+
 test_that("plot_phenotype_markers returns Heatmap object with fake marker tables", {
   skip_if_not_installed("ComplexHeatmap")
   skip_if_not_installed("circlize")

@@ -82,16 +82,30 @@ transpose/scale costs small on large matrices.
 Requires suggested packages \strong{ComplexHeatmap} and \strong{circlize}.
 
 For \code{heatmap_type = "global"}, rows are favorable-marker genes then
-adverse-only genes (no duplicate genes in the adverse block). For
-\code{cell_type_specific}, rows follow phenotype bin then cell type, matching
-column order.
+adverse-only genes (no duplicate genes in the adverse block). Columns are
+ordered by PhenoMapR score (\code{score_col}) from \strong{low to high} across
+all cells in \code{expr_mat}. For \code{cell_type_specific}, columns follow
+phenotype group, then cell type, then score within each block (see
+\code{\link{find_phenotype_markers}} grouping logic); rows follow phenotype
+bin then cell type, matching that column order.
 
 Column annotations (top to bottom): phenotype group, cell type, PhenoMapR
-score; annotation names are drawn on the right. Row \code{anno_mark} gene
-labels only (no colored row strips). Heatmap and annotation legends are
-drawn on the right (\code{merge_legend = TRUE}). Scaled expression uses
-ColorBrewer \strong{RdGy} (11-class): red (low) through white to gray (high).
-No extra gap is inserted between row-split groups (\code{row_gap = 0}).
+score (nearest the heatmap first); annotation names on the right; legends
+are drawn explicitly (\code{Legend()} + \code{annotation_legend_list};
+\code{merge_legends = TRUE} and correct parameter name \code{merge_legends}).
+PhenoMapR score colors use the min--max of the score column across
+\strong{all} cells in \code{meta}. Row annotations: for \code{left_annotation},
+the first track is leftmost (farthest from the matrix), so \code{anno_mark}
+is listed first and phenotype/cell-type strips last (adjacent to the heatmap);
+for \code{right_annotation}, strips are first (next to the heatmap) and marks
+last. Adverse-tail strips and gene marks on the \strong{left}, favorable-tail
+strips and gene marks on the \strong{right} (global and cell-type-specific;
+favorable \code{anno_mark} uses \code{side = "right"}).
+Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
+\strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
+= black. Heatmap and column annotation legends merge on the right
+(\code{merge_legends = TRUE}; extra right \code{padding} for PDFs).
+\code{row_gap = 0} between split blocks.
 }
 \seealso{
 \code{\link{find_phenotype_markers}()}

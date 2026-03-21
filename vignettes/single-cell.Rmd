@@ -248,7 +248,7 @@ precog_scaled_umap <- ggscatter(meta_ordered,
     mid = "#F7F7F7",
     high = "#B2182B",
     midpoint = 0,  
-    name = "PhenoMapR Score"
+    name = "PhenoMapR\nScore"
   ) +
   theme_void() +
     theme(plot.title = element_text(hjust = 0.5)) 
@@ -415,7 +415,7 @@ meta[[group_col]] <- groups[rownames(meta), group_col]
 After identifying marker genes for the adverse and favorable **`PhenoMapR`** populations, we take up to **20** positive markers per tail with **FDR < 0.05** and the **largest `avg_log2FC`** (same thresholds as the cell-type–specific heatmap). The helper **`plot_phenotype_markers()`** subsets the expression matrix to those genes and the ordered cells, then applies **row-wise `scale`** only to that submatrix. **ComplexHeatmap** shows favorable-marker rows, then adverse-marker rows, with **`anno_mark`** for the top five genes in each block.
 
 ```{r heatmap-markers, fig.align='center', fig.width=12, fig.height=8}
-  plot_phenotype_markers(
+plot_phenotype_markers(
     markers = markers,
     expr_mat = expr_mat,
     meta = meta,
