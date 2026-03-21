@@ -57,9 +57,10 @@
 #' the first track is leftmost (farthest from the matrix), so \code{anno_mark}
 #' is listed first and phenotype/cell-type strips last (adjacent to the heatmap);
 #' for \code{right_annotation}, strips are first (next to the heatmap) and marks
-#' last. Adverse-tail strips and gene marks on the \strong{left}, favorable-tail
+#' last. Favorable-tail strips and gene marks on the \strong{left}, adverse-tail
 #' strips and gene marks on the \strong{right} (global and cell-type-specific;
-#' favorable \code{anno_mark} uses \code{side = "right"}).
+#' favorable \code{anno_mark} uses \code{side = "left"}, adverse uses
+#' \code{side = "right"}).
 #' Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 #' \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 #' = black. Heatmap and column annotation legends merge on the right
@@ -233,13 +234,13 @@ plot_phenotype_markers <- function(markers,
     )
 
     pal_marker_row <- c(`Most Favorable` = "#2166AC", `Most Adverse` = "#B2182B")
-    # Left = adverse only; right = favorable only (user request).
+    # Left = favorable; right = adverse.
     strip_l <- rep(NA_character_, nrow(mat_plot))
-    if (n_adv > 0L) {
-      strip_l[n_fav + seq_len(n_adv)] <- "Most Adverse"
-    }
+    strip_l[seq_len(n_fav)] <- "Most Favorable"
     strip_r <- rep(NA_character_, nrow(mat_plot))
-    strip_r[seq_len(n_fav)] <- "Most Favorable"
+    if (n_adv > 0L) {
+      strip_r[n_fav + seq_len(n_adv)] <- "Most Adverse"
+    }
     marks_at_fav <- seq_len(min(n_mark_labels, n_fav))
     marks_lab_fav <- fav_genes[seq_len(min(n_mark_labels, n_fav))]
     marks_at_adv <- if (n_adv > 0L) {
@@ -249,50 +250,50 @@ plot_phenotype_markers <- function(markers,
     }
     marks_lab_adv <- adv_only[seq_len(min(n_mark_labels, n_adv))]
 
-    # Left (adverse): first track leftmost; put marks first, strip last (next to heatmap).
-    ha_left <- NULL
-    if (n_adv > 0L) {
-      ha_left <- ComplexHeatmap::rowAnnotation(
-        marks = ComplexHeatmap::anno_mark(
-          at = marks_at_adv,
-          labels = marks_lab_adv,
-          side = "left",
-          labels_gp = grid::gpar(fontsize = 7),
-          link_gp = grid::gpar(col = "grey50", lwd = 0.6),
-          padding = grid::unit(0.5, "mm")
-        ),
-        `Phenotype` = ComplexHeatmap::anno_simple(
-          strip_l,
-          col = pal_marker_row,
-          width = grid::unit(3, "mm"),
-          na_col = "transparent"
-        ),
-        show_annotation_name = FALSE,
-        gap = grid::unit(0, "mm"),
-        annotation_width = grid::unit(c(18, 3), c("mm", "mm"))
-      )
-    }
-
-    # Right (favorable): strip next to heatmap, gene marks on the outer right.
-    ha_right <- ComplexHeatmap::rowAnnotation(
-      `Phenotype` = ComplexHeatmap::anno_simple(
-        strip_r,
-        col = pal_marker_row,
-        width = grid::unit(3, "mm"),
-        na_col = "transparent"
-      ),
+    # Left (favorable): marks leftmost, strip next to heatmap.
+    ha_left <- ComplexHeatmap::rowAnnotation(
       marks = ComplexHeatmap::anno_mark(
         at = marks_at_fav,
         labels = marks_lab_fav,
-        side = "right",
+        side = "left",
         labels_gp = grid::gpar(fontsize = 7),
         link_gp = grid::gpar(col = "grey50", lwd = 0.6),
         padding = grid::unit(0.5, "mm")
       ),
+      `Phenotype` = ComplexHeatmap::anno_simple(
+        strip_l,
+        col = pal_marker_row,
+        width = grid::unit(3, "mm"),
+        na_col = "transparent"
+      ),
       show_annotation_name = FALSE,
       gap = grid::unit(0, "mm"),
-      annotation_width = grid::unit(c(3, 18), c("mm", "mm"))
+      annotation_width = grid::unit(c(18, 3), c("mm", "mm"))
     )
+
+    # Right (adverse): strip next to heatmap, gene marks on the outer right.
+    ha_right <- NULL
+    if (n_adv > 0L) {
+      ha_right <- ComplexHeatmap::rowAnnotation(
+        `Phenotype` = ComplexHeatmap::anno_simple(
+          strip_r,
+          col = pal_marker_row,
+          width = grid::unit(3, "mm"),
+          na_col = "transparent"
+        ),
+        marks = ComplexHeatmap::anno_mark(
+          at = marks_at_adv,
+          labels = marks_lab_adv,
+          side = "right",
+          labels_gp = grid::gpar(fontsize = 7),
+          link_gp = grid::gpar(col = "grey50", lwd = 0.6),
+          padding = grid::unit(0.5, "mm")
+        ),
+        show_annotation_name = FALSE,
+        gap = grid::unit(0, "mm"),
+        annotation_width = grid::unit(c(3, 18), c("mm", "mm"))
+      )
+    }
 
     row_split_g <- factor(marker_tail, levels = c("Most Favorable", "Most Adverse"))
     hm_col_fun <- .scaled_expr_col_fun_rdgy11(scale_clip)
@@ -426,22 +427,22 @@ plot_phenotype_markers <- function(markers,
     strip_r_ct <- rep(NA_character_, n_row_ct)
     idx_fav <- which(gene_info$phenotype_bin == "Most Favorable")
     idx_adv <- which(gene_info$phenotype_bin == "Most Adverse")
-    # Left = adverse strips; right = favorable strips.
-    if (length(idx_adv) > 0L) {
-      strip_l_pheno[idx_adv] <- "Most Adverse"
-      strip_l_ct[idx_adv] <- as.character(gene_info$cell_type[idx_adv])
-    }
+    # Left = favorable strips; right = adverse strips.
     if (length(idx_fav) > 0L) {
-      strip_r_pheno[idx_fav] <- "Most Favorable"
-      strip_r_ct[idx_fav] <- as.character(gene_info$cell_type[idx_fav])
+      strip_l_pheno[idx_fav] <- "Most Favorable"
+      strip_l_ct[idx_fav] <- as.character(gene_info$cell_type[idx_fav])
+    }
+    if (length(idx_adv) > 0L) {
+      strip_r_pheno[idx_adv] <- "Most Adverse"
+      strip_r_ct[idx_adv] <- as.character(gene_info$cell_type[idx_adv])
     }
 
     ha_left <- NULL
-    if (length(idx_adv) > 0L) {
+    if (length(idx_fav) > 0L) {
       ha_left <- ComplexHeatmap::rowAnnotation(
         marks = ComplexHeatmap::anno_mark(
-          at = marks_at_adv,
-          labels = marks_lab_adv,
+          at = marks_at_fav,
+          labels = marks_lab_fav,
           side = "left",
           labels_gp = grid::gpar(fontsize = 7),
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
@@ -466,7 +467,7 @@ plot_phenotype_markers <- function(markers,
     }
 
     ha_right <- NULL
-    if (length(idx_fav) > 0L) {
+    if (length(idx_adv) > 0L) {
       ha_right <- ComplexHeatmap::rowAnnotation(
         `Phenotype` = ComplexHeatmap::anno_simple(
           strip_r_pheno,
@@ -481,8 +482,8 @@ plot_phenotype_markers <- function(markers,
           na_col = "transparent"
         ),
         marks = ComplexHeatmap::anno_mark(
-          at = marks_at_fav,
-          labels = marks_lab_fav,
+          at = marks_at_adv,
+          labels = marks_lab_adv,
           side = "right",
           labels_gp = grid::gpar(fontsize = 7),
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),

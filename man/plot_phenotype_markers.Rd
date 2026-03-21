@@ -98,9 +98,10 @@ PhenoMapR score colors use the min--max of the score column across
 the first track is leftmost (farthest from the matrix), so \code{anno_mark}
 is listed first and phenotype/cell-type strips last (adjacent to the heatmap);
 for \code{right_annotation}, strips are first (next to the heatmap) and marks
-last. Adverse-tail strips and gene marks on the \strong{left}, favorable-tail
+last. Favorable-tail strips and gene marks on the \strong{left}, adverse-tail
 strips and gene marks on the \strong{right} (global and cell-type-specific;
-favorable \code{anno_mark} uses \code{side = "right"}).
+favorable \code{anno_mark} uses \code{side = "left"}, adverse uses
+\code{side = "right"}).
 Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 = black. Heatmap and column annotation legends merge on the right
