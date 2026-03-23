@@ -334,8 +334,8 @@ sessionInfo()
     ## [5] patchwork_1.3.2 PhenoMapR_0.1.0
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] gtable_0.3.6       xfun_0.56          bslib_0.10.0       htmlwidgets_1.6.4 
-    ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.1       
+    ##  [1] gtable_0.3.6       xfun_0.57          bslib_0.10.0       htmlwidgets_1.6.4 
+    ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.2       
     ##  [9] tools_4.5.3        generics_0.1.4     curl_7.0.0         tibble_3.3.1      
     ## [13] pkgconfig_2.0.3    Matrix_1.7-4       RColorBrewer_1.1-3 S7_0.2.1          
     ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.5.3    
@@ -351,4 +351,4 @@ sessionInfo()
     ## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.1         evaluate_1.0.5    
     ## [61] knitr_1.51         markdown_2.0       rlang_1.1.7        gridtext_0.1.6    
     ## [65] Rcpp_1.1.1         glue_1.8.0         xml2_1.5.2         jsonlite_2.0.0    
-    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_1.6.7
+    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.0

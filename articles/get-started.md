@@ -70,8 +70,8 @@ For the simplest use case of PhenoMapR, implement the following:
 
 ``` r
 # Download PhenoMapR using the following:
-if (!require(devtools)) install.packages("devtools")
-devtools::install_github("brooksbenard/PhenoMapR")
+if (!require(remotes)) install.packages("remotes")
+remotes::install_github("brooksbenard/PhenoMapR")
 
 # Load PhenoMapR in your R session:
 library(PhenoMapR)
