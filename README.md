@@ -20,8 +20,8 @@
 
 ```r
 # Download PhenoMapR using the following:
-if (!require(devtools)) install.packages("devtools")
-devtools::install_github("brooksbenard/PhenoMapR")
+if (!require(remotes)) install.packages("remotes")
+remotes::install_github("brooksbenard/PhenoMapR")
 ```
 
 ## Quick Start
