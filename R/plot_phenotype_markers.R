@@ -52,15 +52,19 @@
 #' score (nearest the heatmap first); annotation names on the right; legends
 #' are drawn explicitly (\code{Legend()} + \code{annotation_legend_list};
 #' \code{merge_legends = TRUE} and correct parameter name \code{merge_legends}).
-#' PhenoMapR score colors use the min--max of the score column across
-#' \strong{all} cells in \code{meta}. Row annotations: for \code{left_annotation},
-#' the first track is leftmost (farthest from the matrix), so \code{anno_mark}
-#' is listed first and phenotype/cell-type strips last (adjacent to the heatmap);
-#' for \code{right_annotation}, strips are first (next to the heatmap) and marks
-#' last. Favorable-tail strips and gene marks on the \strong{left}, adverse-tail
-#' strips and gene marks on the \strong{right} (global and cell-type-specific;
-#' favorable \code{anno_mark} uses \code{side = "left"}, adverse uses
-#' \code{side = "right"}).
+#' PhenoMapR score colors are diverging blue--white--red with \strong{white at
+#' 0}: negative scores are blue, positive scores are red (using the min and max
+#' of the score column across \strong{all} cells in \code{meta}). Row
+#' annotations: for \code{left_annotation}, the first track is leftmost
+#' (farthest from the matrix). For \code{heatmap_type = "cell_type_specific"},
+#' the order is \code{anno_mark} (outer), \strong{cell type}, then
+#' \strong{phenotype bin} (adjacent to the heatmap). For \code{right_annotation},
+#' strips are first (next to the heatmap): phenotype then cell type, then
+#' \code{anno_mark} outermost. Favorable-tail strips and gene marks on the
+#' \strong{left}, adverse on the \strong{right}. For
+#' \code{heatmap_type = "cell_type_specific"}, after drawing, white outline
+#' boxes are added around each marker-gene block (EcoTyper-style
+#' \code{decorate_heatmap_body} + \code{grid.rect}).
 #' Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 #' \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 #' = black. Heatmap and column annotation legends merge on the right
@@ -161,7 +165,7 @@ plot_phenotype_markers <- function(markers,
   pal_celltype <- celltype_palette[hm_celltype_levels]
   pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
 
-  # PhenoMapR score bar: color range from ALL cells in meta (not re-scaled per block)
+  # PhenoMapR score bar: diverging blue–white–red with white anchored at 0 (all cells in meta)
   score_all <- as.numeric(meta[[score_col]])
   score_all <- score_all[is.finite(score_all)]
   if (length(score_all) == 0L) {
@@ -177,10 +181,9 @@ plot_phenotype_markers <- function(markers,
   }
   score_ann <- as.numeric(meta[[score_col]][meta_idx_hm])
   score_ann[!is.finite(score_ann)] <- NA_real_
-  score_col_fun <- circlize::colorRamp2(
-    c(smin, (smin + smax) / 2, smax),
-    c("#2166AC", "#F7F7F7", "#B2182B")
-  )
+  score_col_fun <- .phenomap_score_col_fun(smin, smax)
+
+  decorate_ct_rect <- NULL
 
   if (heatmap_type == "global") {
     pick_global <- function(df, n_keep) {
@@ -439,6 +442,7 @@ plot_phenotype_markers <- function(markers,
 
     ha_left <- NULL
     if (length(idx_fav) > 0L) {
+      # Left (outside -> heatmap): marks | cell type | phenotype bin
       ha_left <- ComplexHeatmap::rowAnnotation(
         marks = ComplexHeatmap::anno_mark(
           at = marks_at_fav,
@@ -448,15 +452,15 @@ plot_phenotype_markers <- function(markers,
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
         ),
-        `Phenotype` = ComplexHeatmap::anno_simple(
-          strip_l_pheno,
-          col = pal_group,
-          width = grid::unit(3, "mm"),
-          na_col = "transparent"
-        ),
         `Cell type` = ComplexHeatmap::anno_simple(
           strip_l_ct,
           col = pal_celltype,
+          width = grid::unit(3, "mm"),
+          na_col = "transparent"
+        ),
+        `Phenotype` = ComplexHeatmap::anno_simple(
+          strip_l_pheno,
+          col = pal_group,
           width = grid::unit(3, "mm"),
           na_col = "transparent"
         ),
@@ -468,6 +472,7 @@ plot_phenotype_markers <- function(markers,
 
     ha_right <- NULL
     if (length(idx_adv) > 0L) {
+      # Right (heatmap -> outside): phenotype | cell type | marks
       ha_right <- ComplexHeatmap::rowAnnotation(
         `Phenotype` = ComplexHeatmap::anno_simple(
           strip_r_pheno,
@@ -499,9 +504,13 @@ plot_phenotype_markers <- function(markers,
 
     ct <- column_title %||% "Cell-type-specific phenotype marker genes"
 
+    decorate_ct_rect <- list(
+      row_factor = factor(block_key, levels = unique(block_key))
+    )
+
     ht <- ComplexHeatmap::Heatmap(
       mat_plot,
-      name = "Scaled expr",
+      name = "phenomap_ct_markers",
       col = hm_col_fun,
       use_raster = use_raster,
       cluster_rows = FALSE,
@@ -516,6 +525,7 @@ plot_phenotype_markers <- function(markers,
       left_annotation = ha_left,
       right_annotation = ha_right,
       column_title = ct,
+      border = TRUE,
       heatmap_legend_param = list(
         title = "Scaled expr",
         direction = "vertical",
@@ -555,6 +565,22 @@ plot_phenotype_markers <- function(markers,
       merge_legends = TRUE,
       padding = grid::unit(c(4, 4, 4, 50), "mm")
     )
+    if (!is.null(decorate_ct_rect)) {
+      rect <- .rect_native_row_blocks(decorate_ct_rect$row_factor)
+      ComplexHeatmap::decorate_heatmap_body("phenomap_ct_markers", {
+        for (j in seq_along(rect$x)) {
+          grid::grid.rect(
+            x = grid::unit(rect$x[j], "native"),
+            y = grid::unit(rect$y[j], "native"),
+            width = grid::unit(rect$w[j], "native"),
+            height = grid::unit(rect$h[j], "native"),
+            hjust = 0,
+            vjust = 1,
+            gp = grid::gpar(col = "white", fill = NA, lty = 1L, lwd = 1)
+          )
+        }
+      })
+    }
   }
   invisible(ht)
 }
@@ -576,6 +602,51 @@ plot_phenotype_markers <- function(markers,
 .scaled_expr_col_fun_rdgy11 <- function(scale_clip) {
   breaks <- seq(scale_clip[1], scale_clip[2], length.out = 11L)
   circlize::colorRamp2(breaks, rev(.rdgy11_brewer))
+}
+
+#' Diverging PhenoMapR score colors: blue (\eqn{< 0}), white at 0, red (\eqn{> 0}).
+#'
+#' @noRd
+#' @keywords internal
+.phenomap_score_col_fun <- function(smin, smax) {
+  if (!is.finite(smin) || !is.finite(smax) || smin == smax) {
+    smin <- -1
+    smax <- 1
+  }
+  if (smin < 0 && smax > 0) {
+    circlize::colorRamp2(
+      c(smin, 0, smax),
+      c("#2166AC", "#FFFFFF", "#B2182B")
+    )
+  } else if (smax <= 0) {
+    circlize::colorRamp2(c(smin, 0), c("#2166AC", "#FFFFFF"))
+  } else if (smin >= 0) {
+    circlize::colorRamp2(c(0, smax), c("#FFFFFF", "#B2182B"))
+  } else {
+    circlize::colorRamp2(c(smin, smax), c("#2166AC", "#B2182B"))
+  }
+}
+
+#' Native heatmap-body coordinates for white boxes around contiguous row blocks
+#' (EcoTyper-style; one rectangle per factor level, full column width).
+#'
+#' @noRd
+#' @keywords internal
+.rect_native_row_blocks <- function(row_factor) {
+  row_factor <- factor(as.character(row_factor), levels = unique(as.character(row_factor)))
+  n <- length(row_factor)
+  if (n < 1L) {
+    return(list(x = numeric(0), y = numeric(0), w = numeric(0), h = numeric(0)))
+  }
+  levels_u <- levels(row_factor)
+  first <- vapply(levels_u, function(lvl) {
+    min(which(as.character(row_factor) == lvl))
+  }, integer(1))
+  fract <- (first - 1L) / n
+  m <- length(fract)
+  height <- if (m > 1L) c(diff(fract), 1 - fract[m]) else (1 - fract[1L])
+  y <- 1 - fract
+  list(x = rep(0, m), y = y, w = rep(1, m), h = height)
 }
 
 

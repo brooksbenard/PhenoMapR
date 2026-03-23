@@ -93,15 +93,19 @@ Column annotations (top to bottom): phenotype group, cell type, PhenoMapR
 score (nearest the heatmap first); annotation names on the right; legends
 are drawn explicitly (\code{Legend()} + \code{annotation_legend_list};
 \code{merge_legends = TRUE} and correct parameter name \code{merge_legends}).
-PhenoMapR score colors use the min--max of the score column across
-\strong{all} cells in \code{meta}. Row annotations: for \code{left_annotation},
-the first track is leftmost (farthest from the matrix), so \code{anno_mark}
-is listed first and phenotype/cell-type strips last (adjacent to the heatmap);
-for \code{right_annotation}, strips are first (next to the heatmap) and marks
-last. Favorable-tail strips and gene marks on the \strong{left}, adverse-tail
-strips and gene marks on the \strong{right} (global and cell-type-specific;
-favorable \code{anno_mark} uses \code{side = "left"}, adverse uses
-\code{side = "right"}).
+PhenoMapR score colors are diverging blue--white--red with \strong{white at
+0}: negative scores are blue, positive scores are red (using the min and max
+of the score column across \strong{all} cells in \code{meta}). Row
+annotations: for \code{left_annotation}, the first track is leftmost
+(farthest from the matrix). For \code{heatmap_type = "cell_type_specific"},
+the order is \code{anno_mark} (outer), \strong{cell type}, then
+\strong{phenotype bin} (adjacent to the heatmap). For \code{right_annotation},
+strips are first (next to the heatmap): phenotype then cell type, then
+\code{anno_mark} outermost. Favorable-tail strips and gene marks on the
+\strong{left}, adverse on the \strong{right}. For
+\code{heatmap_type = "cell_type_specific"}, after drawing, white outline
+boxes are added around each marker-gene block (EcoTyper-style
+\code{decorate_heatmap_body} + \code{grid.rect}).
 Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 = black. Heatmap and column annotation legends merge on the right
