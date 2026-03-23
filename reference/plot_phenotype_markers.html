@@ -179,15 +179,19 @@ bin then cell type, matching that column order.</p>
 score (nearest the heatmap first); annotation names on the right; legends
 are drawn explicitly (<code>Legend()</code> + <code>annotation_legend_list</code>;
 <code>merge_legends = TRUE</code> and correct parameter name <code>merge_legends</code>).
-PhenoMapR score colors use the min–max of the score column across
-<strong>all</strong> cells in <code>meta</code>. Row annotations: for <code>left_annotation</code>,
-the first track is leftmost (farthest from the matrix), so <code>anno_mark</code>
-is listed first and phenotype/cell-type strips last (adjacent to the heatmap);
-for <code>right_annotation</code>, strips are first (next to the heatmap) and marks
-last. Favorable-tail strips and gene marks on the <strong>left</strong>, adverse-tail
-strips and gene marks on the <strong>right</strong> (global and cell-type-specific;
-favorable <code>anno_mark</code> uses <code>side = "left"</code>, adverse uses
-<code>side = "right"</code>).
+PhenoMapR score colors are diverging blue–white–red with <strong>white at
+0</strong>: negative scores are blue, positive scores are red (using the min and max
+of the score column across <strong>all</strong> cells in <code>meta</code>). Row
+annotations: for <code>left_annotation</code>, the first track is leftmost
+(farthest from the matrix). For <code>heatmap_type = "cell_type_specific"</code>,
+the order is <code>anno_mark</code> (outer), <strong>cell type</strong>, then
+<strong>phenotype bin</strong> (adjacent to the heatmap). For <code>right_annotation</code>,
+strips are first (next to the heatmap): phenotype then cell type, then
+<code>anno_mark</code> outermost. Favorable-tail strips and gene marks on the
+<strong>left</strong>, adverse on the <strong>right</strong>. For
+<code>heatmap_type = "cell_type_specific"</code>, after drawing, white outline
+boxes are added around each marker-gene block (EcoTyper-style
+<code>decorate_heatmap_body</code> + <code>grid.rect</code>).
 Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 <strong>RdGy</strong> (11-class): <strong>high</strong> scaled expression = red, <strong>low</strong>
 = black. Heatmap and column annotation legends merge on the right
