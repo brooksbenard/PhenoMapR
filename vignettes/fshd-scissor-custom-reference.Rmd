@@ -1,0 +1,536 @@
+---
+title: "Applying PhenoMapR to facioscapulohumeral muscular dystrophy (FSHD) datasets"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  out.width = "100%",
+  cache = TRUE,
+  cache.path = "cache/fshd-vignette/"
+)
+# vignette_run <- Sys.getenv("PHENOMAPR_FSHD_VIGNETTE", unset = "TRUE") != "FALSE"
+
+# Seurat's FindNeighbors / FindClusters use future::future_lapply. A multisession
+# or multicore plan (e.g. from .Rprofile) can trigger FutureLaunchError when
+# workers see a different 'future' version than the parent, or when unloading
+# 'future' fails because Seurat imports it. Sequential plan avoids forked workers.
+if (requireNamespace("future", quietly = TRUE)) {
+  future::plan("sequential", gc = FALSE)
+}
+```
+
+## Overview
+
+This vignette shows how to use **`PhenoMapR`** to mirror the **FSHD (facioscapulohumeral muscular dystrophy)** analysis in **Scissor** ([Sun *et al.*, *Nat. Biotechnol.* 2022](https://doi.org/10.1038/s41587-021-01091-3); [Nature article](https://www.nature.com/articles/s41587-021-01091-3)), where bulk expression and a binary phenotype are integrated with single-cell data to surface phenotype-associated cells. **Figure 5** of that paper applies Scissor to FSHD using public GEO data.
+
+We follow the paper’s description of the GEO inputs:
+
+- **FSHD scRNA-seq ([s](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE122873))** — 7,047 cells from muscle biopsy–derived myocyte cultures (four FSHD patients, two controls); **148 cells** with high mitochondrial expression (≥10% of total) are removed, leaving **6,899** cells for analysis (Scissor’s reported numbers).
+- **FSHD bulk ([GSE140261](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE140261))** — TPM from **27** follow-up FSHD biopsies and **eight** control biopsies in the processed **year 2** supplementary files; Ensembl IDs are collapsed to **gene symbols** by **summing** expression when multiple Ensembl IDs map to the same symbol (here we use the **mean TPM** across duplicate Ensembl IDs after mapping, which is equivalent for proportional summaries).
+
+**PhenoMapR** workflow:
+
+1. Derive a **custom z-score reference** from bulk TPM with **`derive_reference_from_bulk()`** (FSHD vs. control).
+2. Score all single cells with **`PhenoMap()`** and visualize on **UMAP**.
+3. Define **adverse / favorable** tails with **`define_phenotype_groups()`** and run **`find_phenotype_markers()`** (`marker_scope = "phenotype_groups"` for global markers).
+4. Draw a **global marker heatmap** with **`plot_phenotype_markers(..., heatmap_type = "global")`**.
+5. **Validation** — sketch how to apply the same signature to independent GEO cohorts (**GSE115650**, **GSE56787** biopsies only, **GSE26852** FSHD vs. controls), as in the paper.
+
+## Packages
+
+```{r libraries}
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(ggplot2)
+  library(dplyr)
+    library(Seurat)
+    library(AnnotationDbi)
+    library(org.Hs.eg.db)
+  })
+```
+
+## 1. Bulk TPM and phenotype (GSE140261)
+
+Processed **year 2** supplementary files ([GEO FTP](https://ftp.ncbi.nlm.nih.gov/geo/series/GSE140nnn/GSE140261/suppl/)):
+
+- `GSE140261_year2_TPM.csv.gz` — TPM with **Ensembl IDs** (with version) as rows.
+- `GSE140261_year2_column_data.csv.gz` — metadata; we use **`pheno_type`** (`FSHD` vs `Control`).
+
+```{r bulk-download}
+ftp_base <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE140nnn/GSE140261/suppl/"
+tpm_url <- paste0(ftp_base, "GSE140261_year2_TPM.csv.gz")
+meta_url <- paste0(ftp_base, "GSE140261_year2_column_data.csv.gz")
+
+#' Try several strategies: NCBI HTTPS often fails with default download.file (proxy/SSL/RStudio).
+#' Falls back to GEOquery supplementary download, then system curl if available.
+download_geo_file <- function(url, dest, geo_acc = NULL, supp_filename = NULL) {
+  if (file.exists(dest) && file.info(dest)$size > 1000L) {
+    return(normalizePath(dest, winslash = "/"))
+  }
+  dir.create(dirname(dest), showWarnings = FALSE, recursive = TRUE)
+
+  # 1) curl package: most reliable for HTTPS (often works when download.file / RStudio fails)
+  if (requireNamespace("curl", quietly = TRUE)) {
+    st <- tryCatch(
+      {
+        curl::curl_download(url, dest, quiet = TRUE)
+        0L
+      },
+      error = function(e) 1L
+    )
+    if (st == 0L && file.exists(dest) && file.info(dest)$size > 1000L) {
+      return(normalizePath(dest, winslash = "/"))
+    }
+  }
+
+  try_download_file <- function() {
+    methods <- c("libcurl", "wininet", "auto")
+    for (m in methods) {
+      if (m == "wininet" && .Platform$OS.type != "windows") next
+      st <- tryCatch(
+        download.file(url, dest, mode = "wb", quiet = TRUE, method = m),
+        error = function(e) 1L
+      )
+      if (isTRUE(st == 0L) && file.exists(dest) && file.info(dest)$size > 1000L) {
+        return(TRUE)
+      }
+    }
+    FALSE
+  }
+
+  if (try_download_file()) {
+    return(normalizePath(dest, winslash = "/"))
+  }
+
+  if (!is.null(geo_acc) && !is.null(supp_filename) && requireNamespace("GEOquery", quietly = TRUE)) {
+    base <- tempfile("geo_supp")
+    dir.create(base)
+    tryCatch(
+      suppressMessages(
+        GEOquery::getGEOSuppFiles(geo_acc, makeDirectory = TRUE, baseDir = base)
+      ),
+      error = function(e) invisible(NULL)
+    )
+    hits <- list.files(
+      base,
+      pattern = supp_filename,
+      fixed = TRUE,
+      recursive = TRUE,
+      full.names = TRUE
+    )
+    if (length(hits) >= 1L && file.copy(hits[1], dest, overwrite = TRUE)) {
+      if (file.exists(dest) && file.info(dest)$size > 1000L) {
+        return(normalizePath(dest, winslash = "/"))
+      }
+    }
+  }
+
+  curl_bin <- Sys.which("curl")
+  if (nzchar(curl_bin)) {
+    st <- system2(curl_bin, c("-fsSL", "-o", dest, shQuote(url)), stdout = FALSE, stderr = FALSE)
+    if (st == 0L && file.exists(dest) && file.info(dest)$size > 1000L) {
+      return(normalizePath(dest, winslash = "/"))
+    }
+  }
+
+  stop(
+    "Download failed for:\n  ", url,
+    "\nTry: install.packages('curl'); BiocManager::install('GEOquery'); ",
+    "options(download.file.method = 'libcurl'); ",
+    "or download the file in a browser and set PHENOMAPR_GSE122873_TAR to the local path."
+  )
+}
+
+download_if_needed <- function(url, dest, geo_acc = NULL, supp_filename = basename(url)) {
+  download_geo_file(url, dest, geo_acc = geo_acc, supp_filename = supp_filename)
+}
+
+#' Collapse Ensembl rows to HGNC symbols by mean TPM (duplicate Ensembl → one symbol).
+collapse_ensembl_tpm_to_symbol <- function(tpm_ens_rows_samples_cols) {
+  ens <- rownames(tpm_ens_rows_samples_cols)
+  ens_base <- sub("\\.[0-9]+$", "", ens)
+  sym <- AnnotationDbi::mapIds(
+    org.Hs.eg.db,
+    keys = ens_base,
+    column = "SYMBOL",
+    keytype = "ENSEMBL",
+    multiVals = "first"
+  )
+  df <- as.data.frame(tpm_ens_rows_samples_cols)
+  df$gene_symbol <- sym
+  df <- df[!is.na(df$gene_symbol) & nzchar(df$gene_symbol), , drop = FALSE]
+  sample_cols <- setdiff(names(df), "gene_symbol")
+  agg <- stats::aggregate(
+    df[, sample_cols, drop = FALSE],
+    by = list(gene_symbol = df$gene_symbol),
+    FUN = mean,
+    na.rm = TRUE
+  )
+  mat <- as.matrix(agg[, -1, drop = FALSE])
+  rownames(mat) <- agg$gene_symbol
+  mat
+}
+
+
+  td <- tempdir()
+  tpm_path <- download_if_needed(
+    tpm_url,
+    file.path(td, "GSE140261_year2_TPM.csv.gz"),
+    geo_acc = "GSE140261",
+    supp_filename = "GSE140261_year2_TPM.csv.gz"
+  )
+  meta_path <- download_if_needed(
+    meta_url,
+    file.path(td, "GSE140261_year2_column_data.csv.gz"),
+    geo_acc = "GSE140261",
+    supp_filename = "GSE140261_year2_column_data.csv.gz"
+  )
+
+  tpm_wide <- read.csv(gzfile(tpm_path), row.names = 1, check.names = FALSE, stringsAsFactors = FALSE)
+  tpm_sym <- collapse_ensembl_tpm_to_symbol(tpm_wide)
+
+  coldata <- read.csv(gzfile(meta_path), stringsAsFactors = FALSE, check.names = FALSE)
+  coldata <- coldata[tolower(coldata$pheno_type) %in% c("fshd", "control"), , drop = FALSE]
+  coldata$group <- ifelse(tolower(coldata$pheno_type) == "fshd", "FSHD", "Control")
+  coldata$sample_id <- coldata$sample_name
+
+  use_samples <- intersect(colnames(tpm_sym), coldata$sample_id)
+  tpm_sym <- tpm_sym[, use_samples, drop = FALSE]
+  pheno_bulk <- coldata[match(use_samples, coldata$sample_id), c("sample_id", "group")]
+  pheno_bulk$group <- factor(pheno_bulk$group, levels = c("FSHD", "Control"))
+
+  ref_fshd <- derive_reference_from_bulk(
+    bulk_expression = tpm_sym,
+    phenotype = pheno_bulk,
+    sample_id_column = "sample_id",
+    phenotype_column = "group",
+    phenotype_type = "binary",
+    normalize = FALSE,
+    binary_positive_reference = "first",
+    verbose = TRUE
+  )
+```
+
+With **`levels = c("FSHD", "Control")`** and **`binary_positive_reference = "first"`**, genes with **positive** z-scores are **higher in FSHD** bulk samples.
+
+```{r bulk-ref-plot, fig.width=6, fig.height=3.5}
+if (vignette_run) {
+  plot_score_distribution(ref_fshd, main = "GSE140261: FSHD vs control (gene-level z-scores)")
+}
+```
+
+## 2. Single-cell data (GSE122873) and mitochondrial QC
+
+[GSE122873](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE122873) provides **`GSE122873_RAW.tar`** with six **`GSM*_*.txt.gz`** tables (myocyte cultures: four FSHD + two control). Each table is **genes × cells** with a header row of cell barcodes ([Kendall *et al.*, *Genome Res.* 2019](https://doi.org/10.1101/gr.243734.118); [PMC6423425](https://pmc.ncbi.nlm.nih.gov/articles/PMC6423425/)). **Gene identifiers are Ensembl IDs** (with optional version suffix); **`PhenoMapR`** matches the custom reference by **HUGO symbols**, so we **map Ensembl → symbol** and **sum counts** per symbol **before** building the Seurat object.
+
+**If downloads fail** (common behind strict firewalls or in RStudio: `download.file` to NCBI can error), install **`GEOquery`** (`BiocManager::install("GEOquery")`) so the code can fetch supplementary files via Bioconductor, or set **`PHENOMAPR_GSE122873_TAR`** to the **full path** to a manually downloaded `GSE122873_RAW.tar`.
+
+```{r sc-download}
+sc_tar_url <- "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122873/suppl/GSE122873_RAW.tar"
+
+read_gse122873_sample <- function(path) {
+  m <- as.matrix(read.delim(gzfile(path), row.names = 1, check.names = FALSE))
+  storage.mode(m) <- "double"
+  m
+}
+
+merge_gse122873 <- function(dir_untar) {
+  fs <- list.files(dir_untar, pattern = "^GSM.*\\.txt\\.gz$", full.names = TRUE)
+  if (length(fs) < 1L) stop("No GSM*.txt.gz after extracting GSE122873_RAW.tar")
+  mats <- lapply(fs, read_gse122873_sample)
+  genes <- Reduce(intersect, lapply(mats, rownames))
+  combined <- do.call(cbind, lapply(mats, function(m) m[genes, , drop = FALSE]))
+  colnames(combined) <- make.unique(colnames(combined), sep = "_")
+  sn <- basename(fs)
+  lab <- sub("\\.txt\\.gz$", "", sn)
+  lab <- sub("^GSM[0-9]+_", "", lab)
+  rep_lab <- rep(lab, times = vapply(mats, ncol, 1L))
+  list(counts = combined, donor_batch = rep_lab)
+}
+
+#' Genes x cells count matrix: Ensembl rownames -> HUGO symbols (sum counts per symbol).
+#' Rows already looking like symbols (not ENSG...) are kept as-is.
+collapse_counts_ensembl_to_hugo <- function(counts_mat) {
+  if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+    stop("Package 'org.Hs.eg.db' is required to map Ensembl IDs to symbols.")
+  }
+  x <- as.matrix(counts_mat)
+  genes <- rownames(x)
+  ens_base <- sub("\\.[0-9]+$", "", genes)
+  is_ens <- grepl("^ENSG[0-9]+", ens_base, ignore.case = TRUE)
+  sym <- genes
+  if (any(is_ens)) {
+    mapped <- AnnotationDbi::mapIds(
+      org.Hs.eg.db,
+      keys = ens_base[is_ens],
+      column = "SYMBOL",
+      keytype = "ENSEMBL",
+      multiVals = "first"
+    )
+    sym[is_ens] <- as.character(mapped)
+  }
+  ok <- !is.na(sym) & nzchar(sym) & sym != "NA"
+  x <- x[ok, , drop = FALSE]
+  sym <- sym[ok]
+  if (length(unique(sym)) < length(sym)) {
+    x <- rowsum(x, group = sym, reorder = FALSE)
+  } else {
+    rownames(x) <- sym
+  }
+  x
+}
+
+  td_sc <- tempfile("gse122873")
+  dir.create(td_sc, showWarnings = FALSE)
+  tar_path <- file.path(td_sc, "GSE122873_RAW.tar")
+  env_tar <- Sys.getenv("PHENOMAPR_GSE122873_TAR", unset = "")
+  if (nzchar(env_tar) && file.exists(env_tar)) {
+    file.copy(env_tar, tar_path, overwrite = TRUE)
+  } else {
+    download_geo_file(
+      sc_tar_url,
+      tar_path,
+      geo_acc = "GSE122873",
+      supp_filename = "GSE122873_RAW.tar"
+    )
+  }
+  untar(tar_path, exdir = td_sc)
+  sc_list <- merge_gse122873(td_sc)
+  counts <- collapse_counts_ensembl_to_hugo(sc_list$counts)
+  meta_cells <- data.frame(
+    cell_id = colnames(counts),
+    donor_batch = sc_list$donor_batch,
+    stringsAsFactors = FALSE
+  )
+  meta_cells$disease <- ifelse(grepl("^CTRL", meta_cells$donor_batch), "Control", "FSHD")
+  rownames(meta_cells) <- meta_cells$cell_id
+
+  seu <- CreateSeuratObject(counts = counts, meta.data = meta_cells)
+  seu[["percent.mt"]] <- PercentageFeatureSet(seu, pattern = "^MT-")
+  seu <- subset(seu, subset = percent.mt < 10)
+  seu <- NormalizeData(seu, verbose = FALSE)
+  seu <- FindVariableFeatures(seu, verbose = FALSE)
+  all.genes <- rownames(seu)
+seu <- ScaleData(seu, features = all.genes)
+  seu <- RunPCA(seu, verbose = FALSE)
+
+# Cluster the cells and run UMAP #####
+seu <- FindNeighbors(seu, dims = 1:10)
+seu <- FindClusters(seu, resolution = 0.5)
+  seu <- RunUMAP(seu, dims = 1:30, verbose = FALSE)
+  seu.markers <- FindAllMarkers(object = seu, only.pos = TRUE)
+```
+
+After filtering, you should obtain **about 6,899** cells (exact counts can differ slightly with software versions).
+
+## 3. Score single cells with the custom reference
+
+```{r score-sc}
+if (vignette_run) {
+  scores_sc <- PhenoMap(
+    seu,
+    reference = ref_fshd,
+    assay = "RNA",
+    slot = "data",
+    z_score_cutoff = 2,
+    verbose = FALSE
+  )
+  seu <- add_scores_to_seurat(seu, scores_sc)
+  score_col <- grep("weighted_sum_score", colnames(scores_sc), value = TRUE)[1]
+}
+```
+
+```{r umap-score, fig.width=8, fig.height=4.5}
+if (vignette_run) {
+  pal <- c(Control = "#2166AC", FSHD = "#B2182B")
+  p1 <- DimPlot(seu, group.by = "disease", cols = pal) + ggtitle("GSE122873 (culture label)")
+  DimPlot(seu, group.by = "disease", cols = pal) + ggtitle("GSE122873 (culture label)")
+  p2 <- FeaturePlot(seu, features = score_col, order = TRUE) +
+    scale_color_gradientn(colors = c("#2166AC", "#F7F7F7", "#B2182B"))
+  if (requireNamespace("patchwork", quietly = TRUE)) {
+    suppressPackageStartupMessages(library(patchwork))
+    print(p1 + p2)
+  } else {
+    print(p1)
+    print(p2)
+  }
+}
+```
+
+## Use CyteTypeR to assign cell type labels since none are provided
+```{r}
+# if (requireNamespace("future", quietly = TRUE)) {
+#   future::plan("sequential", gc = FALSE)
+# }
+
+library(devtools)
+BiocManager::install("rhdf5")
+library(rhdf5)
+install_github("NygenAnalytics/CyteTypeR")
+library(CyteTypeR)
+
+
+# Load libraries ####
+library(dplyr)
+library(patchwork)
+library(Matrix)
+library(Seurat)
+
+# Find markers for all Clusters #####
+# seu <- FindNeighbors(object = seu, dims = 1:10)
+# seu <- FindClusters(object = seu, resolution = 0.5)
+# seu.markers <- FindAllMarkers(object = seu, only.pos = TRUE)
+
+# (optional:)
+seu.markers %>%
+  group_by(cluster) %>%
+  dplyr::filter(avg_log2FC > 1)
+
+## Prep data for job submission to cytetype api
+prepped_data <- PrepareCyteTypeR(seu,
+         seu.markers,
+         n_top_genes = 10,
+         group_key = 'seurat_clusters',
+         aggregate_metadata = TRUE,
+         coordinates_key = "umap")
+
+## Adding metadata on 
+metadata <- list(
+  title = 'FSHD GSE122873',
+  run_label = 'initial_analysis',
+  experiment_name = 'fshd_GSE122873')
+
+
+## Submit job to cytetype
+# seu <- CyteTypeR(obj = seu,
+#                      prepped_data = prepped_data, 
+#                           study_context = "FSHD samples from humans and controls", 
+#                           metadata = metadata,
+#                      require_artifacts = FALSE
+#                           )
+GetResults(job_id = "ce748d9d-6191-42bc-a212-4bace7e97e4b")
+```
+
+```{r score-by-disease,fig.width=6, fig.height=4}
+if (vignette_run) {
+  plot_data <- data.frame(
+    disease = seu$disease,
+    score = seu@meta.data[[score_col]],
+    stringsAsFactors = FALSE
+  )
+  ggplot(plot_data, aes(x = disease, y = score, fill = disease)) +
+    geom_violin(alpha = 0.6) +
+    geom_jitter(width = 0.1, alpha = 0.15, size = 0.3) +
+    scale_fill_manual(values = c(Control = "#2166AC", FSHD = "#B2182B")) +
+    theme_minimal(base_size = 14) +
+    labs(title = "Custom FSHD bulk signature (single-cell scores)", y = score_col, x = NULL)
+}
+```
+
+## 4. Phenotype tails and marker genes (single-cell)
+
+We label **Most Adverse** / **Most Favorable** / **Other** tails from the custom score (**higher** = more FSHD-like under this reference), then run **global** `find_phenotype_markers()` (`marker_scope = "phenotype_groups"`). For **cell-type–specific** markers, set `marker_scope = "cell_type_specific"` once cell types are annotated (see `vignette("single-cell", package = "PhenoMapR")`).
+
+```{r markers-sc}
+if (vignette_run) {
+  groups <- define_phenotype_groups(scores_sc, percentile = 0.05, score_columns = score_col)
+  group_col <- grep("^phenotype_group_", names(groups), value = TRUE)[1]
+
+  mk <- find_phenotype_markers(
+    seu,
+    group_labels = groups,
+    group_column = group_col,
+    cell_id_column = "cell_id",
+    marker_scope = "phenotype_groups",
+    assay = "RNA",
+    slot = "data",
+    verbose = FALSE
+  )
+  message("Adverse markers (top 8):")
+  print(utils::head(mk$adverse_markers[order(mk$adverse_markers$p_adj), ], 8))
+  message("Favorable markers (top 8):")
+  print(utils::head(mk$favorable_markers[order(mk$favorable_markers$p_adj), ], 8))
+}
+```
+
+## 5. Phenotype marker heatmap (`plot_phenotype_markers`)
+
+After **`find_phenotype_markers()`**, **`plot_phenotype_markers()`** builds a **ComplexHeatmap** of favorable- then adverse-marker rows (row-wise scaled expression), with column annotations for **prognostic group**, **culture label** (here we use **`disease`**: FSHD vs control as a simple strip—not fine-grained cell type), and the continuous **PhenoMapR score**. Install **`ComplexHeatmap`** and **`circlize`** if needed. **`heatmap_type = "global"`** matches **`marker_scope = "phenotype_groups"`** above.
+
+```{r plot-phenotype-markers-fshd, fig.align='center', fig.width=12, fig.height=8}
+if (vignette_run && exists("mk") && exists("groups") && exists("group_col")) {
+  if (!requireNamespace("ComplexHeatmap", quietly = TRUE) || !requireNamespace("circlize", quietly = TRUE)) {
+    message("Install packages 'ComplexHeatmap' and 'circlize' to draw plot_phenotype_markers().")
+  } else {
+    expr_mat <- tryCatch(
+      Seurat::GetAssayData(seu, layer = "data", assay = "RNA"),
+      error = function(e) Seurat::GetAssayData(seu, slot = "data", assay = "RNA")
+    )
+    meta_hm <- as.data.frame(seu@meta.data)
+    meta_hm$cell_id <- colnames(seu)
+    meta_hm[[group_col]] <- groups[[group_col]][match(meta_hm$cell_id, groups$cell_id)]
+    pal_dis <- PhenoMapR::get_celltype_palette(levels(factor(meta_hm$disease)))
+
+    plot_phenotype_markers(
+      markers = mk,
+      expr_mat = expr_mat,
+      meta = meta_hm,
+      cell_id_col = "cell_id",
+      group_col = group_col,
+      score_col = score_col,
+      celltype_col = "disease",
+      celltype_palette = pal_dis,
+      heatmap_type = "global",
+      top_n_markers = 20L,
+      n_mark_labels = 5L,
+      p_adj_threshold = 0.05,
+      column_title = "FSHD bulk-derived signature: single-cell marker heatmap"
+    )
+  }
+}
+```
+
+## 6. Validation bulk cohorts (optional)
+
+The paper evaluates the FSHD signature on **GSE115650** (34 FSHD vs nine controls; FPKM→TPM), **GSE56787** (muscle biopsies only: 15 FSHD vs nine controls), and **GSE26852** (FSHD vs normal controls only). A minimal pattern is:
+
+1. Download the **series matrix** or supplementary expression table from GEO.
+2. Map identifiers to **gene symbols** and align genes with `ref_fshd`.
+3. **`PhenoMap(expression = bulk_genes_x_samples, reference = ref_fshd, normalize = …)`** (or pass TPM with `normalize = FALSE` in `derive_reference` only; for scoring single samples, use log-normalized expression consistent with your bulk pipeline).
+4. Compare **score by group** (FSHD vs control) with a violin or ROC.
+
+```{r validation-template, eval=FALSE}
+# Example skeleton (not run): load GEO series matrix with GEOquery, then score.
+# library(GEOquery)
+# gse <- getGEO("GSE115650", GSEMatrix = TRUE)[[1]]
+# expr <- Biobase::exprs(gse)  # often log-transformed; match preprocessing to your validation paper
+# pheno <- Biobase::pData(gse)
+# ... build binary labels from pheno columns ...
+# scores_val <- PhenoMap(expression = expr, reference = ref_fshd, z_score_cutoff = 2)
+```
+
+## Summary
+
+- **Bulk reference** — **GSE140261** TPM, **FSHD vs control**, Ensembl→symbol collapse, **`derive_reference_from_bulk()`**.
+- **Single-cell** — **GSE122873**, **<10% MT-** filter, **`PhenoMap()`** + **UMAP** + **`find_phenotype_markers()`** + **`plot_phenotype_markers()`** (global heatmap).
+- **Relation to Scissor** — Scissor solves a **different** optimization (bulk–single-cell regression on a similarity matrix); **PhenoMapR** uses **gene-level** bulk contrasts and a **weighted sum** score on cells, but the **data sources and QC** can follow the same GEO-based workflow as in [Sun *et al.*](https://www.nature.com/articles/s41587-021-01091-3).
+
+## References
+
+<a id="ref-scissor"></a> Sun, D., Guan, X., Moran, A. E. *et al.* Identifying phenotype-associated subpopulations by integrating bulk and single-cell sequencing data. *Nat. Biotechnol.* **40**, 527–538 (2022). <https://doi.org/10.1038/s41587-021-01091-3>
+
+<a id="ref-kendall"></a> Kendall, L. E. *et al.* Single-cell RNA sequencing in facioscapulohumeral muscular dystrophy disease etiology and development. *Genome Res.* **29**, 890–901 (2019). [GSE122873](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE122873)
+
+## Session info
+
+```{r session-info}
+sessionInfo()
+```
