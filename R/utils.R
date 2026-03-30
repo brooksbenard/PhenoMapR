@@ -305,13 +305,28 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Phenoty
     scores <- scores[[score_column]]
   }
 
-  df <- data.frame(score = as.numeric(stats::na.omit(scores)))
-  med <- stats::median(df$score)
+  score_vec <- as.numeric(stats::na.omit(scores))
+  df <- data.frame(score = score_vec)
+
+  # Handle empty inputs (all NA / non-numeric coercion to NA)
+  if (nrow(df) == 0) {
+    return(
+      ggplot2::ggplot(df, ggplot2::aes(x = .data$score)) +
+        ggplot2::geom_blank() +
+        ggplot2::labs(title = main, x = "Score", y = "Frequency") +
+        ggplot2::theme_minimal(base_size = base_size)
+    )
+  }
 
   # PhenoMapR red-blue score palette: blue = favorable (low), white = mid, red = adverse (high)
   score_low <- "#2166AC"
   score_mid <- "#F7F7F7"
   score_high <- "#B2182B"
+
+  # Ensure white is centered at 0 and colors are consistent:
+  # negative -> blue, positive -> red
+  lim <- max(abs(df$score), na.rm = TRUE)
+  if (!is.finite(lim) || lim == 0) lim <- 1
 
   p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$score, fill = ggplot2::after_stat(x))) +
     ggplot2::geom_histogram(bins = 50, color = "white", linewidth = 0.2) +
@@ -319,10 +334,12 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Phenoty
       low = score_low,
       mid = score_mid,
       high = score_high,
-      midpoint = med,
-      name = "Z-score"
+      midpoint = 0,
+      limits = c(-lim, lim),
+      oob = scales::squish,
+      name = "Score"
     ) +
-    ggplot2::labs(title = main, x = "Z-score", y = "Frequency") +
+    ggplot2::labs(title = main, x = "Score", y = "Frequency") +
     ggplot2::theme_minimal(base_size = base_size)
 
   p
