@@ -24,6 +24,12 @@
 #'   \code{marker_scope = "cell_type_specific"}).
 #' @param top_n_markers Maximum number of genes to keep per contrast block (per tail
 #'   for global; per phenotype bin \eqn{\times} cell type for cell-type-specific).
+#' @param rank_by How to rank genes when selecting the top markers for the heatmap.
+#'   \code{"lfc"} ranks by decreasing \code{avg_log2FC} among significant genes
+#'   (\code{p_adj < p_adj_threshold}). \code{"p_adj"} ranks by increasing
+#'   \code{p_adj} but additionally requires \code{avg_log2FC > 1} (and
+#'   \code{p_adj < p_adj_threshold}) so that very small effects are not selected
+#'   purely due to sample size.
 #' @param n_mark_labels Number of row labels to draw per block via
 #'   \code{ComplexHeatmap::anno_mark} (top genes by \code{avg_log2FC} within each block).
 #' @param p_adj_threshold Only genes with \code{p_adj} below this value (and positive
@@ -31,6 +37,12 @@
 #' @param scale_clip Length-2 numeric vector \code{c(lo, hi)} applied after row scaling
 #'   (values outside are clipped). If \code{NULL}, uses \code{c(-3, 3)} for
 #'   \code{heatmap_type = "global"} and \code{c(-5, 5)} for cell-type-specific.
+#' @param heatmap_width Optional heatmap width passed to
+#'   \code{ComplexHeatmap::Heatmap(width = ...)}. Accepts a \code{grid::unit} or a
+#'   single number interpreted as millimeters.
+#' @param heatmap_height Optional heatmap height passed to
+#'   \code{ComplexHeatmap::Heatmap(height = ...)}. Accepts a \code{grid::unit} or a
+#'   single number interpreted as millimeters.
 #' @param column_title Optional title above the heatmap.
 #' @param draw If \code{TRUE} (default), calls \code{ComplexHeatmap::draw()}. If
 #'   \code{FALSE}, returns the \code{Heatmap} object invisibly.
@@ -64,7 +76,9 @@
 #' \strong{left}, adverse on the \strong{right}. For
 #' \code{heatmap_type = "cell_type_specific"}, after drawing, white outline
 #' boxes are added around each marker-gene block (EcoTyper-style
-#' \code{decorate_heatmap_body} + \code{grid.rect}).
+#' \code{decorate_heatmap_body} + \code{grid.rect}), spanning only the
+#' columns for that block\'s phenotype bin and cell type (not the full matrix
+#' width).
 #' Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 #' \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 #' = black. Heatmap and column annotation legends merge on the right
@@ -83,13 +97,17 @@ plot_phenotype_markers <- function(markers,
                                    celltype_palette = NULL,
                                    heatmap_type = c("global", "cell_type_specific"),
                                    top_n_markers = 20L,
+                                   rank_by = c("lfc", "p_adj"),
                                    n_mark_labels = 5L,
                                    p_adj_threshold = 0.05,
                                    scale_clip = NULL,
+                                   heatmap_width = NULL,
+                                   heatmap_height = NULL,
                                    column_title = NULL,
                                    draw = TRUE,
                                    use_raster = FALSE) {
   heatmap_type <- match.arg(heatmap_type)
+  rank_by <- match.arg(rank_by)
 
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE) ||
       !requireNamespace("circlize", quietly = TRUE)) {
@@ -116,6 +134,17 @@ plot_phenotype_markers <- function(markers,
   if (length(scale_clip) != 2L || !is.numeric(scale_clip)) {
     stop("'scale_clip' must be a numeric vector of length 2 (lower, upper clip).")
   }
+
+  .as_heatmap_unit_mm <- function(x, arg_name) {
+    if (is.null(x)) return(NULL)
+    if (inherits(x, "unit")) return(x)
+    if (is.numeric(x) && length(x) == 1L && is.finite(x)) {
+      return(grid::unit(as.numeric(x), "mm"))
+    }
+    stop("'", arg_name, "' must be NULL, a grid::unit, or a single finite number (mm).")
+  }
+  heatmap_width_u <- .as_heatmap_unit_mm(heatmap_width, "heatmap_width")
+  heatmap_height_u <- .as_heatmap_unit_mm(heatmap_height, "heatmap_height")
 
   top_n_markers <- as.integer(top_n_markers)[1L]
   n_mark_labels <- as.integer(n_mark_labels)[1L]
@@ -190,6 +219,7 @@ plot_phenotype_markers <- function(markers,
       .pick_marker_genes(
         df, n_keep = n_keep,
         p_adj_threshold = p_adj_threshold,
+        rank_by = rank_by,
         valid_genes = gene_ids
       )
     }
@@ -308,6 +338,8 @@ plot_phenotype_markers <- function(markers,
       name = "Scaled expr",
       col = hm_col_fun,
       use_raster = use_raster,
+      width = heatmap_width_u,
+      height = heatmap_height_u,
       cluster_rows = FALSE,
       cluster_columns = FALSE,
       row_split = row_split_g,
@@ -343,6 +375,7 @@ plot_phenotype_markers <- function(markers,
           df_ct,
           n_keep = top_n_markers,
           p_adj_threshold = p_adj_threshold,
+          rank_by = rank_by,
           valid_genes = gene_ids
         )
         if (length(top_g) == 0L) next
@@ -504,8 +537,23 @@ plot_phenotype_markers <- function(markers,
 
     ct <- column_title %||% "Cell-type-specific phenotype marker genes"
 
+    # Per-column key must match block_key = paste(phenotype_bin, cell_type, sep = "||")
+    # (same convention as gene rows) so white boxes align with column blocks.
+    ncol_hm <- ncol(mat_plot)
+    col_block_key <- rep(NA_character_, ncol_hm)
+    for (j in seq_len(ncol_hm)) {
+      mid <- meta_idx_hm[j]
+      if (!is.na(mid)) {
+        col_block_key[j] <- paste(
+          trimws(as.character(meta[[group_col]][mid])),
+          trimws(as.character(meta[[celltype_col]][mid])),
+          sep = "||"
+        )
+      }
+    }
     decorate_ct_rect <- list(
-      row_factor = factor(block_key, levels = unique(block_key))
+      row_factor = factor(block_key, levels = unique(block_key)),
+      col_block_key = col_block_key
     )
 
     ht <- ComplexHeatmap::Heatmap(
@@ -513,6 +561,8 @@ plot_phenotype_markers <- function(markers,
       name = "phenomap_ct_markers",
       col = hm_col_fun,
       use_raster = use_raster,
+      width = heatmap_width_u,
+      height = heatmap_height_u,
       cluster_rows = FALSE,
       cluster_columns = FALSE,
       row_split = row_split,
@@ -566,7 +616,10 @@ plot_phenotype_markers <- function(markers,
       padding = grid::unit(c(4, 4, 4, 50), "mm")
     )
     if (!is.null(decorate_ct_rect)) {
-      rect <- .rect_native_row_blocks(decorate_ct_rect$row_factor)
+      rect <- .rect_native_ct_marker_blocks(
+        decorate_ct_rect$row_factor,
+        decorate_ct_rect$col_block_key
+      )
       ComplexHeatmap::decorate_heatmap_body("phenomap_ct_markers", {
         for (j in seq_along(rect$x)) {
           grid::grid.rect(
@@ -627,45 +680,75 @@ plot_phenotype_markers <- function(markers,
   }
 }
 
-#' Native heatmap-body coordinates for white boxes around contiguous row blocks
-#' (EcoTyper-style; one rectangle per factor level, full column width).
+#' Native heatmap-body coordinates for white boxes around each cell-type-specific
+#' marker block. Rows follow \code{block_key}; columns use the same
+#' \code{phenotype||cell_type} string as \code{col_block_key[j]} (from
+#' \code{meta} via \code{meta_idx_hm}), matching \code{block_key} for genes.
 #'
 #' @noRd
 #' @keywords internal
-.rect_native_row_blocks <- function(row_factor) {
-  row_factor <- factor(as.character(row_factor), levels = unique(as.character(row_factor)))
-  n <- length(row_factor)
-  if (n < 1L) {
+.rect_native_ct_marker_blocks <- function(row_factor, col_block_key) {
+  nrow <- length(row_factor)
+  ncol <- length(col_block_key)
+  if (nrow < 1L || ncol < 1L) {
     return(list(x = numeric(0), y = numeric(0), w = numeric(0), h = numeric(0)))
   }
+  col_block_key <- as.character(col_block_key)
+  row_factor <- factor(as.character(row_factor), levels = unique(as.character(row_factor)))
   levels_u <- levels(row_factor)
-  first <- vapply(levels_u, function(lvl) {
-    min(which(as.character(row_factor) == lvl))
-  }, integer(1))
-  fract <- (first - 1L) / n
-  m <- length(fract)
-  height <- if (m > 1L) c(diff(fract), 1 - fract[m]) else (1 - fract[1L])
-  y <- 1 - fract
-  list(x = rep(0, m), y = y, w = rep(1, m), h = height)
+  xs <- ys <- ws <- hs <- numeric(0)
+  for (bk in levels_u) {
+    idx_rows <- which(row_factor == bk)
+    if (length(idx_rows) == 0L) next
+    col_j <- which(col_block_key == bk & !is.na(col_block_key))
+    if (length(col_j) == 0L) {
+      x0 <- 0
+      w0 <- 1
+    } else {
+      jmin <- min(col_j)
+      jmax <- max(col_j)
+      x0 <- (jmin - 1L) / ncol
+      w0 <- (jmax - jmin + 1L) / ncol
+    }
+    first_row <- min(idx_rows)
+    last_row <- max(idx_rows)
+    y0 <- 1 - (first_row - 1L) / nrow
+    h0 <- (last_row - first_row + 1L) / nrow
+    xs <- c(xs, x0)
+    ys <- c(ys, y0)
+    ws <- c(ws, w0)
+    hs <- c(hs, h0)
+  }
+  list(x = xs, y = ys, w = ws, h = hs)
 }
 
 
 #' @keywords internal
-.pick_marker_genes <- function(df, n_keep, p_adj_threshold, valid_genes = NULL) {
+.pick_marker_genes <- function(df,
+                               n_keep,
+                               p_adj_threshold,
+                               rank_by = c("lfc", "p_adj"),
+                               valid_genes = NULL) {
   req <- c("gene", "avg_log2FC", "p_adj")
   if (is.null(df) || nrow(df) == 0L || !all(req %in% names(df))) {
     return(character(0))
   }
-  df <- df[
-    is.finite(df$avg_log2FC) & df$avg_log2FC > 0 &
-      is.finite(df$p_adj) & df$p_adj < p_adj_threshold,
-    ,
-    drop = FALSE
-  ]
+  # Default: keep significant positive-effect markers; ordering controlled by rank_by.
+  df <- df[is.finite(df$avg_log2FC) & is.finite(df$p_adj), , drop = FALSE]
+  df <- df[df$p_adj < p_adj_threshold & df$avg_log2FC > 0, , drop = FALSE]
   if (nrow(df) == 0L) {
     return(character(0))
   }
-  df <- df[order(-df$avg_log2FC, df$p_adj), , drop = FALSE]
+  rank_by <- match.arg(rank_by)
+  if (rank_by == "p_adj") {
+    # When ranking by p_adj, enforce a stronger effect-size cutoff.
+    df <- df[df$avg_log2FC > 1, , drop = FALSE]
+    if (nrow(df) == 0L) return(character(0))
+    df <- df[order(df$p_adj, -df$avg_log2FC), , drop = FALSE]
+  } else {
+    # LFC-preferred: pick the largest positive LFC markers among significant genes.
+    df <- df[order(-df$avg_log2FC, df$p_adj), , drop = FALSE]
+  }
   g <- head(df$gene, n_keep)
   if (!is.null(valid_genes)) {
     g <- g[g %in% valid_genes]

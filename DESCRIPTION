@@ -23,6 +23,7 @@ Imports:
     glue,
     progress
 Suggests:
+    curl,
     googledrive,
     hdf5r,
     GEOquery,
@@ -51,7 +52,8 @@ Suggests:
     HGNChelper,
     survival,
     survminer,
-    ggpubr
+    ggpubr,
+    readxl
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave

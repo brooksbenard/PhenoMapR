@@ -27,9 +27,11 @@ This vignette shows how to **apply PhenoMapR to score bulk RNA-seq samples** usi
 We use `GSE205154` because it's a fairly large PAAD dataset that also includes metastatic samples, which we can score separately using the Primary and Metastatic meta-z scores from PRECOG.
 
 ```{r load-data, fig.height=3, fig.width=6, fig.align='center'}
-suppressPackageStartupMessages(library(PhenoMapR))
-suppressPackageStartupMessages(library(patchwork))
-suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(patchwork)
+  library(ggplot2)
+})
 
 # Vignette data, downloaded from Google Drive.
 googledrive::drive_deauth()

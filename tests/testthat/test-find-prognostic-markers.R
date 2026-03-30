@@ -106,6 +106,64 @@ test_that("find_phenotype_markers supports cell_type_specific marker detection",
   expect_true(all(unique(out$adverse_markers$cell_type) %in% c("T", "B")))
 })
 
+test_that("find_phenotype_markers cell_type_specific accepts celltype_contrast vs_cohort_rest (original cohort-wide reference)", {
+  set.seed(6)
+  n_genes <- 20
+  n_cells <- 12
+  expr <- matrix(
+    pmax(0, rnorm(n_genes * n_cells)),
+    nrow = n_genes,
+    ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
+  )
+  cell_type <- c(rep("T", 6), rep("B", 6))
+  pg <- c(
+    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2),
+    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2)
+  )
+  groups_df <- data.frame(
+    cell_id = colnames(expr),
+    pg = pg,
+    cell_type = cell_type,
+    stringsAsFactors = FALSE
+  )
+
+  out <- find_phenotype_markers(
+    expr,
+    group_labels = groups_df,
+    group_column = "pg",
+    cell_id_column = "cell_id",
+    marker_scope = "cell_type_specific",
+    cell_type_column = "cell_type",
+    celltype_contrast = "vs_cohort_rest",
+    min.pct = 0,
+    logfc.threshold = 0,
+    pval_threshold = 1,
+    max_cells_per_ident = Inf,
+    verbose = FALSE
+  )
+
+  expect_type(out, "list")
+  expect_named(out, c("adverse_markers", "favorable_markers"))
+  expect_true("cell_type" %in% names(out$adverse_markers))
+})
+
+test_that("vs_cohort_rest defines a larger reference set than within_cell_type for T adverse", {
+  cell_type_vec <- c(rep("T", 6), rep("B", 6))
+  group_vec <- c(
+    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2),
+    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2)
+  )
+  ct <- "T"
+  tail <- "Most Adverse"
+  is_in <- !is.na(cell_type_vec) & !is.na(group_vec) &
+    (cell_type_vec == ct) & (group_vec == tail)
+  n_within <- sum(!is.na(cell_type_vec) & !is.na(group_vec) &
+    (cell_type_vec == ct) & (group_vec != tail))
+  n_cohort <- sum(!is_in & !is.na(group_vec))
+  expect_true(n_cohort > n_within)
+})
+
 test_that("find_phenotype_markers cell_type_specific handles empty per-cell-type results", {
   set.seed(66)
   n_genes <- 30

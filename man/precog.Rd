@@ -5,8 +5,12 @@
 \alias{precog}
 \title{PRECOG Prognostic Z-Scores}
 \format{
-A data.frame with genes as rows and cancer types as columns.
+A matrix with genes as rows and cancer types as columns.
 Values represent meta-z-scores indicating prognostic association.
+The object shipped in the package is \strong{sparse}: for package size,
+\code{data-raw/shrink_reference_data.R} sets entries with |z| \eqn{\leq} 2 (the
+default \code{z_score_cutoff} in \code{\link[=PhenoMap]{PhenoMap()}}) to \code{NA} and drops genes that are
+\code{NA} in every column. Raw exports have many more finite values per column.
 }
 \source{
 Gentles et al. (2015) Cell. DOI: 10.1016/j.cell.2015.11.025

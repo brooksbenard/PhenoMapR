@@ -2,17 +2,14 @@
 title: "Draft: Alzheimer's custom reference + single-cell scoring"
 output:
   html_document:
+    code_folding: hide
     toc: true
     toc_float: true
+    toc_collapsed: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  warning = TRUE,
-  message = TRUE,
-  eval = FALSE
-)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
 ```
 
 ## Purpose
@@ -42,7 +39,7 @@ sc_rds_path <- file.path(Sys.getenv("HOME"), "Downloads", "adsn_seuV5.rds")
 gpl_path <- file.path(Sys.getenv("HOME"), "Downloads", "GPL11532.annot.gz")
 series_path <- file.path(Sys.getenv("HOME"), "Downloads", "GSE39420_series_matrix.txt.gz")
 
-stopifnot(file.exists(sc_rds_path), file.exists(gpl_path), file.exists(series_path))
+# stopifnot(file.exists(sc_rds_path), file.exists(gpl_path), file.exists(series_path))
 ```
 
 ## Helper functions for GEO parsing
@@ -288,7 +285,7 @@ head(ad_reference)
 
 ## Optional: visualize the custom reference
 
-```{r}
+```{r, fig.height=2, fig.width=7.5}
 plot_reference_signature(
   reference = ad_reference,
   n_label = 20,
@@ -351,6 +348,28 @@ scores <- PhenoMap(
 score_col <- names(scores)[1]
 seu <- add_scores_to_seurat(seu, scores)
 head(scores)
+```
+
+## UMAP with cell type labels
+
+```{r, fig.width=5, fig.height=4}
+meta <- seu[[]]
+pal_cells <- get_celltype_palette(meta[[celltype_col]])
+
+if (!"umap" %in% names(seu@reductions)) {
+  message("No UMAP reduction found in this Seurat object (expected seu@reductions$umap). Skipping UMAP plot.")
+} else {
+  DimPlot(
+    seu,
+    reduction = "umap",
+    group.by = celltype_col,
+    cols = pal_cells,
+    label = FALSE
+  ) +
+    ggtitle("Alzheimer's dataset: cell types on UMAP") +
+    theme_void() +
+    theme(legend.position = "right")
+}
 ```
 
 ## Inspect score distributions
@@ -478,7 +497,7 @@ markers_ct <- find_phenotype_markers(
 
 ## Marker heatmaps
 
-```{r}
+```{r, fig.width=7.5, fig.height=5}
 plot_phenotype_markers(
   markers = markers_global,
   expr_mat = expr_counts,
@@ -495,7 +514,7 @@ plot_phenotype_markers(
 )
 ```
 
-```{r}
+```{5}
 plot_phenotype_markers(
   markers = markers_ct,
   expr_mat = expr_counts,
@@ -512,20 +531,6 @@ plot_phenotype_markers(
 )
 ```
 
-## Optional: UMAP overlay of AD-reference scores
-
-```{r}
-if ("umap" %in% names(seu@reductions)) {
-  FeaturePlot(
-    seu,
-    features = score_col,
-    reduction = "umap",
-    cols = c("#2166AC", "#F7F7F7", "#B2182B"),
-    order = TRUE,
-    pt.size = 0.2
-  ) + ggtitle("AD-reference PhenoMapR score")
-}
-```
 
 
 

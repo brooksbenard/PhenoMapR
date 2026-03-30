@@ -48,6 +48,10 @@ navbar:
         href: articles/bulk-survival.html
       - text: Custom reference
         href: articles/custom-reference.html
+      - text: FSHD (Scissor-style, custom bulk + scRNA-seq)
+        href: articles/fshd-scissor-custom-reference.html
+      - text: Alzheimer's (custom reference + single-cell scoring)
+        href: articles/alzheimers-custom-reference-draft.html
     - text: R functions
       href: reference/index.html
 
@@ -68,6 +72,8 @@ articles:
       - spatial-transcriptomics
       - bulk-survival
       - custom-reference
+      - fshd-scissor-custom-reference
+      - alzheimers-custom-reference-draft
 
 reference:
 - title: Prognostic scoring

@@ -20,6 +20,8 @@ find_phenotype_markers(
   verbose = TRUE,
   max_cells_per_ident = 5000L,
   validate_expression_axes = TRUE,
+  celltype_unique_genes = TRUE,
+  celltype_contrast = c("within_cell_type", "vs_cohort_rest"),
   ...
 )
 }
@@ -44,9 +46,10 @@ name for cell/sample IDs (default \code{"cell_id"}).}
 \item \code{"phenotype_groups"}: find markers for the adverse and favorable
 phenotype groups globally (cell type agnostic; default).
 \item \code{"cell_type_specific"}: for each cell type, find markers for
-cells of that type in the adverse (or favorable) phenotype tail vs
-\strong{all other cells} in the dataset (other types and other
-phenotype groups combined).
+cells of that type in the adverse (or favorable) tail vs a reference
+group controlled by \code{celltype_contrast} (default: same cell type,
+not in that tail; use \code{"vs_cohort_rest"} for the original cohort-wide
+contrast).
 }}
 
 \item{cell_type_column}{When \code{marker_scope = "cell_type_specific"}, the
@@ -79,6 +82,19 @@ matrix is genes \eqn{\times} cells (transpose when a clear samples \eqn{\times}
 genes layout is detected) and normalize colnames for ID matching. Use
 log-normalized (e.g. log1p CPM) \code{data} for matrix input when possible.}
 
+\item{celltype_unique_genes}{When \code{marker_scope = "cell_type_specific"} and
+\code{TRUE} (default), each gene is kept in at most one row across adverse and
+favorable marker tables: the row with the largest \code{avg_log2FC} (tie-break
+by \code{p_adj}). This avoids the same gene (e.g. highly expressed
+housekeeping transcripts) appearing as a top marker in many cell-type
+blocks. Set to \code{FALSE} to retain all significant hits per block.}
+
+\item{celltype_contrast}{When \code{marker_scope = "cell_type_specific"}: \code{"within_cell_type"}
+(default) compares each phenotype tail within a cell type to other phenotype
+groups in the \strong{same} cell type only. \code{"vs_cohort_rest"} restores the
+original behaviour: (cell type \eqn{\cap} tail) vs \strong{all other cells} in
+the dataset (other cell types and other phenotype groups).}
+
 \item{...}{Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).}
 }
 \value{
@@ -93,8 +109,10 @@ Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
 When \code{marker_scope = "cell_type_specific"}, each row is one gene for
 one cell type; the \code{cell_type} column identifies which type the
-contrast was anchored on (adverse/favorable cells of that type vs all
-other cells).
+in-group was anchored on. If \code{celltype_contrast = "within_cell_type"}
+(default), the reference is other phenotype groups within that cell type; if
+\code{"vs_cohort_rest"}, the reference is all other cells with a phenotype
+label (original behaviour).
 }
 \description{
 Performs differential expression between the top (adverse) and bottom
@@ -105,11 +123,10 @@ available, else base R) and does not require Seurat.
 }
 \details{
 Phenotype tails (e.g. top/bottom 5\\%) come from \code{\link{define_phenotype_groups}()}.
-For \code{marker_scope = "cell_type_specific"}, each test compares cells in
-\strong{(that cell type \eqn{\cap} adverse or favorable tail)} to \strong{all
-other cells}. \code{group_labels} cell IDs must match \code{colnames(expression)}
-(after trimming); use the same identifiers you used when building the score
-table and phenotype groups.
+For \code{marker_scope = "cell_type_specific"}, the contrast is set by
+\code{celltype_contrast} (see above). \code{group_labels} cell IDs must match
+\code{colnames(expression)} (after trimming); use the same identifiers you used
+when building the score table and phenotype groups.
 }
 \examples{
 \dontrun{

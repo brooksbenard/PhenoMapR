@@ -62,6 +62,8 @@ test_that("plot_phenotype_markers returns Heatmap object with fake marker tables
     top_n_markers = 5L,
     n_mark_labels = 2L,
     p_adj_threshold = 0.05,
+    heatmap_width = grid::unit(90, "mm"),
+    heatmap_height = grid::unit(55, "mm"),
     draw = FALSE
   )
   expect_s4_class(ht, "Heatmap")
@@ -114,7 +116,60 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
     top_n_markers = 5L,
     n_mark_labels = 2L,
     p_adj_threshold = 0.05,
+    heatmap_width = 120,  # mm
     draw = FALSE
   )
   expect_s4_class(ht, "Heatmap")
+})
+
+test_that(".pick_marker_genes can rank by lfc vs p_adj with different filters", {
+  df <- data.frame(
+    gene = c("G1", "G2", "G3", "G4"),
+    avg_log2FC = c(2.0, 1.5, 0.8, 1.2),
+    p_adj = c(0.04, 0.001, 1e-6, 0.03),
+    stringsAsFactors = FALSE
+  )
+
+  # LFC ranking: significant (p_adj < 0.05) and avg_log2FC > 0; pick highest LFC.
+  g_lfc <- PhenoMapR:::.pick_marker_genes(df, n_keep = 3, p_adj_threshold = 0.05, rank_by = "lfc")
+  expect_equal(g_lfc[1], "G1")
+
+  # p_adj ranking: still significant, but enforce avg_log2FC > 1; then rank by p_adj.
+  g_p <- PhenoMapR:::.pick_marker_genes(df, n_keep = 3, p_adj_threshold = 0.05, rank_by = "p_adj")
+  expect_true(all(g_p %in% c("G1", "G2", "G4")))
+  expect_false("G3" %in% g_p) # fails avg_log2FC > 1 filter
+})
+
+test_that(".rect_native_ct_marker_blocks uses col_block_key for x/w (not full width)", {
+  row_factor <- factor(
+    c("Most Favorable||T1", "Most Favorable||T1", "Most Adverse||T2"),
+    levels = c("Most Favorable||T1", "Most Adverse||T2")
+  )
+  col_block_key <- c(
+    rep("Most Favorable||T1", 3L),
+    rep("Most Adverse||T2", 2L)
+  )
+  r <- PhenoMapR:::.rect_native_ct_marker_blocks(row_factor, col_block_key)
+  expect_length(r$x, 2L)
+  expect_equal(r$x[1], 0)
+  expect_equal(r$w[1], 3 / 5)
+  expect_equal(r$x[2], 3 / 5)
+  expect_equal(r$w[2], 2 / 5)
+})
+
+test_that(".rect_native_ct_marker_blocks uses col_block_key for x/w (not full width)", {
+  row_factor <- factor(
+    c("Most Favorable||T1", "Most Favorable||T1", "Most Adverse||T2"),
+    levels = c("Most Favorable||T1", "Most Adverse||T2")
+  )
+  col_block_key <- c(
+    rep("Most Favorable||T1", 3L),
+    rep("Most Adverse||T2", 2L)
+  )
+  r <- PhenoMapR:::.rect_native_ct_marker_blocks(row_factor, col_block_key)
+  expect_length(r$x, 2L)
+  expect_equal(r$x[1], 0)
+  expect_equal(r$w[1], 3 / 5)
+  expect_equal(r$x[2], 3 / 5)
+  expect_equal(r$w[2], 2 / 5)
 })
