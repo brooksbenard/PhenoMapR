@@ -5,8 +5,14 @@
 \alias{tcga}
 \title{TCGA Prognostic Z-Scores}
 \format{
-A data.frame with genes as rows and cancer types as columns.
+A matrix with genes as rows and cancer types as columns.
 Values represent z-scores from Cox proportional hazards models.
+The object shipped in the package is \strong{sparse}: for package size,
+\code{data-raw/shrink_reference_data.R} sets entries with |z| \eqn{\leq} 2 (the
+default \code{z_score_cutoff} in \code{\link[=PhenoMap]{PhenoMap()}}) to \code{NA} and drops genes that are
+\code{NA} in every column. The upstream table \code{TCGA_metaz.csv} (gitignored)
+contains full-density columns (e.g. ~20k finite values per TCGA cancer)
+before this step.
 }
 \source{
 The Cancer Genome Atlas Research Network

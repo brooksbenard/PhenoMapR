@@ -103,9 +103,10 @@ define_phenotype_groups <- function(scores,
 #'     \item \code{"phenotype_groups"}: find markers for the adverse and favorable
 #'       phenotype groups globally (cell type agnostic; default).
 #'     \item \code{"cell_type_specific"}: for each cell type, find markers for
-#'       cells of that type in the adverse (or favorable) phenotype tail vs
-#'       \strong{all other cells} in the dataset (other types and other
-#'       phenotype groups combined).
+#'       cells of that type in the adverse (or favorable) tail vs a reference
+#'       group controlled by \code{celltype_contrast} (default: same cell type,
+#'       not in that tail; use \code{"vs_cohort_rest"} for the original cohort-wide
+#'       contrast).
 #'   }
 #' @param cell_type_column When \code{marker_scope = "cell_type_specific"}, the
 #'   column in \code{group_labels} that contains cell type labels.
@@ -127,13 +128,23 @@ define_phenotype_groups <- function(scores,
 #'   matrix is genes \eqn{\times} cells (transpose when a clear samples \eqn{\times}
 #'   genes layout is detected) and normalize colnames for ID matching. Use
 #'   log-normalized (e.g. log1p CPM) \code{data} for matrix input when possible.
+#' @param celltype_unique_genes When \code{marker_scope = "cell_type_specific"} and
+#'   \code{TRUE} (default), each gene is kept in at most one row across adverse and
+#'   favorable marker tables: the row with the largest \code{avg_log2FC} (tie-break
+#'   by \code{p_adj}). This avoids the same gene (e.g. highly expressed
+#'   housekeeping transcripts) appearing as a top marker in many cell-type
+#'   blocks. Set to \code{FALSE} to retain all significant hits per block.
+#' @param celltype_contrast When \code{marker_scope = "cell_type_specific"}: \code{"within_cell_type"}
+#'   (default) compares each phenotype tail within a cell type to other phenotype
+#'   groups in the \strong{same} cell type only. \code{"vs_cohort_rest"} restores the
+#'   original behaviour: (cell type \eqn{\cap} tail) vs \strong{all other cells} in
+#'   the dataset (other cell types and other phenotype groups).
 #' @details
 #' Phenotype tails (e.g. top/bottom 5\%) come from \code{\link{define_phenotype_groups}()}.
-#' For \code{marker_scope = "cell_type_specific"}, each test compares cells in
-#' \strong{(that cell type \eqn{\cap} adverse or favorable tail)} to \strong{all
-#' other cells}. \code{group_labels} cell IDs must match \code{colnames(expression)}
-#' (after trimming); use the same identifiers you used when building the score
-#' table and phenotype groups.
+#' For \code{marker_scope = "cell_type_specific"}, the contrast is set by
+#' \code{celltype_contrast} (see above). \code{group_labels} cell IDs must match
+#' \code{colnames(expression)} (after trimming); use the same identifiers you used
+#' when building the score table and phenotype groups.
 #' @param ... Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).
 #'
 #' @return A list with:
@@ -147,8 +158,10 @@ define_phenotype_groups <- function(scores,
 #'   \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
 #'   When \code{marker_scope = "cell_type_specific"}, each row is one gene for
 #'   one cell type; the \code{cell_type} column identifies which type the
-#'   contrast was anchored on (adverse/favorable cells of that type vs all
-#'   other cells).
+#'   in-group was anchored on. If \code{celltype_contrast = "within_cell_type"}
+#'   (default), the reference is other phenotype groups within that cell type; if
+#'   \code{"vs_cohort_rest"}, the reference is all other cells with a phenotype
+#'   label (original behaviour).
 #'
 #' @examples
 #' \dontrun{
@@ -182,9 +195,12 @@ find_phenotype_markers <- function(expression,
                                     verbose = TRUE,
                                     max_cells_per_ident = 5000L,
                                     validate_expression_axes = TRUE,
+                                    celltype_unique_genes = TRUE,
+                                    celltype_contrast = c("within_cell_type", "vs_cohort_rest"),
                                     ...) {
   test.use <- match.arg(test.use)
   marker_scope <- match.arg(marker_scope)
+  celltype_contrast <- match.arg(celltype_contrast)
 
   # Resolve expression and cell order
   expr_info <- process_expression_for_markers(
@@ -280,7 +296,9 @@ find_phenotype_markers <- function(expression,
         logfc.threshold = logfc.threshold,
         pval_threshold = pval_threshold,
         max_cells_per_ident = max_cells_per_ident,
-        verbose = verbose
+        verbose = verbose,
+        unique_genes_across_celltypes = celltype_unique_genes,
+        celltype_contrast = celltype_contrast
       )
     } else {
       out <- run_markers_on_matrix(
@@ -661,11 +679,13 @@ run_markers_on_matrix <- function(mat,
 }
 
 
-#' One contrast: (cell type == ct AND phenotype tail) vs all other cells
+#' One contrast: cell-type phenotype tail vs reference cells
 #'
-#' Marker genes are for cells in the phenotype tail within a cell type vs the
-#' entire rest of the cohort (other cell types and other phenotype groups),
-#' not vs only other phenotype groups within the same cell type.
+#' With \code{contrast = "within_cell_type"} (default), compares phenotype extreme
+#' cells of type \code{ct} to other phenotype groups \strong{within the same cell
+#' type} only. With \code{contrast = "vs_cohort_rest"}, uses the original definition:
+#' (cell type \eqn{\cap} tail) vs \strong{all other cells} with a non-missing group
+#' (whole cohort minus the in-group).
 #'
 #' @keywords internal
 #' @noRd
@@ -678,7 +698,9 @@ run_celltype_phenotype_vs_rest <- function(mat,
                                            logfc.threshold = 0.25,
                                            pval_threshold = 0.05,
                                            max_cells_per_ident = 5000L,
-                                           verbose = TRUE) {
+                                           verbose = TRUE,
+                                           contrast = c("within_cell_type", "vs_cohort_rest")) {
+  contrast <- match.arg(contrast)
   empty_markers <- function() {
     data.frame(
       gene = character(0),
@@ -695,7 +717,14 @@ run_celltype_phenotype_vs_rest <- function(mat,
   is_in <- !is.na(cell_type_vec) & !is.na(group_vec) &
     (cell_type_vec == cell_type_label) & (group_vec == phenotype_tail)
   in_i <- which(is_in)
-  out_i <- which(!is_in & !is.na(group_vec))
+  if (contrast == "vs_cohort_rest") {
+    # Original: in-group = (ct ∩ tail); rest = every other cell with a phenotype label
+    out_i <- which(!is_in & !is.na(group_vec))
+  } else {
+    is_out <- !is.na(cell_type_vec) & !is.na(group_vec) &
+      (cell_type_vec == cell_type_label) & (group_vec != phenotype_tail)
+    out_i <- which(is_out)
+  }
 
   if (length(in_i) < 2L || length(out_i) < 2L) {
     return(empty_markers())
@@ -713,9 +742,15 @@ run_celltype_phenotype_vs_rest <- function(mat,
     if (length(out_i) > max_cells_per_ident) {
       out_i <- out_i[sample.int(length(out_i), max_cells_per_ident)]
       if (verbose) {
-        message(glue::glue(
-          "Subsampled rest-of-cohort cells for '{cell_type_label}' {phenotype_tail} contrast to {max_cells_per_ident} (memory limit)"
-        ))
+        if (contrast == "vs_cohort_rest") {
+          message(glue::glue(
+            "Subsampled cohort-rest (non-in-group) cells for '{cell_type_label}' {phenotype_tail} contrast to {max_cells_per_ident} (memory limit)"
+          ))
+        } else {
+          message(glue::glue(
+            "Subsampled same-type non-{phenotype_tail} cells for '{cell_type_label}' to {max_cells_per_ident} (memory limit)"
+          ))
+        }
       }
     }
   }
@@ -806,11 +841,37 @@ run_celltype_phenotype_vs_rest <- function(mat,
 }
 
 
+#' Keep each gene in at most one cell-type-specific block (strongest hit).
+#'
+#' Stacks adverse and favorable marker tables, orders by \code{gene} then
+#' \code{-avg_log2FC} then \code{p_adj}, and drops duplicate \code{gene} rows.
+#'
+#' @keywords internal
+#' @noRd
+dedupe_celltype_marker_tables <- function(adverse_markers, favorable_markers) {
+  adv <- adverse_markers
+  fav <- favorable_markers
+  if (nrow(adv) == 0L && nrow(fav) == 0L) {
+    return(list(adverse_markers = adv, favorable_markers = fav))
+  }
+  adv$.phenomap_wing <- "adverse"
+  fav$.phenomap_wing <- "favorable"
+  comb <- rbind(adv, fav)
+  o <- order(comb$gene, -comb$avg_log2FC, comb$p_adj)
+  comb <- comb[o, , drop = FALSE]
+  comb <- comb[!duplicated(comb$gene), , drop = FALSE]
+  base_cols <- setdiff(names(comb), ".phenomap_wing")
+  adverse_out <- comb[comb$.phenomap_wing == "adverse", base_cols, drop = FALSE]
+  favorable_out <- comb[comb$.phenomap_wing == "favorable", base_cols, drop = FALSE]
+  list(adverse_markers = adverse_out, favorable_markers = favorable_out)
+}
+
+
 #' Run marker detection on a matrix by cell type
 #'
-#' For each cell type, compute markers for:
-#'   - (That cell type AND Most Adverse) vs all other cells
-#'   - (That cell type AND Most Favorable) vs all other cells
+#' For each cell type, compute markers for adverse and favorable tails; the
+#' reference group is set by \code{celltype_contrast} (see
+#' \code{\link{find_phenotype_markers}}).
 #'
 #' @keywords internal
 run_markers_on_matrix_by_celltype <- function(mat,
@@ -820,7 +881,10 @@ run_markers_on_matrix_by_celltype <- function(mat,
                                                logfc.threshold = 0.25,
                                                pval_threshold = 0.05,
                                                max_cells_per_ident = 5000L,
-                                               verbose = TRUE) {
+                                               verbose = TRUE,
+                                               unique_genes_across_celltypes = TRUE,
+                                               celltype_contrast = c("within_cell_type", "vs_cohort_rest")) {
+  celltype_contrast <- match.arg(celltype_contrast)
   if (length(group_vec) != ncol(mat)) {
     stop("Length of 'group_vec' must match number of columns in expression matrix")
   }
@@ -851,7 +915,8 @@ run_markers_on_matrix_by_celltype <- function(mat,
       logfc.threshold = logfc.threshold,
       pval_threshold = pval_threshold,
       max_cells_per_ident = max_cells_per_ident,
-      verbose = verbose
+      verbose = verbose,
+      contrast = celltype_contrast
     )
     favorable_ct <- run_celltype_phenotype_vs_rest(
       mat = mat,
@@ -863,7 +928,8 @@ run_markers_on_matrix_by_celltype <- function(mat,
       logfc.threshold = logfc.threshold,
       pval_threshold = pval_threshold,
       max_cells_per_ident = max_cells_per_ident,
-      verbose = verbose
+      verbose = verbose,
+      contrast = celltype_contrast
     )
 
     if (nrow(adverse_ct) > 0) {
@@ -896,6 +962,12 @@ run_markers_on_matrix_by_celltype <- function(mat,
   if (!"cell_type" %in% names(favorable_markers)) favorable_markers$cell_type <- NA_character_
   adverse_markers <- adverse_markers[, c(setdiff(names(adverse_markers), "cell_type"), "cell_type"), drop = FALSE]
   favorable_markers <- favorable_markers[, c(setdiff(names(favorable_markers), "cell_type"), "cell_type"), drop = FALSE]
+
+  if (isTRUE(unique_genes_across_celltypes)) {
+    deduped <- dedupe_celltype_marker_tables(adverse_markers, favorable_markers)
+    adverse_markers <- deduped$adverse_markers
+    favorable_markers <- deduped$favorable_markers
+  }
 
   list(adverse_markers = adverse_markers, favorable_markers = favorable_markers)
 }

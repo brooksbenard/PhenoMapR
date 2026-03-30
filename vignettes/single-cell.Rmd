@@ -21,15 +21,17 @@ This vignette demonstrates how to use **`PhenoMapR`** on a single-cell RNA-seq d
 We will use pre-processed expression and annotation files from TISCH2 for the CRA001160 dataset. Download the expression matrix and cell metadata from Google Drive and visualize cell type distributions across all samples in the dataset.
 
 ```{r load-data, fig.align='center'}
-suppressPackageStartupMessages(library(PhenoMapR))
-suppressPackageStartupMessages(library(googledrive))
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(ggpubr))
-suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(Seurat))
-suppressPackageStartupMessages(library(patchwork))
-suppressPackageStartupMessages(library(ComplexHeatmap))
-suppressPackageStartupMessages(library(circlize))
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(googledrive)
+  library(ggplot2)
+  library(ggpubr)
+  library(dplyr)
+  library(Seurat)
+  library(patchwork)
+  library(ComplexHeatmap)
+  library(circlize)
+})
 
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
@@ -433,7 +435,7 @@ plot_phenotype_markers(
 It's clear from the heatmap that the cell type driving the favorable prognostic signal is the Acinar cell type. Cell-type specific marker identification within the most prgnostic group would further resolve other cell type markers associated with favorable outcomes in this dataset. 
 
 ## Cell-type-specific phenotype marker genes
-The `find_phenotype_markers()` function can also identify marker genes **for each cell type** by contrasting cells in that type within the phenotype tail (Most Adverse or Most Favorable) against **all other cells in the dataset** (other cell types and other phenotype groups). We visualize the top marker genes per cell type and phenotype bin in a heatmap that includes *all* cells, ordered by:
+The `find_phenotype_markers()` function can also identify marker genes **for each cell type** by contrasting cells in the phenotype tail (Most Adverse or Most Favorable) against a reference group. By default (`celltype_contrast = "within_cell_type"`), the reference is **only other cells of the same type** (`Other` and the opposite tail)—this reduces ubiquitous genes appearing in many blocks. The **original** cohort-wide contrast `(cell type ∩ tail)` vs **all other cells** is available as `celltype_contrast = "vs_cohort_rest"`. By default (`celltype_unique_genes = TRUE`), each gene is kept in a **single** cell-type–phenotype block (the one with the strongest `avg_log2FC`), so ubiquitous transcripts are not repeated across many blocks. We visualize the top marker genes per cell type and phenotype bin in a heatmap that includes *all* cells, ordered by:
 1) phenotype bin (Most Favorable, Other, Most Adverse), then
 2) cell type, then
 3) phenotype score.

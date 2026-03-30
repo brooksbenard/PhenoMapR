@@ -33,9 +33,11 @@ This vignette uses the following pre-processed data:
 ## 1. Load expression and phenotype data
 Load the pre-processed bulk gene expression and sample annotations. This dataset contains a range of patients across different disease stages, and we will get back to this later in the vignette.
 ```{r load-data and cohort-demographics, fig.width=9, fig.height=3, fig.align='center'}
-suppressPackageStartupMessages(library(PhenoMapR))
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(ggplot2)
+  library(dplyr)
+})
 
 # Vignette data: Google Drive
 # requireNamespace("googledrive", quietly = TRUE)
@@ -259,7 +261,7 @@ if (nrow(dat_os) >= 10) {
   cox <- coxph(Surv(time_months, survival_event) ~ custom_grp, data = dat_os)
   hr <- exp(coef(cox))[1]
   ci <- as.vector(exp(confint(cox)))[1:2]
-  label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+  label <- sprintf("p = %s\nHR = %.1f (%.1f-%.1f)",
                    format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
   max_t <- max(dat_os$time_months, na.rm = TRUE)
 
@@ -344,8 +346,8 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
   ci <- exp(confint(cox))
   hr_lines <- paste0(
     gsub("^stage_group", "", names(hr)),
-    ": HR ", sprintf("%.2f", hr),
-    " (", sprintf("%.2f", ci[, 1]), "-", sprintf("%.2f", ci[, 2]), ")"
+    ": HR ", sprintf("%.1f", hr),
+    " (", sprintf("%.1f", ci[, 1]), "-", sprintf("%.1f", ci[, 2]), ")"
   )
   label <- paste0(
     "p ", format.pval(p_lr, digits = 2, eps = 0.001),
@@ -507,7 +509,7 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
     cox <- coxph(Surv(time_months, OS_event) ~ grp, data = dat_st)
     hr <- exp(coef(cox))[1]
     ci <- as.vector(exp(confint(cox)))[1:2]
-    label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+    label <- sprintf("p = %s\nHR = %.1f (%.1f-%.1f)",
                      format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
     max_t <- max(dat_st$time_months, na.rm = TRUE)
 
@@ -620,7 +622,7 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
     cox <- coxph(Surv(survival_time, survival_event) ~ grp, data = dat_km)
     hr <- exp(coef(cox))[1]
     ci <- as.vector(exp(confint(cox)))[1:2]
-    label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+    label <- sprintf("p = %s\nHR = %.1f (%.1f-%.1f)",
                      format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
     max_t <- max(dat_km$survival_time, na.rm = TRUE)
 
