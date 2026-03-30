@@ -10,6 +10,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+# Data-dependent chunks below require local files; paths chunk sets eval accordingly.
 ```
 
 ## Purpose
@@ -39,12 +40,28 @@ sc_rds_path <- file.path(Sys.getenv("HOME"), "Downloads", "adsn_seuV5.rds")
 gpl_path <- file.path(Sys.getenv("HOME"), "Downloads", "GPL11532.annot.gz")
 series_path <- file.path(Sys.getenv("HOME"), "Downloads", "GSE39420_series_matrix.txt.gz")
 
-# stopifnot(file.exists(sc_rds_path), file.exists(gpl_path), file.exists(series_path))
+draft_data_ok <- file.exists(sc_rds_path) && file.exists(gpl_path) && file.exists(series_path)
+knitr::opts_chunk$set(eval = draft_data_ok)
+if (!draft_data_ok) {
+  message(
+    "Draft vignette: local GEO/Seurat files not found under ~/Downloads/; ",
+    "skipping execution of data-dependent chunks (e.g. pkgdown/CI)."
+  )
+}
+```
+
+```{r draft-data-note, eval=TRUE, echo=FALSE, results="asis"}
+if (!draft_data_ok) {
+  cat(
+    "_This draft requires local files in `~/Downloads/` (see Purpose). ",
+    "Those files are absent here, so code is shown but not executed._\n\n"
+  )
+}
 ```
 
 ## Helper functions for GEO parsing
 
-```{r}
+```{r helper-functions, eval=TRUE}
 read_series_matrix_table <- function(series_matrix_gz) {
   lines <- readLines(gzfile(series_matrix_gz), warn = FALSE)
 
@@ -514,7 +531,7 @@ plot_phenotype_markers(
 )
 ```
 
-```{5}
+```{r}
 plot_phenotype_markers(
   markers = markers_ct,
   expr_mat = expr_counts,
