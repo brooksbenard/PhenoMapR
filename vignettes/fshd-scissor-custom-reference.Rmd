@@ -462,19 +462,59 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
 
 ```{r cytetype-annotations}
   ann_base <- "cytetype_annotations_ce748d9d-6191-42bc-a212-4bace7e97e4b.csv"
-  ann_candidates <- unique(c(
-    ann_base,
-    file.path("vignettes", ann_base),
-    {
-      in_path <- tryCatch(knitr::current_input(), error = function(e) NA_character_)
-      if (is.na(in_path)) NA_character_ else file.path(dirname(in_path), ann_base)
+
+  find_cytetype_csv <- function(fn) {
+    try_one <- function(p) {
+      if (is.na(p) || !nzchar(p)) return(NA_character_)
+      p <- path.expand(p)
+      if (file.exists(p)) return(normalizePath(p, winslash = "/", mustWork = TRUE))
+      NA_character_
     }
-  ))
-  ann_path <- ann_candidates[file.exists(ann_candidates)][1]
+
+    # 1) same directory as this vignette Rmd (works when knitr sets full path)
+    fnm <- tryCatch(knitr::opts_knit$get("filename"), error = function(e) NULL)
+    if (!is.null(fnm) && nzchar(fnm)) {
+      hit <- try_one(file.path(dirname(fnm), fn))
+      if (!is.na(hit)) return(hit)
+    }
+
+    # 2) current_input() basename-only breaks dirname(); use dirname(fnm) only above
+    in_path <- tryCatch(knitr::current_input(), error = function(e) NA_character_)
+    if (!is.na(in_path) && nzchar(in_path) && basename(in_path) != in_path) {
+      hit <- try_one(file.path(dirname(in_path), fn))
+      if (!is.na(hit)) return(hit)
+    }
+
+    # 3) repo root / cwd layouts
+    for (p in c(file.path("vignettes", fn), fn)) {
+      hit <- try_one(p)
+      if (!is.na(hit)) return(hit)
+    }
+
+    # 4) walk up from cwd to find package/vignettes/<fn>
+    d <- normalizePath(getwd(), winslash = "/")
+    for (i in 1:20) {
+      hit <- try_one(file.path(d, "vignettes", fn))
+      if (!is.na(hit)) return(hit)
+      nd <- dirname(d)
+      if (identical(nd, d)) break
+      d <- nd
+    }
+
+    # 5) installed package (R CMD check / site build)
+    if (requireNamespace("PhenoMapR", quietly = TRUE)) {
+      hit <- try_one(system.file("vignettes", fn, package = "PhenoMapR"))
+      if (!is.na(hit)) return(hit)
+    }
+
+    NA_character_
+  }
+
+  ann_path <- find_cytetype_csv(ann_base)
   if (is.na(ann_path) || !nzchar(ann_path)) {
     stop(
-      "Missing CyteTypeR annotations CSV. Tried:\n- ",
-      paste(ann_candidates, collapse = "\n- ")
+      "Missing CyteTypeR annotations CSV (commit vignettes/", ann_base, " in git for CI). ",
+      "Expected next to this vignette Rmd or under vignettes/."
     )
   }
 
