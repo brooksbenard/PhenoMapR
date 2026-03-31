@@ -79,6 +79,8 @@ available, else base R) and does not require Seurat.</p>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  max_cells_per_ident <span class="op">=</span> <span class="fl">5000L</span>,</span>
 <span>  validate_expression_axes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  celltype_unique_genes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  celltype_contrast <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"within_cell_type"</span>, <span class="st">"vs_cohort_rest"</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -114,9 +116,10 @@ name for cell/sample IDs (default <code>"cell_id"</code>).</p></dd>
 <dd><p>Either:</p><ul><li><p><code>"phenotype_groups"</code>: find markers for the adverse and favorable
 phenotype groups globally (cell type agnostic; default).</p></li>
 <li><p><code>"cell_type_specific"</code>: for each cell type, find markers for
-cells of that type in the adverse (or favorable) phenotype tail vs
-<strong>all other cells</strong> in the dataset (other types and other
-phenotype groups combined).</p></li>
+cells of that type in the adverse (or favorable) tail vs a reference
+group controlled by <code>celltype_contrast</code> (default: same cell type,
+not in that tail; use <code>"vs_cohort_rest"</code> for the original cohort-wide
+contrast).</p></li>
 </ul></dd>
 
 
@@ -170,6 +173,23 @@ genes layout is detected) and normalize colnames for ID matching. Use
 log-normalized (e.g. log1p CPM) <code>data</code> for matrix input when possible.</p></dd>
 
 
+<dt id="arg-celltype-unique-genes">celltype_unique_genes<a class="anchor" aria-label="anchor" href="#arg-celltype-unique-genes"></a></dt>
+<dd><p>When <code>marker_scope = "cell_type_specific"</code> and
+<code>TRUE</code> (default), each gene is kept in at most one row across adverse and
+favorable marker tables: the row with the largest <code>avg_log2FC</code> (tie-break
+by <code>p_adj</code>). This avoids the same gene (e.g. highly expressed
+housekeeping transcripts) appearing as a top marker in many cell-type
+blocks. Set to <code>FALSE</code> to retain all significant hits per block.</p></dd>
+
+
+<dt id="arg-celltype-contrast">celltype_contrast<a class="anchor" aria-label="anchor" href="#arg-celltype-contrast"></a></dt>
+<dd><p>When <code>marker_scope = "cell_type_specific"</code>: <code>"within_cell_type"</code>
+(default) compares each phenotype tail within a cell type to other phenotype
+groups in the <strong>same</strong> cell type only. <code>"vs_cohort_rest"</code> restores the
+original behaviour: (cell type \(\cap\) tail) vs <strong>all other cells</strong> in
+the dataset (other cell types and other phenotype groups).</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Additional arguments passed to <code><a href="https://satijalab.org/seurat/reference/FindMarkers.html" class="external-link">Seurat::FindMarkers</a></code> when input is a Seurat object (ignored for matrix/SCE/Matrix input).</p></dd>
 
@@ -184,17 +204,18 @@ the favorable (bottom score) group (vs rest).</p></li>
 <code>pct_in_group</code>, <code>pct_rest</code>, <code>p_val</code>, <code>p_adj</code>.
 When <code>marker_scope = "cell_type_specific"</code>, each row is one gene for
 one cell type; the <code>cell_type</code> column identifies which type the
-contrast was anchored on (adverse/favorable cells of that type vs all
-other cells).</p>
+in-group was anchored on. If <code>celltype_contrast = "within_cell_type"</code>
+(default), the reference is other phenotype groups within that cell type; if
+<code>"vs_cohort_rest"</code>, the reference is all other cells with a phenotype
+label (original behaviour).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Phenotype tails (e.g. top/bottom 5\<!-- %) come from \code{\link{define_phenotype_groups}()}. -->
-For <code>marker_scope = "cell_type_specific"</code>, each test compares cells in
-<strong>(that cell type \(\cap\) adverse or favorable tail)</strong> to <strong>all
-other cells</strong>. <code>group_labels</code> cell IDs must match <code>colnames(expression)</code>
-(after trimming); use the same identifiers you used when building the score
-table and phenotype groups.</p>
+For <code>marker_scope = "cell_type_specific"</code>, the contrast is set by
+<code>celltype_contrast</code> (see above). <code>group_labels</code> cell IDs must match
+<code>colnames(expression)</code> (after trimming); use the same identifiers you used
+when building the score table and phenotype groups.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

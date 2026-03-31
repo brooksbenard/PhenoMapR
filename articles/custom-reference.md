@@ -47,9 +47,11 @@ dataset contains a range of patients across different disease stages,
 and we will get back to this later in the vignette.
 
 ``` r
-suppressPackageStartupMessages(library(PhenoMapR))
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(ggplot2)
+  library(dplyr)
+})
 
 # Vignette data: Google Drive
 # requireNamespace("googledrive", quietly = TRUE)
@@ -306,7 +308,7 @@ if (nrow(dat_os) >= 10) {
   cox <- coxph(Surv(time_months, survival_event) ~ custom_grp, data = dat_os)
   hr <- exp(coef(cox))[1]
   ci <- as.vector(exp(confint(cox)))[1:2]
-  label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+  label <- sprintf("p = %s\nHR = %.1f (%.1f-%.1f)",
                    format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
   max_t <- max(dat_os$time_months, na.rm = TRUE)
 
@@ -399,8 +401,8 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
   ci <- exp(confint(cox))
   hr_lines <- paste0(
     gsub("^stage_group", "", names(hr)),
-    ": HR ", sprintf("%.2f", hr),
-    " (", sprintf("%.2f", ci[, 1]), "-", sprintf("%.2f", ci[, 2]), ")"
+    ": HR ", sprintf("%.1f", hr),
+    " (", sprintf("%.1f", ci[, 1]), "-", sprintf("%.1f", ci[, 2]), ")"
   )
   label <- paste0(
     "p ", format.pval(p_lr, digits = 2, eps = 0.001),
@@ -576,7 +578,7 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
     cox <- coxph(Surv(time_months, OS_event) ~ grp, data = dat_st)
     hr <- exp(coef(cox))[1]
     ci <- as.vector(exp(confint(cox)))[1:2]
-    label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+    label <- sprintf("p = %s\nHR = %.1f (%.1f-%.1f)",
                      format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
     max_t <- max(dat_st$time_months, na.rm = TRUE)
 
@@ -697,7 +699,7 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
     cox <- coxph(Surv(survival_time, survival_event) ~ grp, data = dat_km)
     hr <- exp(coef(cox))[1]
     ci <- as.vector(exp(confint(cox)))[1:2]
-    label <- sprintf("p = %s\nHR = %.2f (%.2f-%.2f)",
+    label <- sprintf("p = %s\nHR = %.1f (%.1f-%.1f)",
                      format.pval(p_lr, digits = 2, eps = 0.001), hr, ci[1], ci[2])
     max_t <- max(dat_km$survival_time, na.rm = TRUE)
 
@@ -772,7 +774,7 @@ sessionInfo()
 
     ## R version 4.5.3 (2026-03-11)
     ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.3 LTS
+    ## Running under: Ubuntu 24.04.4 LTS
     ## 
     ## Matrix products: default
     ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -808,14 +810,14 @@ sessionInfo()
     ## [22] withr_3.0.2             purrr_1.2.1             BiocGenerics_0.56.0    
     ## [25] desc_1.4.3              stats4_4.5.3            googledrive_2.1.2      
     ## [28] colorspace_2.1-2        scales_1.4.0            iterators_1.0.14       
-    ## [31] cli_3.6.5               rmarkdown_2.30          crayon_1.5.3           
-    ## [34] ragg_1.5.1              generics_0.1.4          otel_0.2.0             
+    ## [31] cli_3.6.5               rmarkdown_2.31          crayon_1.5.3           
+    ## [34] ragg_1.5.2              generics_0.1.4          otel_0.2.0             
     ## [37] httr_1.4.8              rjson_0.2.23            cachem_1.1.0           
     ## [40] splines_4.5.3           parallel_4.5.3          matrixStats_1.5.0      
     ## [43] vctrs_0.7.2             Matrix_1.7-4            carData_3.0-6          
     ## [46] jsonlite_2.0.0          car_3.1-5               IRanges_2.44.0         
     ## [49] GetoptLong_1.1.0        S4Vectors_0.48.0        rstatix_0.7.3          
-    ## [52] Formula_1.2-5           clue_0.3-67             systemfonts_1.3.2      
+    ## [52] Formula_1.2-5           clue_0.3-68             systemfonts_1.3.2      
     ## [55] magick_2.9.1            foreach_1.5.2           jquerylib_0.1.4        
     ## [58] tidyr_1.3.2             glue_1.8.0              pkgdown_2.2.0          
     ## [61] codetools_0.2-20        gtable_0.3.6            shape_1.4.6.1          
@@ -824,5 +826,5 @@ sessionInfo()
     ## [70] evaluate_1.0.5          lattice_0.22-9          png_0.1-9              
     ## [73] backports_1.5.0         broom_1.0.12            gargle_1.6.1           
     ## [76] bslib_0.10.0            Rcpp_1.1.1              gridExtra_2.3          
-    ## [79] HGNChelper_0.8.15       xfun_0.57               fs_2.0.0               
+    ## [79] HGNChelper_0.8.15       xfun_0.57               fs_2.0.1               
     ## [82] pkgconfig_2.0.3         GlobalOptions_0.1.3

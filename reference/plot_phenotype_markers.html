@@ -191,7 +191,9 @@ strips are first (next to the heatmap): phenotype then cell type, then
 <strong>left</strong>, adverse on the <strong>right</strong>. For
 <code>heatmap_type = "cell_type_specific"</code>, after drawing, white outline
 boxes are added around each marker-gene block (EcoTyper-style
-<code>decorate_heatmap_body</code> + <code>grid.rect</code>).
+<code>decorate_heatmap_body</code> + <code>grid.rect</code>), spanning only the
+columns for that block\'s phenotype bin and cell type (not the full matrix
+width).
 Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 <strong>RdGy</strong> (11-class): <strong>high</strong> scaled expression = red, <strong>low</strong>
 = black. Heatmap and column annotation legends merge on the right

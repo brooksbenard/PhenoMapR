@@ -26,15 +26,17 @@ metadata from Google Drive and visualize cell type distributions across
 all samples in the dataset.
 
 ``` r
-suppressPackageStartupMessages(library(PhenoMapR))
-suppressPackageStartupMessages(library(googledrive))
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(ggpubr))
-suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(Seurat))
-suppressPackageStartupMessages(library(patchwork))
-suppressPackageStartupMessages(library(ComplexHeatmap))
-suppressPackageStartupMessages(library(circlize))
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(googledrive)
+  library(ggplot2)
+  library(ggpubr)
+  library(dplyr)
+  library(Seurat)
+  library(patchwork)
+  library(ComplexHeatmap)
+  library(circlize)
+})
 
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
@@ -521,12 +523,19 @@ associated with favorable outcomes in this dataset.
 The
 [`find_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/find_phenotype_markers.md)
 function can also identify marker genes **for each cell type** by
-contrasting cells in that type within the phenotype tail (Most Adverse
-or Most Favorable) against **all other cells in the dataset** (other
-cell types and other phenotype groups). We visualize the top marker
-genes per cell type and phenotype bin in a heatmap that includes *all*
-cells, ordered by: 1) phenotype bin (Most Favorable, Other, Most
-Adverse), then 2) cell type, then 3) phenotype score.
+contrasting cells in the phenotype tail (Most Adverse or Most Favorable)
+against a reference group. By default
+(`celltype_contrast = "within_cell_type"`), the reference is **only
+other cells of the same type** (`Other` and the opposite tail)—this
+reduces ubiquitous genes appearing in many blocks. The **original**
+cohort-wide contrast `(cell type ∩ tail)` vs **all other cells** is
+available as `celltype_contrast = "vs_cohort_rest"`. By default
+(`celltype_unique_genes = TRUE`), each gene is kept in a **single**
+cell-type–phenotype block (the one with the strongest `avg_log2FC`), so
+ubiquitous transcripts are not repeated across many blocks. We visualize
+the top marker genes per cell type and phenotype bin in a heatmap that
+includes *all* cells, ordered by: 1) phenotype bin (Most Favorable,
+Other, Most Adverse), then 2) cell type, then 3) phenotype score.
 
 For the heatmap, we take up to **20** positive markers per cell type and
 phenotype tail with the **largest `avg_log2FC`**, restricting to genes
@@ -757,7 +766,7 @@ sessionInfo()
 
     ## R version 4.5.3 (2026-03-11)
     ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.3 LTS
+    ## Running under: Ubuntu 24.04.4 LTS
     ## 
     ## Matrix products: default
     ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -788,7 +797,7 @@ sessionInfo()
     ##   [7] lifecycle_1.0.5        rstatix_0.7.3          doParallel_1.0.17     
     ##  [10] globals_0.19.1         lattice_0.22-9         hdf5r_1.3.12          
     ##  [13] MASS_7.3-65            backports_1.5.0        magrittr_2.0.4        
-    ##  [16] plotly_4.12.0          sass_0.4.10            rmarkdown_2.30        
+    ##  [16] plotly_4.12.0          sass_0.4.10            rmarkdown_2.31        
     ##  [19] jquerylib_0.1.4        yaml_2.3.12            httpuv_1.6.17         
     ##  [22] otel_0.2.0             sctransform_0.4.3      spam_2.11-3           
     ##  [25] spatstat.sparse_3.1-0  reticulate_1.45.0      cowplot_1.2.0         
@@ -804,7 +813,7 @@ sessionInfo()
     ##  [55] GetoptLong_1.1.0       progressr_0.18.0       Formula_1.2-5         
     ##  [58] ggridges_0.5.7         survival_3.8-6         iterators_1.0.14      
     ##  [61] systemfonts_1.3.2      foreach_1.5.2          tools_4.5.3           
-    ##  [64] ragg_1.5.1             ica_1.0-3              Rcpp_1.1.1            
+    ##  [64] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.1            
     ##  [67] glue_1.8.0             gridExtra_2.3          mgcv_1.9-4            
     ##  [70] xfun_0.57              withr_3.0.2            fastmap_1.2.0         
     ##  [73] digest_0.6.39          R6_2.6.1               mime_0.13             
@@ -814,7 +823,7 @@ sessionInfo()
     ##  [85] htmlwidgets_1.6.4      uwot_0.2.4             pkgconfig_2.0.3       
     ##  [88] gtable_0.3.6           lmtest_0.9-40          S7_0.2.1              
     ##  [91] htmltools_0.5.9        carData_3.0-6          dotCall64_1.2         
-    ##  [94] clue_0.3-67            scales_1.4.0           png_0.1-9             
+    ##  [94] clue_0.3-68            scales_1.4.0           png_0.1-9             
     ##  [97] spatstat.univar_3.1-7  knitr_1.51             reshape2_1.4.5        
     ## [100] rjson_0.2.23           nlme_3.1-168           curl_7.0.0            
     ## [103] cachem_1.1.0           zoo_1.8-15             GlobalOptions_0.1.3   
@@ -825,9 +834,9 @@ sessionInfo()
     ## [118] evaluate_1.0.5         magick_2.9.1           cli_3.6.5             
     ## [121] compiler_4.5.3         rlang_1.1.7            crayon_1.5.3          
     ## [124] future.apply_1.20.2    ggsignif_0.6.4         labeling_0.4.3        
-    ## [127] plyr_1.8.9             fs_2.0.0               stringi_1.8.7         
+    ## [127] plyr_1.8.9             fs_2.0.1               stringi_1.8.7         
     ## [130] viridisLite_0.4.3      deldir_2.0-4           lazyeval_0.2.2        
-    ## [133] spatstat.geom_3.7-2    Matrix_1.7-4           RcppHNSW_0.6.0        
+    ## [133] spatstat.geom_3.7-3    Matrix_1.7-4           RcppHNSW_0.6.0        
     ## [136] bit64_4.6.0-1          future_1.70.0          shiny_1.13.0          
     ## [139] ROCR_1.0-12            gargle_1.6.1           igraph_2.2.2          
     ## [142] broom_1.0.12           bslib_0.10.0           bit_4.6.0

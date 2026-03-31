@@ -59,8 +59,14 @@ survival analyses.</p>
 
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
-    <p>A data.frame with genes as rows and cancer types as columns.
-Values represent z-scores from Cox proportional hazards models.</p>
+    <p>A matrix with genes as rows and cancer types as columns.
+Values represent z-scores from Cox proportional hazards models.
+The object shipped in the package is <strong>sparse</strong>: for package size,
+<code>data-raw/shrink_reference_data.R</code> sets entries with |z| \(\leq\) 2 (the
+default <code>z_score_cutoff</code> in <code><a href="PhenoMap.html">PhenoMap()</a></code>) to <code>NA</code> and drops genes that are
+<code>NA</code> in every column. The upstream table <code>TCGA_metaz.csv</code> (gitignored)
+contains full-density columns (e.g. ~20k finite values per TCGA cancer)
+before this step.</p>
     </div>
     <div class="section level2">
     <h2 id="source">Source<a class="anchor" aria-label="anchor" href="#source"></a></h2>

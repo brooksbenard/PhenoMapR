@@ -26,9 +26,11 @@ includes metastatic samples, which we can score separately using the
 Primary and Metastatic meta-z scores from PRECOG.
 
 ``` r
-suppressPackageStartupMessages(library(PhenoMapR))
-suppressPackageStartupMessages(library(patchwork))
-suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages({
+  library(PhenoMapR)
+  library(patchwork)
+  library(ggplot2)
+})
 
 # Vignette data, downloaded from Google Drive.
 googledrive::drive_deauth()
@@ -311,7 +313,7 @@ sessionInfo()
 
     ## R version 4.5.3 (2026-03-11)
     ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.3 LTS
+    ## Running under: Ubuntu 24.04.4 LTS
     ## 
     ## Matrix products: default
     ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -347,8 +349,8 @@ sessionInfo()
     ## [41] purrr_1.2.1        labeling_0.4.3     splines_4.5.3      fastmap_1.2.0     
     ## [45] grid_4.5.3         cli_3.6.5          magrittr_2.0.4     broom_1.0.12      
     ## [49] withr_3.0.2        scales_1.4.0       backports_1.5.0    googledrive_2.1.2 
-    ## [53] rmarkdown_2.30     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
-    ## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.1         evaluate_1.0.5    
+    ## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
+    ## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
     ## [61] knitr_1.51         markdown_2.0       rlang_1.1.7        gridtext_0.1.6    
     ## [65] Rcpp_1.1.1         glue_1.8.0         xml2_1.5.2         jsonlite_2.0.0    
-    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.0
+    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.1

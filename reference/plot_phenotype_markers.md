@@ -147,11 +147,13 @@ then cell type, then `anno_mark` outermost. Favorable-tail strips and
 gene marks on the **left**, adverse on the **right**. For
 `heatmap_type = "cell_type_specific"`, after drawing, white outline
 boxes are added around each marker-gene block (EcoTyper-style
-`decorate_heatmap_body` + `grid.rect`). Row-split slice titles are
-suppressed. Heatmap fill uses ColorBrewer **RdGy** (11-class): **high**
-scaled expression = red, **low** = black. Heatmap and column annotation
-legends merge on the right (`merge_legends = TRUE`; extra right
-`padding` for PDFs). `row_gap = 0` between split blocks.
+`decorate_heatmap_body` + `grid.rect`), spanning only the columns for
+that block\\s phenotype bin and cell type (not the full matrix width).
+Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
+**RdGy** (11-class): **high** scaled expression = red, **low** = black.
+Heatmap and column annotation legends merge on the right
+(`merge_legends = TRUE`; extra right `padding` for PDFs). `row_gap = 0`
+between split blocks.
 
 ## See also
 

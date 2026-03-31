@@ -108,9 +108,11 @@ dataset that also includes metastatic samples, which we can score
 separately using the Primary and Metastatic meta-z scores from
 PRECOG.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://brooksbenard.github.io/PhenoMapR">PhenoMapR</a></span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://patchwork.data-imaginist.com" class="external-link">patchwork</a></span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="op">{</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://brooksbenard.github.io/PhenoMapR">PhenoMapR</a></span><span class="op">)</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://patchwork.data-imaginist.com" class="external-link">patchwork</a></span><span class="op">)</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Vignette data, downloaded from Google Drive.</span></span>
 <span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_deauth.html" class="external-link">drive_deauth</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -382,7 +384,7 @@ liver and lung recurrence and outcomes in pancreatic cancer. Nat. Cancer
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## R version 4.5.3 (2026-03-11)</span></span>
 <span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
-<span><span class="co">## Running under: Ubuntu 24.04.3 LTS</span></span>
+<span><span class="co">## Running under: Ubuntu 24.04.4 LTS</span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## Matrix products: default</span></span>
 <span><span class="co">## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 </span></span>
@@ -418,11 +420,11 @@ liver and lung recurrence and outcomes in pancreatic cancer. Nat. Cancer
 <span><span class="co">## [41] purrr_1.2.1        labeling_0.4.3     splines_4.5.3      fastmap_1.2.0     </span></span>
 <span><span class="co">## [45] grid_4.5.3         cli_3.6.5          magrittr_2.0.4     broom_1.0.12      </span></span>
 <span><span class="co">## [49] withr_3.0.2        scales_1.4.0       backports_1.5.0    googledrive_2.1.2 </span></span>
-<span><span class="co">## [53] rmarkdown_2.30     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      </span></span>
-<span><span class="co">## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.1         evaluate_1.0.5    </span></span>
+<span><span class="co">## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      </span></span>
+<span><span class="co">## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    </span></span>
 <span><span class="co">## [61] knitr_1.51         markdown_2.0       rlang_1.1.7        gridtext_0.1.6    </span></span>
 <span><span class="co">## [65] Rcpp_1.1.1         glue_1.8.0         xml2_1.5.2         jsonlite_2.0.0    </span></span>
-<span><span class="co">## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.0</span></span></code></pre>
+<span><span class="co">## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.1</span></span></code></pre>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

@@ -26,6 +26,8 @@ find_phenotype_markers(
   verbose = TRUE,
   max_cells_per_ident = 5000L,
   validate_expression_axes = TRUE,
+  celltype_unique_genes = TRUE,
+  celltype_contrast = c("within_cell_type", "vs_cohort_rest"),
   ...
 )
 ```
@@ -64,9 +66,10 @@ find_phenotype_markers(
     phenotype groups globally (cell type agnostic; default).
 
   - `"cell_type_specific"`: for each cell type, find markers for cells
-    of that type in the adverse (or favorable) phenotype tail vs **all
-    other cells** in the dataset (other types and other phenotype groups
-    combined).
+    of that type in the adverse (or favorable) tail vs a reference group
+    controlled by `celltype_contrast` (default: same cell type, not in
+    that tail; use `"vs_cohort_rest"` for the original cohort-wide
+    contrast).
 
 - cell_type_column:
 
@@ -118,6 +121,24 @@ find_phenotype_markers(
   layout is detected) and normalize colnames for ID matching. Use
   log-normalized (e.g. log1p CPM) `data` for matrix input when possible.
 
+- celltype_unique_genes:
+
+  When `marker_scope = "cell_type_specific"` and `TRUE` (default), each
+  gene is kept in at most one row across adverse and favorable marker
+  tables: the row with the largest `avg_log2FC` (tie-break by `p_adj`).
+  This avoids the same gene (e.g. highly expressed housekeeping
+  transcripts) appearing as a top marker in many cell-type blocks. Set
+  to `FALSE` to retain all significant hits per block.
+
+- celltype_contrast:
+
+  When `marker_scope = "cell_type_specific"`: `"within_cell_type"`
+  (default) compares each phenotype tail within a cell type to other
+  phenotype groups in the **same** cell type only. `"vs_cohort_rest"`
+  restores the original behaviour: (cell type \\\cap\\ tail) vs **all
+  other cells** in the dataset (other cell types and other phenotype
+  groups).
+
 - ...:
 
   Additional arguments passed to
@@ -137,17 +158,19 @@ A list with:
 Each data.frame has columns: `gene`, `avg_log2FC`, `pct_in_group`,
 `pct_rest`, `p_val`, `p_adj`. When
 `marker_scope = "cell_type_specific"`, each row is one gene for one cell
-type; the `cell_type` column identifies which type the contrast was
-anchored on (adverse/favorable cells of that type vs all other cells).
+type; the `cell_type` column identifies which type the in-group was
+anchored on. If `celltype_contrast = "within_cell_type"` (default), the
+reference is other phenotype groups within that cell type; if
+`"vs_cohort_rest"`, the reference is all other cells with a phenotype
+label (original behaviour).
 
 ## Details
 
 Phenotype tails (e.g. top/bottom 5\\ For
-`marker_scope = "cell_type_specific"`, each test compares cells in
-**(that cell type \\\cap\\ adverse or favorable tail)** to **all other
-cells**. `group_labels` cell IDs must match `colnames(expression)`
-(after trimming); use the same identifiers you used when building the
-score table and phenotype groups.
+`marker_scope = "cell_type_specific"`, the contrast is set by
+`celltype_contrast` (see above). `group_labels` cell IDs must match
+`colnames(expression)` (after trimming); use the same identifiers you
+used when building the score table and phenotype groups.
 
 ## See also
 
