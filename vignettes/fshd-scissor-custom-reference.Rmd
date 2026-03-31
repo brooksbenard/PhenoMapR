@@ -461,9 +461,21 @@ plot_data_sc <- data.frame(
 This dataset does not provide cell type labels. Here we use pre-computed **CyteTypeR** annotations (saved alongside this vignette) and attach them to the Seurat object metadata as `cell_type` and `coarse_cell_type`. The next figure shows those labels on the **UMAP** (`label = TRUE`).
 
 ```{r cytetype-annotations}
-  ann_path <- "cytetype_annotations_ce748d9d-6191-42bc-a212-4bace7e97e4b.csv"
-  if (!file.exists(ann_path)) {
-    stop("Missing CyteTypeR annotations CSV: ", ann_path)
+  ann_base <- "cytetype_annotations_ce748d9d-6191-42bc-a212-4bace7e97e4b.csv"
+  ann_candidates <- unique(c(
+    ann_base,
+    file.path("vignettes", ann_base),
+    {
+      in_path <- tryCatch(knitr::current_input(), error = function(e) NA_character_)
+      if (is.na(in_path)) NA_character_ else file.path(dirname(in_path), ann_base)
+    }
+  ))
+  ann_path <- ann_candidates[file.exists(ann_candidates)][1]
+  if (is.na(ann_path) || !nzchar(ann_path)) {
+    stop(
+      "Missing CyteTypeR annotations CSV. Tried:\n- ",
+      paste(ann_candidates, collapse = "\n- ")
+    )
   }
 
   ann <- utils::read.csv(ann_path, stringsAsFactors = FALSE, check.names = FALSE)
