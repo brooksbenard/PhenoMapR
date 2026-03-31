@@ -10,6 +10,11 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+
+# GitHub Actions / pkgdown often hits exit 143 (SIGTERM) from OOM or timeout on this vignette.
+spatial_ci_lite <- identical(Sys.getenv("CI"), "true") ||
+  tolower(Sys.getenv("PHENOMAPR_SPATIAL_LITE", "")) %in% c("true", "1", "yes")
+spatial_max_cells <- if (spatial_ci_lite) 2000L else 5000L
 ```
 
 ## Overview
@@ -25,18 +30,28 @@ suppressPackageStartupMessages({
   library(PhenoMapR)
   library(Seurat)
   library(ggplot2)
-  library(googledrive)
   library(dplyr)
 })
 
 knitr::opts_chunk$set(fig.width = 12, out.width = "100%", warning = FALSE)
 theme_set(theme_minimal(base_size = 14))
 
-googledrive::drive_deauth()
-googledrive::drive_download(googledrive::as_id("1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"), "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds", overwrite = TRUE)
+rds_name <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
+spatial_url <- Sys.getenv("PHENOMAPR_SPATIAL_RDS_URL", unset = "")
+if (nzchar(spatial_url)) {
+  if (requireNamespace("curl", quietly = TRUE)) {
+    curl::curl_download(spatial_url, rds_name, quiet = TRUE)
+  } else {
+    utils::download.file(spatial_url, rds_name, mode = "wb", quiet = TRUE)
+  }
+} else {
+  suppressPackageStartupMessages(library(googledrive))
+  googledrive::drive_deauth()
+  googledrive::drive_download(googledrive::as_id("1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"), rds_name, overwrite = TRUE)
+}
 
   suppressMessages({
-    seurat <- PhenoMapR::load_rds_fast("HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds")
+    seurat <- PhenoMapR::load_rds_fast(rds_name)
     update_fn <- tryCatch(
       get("UpdateSeuratObject", envir = asNamespace("SeuratObject")),
       error = function(e) get0("UpdateSeuratObject", envir = asNamespace("Seurat"), mode = "function")
@@ -45,6 +60,16 @@ googledrive::drive_download(googledrive::as_id("1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_v
       seurat <- tryCatch(update_fn(seurat), error = function(e) seurat)
     }
   })
+
+  if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite) && ncol(seurat) > 1L) {
+    set.seed(1L)
+    nkeep <- min(2000L, as.integer(ncol(seurat)))
+    if (ncol(seurat) > nkeep) {
+      seurat <- subset(seurat, cells = sample(colnames(seurat), nkeep))
+      message("spatial_ci_lite=TRUE: using ", ncol(seurat), " cells/spots to reduce CI memory (exit 143).")
+    }
+  }
+
   assay_use <- if ("Spatial" %in% names(seurat@assays)) "Spatial" else "RNA"
   n_genes <- nrow(seurat)
   n_spots <- ncol(seurat)
@@ -363,7 +388,7 @@ if (!is.null(group_col)) {
         marker_scope = "phenotype_groups",
         assay = a,
         slot = "data",
-        max_cells_per_ident = 5000L,
+        max_cells_per_ident = spatial_max_cells,
         verbose = FALSE
       ),
       error = function(e) {
@@ -391,7 +416,7 @@ if (!is.null(group_col)) {
 
 ```{r heatmap-markers-spatial}
 if (exists("markers") && !is.null(markers)) {
-  n_top <- 15
+  n_top <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 10L else 15L
   expr <- NULL
   assay_order <- unique(c(
     if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0),
@@ -586,7 +611,7 @@ Here we call `find_phenotype_markers()` with **`marker_scope = "cell_type_specif
 
 When both adverse and favorable marker tables are non-empty and **ComplexHeatmap** is installed, **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** matches the single-cell vignette (column order: phenotype bin, cell type, score; row blocks with optional gene labels).
 
-```{r markers-celltype-specific-spatial, cache = FALSE, fig.align='center', fig.width=14, fig.height=10}
+```{r markers-celltype-specific-spatial, cache = FALSE, fig.align='center', fig.width=14, fig.height=10, eval=!spatial_ci_lite}
 markers_ct_spatial <- NULL
 ct_col_spatial <- NULL
 if (!is.null(group_col)) {
@@ -623,7 +648,7 @@ if (!is.null(group_col)) {
         celltype_contrast = "within_cell_type",
         assay = assay_ct,
         slot = "data",
-        max_cells_per_ident = 5000L,
+        max_cells_per_ident = spatial_max_cells,
         verbose = FALSE
       ),
       error = function(e) {

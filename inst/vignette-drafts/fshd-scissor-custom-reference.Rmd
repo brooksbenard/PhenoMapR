@@ -491,18 +491,22 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
       if (!is.na(hit)) return(hit)
     }
 
-    # 4) walk up from cwd to find package/vignettes/<fn>
+    # 4) walk up from cwd to find package/vignettes/<fn> or inst/vignette-drafts/<fn>
     d <- normalizePath(getwd(), winslash = "/")
     for (i in 1:20) {
-      hit <- try_one(file.path(d, "vignettes", fn))
-      if (!is.na(hit)) return(hit)
+      for (sub in c("vignettes", file.path("inst", "vignette-drafts"))) {
+        hit <- try_one(file.path(d, sub, fn))
+        if (!is.na(hit)) return(hit)
+      }
       nd <- dirname(d)
       if (identical(nd, d)) break
       d <- nd
     }
 
-    # 5) installed package (R CMD check / site build)
+    # 5) installed package (draft vignettes ship under inst/vignette-drafts/)
     if (requireNamespace("PhenoMapR", quietly = TRUE)) {
+      hit <- try_one(system.file("vignette-drafts", fn, package = "PhenoMapR"))
+      if (!is.na(hit)) return(hit)
       hit <- try_one(system.file("vignettes", fn, package = "PhenoMapR"))
       if (!is.na(hit)) return(hit)
     }
@@ -513,8 +517,8 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
   ann_path <- find_cytetype_csv(ann_base)
   if (is.na(ann_path) || !nzchar(ann_path)) {
     stop(
-      "Missing CyteTypeR annotations CSV (commit vignettes/", ann_base, " in git for CI). ",
-      "Expected next to this vignette Rmd or under vignettes/."
+      "Missing CyteTypeR annotations CSV (", ann_base, "). ",
+      "Place it next to this Rmd or under inst/vignette-drafts/ in the package source."
     )
   }
 
