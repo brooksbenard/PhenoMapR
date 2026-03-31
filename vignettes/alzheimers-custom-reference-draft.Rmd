@@ -364,19 +364,21 @@ scores <- PhenoMap(
 
 score_col <- names(scores)[1]
 seu <- add_scores_to_seurat(seu, scores)
+score_z_col <- paste0(score_col, "_z")
+seu[[score_z_col]] <- as.numeric(scale(seu[[score_col]][, 1]))
 head(scores)
 ```
 
 ## UMAP with cell type labels
 
-```{r, fig.width=5, fig.height=4}
+```{r, fig.width=10, fig.height=4}
 meta <- seu[[]]
 pal_cells <- get_celltype_palette(meta[[celltype_col]])
 
 if (!"umap" %in% names(seu@reductions)) {
   message("No UMAP reduction found in this Seurat object (expected seu@reductions$umap). Skipping UMAP plot.")
 } else {
-  DimPlot(
+  p_ct <- DimPlot(
     seu,
     reduction = "umap",
     group.by = celltype_col,
@@ -386,6 +388,40 @@ if (!"umap" %in% names(seu@reductions)) {
     ggtitle("Alzheimer's dataset: cell types on UMAP") +
     theme_void() +
     theme(legend.position = "right")
+
+  um <- as.data.frame(seu@reductions$umap@cell.embeddings[, 1:2, drop = FALSE])
+  colnames(um) <- c("UMAP_1", "UMAP_2")
+  um$score_z <- seu@meta.data[[score_z_col]]
+  # Plot low-|z| points first, extremes last (on top).
+  um <- um[order(abs(um$score_z)), , drop = FALSE]
+  # Use asymmetric limits to preserve more red-side dynamic range when negatives are extreme.
+  q_hi <- as.numeric(stats::quantile(um$score_z, probs = 0.99, na.rm = TRUE))
+  neg_abs <- abs(um$score_z[um$score_z < 0])
+  q_lo_abs <- if (length(neg_abs) > 0) as.numeric(stats::quantile(neg_abs, probs = 0.9, na.rm = TRUE)) else 1
+  lim_hi <- if (is.finite(q_hi) && q_hi > 0) q_hi else 1
+  lim_lo <- if (is.finite(q_lo_abs) && q_lo_abs > 0) -q_lo_abs else -1
+
+  p_score <- ggplot(um, aes(x = UMAP_1, y = UMAP_2, color = score_z)) +
+    geom_point(size = 0.25, alpha = 0.9) +
+    scale_color_gradient2(
+      low = "#2166AC",
+      mid = "#F7F7F7",
+      high = "#B2182B",
+      midpoint = 0,
+      limits = c(lim_lo, lim_hi),
+      oob = scales::squish
+    ) +
+    ggtitle("Alzheimer's dataset: PhenoMapR score (z) on UMAP") +
+    theme_void() +
+    theme(legend.position = "right")
+
+  if (requireNamespace("patchwork", quietly = TRUE)) {
+    suppressPackageStartupMessages(library(patchwork))
+    print(p_ct + p_score + patchwork::plot_layout(widths = c(1, 1)))
+  } else {
+    print(p_ct)
+    print(p_score)
+  }
 }
 ```
 
@@ -399,16 +435,15 @@ message("Using cell type column: ", celltype_col)
 pal_cells <- get_celltype_palette(meta[[celltype_col]])
 ```
 
-```{r}
+```{r, fig.height=3.5}
 # Global distribution
 plot_score_distribution(
-  scores = scores,
-  score_column = score_col,
-  main = "AD-reference PhenoMapR score distribution"
+  scores = seu@meta.data[[score_z_col]],
+  main = "AD-reference PhenoMapR score distribution (z-scored)"
 )
 ```
 
-```{r}
+```{r, fig.height=3.5}
 # Per-cell-type AD vs Ctrl distributions (side-by-side violins) with per-cell-type
 # tests for differences in means.
 plot_df <- meta %>%
@@ -514,7 +549,7 @@ markers_ct <- find_phenotype_markers(
 
 ## Marker heatmaps
 
-```{r, fig.width=7.5, fig.height=5}
+```{r, fig.width=11.5, fig.height=3.2}
 plot_phenotype_markers(
   markers = markers_global,
   expr_mat = expr_counts,
@@ -531,7 +566,7 @@ plot_phenotype_markers(
 )
 ```
 
-```{r}
+```{r, fig.width=11.5, fig.height=3.2}
 plot_phenotype_markers(
   markers = markers_ct,
   expr_mat = expr_counts,
@@ -549,14 +584,324 @@ plot_phenotype_markers(
 ```
 
 
+## Independent validation cohorts (Scissor Alzheimer’s GEO)
 
+This section mirrors the validation idea used in Scissor’s Alzheimer’s analysis by scoring **independent GEO cohorts** with the bulk-derived reference (`ad_reference`) and testing whether PhenoMapR scores differ between **healthy vs Alzheimer’s** samples (and across **stages** for GSE28146).
 
-## Save outputs (optional)
+**Datasets (GEO):**
 
-```{r}
-# saveRDS(ad_reference, "alzheimers_custom_reference_from_GSE39420.rds")
-# saveRDS(scores, "alzheimers_singlecell_scores.rds")
-# saveRDS(markers_global, "alzheimers_markers_global.rds")
-# saveRDS(markers_ct, "alzheimers_markers_celltype_specific.rds")
+- **GSE109887** — independent cohort for Healthy vs AD score separation.
+- **GSE28146** — independent cohort with Alzheimer’s staging; we test score shifts across stages.
+
+**Notes:**
+
+- Requires **`GEOquery`** and network access.
+- Runs only when this draft is running with local inputs available (`draft_data_ok`) and `ad_reference` exists.
+
+```{r alz-validation-geo, fig.width=11, fig.height=4, message=TRUE, warning=TRUE}
+validation_plot_df <- NULL
+validation_tests <- list()
+
+if (!exists("draft_data_ok") || !isTRUE(draft_data_ok) || !exists("ad_reference")) {
+  message("Skipping GEO validation: draft_data_ok is FALSE or ad_reference not found.")
+} else if (!requireNamespace("GEOquery", quietly = TRUE)) {
+  message("Install GEOquery to run GEO validation: BiocManager::install('GEOquery').")
+} else {
+  score_col_bulk <- paste0("weighted_sum_score_", colnames(ad_reference)[1])
+  # Validation palette (similar to Scissor Alzheimer figure): light yellow -> orange -> red
+  pal_val <- c(
+    Control = "#FFF7BC",
+    Incipient = "#FEC44F",
+    Moderate = "#FB6A4A",
+    Severe = "#CB181D",
+    AD = "#CB181D"
+  )
+
+  collapse_to_symbol <- function(eset) {
+    expr <- Biobase::exprs(eset)
+    probes <- rownames(expr)
+
+    # 1) If features are Ensembl IDs, map ENSG -> SYMBOL via org.Hs.eg.db
+    if (any(grepl("^ENSG[0-9]+", probes, ignore.case = TRUE)) &&
+      requireNamespace("AnnotationDbi", quietly = TRUE) &&
+      requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+      ens_base <- sub("\\\\.[0-9]+$", "", probes)
+      sym <- AnnotationDbi::mapIds(
+        org.Hs.eg.db,
+        keys = ens_base,
+        column = "SYMBOL",
+        keytype = "ENSEMBL",
+        multiVals = "first"
+      )
+      sym <- as.character(sym)
+      ok <- !is.na(sym) & nzchar(sym)
+      if (any(ok)) {
+        expr2 <- expr[ok, , drop = FALSE]
+        sym2 <- sym[ok]
+        df <- data.frame(sym = sym2, expr2, check.names = FALSE)
+        agg <- stats::aggregate(. ~ sym, data = df, FUN = mean)
+        rownames(agg) <- agg$sym
+        return(as.matrix(agg[, -1, drop = FALSE]))
+      }
+    }
+
+    # 2) If fData has a symbol column, use it directly
+    fd <- tryCatch(Biobase::fData(eset), error = function(e) NULL)
+    if (!is.null(fd) && nrow(fd) > 0) {
+      sym_col <- NULL
+      for (cand in c(
+        "Symbol", "SYMBOL", "Gene Symbol", "GENE_SYMBOL", "Gene.symbol", "gene_assignment",
+        "Gene.symbol.", "Gene.Symbol", "GENE", "ILMN_Gene", "ORF"
+      )) {
+        if (cand %in% colnames(fd)) {
+          sym_col <- cand
+          break
+        }
+      }
+      if (!is.null(sym_col)) {
+        sym <- as.character(fd[[sym_col]])
+        ok <- !is.na(sym) & nzchar(sym)
+        if (any(ok)) {
+          expr2 <- expr[ok, , drop = FALSE]
+          sym2 <- sym[ok]
+          df <- data.frame(sym = sym2, expr2, check.names = FALSE)
+          agg <- stats::aggregate(. ~ sym, data = df, FUN = mean)
+          rownames(agg) <- agg$sym
+          return(as.matrix(agg[, -1, drop = FALSE]))
+        }
+      }
+    }
+
+    # 3) Fall back: map probe IDs -> gene symbols via the platform (GPL) annotation table
+    gpl_id <- tryCatch(as.character(Biobase::annotation(eset)), error = function(e) "")
+    if (!nzchar(gpl_id) || !requireNamespace("GEOquery", quietly = TRUE)) return(NULL)
+
+    gpl_obj <- suppressMessages(tryCatch(GEOquery::getGEO(gpl_id), error = function(e) NULL))
+    if (is.null(gpl_obj)) return(NULL)
+
+    gpl_tab <- tryCatch(GEOquery::Table(gpl_obj), error = function(e) NULL)
+    if (is.null(gpl_tab) || nrow(gpl_tab) == 0) return(NULL)
+
+    pick_col <- function(nms, candidates, regex = NULL) {
+      for (c in candidates) if (c %in% nms) return(c)
+      if (!is.null(regex)) {
+        idx <- grep(regex, nms, ignore.case = TRUE)
+        if (length(idx) > 0) return(nms[idx[1]])
+      }
+      NULL
+    }
+
+    probe_col <- pick_col(
+      names(gpl_tab),
+      c("ID", "ID_REF", "Probe.Set.ID", "ProbeID", "Probe ID", "SPOT_ID"),
+      regex = "^id(_ref)?$|probe"
+    )
+    sym_col <- pick_col(
+      names(gpl_tab),
+      c("Gene Symbol", "GENE_SYMBOL", "Symbol", "SYMBOL", "ILMN_Gene", "Gene.symbol", "ORF"),
+      regex = "gene.*symbol|^symbol$|ilmn_gene|orf"
+    )
+    if (is.null(probe_col) || is.null(sym_col)) return(NULL)
+
+    map_probe <- as.character(gpl_tab[[probe_col]])
+    map_sym <- as.character(gpl_tab[[sym_col]])
+    okm <- !is.na(map_probe) & nzchar(map_probe) & !is.na(map_sym) & nzchar(map_sym)
+    map_probe <- map_probe[okm]
+    map_sym <- map_sym[okm]
+
+    m <- match(probes, map_probe)
+    sym <- map_sym[m]
+    ok <- !is.na(sym) & nzchar(sym)
+    if (!any(ok)) return(NULL)
+
+    expr2 <- expr[ok, , drop = FALSE]
+    sym2 <- sym[ok]
+    df <- data.frame(sym = sym2, expr2, check.names = FALSE)
+    agg <- stats::aggregate(. ~ sym, data = df, FUN = mean)
+    rownames(agg) <- agg$sym
+    as.matrix(agg[, -1, drop = FALSE])
+  }
+
+  score_bulk_mat <- function(expr_gene_by_sample, reference) {
+    sc <- PhenoMap(
+      expression = expr_gene_by_sample,
+      reference = reference,
+      z_score_cutoff = 2,
+      verbose = FALSE
+    )
+    sc[, score_col_bulk, drop = FALSE]
+  }
+
+  ## --- GSE109887: Healthy vs AD --------------------------------------------
+  tryCatch(
+    {
+      g <- suppressMessages(GEOquery::getGEO("GSE109887", GSEMatrix = TRUE, AnnotGPL = TRUE)[[1]])
+      pd <- Biobase::pData(g)
+      meta_text <- tolower(apply(pd, 1, function(x) paste(x, collapse = " | ")))
+      grp <- ifelse(
+        grepl("alzheimer|ad\\b|dementia", meta_text), "AD",
+        ifelse(grepl("control|healthy|normal", meta_text), "Control", NA_character_)
+      )
+      expr_sym <- collapse_to_symbol(g)
+      if (is.null(expr_sym)) stop("GSE109887: could not find a gene-symbol column in fData().")
+
+      keep <- !is.na(grp)
+      if (sum(keep) < 4) stop("GSE109887: too few labeled samples after parsing metadata.")
+      expr_sym <- expr_sym[, keep, drop = FALSE]
+      grp <- factor(grp[keep], levels = c("Control", "AD"))
+
+      sc <- score_bulk_mat(expr_sym, ad_reference)
+      x <- sc[, 1, drop = TRUE]
+
+      validation_plot_df <- rbind(
+        validation_plot_df,
+        data.frame(
+          cohort = "GSE109887",
+          group = grp,
+          score = x,
+          stringsAsFactors = FALSE
+        )
+      )
+      ok_w <- stats::complete.cases(x, grp)
+      if (sum(ok_w) > 0 && length(unique(grp[ok_w])) >= 2) {
+        validation_tests[["GSE109887"]] <- stats::wilcox.test(x[ok_w] ~ grp[ok_w])
+      }
+    },
+    error = function(e) message("GSE109887 failed: ", conditionMessage(e))
+  )
+
+  ## --- GSE28146: stage / severity -----------------------------------------
+  tryCatch(
+    {
+      g <- suppressMessages(GEOquery::getGEO("GSE28146", GSEMatrix = TRUE, AnnotGPL = TRUE)[[1]])
+      pd <- Biobase::pData(g)
+      meta_text <- tolower(apply(pd, 1, function(x) paste(x, collapse = " | ")))
+
+      # Attempt to recover an ordered stage variable from metadata text.
+      stage <- ifelse(grepl("control|healthy|normal", meta_text), "Control", NA_character_)
+      stage[grepl("incipient", meta_text)] <- "Incipient"
+      stage[grepl("moderate", meta_text)] <- "Moderate"
+      stage[grepl("severe", meta_text)] <- "Severe"
+
+      expr_sym <- collapse_to_symbol(g)
+      if (is.null(expr_sym)) stop("GSE28146: could not find a gene-symbol column in fData().")
+
+      keep <- !is.na(stage)
+      if (sum(keep) < 4) stop("GSE28146: too few labeled samples after parsing metadata.")
+      expr_sym <- expr_sym[, keep, drop = FALSE]
+      stage <- factor(stage[keep], levels = c("Control", "Incipient", "Moderate", "Severe"), ordered = TRUE)
+
+      sc <- score_bulk_mat(expr_sym, ad_reference)
+      x <- sc[, 1, drop = TRUE]
+
+      validation_plot_df <- rbind(
+        validation_plot_df,
+        data.frame(
+          cohort = "GSE28146",
+          group = stage,
+          score = x,
+          stringsAsFactors = FALSE
+        )
+      )
+      ok_w <- stats::complete.cases(x, stage)
+      if (sum(ok_w) > 0 && length(unique(stage[ok_w])) >= 2) {
+        validation_tests[["GSE28146"]] <- stats::kruskal.test(x[ok_w] ~ stage[ok_w])
+      }
+    },
+    error = function(e) message("GSE28146 failed: ", conditionMessage(e))
+  )
+
+  if (!is.null(validation_plot_df) && nrow(validation_plot_df) > 0) {
+    # Scale within cohort to make y-axis comparable across platforms.
+    validation_plot_df$score_scaled <- ave(
+      validation_plot_df$score,
+      validation_plot_df$cohort,
+      FUN = function(x) as.numeric(scale(x))
+    )
+
+    if (!requireNamespace("ggpubr", quietly = TRUE)) {
+      stop("Please install ggpubr to annotate validation p-values: install.packages('ggpubr')")
+    }
+
+    df_109 <- validation_plot_df[validation_plot_df$cohort == "GSE109887", , drop = FALSE]
+    df_281 <- validation_plot_df[validation_plot_df$cohort == "GSE28146", , drop = FALSE]
+
+    p_109 <- NULL
+    if (nrow(df_109) > 0) {
+      df_109$group <- factor(as.character(df_109$group), levels = c("Control", "AD"))
+      p_109 <- ggplot(df_109, aes(x = group, y = score_scaled, fill = group)) +
+        geom_violin(trim = FALSE, alpha = 0.35, color = NA) +
+        geom_boxplot(width = 0.18, outlier.alpha = 0.0, alpha = 0.65) +
+        geom_jitter(width = 0.08, height = 0, size = 0.9, alpha = 0.85) +
+        ggpubr::stat_compare_means(
+          aes(group = group),
+          method = "wilcox.test",
+          comparisons = list(c("Control", "AD")),
+          label = "p.format",
+          label.y.npc = "top"
+        ) +
+        scale_fill_manual(values = pal_val[c("Control", "AD")], drop = FALSE) +
+        labs(
+          title = "GSE109887",
+          x = NULL,
+          y = "Scaled PhenoMap score (within cohort)"
+        ) +
+        theme_bw() +
+        theme(legend.position = "none")
+    }
+
+    p_281 <- NULL
+    if (nrow(df_281) > 0) {
+      df_281$group <- factor(
+        as.character(df_281$group),
+        levels = c("Control", "Incipient", "Moderate", "Severe"),
+        ordered = TRUE
+      )
+      comps <- list(
+        c("Control", "Incipient"),
+        c("Control", "Moderate"),
+        c("Control", "Severe")
+      )
+      p_281 <- ggplot(df_281, aes(x = group, y = score_scaled, fill = group)) +
+        geom_violin(trim = FALSE, alpha = 0.35, color = NA) +
+        geom_boxplot(width = 0.18, outlier.alpha = 0.0, alpha = 0.65) +
+        geom_jitter(width = 0.08, height = 0, size = 0.9, alpha = 0.85) +
+        ggpubr::stat_compare_means(
+          aes(group = group),
+          method = "wilcox.test",
+          comparisons = comps,
+          label = "p.format",
+          label.y.npc = "top"
+        ) +
+        scale_fill_manual(
+          values = pal_val[c("Control", "Incipient", "Moderate", "Severe")],
+          drop = FALSE
+        ) +
+        labs(
+          title = "GSE28146 (staging)",
+          x = NULL,
+          y = "Scaled PhenoMap score (within cohort)"
+        ) +
+        theme_bw() +
+        theme(legend.position = "none")
+    }
+
+    if (requireNamespace("patchwork", quietly = TRUE) && (!is.null(p_109) || !is.null(p_281))) {
+      suppressPackageStartupMessages(library(patchwork))
+      if (!is.null(p_109) && !is.null(p_281)) {
+        print(p_109 + p_281 + patchwork::plot_layout(widths = c(1, 1)))
+      } else if (!is.null(p_109)) {
+        print(p_109)
+      } else {
+        print(p_281)
+      }
+    } else {
+      if (!is.null(p_109)) print(p_109)
+      if (!is.null(p_281)) print(p_281)
+    }
+  } else {
+    message("No validation results to plot (check GEO access and phenotype parsing).")
+  }
+}
 ```
 

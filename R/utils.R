@@ -328,8 +328,15 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Phenoty
   lim <- max(abs(df$score), na.rm = TRUE)
   if (!is.finite(lim) || lim == 0) lim <- 1
 
-  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$score, fill = ggplot2::after_stat(x))) +
-    ggplot2::geom_histogram(bins = 50, color = "white", linewidth = 0.2) +
+  p <- ggplot2::ggplot(
+    df,
+    ggplot2::aes(
+      x = .data$score,
+      fill = ggplot2::after_stat(x),
+      color = ggplot2::after_stat(x)
+    )
+  ) +
+    ggplot2::geom_histogram(bins = 50, linewidth = 0.2) +
     ggplot2::scale_fill_gradient2(
       low = score_low,
       mid = score_mid,
@@ -338,6 +345,15 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Phenoty
       limits = c(-lim, lim),
       oob = scales::squish,
       name = "Score"
+    ) +
+    ggplot2::scale_color_gradient2(
+      low = score_low,
+      mid = score_mid,
+      high = score_high,
+      midpoint = 0,
+      limits = c(-lim, lim),
+      oob = scales::squish,
+      guide = "none"
     ) +
     ggplot2::labs(title = main, x = "Score", y = "Frequency") +
     ggplot2::theme_minimal(base_size = base_size)
