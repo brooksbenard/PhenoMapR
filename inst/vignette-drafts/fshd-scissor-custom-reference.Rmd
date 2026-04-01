@@ -389,7 +389,7 @@ score_col <- grep("weighted_sum_score", colnames(scores_sc), value = TRUE)[1]
 ```
 
 ```{r umap-score, fig.width=12, fig.height=4.5}
-  pal <- c(Control = "#FED789FF", FSHD = "#476F84FF")
+  pal <- c(FSHD = "#950404FF", Control = "#476F84FF")
 
 plot_data_sc <- data.frame(
   disease = seu$disease,
@@ -450,10 +450,14 @@ plot_data_sc <- data.frame(
   ) +
   labs(color = "PhenoMapR\nz-score") +
   theme_void() +
-    ggtitle("PhenoMap score Distribution") 
+    ggtitle("PhenoMapR Score Distribution") 
 
     print(p1 / (p2 + p3) + patchwork::plot_layout(widths = c(1, 1, 1)))
 
+```
+
+```{r, fig.height=2, fig.width=6}
+print(p2 + p3 + patchwork::plot_layout(widths = c(1, 1)))
 ```
 
 ## Cell type annotations (CyteTypeR results)
@@ -560,6 +564,7 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
     score_scaled = scale(seu@meta.data[[score_col]]),
     umap1   = seu@reductions$umap@cell.embeddings[, 1],
     umap2   = seu@reductions$umap@cell.embeddings[, 2],
+    source = seu$disease,
     stringsAsFactors = FALSE
   ) %>%
     mutate(cell_type = reorder(cell_type, score_scaled, FUN = median))
@@ -619,23 +624,28 @@ theme(
     theme(plot.title = element_text(hjust = 0.5)) 
 
 p2 <- ggplot(plot_data_sc,
-               aes(x = cell_type, y = score_scaled, fill = cell_type)) +
+               aes(x = cell_type, y = score_scaled, fill = cell_type, color = source)) +
     geom_boxplot(outlier.alpha = 0.2) +
     scale_fill_manual(
       values = pal_ct,
       name = "Cell Type"
     ) +
+  scale_color_manual(values = c("Control" = "lightgrey", "FSHD" = "black"), name = "Source") +
     theme_pubr(base_size = 10) +
 theme(
   axis.text.x  = element_blank(),
   axis.ticks.x = element_blank(),
     axis.line.x = element_blank(),
-  legend.position = "none",
+  legend.position = "right",
   strip.text = element_text(size = 12)
 ) +
-    labs(x = NULL, y = "Scaled PhenoMapR score", title = "Score distribution by cell type") +
+guides(
+  fill  = "none",   # removes fill legend
+  color = guide_legend()  # keeps color legend
+) +
+    labs(x = NULL, y = "Scaled PhenoMapR score", title = "Score Distribution by Cell Type and Source") +
     theme(plot.title = element_text(hjust = 0.5))
-  
+
   
       print(p2 / p1 + patchwork::plot_layout(widths = c(1, 1), guides = "collect"))
 ```
@@ -852,7 +862,7 @@ if (!vignette_run) {
 } else {
   val_base <- tempdir()
   val_score_col <- paste0("weighted_sum_score_", colnames(ref_fshd)[1])
-  val_pal <- c(Control = "#FED789FF", FSHD = "#476F84FF")
+  val_pal <- c(Control = "#476F84FF", FSHD = "#950404FF")
 
   pick_first_existing_file <- function(dir, patterns) {
     for (pat in patterns) {
@@ -1070,6 +1080,7 @@ if (!vignette_run) {
     )
     p_val <- ggplot(validation_plot_df, aes(x = group, y = score_scaled, fill = group)) +
       geom_violin(trim = FALSE, alpha = 0.35, color = NA) +
+      geom_boxplot(width = 0.18, outlier.alpha = 0.0, alpha = 0.65) +
       geom_jitter(width = 0.08, height = 0, size = 0.9, alpha = 0.85) +
       facet_wrap(~cohort, scales = "free_y", nrow = 1) +
       scale_fill_manual(values = val_pal, drop = FALSE) +

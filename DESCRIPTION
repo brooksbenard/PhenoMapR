@@ -21,7 +21,8 @@ Imports:
     dplyr,
     ggplot2,
     glue,
-    progress
+    progress,
+    scales
 Suggests:
     curl,
     googledrive,
@@ -44,6 +45,7 @@ Suggests:
     SingleCellExperiment,
     SpatialExperiment,
     SummarizedExperiment,
+    S4Vectors,
     reticulate,
     testthat (>= 3.0.0),
     knitr,

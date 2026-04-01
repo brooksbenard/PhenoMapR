@@ -7,5 +7,7 @@
 #' @keywords internal
 NULL
 
-# Tidy eval pronouns used in dplyr::filter(); avoid R CMD check false positive
-if (getRversion() >= "2.15.1") utils::globalVariables(c(".data", ".env"))
+# Tidy eval / ggplot2 computed vars; avoid R CMD check false positives
+if (getRversion() >= "2.15.1") {
+  utils::globalVariables(c(".data", ".env", "x"))
+}

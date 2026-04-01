@@ -295,6 +295,7 @@ get_top_prognostic_genes <- function(reference,
 #' @param main Plot title
 #' @param base_size Base font size for the plot (default 14)
 #'
+#' @importFrom scales squish
 #' @export
 plot_score_distribution <- function(scores, score_column = NULL, main = "Phenotype gene z-score distribution", base_size = 14) {
 
@@ -343,7 +344,7 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Phenoty
       high = score_high,
       midpoint = 0,
       limits = c(-lim, lim),
-      oob = scales::squish,
+      oob = squish,
       name = "Score"
     ) +
     ggplot2::scale_color_gradient2(
@@ -352,7 +353,7 @@ plot_score_distribution <- function(scores, score_column = NULL, main = "Phenoty
       high = score_high,
       midpoint = 0,
       limits = c(-lim, lim),
-      oob = scales::squish,
+      oob = squish,
       guide = "none"
     ) +
     ggplot2::labs(title = main, x = "Score", y = "Frequency") +
