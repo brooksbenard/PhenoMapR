@@ -15,9 +15,12 @@ plot_phenotype_markers(
   celltype_palette = NULL,
   heatmap_type = c("global", "cell_type_specific"),
   top_n_markers = 20L,
+  rank_by = c("lfc", "p_adj"),
   n_mark_labels = 5L,
   p_adj_threshold = 0.05,
   scale_clip = NULL,
+  heatmap_width = NULL,
+  heatmap_height = NULL,
   column_title = NULL,
   draw = TRUE,
   use_raster = FALSE
@@ -51,6 +54,13 @@ plot_phenotype_markers(
 \item{top_n_markers}{Maximum number of genes to keep per contrast block (per tail
 for global; per phenotype bin \eqn{\times} cell type for cell-type-specific).}
 
+\item{rank_by}{How to rank genes when selecting the top markers for the heatmap.
+\code{"lfc"} ranks by decreasing \code{avg_log2FC} among significant genes
+(\code{p_adj < p_adj_threshold}). \code{"p_adj"} ranks by increasing
+\code{p_adj} but additionally requires \code{avg_log2FC > 1} (and
+\code{p_adj < p_adj_threshold}) so that very small effects are not selected
+purely due to sample size.}
+
 \item{n_mark_labels}{Number of row labels to draw per block via
 \code{ComplexHeatmap::anno_mark} (top genes by \code{avg_log2FC} within each block).}
 
@@ -60,6 +70,14 @@ for global; per phenotype bin \eqn{\times} cell type for cell-type-specific).}
 \item{scale_clip}{Length-2 numeric vector \code{c(lo, hi)} applied after row scaling
 (values outside are clipped). If \code{NULL}, uses \code{c(-3, 3)} for
 \code{heatmap_type = "global"} and \code{c(-5, 5)} for cell-type-specific.}
+
+\item{heatmap_width}{Optional heatmap width passed to
+\code{ComplexHeatmap::Heatmap(width = ...)}. Accepts a \code{grid::unit} or a
+single number interpreted as millimeters.}
+
+\item{heatmap_height}{Optional heatmap height passed to
+\code{ComplexHeatmap::Heatmap(height = ...)}. Accepts a \code{grid::unit} or a
+single number interpreted as millimeters.}
 
 \item{column_title}{Optional title above the heatmap.}
 

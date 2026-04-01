@@ -10,3 +10,5 @@
 ^Meta$
 ^vignettes$
 ^pkgdown$
+^CITATION\.cff$
+^data/tcga$
