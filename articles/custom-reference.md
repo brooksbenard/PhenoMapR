@@ -95,7 +95,7 @@ p_age <- ggplot(subset(dat_demo, is.finite(Age)), aes(x = Age)) +
   geom_vline(xintercept = mean_age, linetype = "dashed", color = "black", linewidth = 0.8) +
   annotate("text", x = mean_age, y = Inf, 
            label = paste0("Mean = ", round(mean_age, 1)), 
-           vjust = 1.5, hjust = 1.5, color = "black", size = 3.5) +
+           vjust = 1.5, hjust = 1, color = "black", size = 3.5) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5)) +
   labs(x = NULL, y = "# of Patients", title = "Age")
@@ -237,7 +237,7 @@ if (nrow(dat_sc) > 0) {
   pal_km <- c("Low" = "#2166AC", "High" = "#B2182B")  # Low (favorable), High (adverse)
 
   p_hist <- ggplot(dat_sc, aes(x = score_custom)) +
-    geom_histogram(aes(fill = score_grp), bins = 40, color = "white", linewidth = 0.2) +
+    geom_histogram(aes(fill = score_grp), bins = 20, color = "white", linewidth = 0.2) +
     geom_density(aes(y = after_stat(count), color = score_grp), linewidth = 0.7) +
     scale_fill_manual(values = pal_km, drop = FALSE) +
     scale_color_manual(values = pal_km, drop = FALSE) +
@@ -290,7 +290,7 @@ suppressPackageStartupMessages(library(survival))
 pheno$survival_time <- pheno$OS_Time
 pheno$survival_event <- pheno$OS_Censor
 dat_os <- subset(pheno, !is.na(survival_time) & !is.na(survival_event) & !is.na(score_custom))
-if (nrow(dat_os) >= 10) {
+
   # Convert to months for plotting
   time_months <- dat_os$survival_time
   if (is.finite(max(time_months, na.rm = TRUE)) && max(time_months, na.rm = TRUE) > 400) {
@@ -315,28 +315,24 @@ if (nrow(dat_os) >= 10) {
   if (requireNamespace("survminer", quietly = TRUE)) {
     suppressPackageStartupMessages(library(survminer))
     pal_km <- c("Low" = "#2166AC", "High" = "#B2182B")  # Low (favorable), High (adverse)
-    p <- ggsurvplot(
+    p_surv <- ggsurvplot(
       fit,
       data = dat_os,
-      title = NULL,
+      title = "Survival by PhenoMapR Score",
       xlab = "Time (months)",
       ylab = "Survival probability",
       legend.title = "Custom score",
       legend.labs = c("Low", "High"),
+      legend = "right",
       palette = unname(pal_km[c("Low", "High")]),
       risk.table = FALSE,
       pval = label,
-      pval.coord = c(max_t * 0.45, 0.95),
-      pval.size = 3.5
-    )
-    print(p)
-  } else {
-    plot(fit, col = c("blue", "red"), lwd = 2, xlab = "Time (months)", ylab = "Survival probability",
-         main = "GSE253260: OS by custom survival-derived score (median split)")
-    legend("bottomleft", legend = c("Low", "High"), col = c("blue", "red"), lwd = 2, bty = "n")
-    mtext(label, side = 3, adj = 1, line = -1, cex = 0.8)
+      pval.coord = c(max_t * 0.4, 0.95),
+      pval.size = 3
+    ) 
+    
+    p_surv$plot + theme(plot.title = element_text(hjust = 0.5))
   }
-}
 ```
 
 ![](custom-reference_files/figure-html/km-custom-1.png) The sample
@@ -413,20 +409,23 @@ if (nrow(dat_stage) >= 10 && nlevels(dat_stage$stage_group) >= 2) {
   if (requireNamespace("survminer", quietly = TRUE)) {
     suppressPackageStartupMessages(library(survminer))
     pal_vec <- unname(pal_stage[levels(dat_stage$stage_group)])
-    p <- ggsurvplot(
+    p_surv_4 <- ggsurvplot(
       fit,
       data = dat_stage,
+      title = "Survival by Disease Stage",
       palette = pal_vec,
       risk.table = FALSE,
-      legend.title = NULL,
+      legend.title = "Stage",
+      legend = "right",
       legend.labs = levels(dat_stage$stage_group),
       xlab = "Time (months)",
       ylab = "Overall survival probability",
       pval = label,
-      pval.coord = c(max_t * 0.42, 0.90),
-      pval.size = 4
+      pval.coord = c(max_t * 0.25, 0.90),
+      pval.size = 3
     )
-    print(p)
+    p_surv_4$plot + theme(plot.title = element_text(hjust = 0.5))
+    # print(p_surv_4)
   } else {
     plot(fit, col = pal_stage[levels(dat_stage$stage_group)], lwd = 2,
          xlab = "Time (months)", ylab = "Overall survival probability")
@@ -480,7 +479,7 @@ dat_hist <- dat_os %>%
 if (nrow(dat_hist) > 0) {
   library(ggsignif)
 
-ggplot(dat_hist, aes(x = stage_group, y = score_custom, fill = stage_group)) +
+p_dist <- ggplot(dat_hist, aes(x = stage_group, y = scale(score_custom), fill = stage_group)) +
   geom_violin(trim = FALSE, alpha = 0.85, color = NA) +
   geom_boxplot(width = 0.15, outlier.size = 0.4, alpha = 0.9) +
   scale_fill_manual(values = pal_stage, drop = FALSE) +
@@ -492,12 +491,20 @@ ggplot(dat_hist, aes(x = stage_group, y = score_custom, fill = stage_group)) +
     step_increase = 0.08,  # Vertical spacing between brackets
     tip_length = 0.01
   ) +
-  theme_minimal() +
-  theme(legend.position = "none") +
+  theme_pubr(base_size = 14) +
+  theme(
+    legend.position = "right",
+    axis.text.x     = element_blank(),
+    axis.ticks.x    = element_blank(),
+    plot.title      = element_text(hjust = 0.5)
+  ) +
   labs(
-    x = "Disease stage",
-    y = "Cohort-wide custom signature score"
+    title = "PhenoMapR Score Across Stage",
+    x     = NULL,
+    y     = "Cohort-wide signature score",
+    fill  = "Stage"
   )
+p_dist
 }
 ```
 
@@ -596,8 +603,8 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
       xlab = "Time (months)",
       ylab = "Overall survival probability",
       pval = label,
-      pval.coord = c(max_t * 0.42, 0.90),
-      pval.size = 5
+      pval.coord = c(max_t * 0.45, 0.95),
+      pval.size = 4
     )
     p$plot <- p$plot + ggplot2::aes(linetype = grp) +
       ggplot2::scale_linetype_manual(
@@ -718,14 +725,15 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
       xlab = "Time (months)",
       ylab = "Overall survival probability",
       pval = label,
-      pval.coord = c(max_t * 0.42, 0.90),
-      pval.size = 5
+      pval.coord = c(max_t * 0.35, 0.95),
+      pval.size = 4
     )
 
     # Differentiate High vs Low with linetype so we can keep the stage color
     p$plot <- p$plot + ggplot2::aes(linetype = grp) +
       ggplot2::scale_linetype_manual(values = c("Low" = "solid", "High" = "dashed")) +
-      ggplot2::guides(color = "none")
+      ggplot2::guides(color = "none") + 
+      theme(plot.title = element_text(hjust = 0.5))
 
     plots[[st]] <- p$plot
   }
@@ -734,7 +742,8 @@ if (!requireNamespace("survminer", quietly = TRUE)) {
     message("Not enough samples per stage with OS to derive and plot stage-specific signatures.")
   } else {
     ordered <- plots[intersect(stage_levels, names(plots))]
-    print(wrap_plots(ordered, ncol = 2))
+    p_surv_split <- wrap_plots(ordered, ncol = 4)
+    p_surv_split
   }
 }
 ```

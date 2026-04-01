@@ -21,9 +21,12 @@ plot_phenotype_markers(
   celltype_palette = NULL,
   heatmap_type = c("global", "cell_type_specific"),
   top_n_markers = 20L,
+  rank_by = c("lfc", "p_adj"),
   n_mark_labels = 5L,
   p_adj_threshold = 0.05,
   scale_clip = NULL,
+  heatmap_width = NULL,
+  heatmap_height = NULL,
   column_title = NULL,
   draw = TRUE,
   use_raster = FALSE
@@ -81,6 +84,14 @@ plot_phenotype_markers(
   global; per phenotype bin \\\times\\ cell type for
   cell-type-specific).
 
+- rank_by:
+
+  How to rank genes when selecting the top markers for the heatmap.
+  `"lfc"` ranks by decreasing `avg_log2FC` among significant genes
+  (`p_adj < p_adj_threshold`). `"p_adj"` ranks by increasing `p_adj` but
+  additionally requires `avg_log2FC > 1` (and `p_adj < p_adj_threshold`)
+  so that very small effects are not selected purely due to sample size.
+
 - n_mark_labels:
 
   Number of row labels to draw per block via
@@ -97,6 +108,20 @@ plot_phenotype_markers(
   Length-2 numeric vector `c(lo, hi)` applied after row scaling (values
   outside are clipped). If `NULL`, uses `c(-3, 3)` for
   `heatmap_type = "global"` and `c(-5, 5)` for cell-type-specific.
+
+- heatmap_width:
+
+  Optional heatmap width passed to
+  `ComplexHeatmap::Heatmap(width = ...)`. Accepts a
+  [`grid::unit`](https://rdrr.io/r/grid/unit.html) or a single number
+  interpreted as millimeters.
+
+- heatmap_height:
+
+  Optional heatmap height passed to
+  `ComplexHeatmap::Heatmap(height = ...)`. Accepts a
+  [`grid::unit`](https://rdrr.io/r/grid/unit.html) or a single number
+  interpreted as millimeters.
 
 - column_title:
 

@@ -71,9 +71,12 @@ transpose/scale costs small on large matrices.</p>
 <span>  celltype_palette <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  heatmap_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"global"</span>, <span class="st">"cell_type_specific"</span><span class="op">)</span>,</span>
 <span>  top_n_markers <span class="op">=</span> <span class="fl">20L</span>,</span>
+<span>  rank_by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lfc"</span>, <span class="st">"p_adj"</span><span class="op">)</span>,</span>
 <span>  n_mark_labels <span class="op">=</span> <span class="fl">5L</span>,</span>
 <span>  p_adj_threshold <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  scale_clip <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  heatmap_width <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  heatmap_height <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  column_title <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  draw <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  use_raster <span class="op">=</span> <span class="cn">FALSE</span></span>
@@ -131,6 +134,15 @@ transpose/scale costs small on large matrices.</p>
 for global; per phenotype bin \(\times\) cell type for cell-type-specific).</p></dd>
 
 
+<dt id="arg-rank-by">rank_by<a class="anchor" aria-label="anchor" href="#arg-rank-by"></a></dt>
+<dd><p>How to rank genes when selecting the top markers for the heatmap.
+<code>"lfc"</code> ranks by decreasing <code>avg_log2FC</code> among significant genes
+(<code>p_adj &lt; p_adj_threshold</code>). <code>"p_adj"</code> ranks by increasing
+<code>p_adj</code> but additionally requires <code>avg_log2FC &gt; 1</code> (and
+<code>p_adj &lt; p_adj_threshold</code>) so that very small effects are not selected
+purely due to sample size.</p></dd>
+
+
 <dt id="arg-n-mark-labels">n_mark_labels<a class="anchor" aria-label="anchor" href="#arg-n-mark-labels"></a></dt>
 <dd><p>Number of row labels to draw per block via
 <code><a href="https://rdrr.io/pkg/ComplexHeatmap/man/anno_mark.html" class="external-link">ComplexHeatmap::anno_mark</a></code> (top genes by <code>avg_log2FC</code> within each block).</p></dd>
@@ -145,6 +157,18 @@ for global; per phenotype bin \(\times\) cell type for cell-type-specific).</p><
 <dd><p>Length-2 numeric vector <code>c(lo, hi)</code> applied after row scaling
 (values outside are clipped). If <code>NULL</code>, uses <code>c(-3, 3)</code> for
 <code>heatmap_type = "global"</code> and <code>c(-5, 5)</code> for cell-type-specific.</p></dd>
+
+
+<dt id="arg-heatmap-width">heatmap_width<a class="anchor" aria-label="anchor" href="#arg-heatmap-width"></a></dt>
+<dd><p>Optional heatmap width passed to
+<code>ComplexHeatmap::Heatmap(width = ...)</code>. Accepts a <code><a href="https://rdrr.io/r/grid/unit.html" class="external-link">grid::unit</a></code> or a
+single number interpreted as millimeters.</p></dd>
+
+
+<dt id="arg-heatmap-height">heatmap_height<a class="anchor" aria-label="anchor" href="#arg-heatmap-height"></a></dt>
+<dd><p>Optional heatmap height passed to
+<code>ComplexHeatmap::Heatmap(height = ...)</code>. Accepts a <code><a href="https://rdrr.io/r/grid/unit.html" class="external-link">grid::unit</a></code> or a
+single number interpreted as millimeters.</p></dd>
 
 
 <dt id="arg-column-title">column_title<a class="anchor" aria-label="anchor" href="#arg-column-title"></a></dt>

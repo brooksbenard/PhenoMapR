@@ -863,7 +863,7 @@ sessionInfo()
     ##  [37] digest_0.6.39          rematch2_2.1.2         patchwork_1.3.2       
     ##  [40] tensor_1.5.1           prismatic_1.1.2        RSpectra_0.16-2       
     ##  [43] irlba_2.3.7            textshaping_1.0.5      labeling_0.4.3        
-    ##  [46] progressr_0.18.0       spatstat.sparse_3.1-0  httr_1.4.8            
+    ##  [46] progressr_0.19.0       spatstat.sparse_3.1-0  httr_1.4.8            
     ##  [49] polyclip_1.10-7        abind_1.4-8            compiler_4.5.3        
     ##  [52] gargle_1.6.1           withr_3.0.2            S7_0.2.1              
     ##  [55] fastSave_0.1.0         fastDummies_1.7.5      MASS_7.3-65           

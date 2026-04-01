@@ -363,6 +363,38 @@ et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2),
 where they find **over 55% of their high-risk cells were Ductal cell
 type 2**.
 
+## Score distribution by sample source
+
+Theoretically, the PhenoMapR scores should be differentially distributed
+between tumor or normal samples. We plot the scores per cell type, split
+by tumor/normal source:
+
+``` r
+dl <- 
+  data.frame(Reference = "PRECOG Pancreatic", Source = meta$Source, Score = meta[[score_precog_col]], Cell_type = meta$celltype_original, stringsAsFactors = FALSE)
+
+ggplot(dl, aes(x = Cell_type, y = scale(Score), fill = Cell_type, color = Source)) +
+  geom_boxplot(outlier.alpha = 0.2, position = position_dodge(width = 0.8)) +
+  scale_fill_manual(values = pal_cells, name = "\nCell Type") +
+  scale_color_manual(values = c("Normal" = "lightgrey", "Tumor" = "black"), name = "Source") +
+  guides(
+    fill  = guide_legend(order = 1),  # appears first
+    color = guide_legend(order = 2)   # appears second
+  ) +
+  theme_pubr(base_size = 14) +
+  theme(
+    axis.text.x    = element_text(angle = 45, hjust = 1),
+    legend.position = "right",
+    strip.text      = element_text(size = 12),
+    plot.title      = element_text(hjust = 0.5)
+  ) +
+  labs(x = NULL, y = "PhenoMapR score (scaled)", title = "PhenoMapR Score distribution by Source and Cell Type")
+```
+
+![](single-cell_files/figure-html/unnamed-chunk-1-1.png) Indeed, tumor
+samples are significantly enriched for more adverse scores across all
+cell types.
+
 ## Cell types in the most prognostic populations
 
 Cell type counts in the top 5% (Most Adverse) and bottom 5% (Most
@@ -810,7 +842,7 @@ sessionInfo()
     ##  [46] pkgdown_2.2.0          codetools_0.2-20       tidyselect_1.2.1      
     ##  [49] shape_1.4.6.1          farver_2.1.2           matrixStats_1.5.0     
     ##  [52] stats4_4.5.3           spatstat.explore_3.8-0 jsonlite_2.0.0        
-    ##  [55] GetoptLong_1.1.0       progressr_0.18.0       Formula_1.2-5         
+    ##  [55] GetoptLong_1.1.0       progressr_0.19.0       Formula_1.2-5         
     ##  [58] ggridges_0.5.7         survival_3.8-6         iterators_1.0.14      
     ##  [61] systemfonts_1.3.2      foreach_1.5.2          tools_4.5.3           
     ##  [64] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.1            
