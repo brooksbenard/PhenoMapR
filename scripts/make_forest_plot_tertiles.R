@@ -32,11 +32,26 @@ if (length(miss) > 0) {
 # Match prior plot behavior: exclude Normal strata from forest plot outputs.
 dt <- dt[stratum != "Normal"]
 
+# Patient-level aggregation (avoid counting multiple samples per patient).
+dt <- dt[
+  is.finite(score) & !is.na(score) & is.finite(os_time) & !is.na(os_event),
+  .(
+    score = mean(score, na.rm = TRUE),
+    os_time = os_time[1],
+    os_event = os_event[1],
+    tcga_code = tcga_code[1],
+    stratum = stratum[1],
+    precog_label_used = precog_label_used[1],
+    forest_label = forest_label[1]
+  ),
+  by = .(forest_label, patient)
+]
+
 res_list <- list()
 
 labels <- sort(unique(dt$forest_label))
 for (lab in labels) {
-  sub <- dt[forest_label == lab & is.finite(score) & !is.na(score) & is.finite(os_time) & !is.na(os_event)]
+  sub <- dt[forest_label == lab]
   if (nrow(sub) < 40) next
 
   q1 <- as.numeric(stats::quantile(sub$score, probs = 1/3, na.rm = TRUE, type = 7))
