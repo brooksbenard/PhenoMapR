@@ -53,6 +53,7 @@ Suggests:
     pkgdown (>= 2.1.0),
     HGNChelper,
     survival,
+    maxstat,
     survminer,
     ggpubr,
     readxl,
