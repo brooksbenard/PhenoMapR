@@ -3,8 +3,8 @@
 # Incremental TCGA PRECOG bulk survival stratification:
 # - download one TCGA TPM gz at a time
 # - score via PhenoMapR (built-in PRECOG meta-z signatures)
-# - stratify by median PhenoMapR score (High vs Low) *within each sample stratum*
-# - compute Cox PH HR + CI and log-rank p-value per TCGA type
+# - stratify by median, mean, and max-selected log-rank (optimal cutpoint) PhenoMapR score *within each stratum*
+# - compute Cox PH HR + CI; median/mean use log-rank p at split; max-stat uses HL global p + HR at optimal split
 # - append sample-level results to a single consolidated table
 # - delete the local TPM file after each cancer type is processed
 #
@@ -15,18 +15,25 @@
 #   empty for DLBC, TGCT, and READ, so only OS is available for those types.
 #
 # Outputs:
-# - results/tcga_precog_forest_results.tsv — stratum-level Cox/log-rank (merged with forest-plot fields)
-# - results/tcga_precog_forest_plot_data.tsv — exact rows/columns used for the forest figure (HR, CI, cor, etc.)
-# - results/tcga_precog_forest_panel.tsv — sample-level scores + survival (minimal, for tertile script)
+# - results/tcga_precog_forest_results.tsv — median split: stratum-level Cox/log-rank + forest-plot fields
+# - results/tcga_precog_forest_plot_data.tsv — median split: exact forest figure rows
+# - results/tcga_precog_forest_mean_results.tsv — mean split (same structure; threshold column mean_score)
+# - results/tcga_precog_forest_mean_plot_data.tsv — mean split forest figure rows
+# - results/tcga_precog_forest_maxstat_results.tsv — max-stat optimal split (p_maxstat = HL-adjusted global test)
+# - results/tcga_precog_forest_maxstat_plot_data.tsv — max-stat forest figure rows
+# - results/tcga_precog_forest_panel.tsv — patient-level scores + survival + median/mean/maxstat group labels
 # - results/tcga_precog_forest_samples_annotated.tsv — per-sample PhenoMapR scores + PANCAN clinical (pancan_*)
 # - results/tcga_outcomes_methods_note.txt — outcomes source (PANCAN OS)
-# - results/tcga_precog_forest.png — forest + patient n + PRECOG gene n
+# - results/tcga_precog_forest.png — median split forest + patient n + PRECOG gene n
+# - results/tcga_precog_forest_mean.png — mean split forest (same layout)
+# - results/tcga_precog_forest_maxstat.png — max-stat optimal split forest (same layout)
 # Optional flags: --precog_full, --tcga_full (unshrunk meta-z for PRECOG–TCGA r in the plot)
 
 suppressPackageStartupMessages({
   library(data.table)
   library(PhenoMapR)
   library(survival)
+  library(maxstat)
   library(ggplot2)
   library(patchwork)
   library(scales)
@@ -601,7 +608,9 @@ tpm_id_map <- extract_drive_tpm_id_map(html)
 cat("Found TCGA TPM entries in folder HTML:", length(tpm_id_map), "\n")
 
 panel_all <- list()
-type_results <- list()
+type_results_median <- list()
+type_results_mean <- list()
+type_results_maxstat <- list()
 
 for (tcga_code in tcga_types) {
   precog_label_primary <- concordant_precog_label(tcga_code)
@@ -659,24 +668,16 @@ for (tcga_code in tcga_types) {
     dat <- merge(os_dt, score_dt_patient, by = "patient", all = FALSE)
     if (nrow(dat) < 20) NULL else {
 
-    # Per-stratum median split + survival tests; keep strata separate (e.g. ACC_Normal)
+    # Per-stratum median and mean splits + survival tests; keep strata separate (e.g. ACC_Normal)
     out_panels <- list()
     for (st in sort(unique(dat$stratum))) {
       sub <- dat[stratum == st]
       if (nrow(sub) < 20) next
 
       med <- median(sub$score, na.rm = TRUE)
-      sub[, score_grp := factor(ifelse(score >= med, "High", "Low"), levels = c("Low", "High"))]
-      sub[, median_score := med]
-      sub[, forest_label := ifelse(st == "Tumor", tcga_code, paste0(tcga_code, "_", st))]
-
-      fit <- coxph(Surv(os_time, os_event) ~ score_grp, data = sub)
-      coef_hi <- coef(fit)[["score_grpHigh"]]
-      hr <- exp(coef_hi)
-      ci <- exp(confint(fit)[1, ])
-
-      lr <- survdiff(Surv(os_time, os_event) ~ score_grp, data = sub)
-      p_lr <- 1 - pchisq(lr$chisq, 1)
+      mn <- mean(sub$score, na.rm = TRUE)
+      forest_label_st <- ifelse(st == "Tumor", tcga_code, paste0(tcga_code, "_", st))
+      precog_used_st <- if (st == "Metastatic" && !is.na(precog_label_met)) precog_label_met else precog_label_primary
 
       n_precog_genes <- if (st == "Metastatic" && !is.na(precog_label_met) && is.finite(scr$n_genes_met)) {
         as.integer(scr$n_genes_met)
@@ -684,14 +685,24 @@ for (tcga_code in tcga_types) {
         as.integer(scr$n_genes_primary)
       }
 
-      type_results[[paste(tcga_code, st, sep = "__")]] <- data.table(
-        forest_label = unique(sub$forest_label),
+      # Median split (score >= median -> High)
+      sub_med <- data.table::copy(sub)
+      sub_med[, score_grp := factor(ifelse(score >= med, "High", "Low"), levels = c("Low", "High"))]
+      fit <- coxph(Surv(os_time, os_event) ~ score_grp, data = sub_med)
+      coef_hi <- coef(fit)[["score_grpHigh"]]
+      hr <- exp(coef_hi)
+      ci <- exp(confint(fit)[1, ])
+      lr <- survdiff(Surv(os_time, os_event) ~ score_grp, data = sub_med)
+      p_lr <- 1 - pchisq(lr$chisq, 1)
+
+      type_results_median[[paste(tcga_code, st, sep = "__")]] <- data.table(
+        forest_label = forest_label_st,
         tcga_code = tcga_code,
         stratum = st,
         survival_endpoint = endpoint_lab,
-        precog_label_used = if (st == "Metastatic" && !is.na(precog_label_met)) precog_label_met else precog_label_primary,
-        n_samples = nrow(sub),
-        n_patients = uniqueN(sub$patient),
+        precog_label_used = precog_used_st,
+        n_samples = nrow(sub_med),
+        n_patients = uniqueN(sub_med$patient),
         n_precog_genes = n_precog_genes,
         median_score = med,
         hr = hr,
@@ -700,7 +711,105 @@ for (tcga_code in tcga_types) {
         p_logrank = p_lr
       )
 
-      out_panels[[st]] <- sub
+      # Mean split (score >= mean -> High)
+      sub_mean <- data.table::copy(sub)
+      sub_mean[, score_grp := factor(ifelse(score >= mn, "High", "Low"), levels = c("Low", "High"))]
+      fit_m <- coxph(Surv(os_time, os_event) ~ score_grp, data = sub_mean)
+      coef_hi_m <- coef(fit_m)[["score_grpHigh"]]
+      hr_m <- exp(coef_hi_m)
+      ci_m <- exp(confint(fit_m)[1, ])
+      lr_m <- survdiff(Surv(os_time, os_event) ~ score_grp, data = sub_mean)
+      p_lr_m <- 1 - pchisq(lr_m$chisq, 1)
+
+      type_results_mean[[paste(tcga_code, st, sep = "__")]] <- data.table(
+        forest_label = forest_label_st,
+        tcga_code = tcga_code,
+        stratum = st,
+        survival_endpoint = endpoint_lab,
+        precog_label_used = precog_used_st,
+        n_samples = nrow(sub_mean),
+        n_patients = uniqueN(sub_mean$patient),
+        n_precog_genes = n_precog_genes,
+        mean_score = mn,
+        hr = hr_m,
+        ci_low = ci_m[1],
+        ci_high = ci_m[2],
+        p_logrank = p_lr_m
+      )
+
+      # Max-selected log-rank split (optimal cutpoint; global p from Hothorn–Lausen HL approximation)
+      sub_ms_ok <- FALSE
+      sub_ms <- NULL
+      cp_ms <- NA_real_
+      ms <- tryCatch(
+        maxstat::maxstat.test(
+          survival::Surv(os_time, os_event) ~ score,
+          data = sub,
+          smethod = "LogRank",
+          pmethod = "HL",
+          minprop = 0.1,
+          maxprop = 0.9
+        ),
+        error = function(e) NULL
+      )
+      if (!is.null(ms)) {
+        cp_candidate <- unname(ms$estimate["estimated cutpoint"])
+        if (length(cp_candidate) == 1L && is.finite(cp_candidate)) {
+          sub_ms <- data.table::copy(sub)
+          sub_ms[, score_grp := factor(fifelse(score > cp_candidate, "High", "Low"), levels = c("Low", "High"))]
+          if (uniqueN(sub_ms$score_grp) >= 2L) {
+            fit_ms <- tryCatch(
+              coxph(Surv(os_time, os_event) ~ score_grp, data = sub_ms),
+              error = function(e) NULL
+            )
+            if (!is.null(fit_ms) && "score_grpHigh" %in% names(coef(fit_ms))) {
+              coef_hi_ms <- coef(fit_ms)[["score_grpHigh"]]
+              if (is.finite(coef_hi_ms)) {
+                hr_ms <- exp(coef_hi_ms)
+                ci_ms_x <- exp(confint(fit_ms)[1, ])
+                lr_ms <- survdiff(Surv(os_time, os_event) ~ score_grp, data = sub_ms)
+                p_lr_split <- 1 - pchisq(lr_ms$chisq, 1)
+                cp_ms <- as.numeric(cp_candidate)
+                p_ms <- as.numeric(ms$p.value)
+                type_results_maxstat[[paste(tcga_code, st, sep = "__")]] <- data.table(
+                  forest_label = forest_label_st,
+                  tcga_code = tcga_code,
+                  stratum = st,
+                  survival_endpoint = endpoint_lab,
+                  precog_label_used = precog_used_st,
+                  n_samples = nrow(sub_ms),
+                  n_patients = uniqueN(sub_ms$patient),
+                  n_precog_genes = n_precog_genes,
+                  maxstat_cutpoint = cp_ms,
+                  p_maxstat = p_ms,
+                  p_logrank_at_split = p_lr_split,
+                  hr = hr_ms,
+                  ci_low = ci_ms_x[1],
+                  ci_high = ci_ms_x[2],
+                  p_logrank = p_ms
+                )
+                sub_ms_ok <- TRUE
+              }
+            }
+          }
+        }
+      }
+
+      # Panel: patient-level row; score_grp / median_score = median; score_grp_mean / mean_score = mean; max-stat if fit OK
+      sub_panel <- data.table::copy(sub)
+      sub_panel[, forest_label := forest_label_st]
+      sub_panel[, score_grp := factor(ifelse(score >= med, "High", "Low"), levels = c("Low", "High"))]
+      sub_panel[, median_score := med]
+      sub_panel[, score_grp_mean := factor(ifelse(score >= mn, "High", "Low"), levels = c("Low", "High"))]
+      sub_panel[, mean_score := mn]
+      if (isTRUE(sub_ms_ok)) {
+        sub_panel[, score_grp_maxstat := as.character(sub_ms$score_grp)]
+        sub_panel[, maxstat_cutpoint := cp_ms]
+      } else {
+        sub_panel[, score_grp_maxstat := NA_character_]
+        sub_panel[, maxstat_cutpoint := NA_real_]
+      }
+      out_panels[[st]] <- sub_panel
     }
 
       if (length(out_panels) == 0) NULL else {
@@ -721,23 +830,26 @@ for (tcga_code in tcga_types) {
   if (!is.null(panel_dt)) panel_all[[tcga_code]] <- panel_dt
 }
 
-if (length(panel_all) == 0 || length(type_results) == 0) {
+if (length(panel_all) == 0 || length(type_results_median) == 0 || length(type_results_mean) == 0) {
   stop("No successful TCGA types processed. Check downloads/concordance mapping.")
 }
 
 panel_dt_all <- rbindlist(panel_all, use.names = TRUE, fill = TRUE)
-type_dt <- rbindlist(type_results, use.names = TRUE, fill = TRUE)
-type_dt <- type_dt[order(hr, decreasing = TRUE)]
+type_dt_median <- rbindlist(type_results_median, use.names = TRUE, fill = TRUE)
+type_dt_median <- type_dt_median[order(hr, decreasing = TRUE)]
+type_dt_mean <- rbindlist(type_results_mean, use.names = TRUE, fill = TRUE)
+type_dt_mean <- type_dt_mean[order(hr, decreasing = TRUE)]
 
-# Forest plot
-plot_dt <- type_dt[
-  stratum != "Normal" &
-    is.finite(hr) & !is.na(hr) &
-    is.finite(ci_low) & !is.na(ci_low) &
-    is.finite(ci_high) & !is.na(ci_high)
-]
-plot_dt[, sig := ifelse(is.finite(p_logrank) & !is.na(p_logrank) & p_logrank < 0.05, "Significant", "Not significant")]
-plot_dt$sig <- factor(plot_dt$sig, levels = c("Significant", "Not significant"))
+has_maxstat <- length(type_results_maxstat) > 0L
+if (!has_maxstat) {
+  warning("No max-stat strata produced results; skipping max-stat forest outputs.")
+}
+type_dt_maxstat <- if (has_maxstat) {
+  x <- rbindlist(type_results_maxstat, use.names = TRUE, fill = TRUE)
+  x[order(hr, decreasing = TRUE)]
+} else {
+  NULL
+}
 
 # Point size: Pearson r between PRECOG and TCGA meta-z (same cancer mapping), using
 # unshrunk files when --precog_full / --tcga_full exist (else bundled data).
@@ -795,51 +907,83 @@ calc_precog_tcga_cor <- function(precog_label, tcga_code) {
   calc_precog_tcga_cor_one(precog_ref_b, tcga_ref_b, precog_label, tcga_code)
 }
 
-plot_dt[, precog_tcga_cor := mapply(calc_precog_tcga_cor, precog_label_used, tcga_code)]
-plot_dt[, precog_tcga_cor_abs := abs(precog_tcga_cor)]
-# Impute missing |cor| for sizing only (keeps all strata on plot; rare when gene overlap is low)
-med_cor_abs <- stats::median(plot_dt$precog_tcga_cor_abs, na.rm = TRUE)
-if (!is.finite(med_cor_abs)) med_cor_abs <- 0.5
-plot_dt[, precog_tcga_cor_abs_plot := precog_tcga_cor_abs]
-plot_dt[!is.finite(precog_tcga_cor_abs_plot), precog_tcga_cor_abs_plot := med_cor_abs]
+finalize_forest_plot_dt <- function(type_dt) {
+  plot_dt <- type_dt[
+    stratum != "Normal" &
+      is.finite(hr) & !is.na(hr) &
+      is.finite(ci_low) & !is.na(ci_low) &
+      is.finite(ci_high) & !is.na(ci_high)
+  ]
+  # Median/mean: p_logrank = log-rank at fixed split. Max-stat: p_logrank duplicates p_maxstat (HL global p).
+  plot_dt[, sig := ifelse(is.finite(p_logrank) & !is.na(p_logrank) & p_logrank < 0.05, "Significant", "Not significant")]
+  plot_dt$sig <- factor(plot_dt$sig, levels = c("Significant", "Not significant"))
+  plot_dt[, precog_tcga_cor := mapply(calc_precog_tcga_cor, precog_label_used, tcga_code)]
+  plot_dt[, precog_tcga_cor_abs := abs(precog_tcga_cor)]
+  med_cor_abs <- stats::median(plot_dt$precog_tcga_cor_abs, na.rm = TRUE)
+  if (!is.finite(med_cor_abs)) med_cor_abs <- 0.5
+  plot_dt[, precog_tcga_cor_abs_plot := precog_tcga_cor_abs]
+  plot_dt[!is.finite(precog_tcga_cor_abs_plot), precog_tcga_cor_abs_plot := med_cor_abs]
+  plot_dt[, cor_shape := fifelse(
+    is.finite(precog_tcga_cor) & precog_tcga_cor >= 0,
+    "r_pos",
+    "r_neg"
+  )]
+  plot_dt$cor_shape <- factor(plot_dt$cor_shape, levels = c("r_pos", "r_neg"))
+  plot_dt[, y_ord := stats::reorder(forest_label, hr)]
+  plot_dt[, z_score_cutoff := z_score_cutoff]
+  plot_dt[, reference := reference]
+  plot_dt
+}
 
-# Point outline: hollow for negative or missing PRECOG–TCGA r; filled for r >= 0
-plot_dt[, cor_shape := fifelse(
-  is.finite(precog_tcga_cor) & precog_tcga_cor >= 0,
-  "r_pos",
-  "r_neg"
-)]
-plot_dt$cor_shape <- factor(plot_dt$cor_shape, levels = c("r_pos", "r_neg"))
+plot_dt_median <- finalize_forest_plot_dt(type_dt_median)
+plot_dt_mean <- finalize_forest_plot_dt(type_dt_mean)
+plot_dt_maxstat <- if (has_maxstat) finalize_forest_plot_dt(type_dt_maxstat) else NULL
 
-# Shared y order for forest + patient-count bar (factor so both panels align)
-plot_dt[, y_ord := stats::reorder(forest_label, hr)]
+merge_type_with_plot_extras <- function(type_dt, plot_dt) {
+  x <- data.table::copy(type_dt)
+  x[, included_in_forest_plot := forest_label %in% plot_dt$forest_label]
+  plot_extras <- c(
+    "sig", "precog_tcga_cor", "precog_tcga_cor_abs", "precog_tcga_cor_abs_plot",
+    "cor_shape", "y_ord"
+  )
+  out <- merge(
+    x,
+    plot_dt[, c("forest_label", plot_extras), with = FALSE],
+    by = "forest_label",
+    all.x = TRUE
+  )
+  out[, z_score_cutoff := z_score_cutoff]
+  out[, reference := reference]
+  out
+}
 
-plot_dt[, z_score_cutoff := z_score_cutoff]
-plot_dt[, reference := reference]
-
-type_dt[, included_in_forest_plot := forest_label %in% plot_dt$forest_label]
-plot_extras <- c(
-  "sig", "precog_tcga_cor", "precog_tcga_cor_abs", "precog_tcga_cor_abs_plot",
-  "cor_shape", "y_ord"
-)
-type_dt_export <- merge(
-  type_dt,
-  plot_dt[, c("forest_label", plot_extras), with = FALSE],
-  by = "forest_label",
-  all.x = TRUE
-)
-type_dt_export[, z_score_cutoff := z_score_cutoff]
-type_dt_export[, reference := reference]
+type_dt_export_median <- merge_type_with_plot_extras(type_dt_median, plot_dt_median)
+type_dt_export_mean <- merge_type_with_plot_extras(type_dt_mean, plot_dt_mean)
+type_dt_export_maxstat <- if (has_maxstat) {
+  merge_type_with_plot_extras(type_dt_maxstat, plot_dt_maxstat)
+} else {
+  NULL
+}
 
 panel_out <- file.path(out_dir, "tcga_precog_forest_panel.tsv")
-type_out <- file.path(out_dir, "tcga_precog_forest_results.tsv")
-plot_data_out <- file.path(out_dir, "tcga_precog_forest_plot_data.tsv")
+type_out_median <- file.path(out_dir, "tcga_precog_forest_results.tsv")
+plot_data_out_median <- file.path(out_dir, "tcga_precog_forest_plot_data.tsv")
+type_out_mean <- file.path(out_dir, "tcga_precog_forest_mean_results.tsv")
+plot_data_out_mean <- file.path(out_dir, "tcga_precog_forest_mean_plot_data.tsv")
+type_out_maxstat <- file.path(out_dir, "tcga_precog_forest_maxstat_results.tsv")
+plot_data_out_maxstat <- file.path(out_dir, "tcga_precog_forest_maxstat_plot_data.tsv")
 samples_ann_out <- file.path(out_dir, "tcga_precog_forest_samples_annotated.tsv")
 note_out <- file.path(out_dir, "tcga_outcomes_methods_note.txt")
 
 fwrite(panel_dt_all, panel_out, sep = "\t")
-fwrite(type_dt_export, type_out, sep = "\t")
-fwrite(plot_dt, plot_data_out, sep = "\t")
+fwrite(type_dt_export_median, type_out_median, sep = "\t")
+fwrite(plot_dt_median, plot_data_out_median, sep = "\t")
+fwrite(type_dt_export_mean, type_out_mean, sep = "\t")
+fwrite(plot_dt_mean, plot_data_out_mean, sep = "\t")
+if (has_maxstat) {
+  fwrite(type_dt_export_maxstat, type_out_maxstat, sep = "\t")
+  fwrite(plot_dt_maxstat, plot_data_out_maxstat, sep = "\t")
+}
 
 outcomes_label <- basename(clinical_file)
 panel_enriched <- enrich_panel_samples(panel_dt_all, clin, outcomes_label)
@@ -849,104 +993,139 @@ fwrite(panel_enriched, samples_ann_out, sep = "\t")
 
 write_outcomes_note(note_out, outcomes_label)
 
-cat("\nWrote sample panel (minimal, tertile-compatible):", panel_out, "\n")
-cat("Wrote stratum-level results + forest-plot fields:", type_out, "\n")
-cat("Wrote exact forest figure data:", plot_data_out, "\n")
+cat("\nWrote patient-level panel (median, mean, max-stat group columns):", panel_out, "\n")
+cat("Wrote median-split results + forest fields:", type_out_median, "\n")
+cat("Wrote median-split forest figure data:", plot_data_out_median, "\n")
+cat("Wrote mean-split results + forest fields:", type_out_mean, "\n")
+cat("Wrote mean-split forest figure data:", plot_data_out_mean, "\n")
+if (has_maxstat) {
+  cat("Wrote max-stat results + forest fields:", type_out_maxstat, "\n")
+  cat("Wrote max-stat forest figure data:", plot_data_out_maxstat, "\n")
+}
 cat("Wrote annotated samples (PANCAN + PhenoMapR):", samples_ann_out, "\n")
 cat("Wrote outcomes note (PANCAN OS):", note_out, "\n")
 
-# Point size: |cor| mapped to [0, 1] on the scale; visual point size range still scales with n rows
-cor_lim <- c(0, 1)
-n_forest <- nrow(plot_dt)
-size_rng <- c(
-  max(1.1, 1.35 + 0.02 * n_forest),
-  min(7, 2.05 + 0.14 * n_forest)
-)
-
-# Larger text throughout the figure (axis, legend, y category labels)
-plot_base_size <- 16
-plot_title_size <- 18
-legend_pt <- 4.5
-
-p_forest <- ggplot(plot_dt, aes(y = y_ord, x = hr, color = sig, size = precog_tcga_cor_abs_plot, shape = cor_shape)) +
-  geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.4) +
-  geom_errorbar(aes(xmin = ci_low, xmax = ci_high), height = 0.15, linewidth = 0.6) +
-  geom_point(data = ~ .x[.x$cor_shape == "r_pos", ], stroke = 0) +
-  geom_point(data = ~ .x[.x$cor_shape == "r_neg", ], stroke = 0.85) +
-  scale_x_log10() +
-  scale_shape_manual(
-    values = c(r_pos = 16, r_neg = 1),
-    labels = c(r_pos = "r \u2265 0", r_neg = "r < 0"),
-    name = "PRECOG vs. TCGA\nMeta-z correlation"
-  ) +
-  scale_size_continuous(
-    range = size_rng,
-    limits = cor_lim,
-    breaks = c(0, 0.25, 0.5, 0.75, 1),
-    name = "|cor(PRECOG, TCGA)|"
-  ) +
-  scale_color_manual(
-    values = c("Significant" = "#B2182B", "Not significant" = "#4D4D4D"),
-    name = "Log-rank Survival"
-  ) +
-  labs(
-    x = "Hazard Ratio\n(High vs. Low PhenoMapR score)",
-    y = "TCGA cancer"
-  ) +
-  theme_minimal(base_size = plot_base_size) +
-  guides(
-    color = ggplot2::guide_legend(override.aes = list(size = legend_pt, stroke = 0)),
-    shape = ggplot2::guide_legend(override.aes = list(size = legend_pt)),
-    # Size legend: show |cor| 0–1 as a gradient of point sizes (do not fix size in override.aes)
-    size = ggplot2::guide_legend(override.aes = list(shape = 16))
+build_tcga_forest_multipanel <- function(plot_dt, title, forest_png, color_legend_name = NULL) {
+  legend_color_name <- if (is.null(color_legend_name)) "Log-rank Survival" else color_legend_name
+  pd <- data.table::copy(plot_dt)
+  cor_lim <- c(0, 1)
+  n_forest <- nrow(pd)
+  size_rng <- c(
+    max(1.1, 1.35 + 0.02 * n_forest),
+    min(7, 2.05 + 0.14 * n_forest)
   )
+  plot_base_size <- 16
+  plot_title_size <- 18
+  legend_pt <- 4.5
 
-p_counts <- ggplot(plot_dt, aes(y = y_ord, x = n_patients)) +
-  geom_col(width = 0.72, fill = "#5C5C5C", alpha = 0.88) +
-  labs(x = "# of TCGA\nPatients", y = NULL) +
-  theme_minimal(base_size = plot_base_size) +
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    panel.grid.major.y = element_blank()
-  )
+  if (!"n_precog_genes" %in% names(pd)) {
+    pd[, n_precog_genes := NA_integer_]
+  }
+  pd[, n_precog_genes_plot := ifelse(is.finite(n_precog_genes), as.numeric(n_precog_genes), NA_real_)]
 
-if (!"n_precog_genes" %in% names(plot_dt)) {
-  plot_dt[, n_precog_genes := NA_integer_]
-}
-plot_dt[, n_precog_genes_plot := ifelse(is.finite(n_precog_genes), as.numeric(n_precog_genes), NA_real_)]
-
-p_genes <- ggplot(plot_dt, aes(y = y_ord, x = n_precog_genes_plot)) +
-  geom_col(width = 0.72, fill = "#4A6FA5", alpha = 0.88) +
-  scale_x_continuous(
-    labels = function(x) tolower(scales::label_number(scale_cut = scales::cut_short_scale())(x))
-  ) +
-  labs(x = "# of genes in\nPRECOG signature", y = NULL) +
-  theme_minimal(base_size = plot_base_size) +
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    panel.grid.major.y = element_blank()
-  )
-
-p <- p_forest + p_counts + p_genes +
-  plot_layout(widths = c(3.4, 1, 1), guides = "collect") +
-  plot_annotation(
-    title = "TCGA survival by median PhenoMapR PRECOG score",
-    subtitle = "Outcomes: PANCAN clinical (OS from vital_status, days_to_death / days_to_last_followup)",
-    theme = theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, size = plot_title_size),
-      plot.subtitle = ggplot2::element_text(hjust = 0.5, size = plot_base_size - 2)
+  p_forest <- ggplot(pd, aes(y = y_ord, x = hr, color = sig, size = precog_tcga_cor_abs_plot, shape = cor_shape)) +
+    geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.4) +
+    geom_errorbar(aes(xmin = ci_low, xmax = ci_high), height = 0.15, linewidth = 0.6) +
+    geom_point(data = ~ .x[.x$cor_shape == "r_pos", ], stroke = 0) +
+    geom_point(data = ~ .x[.x$cor_shape == "r_neg", ], stroke = 0.85) +
+    scale_x_log10() +
+    scale_shape_manual(
+      values = c(r_pos = 16, r_neg = 1),
+      labels = c(r_pos = "r \u2265 0", r_neg = "r < 0"),
+      name = "PRECOG vs. TCGA\nMeta-z correlation"
+    ) +
+    scale_size_continuous(
+      range = size_rng,
+      limits = cor_lim,
+      breaks = c(0, 0.25, 0.5, 0.75, 1),
+      name = "|cor(PRECOG, TCGA)|"
+    ) +
+    scale_color_manual(
+      values = c("Significant" = "#B2182B", "Not significant" = "#4D4D4D"),
+      name = legend_color_name
+    ) +
+    labs(
+      x = "Hazard Ratio\n(High vs. Low PhenoMapR score)",
+      y = "TCGA cancer"
+    ) +
+    theme_minimal(base_size = plot_base_size) +
+    guides(
+      color = ggplot2::guide_legend(override.aes = list(size = legend_pt, stroke = 0)),
+      shape = ggplot2::guide_legend(override.aes = list(size = legend_pt)),
+      size = ggplot2::guide_legend(override.aes = list(shape = 16))
     )
+
+  p_counts <- ggplot(pd, aes(y = y_ord, x = n_patients)) +
+    geom_col(width = 0.72, fill = "#5C5C5C", alpha = 0.88) +
+    labs(x = "# of TCGA\nPatients", y = NULL) +
+    theme_minimal(base_size = plot_base_size) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      panel.grid.major.y = element_blank()
+    )
+
+  p_genes <- ggplot(pd, aes(y = y_ord, x = n_precog_genes_plot)) +
+    geom_col(width = 0.72, fill = "#4A6FA5", alpha = 0.88) +
+    scale_x_continuous(
+      labels = function(x) tolower(scales::label_number(scale_cut = scales::cut_short_scale())(x))
+    ) +
+    labs(x = "# of genes in\nPRECOG signature", y = NULL) +
+    theme_minimal(base_size = plot_base_size) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      panel.grid.major.y = element_blank()
+    )
+
+  p <- p_forest + p_counts + p_genes +
+    plot_layout(widths = c(3.4, 1, 1), guides = "collect") +
+    plot_annotation(
+      title = title,
+      theme = theme(
+        plot.title = ggplot2::element_text(hjust = 0.5, size = plot_title_size)
+      )
+    )
+
+  ggsave(forest_png, p, width = 12.5, height = max(4.8, 0.24 * n_forest + 2.2), dpi = 200)
+  cat("Wrote forest plot:", forest_png, "\n")
+  invisible(NULL)
+}
+
+build_tcga_forest_multipanel(
+  plot_dt_median,
+  "TCGA survival by median PhenoMapR PRECOG score",
+  file.path(out_dir, "tcga_precog_forest.png")
+)
+build_tcga_forest_multipanel(
+  plot_dt_mean,
+  "TCGA survival by mean-split PhenoMapR PRECOG score",
+  file.path(out_dir, "tcga_precog_forest_mean.png")
+)
+if (has_maxstat) {
+  build_tcga_forest_multipanel(
+    plot_dt_maxstat,
+    "TCGA survival by max-stat optimal PhenoMapR PRECOG split",
+    file.path(out_dir, "tcga_precog_forest_maxstat.png"),
+    color_legend_name = "Max-selected log-rank\n(HL global p)"
   )
+}
 
-forest_png <- file.path(out_dir, "tcga_precog_forest.png")
-ggsave(forest_png, p, width = 12.5, height = max(4.8, 0.24 * n_forest + 2.2), dpi = 200)
-cat("Wrote forest plot:", forest_png, "\n")
-
-cat("\nTop results (sorted by HR):\n")
-print(type_dt[, .(
+cat("\nMedian split — top results (sorted by HR):\n")
+print(type_dt_median[, .(
   forest_label, tcga_code, stratum, survival_endpoint, precog_label_used,
-  n_samples, n_patients, n_precog_genes, hr, ci_low, ci_high, p_logrank
+  n_samples, n_patients, n_precog_genes, median_score, hr, ci_low, ci_high, p_logrank
 )])
-
+cat("\nMean split — top results (sorted by HR):\n")
+print(type_dt_mean[, .(
+  forest_label, tcga_code, stratum, survival_endpoint, precog_label_used,
+  n_samples, n_patients, n_precog_genes, mean_score, hr, ci_low, ci_high, p_logrank
+)])
+if (has_maxstat) {
+  cat("\nMax-stat split — top results (sorted by HR):\n")
+  print(type_dt_maxstat[, .(
+    forest_label, tcga_code, stratum, survival_endpoint, precog_label_used,
+    n_samples, n_patients, n_precog_genes, maxstat_cutpoint, p_maxstat, p_logrank_at_split,
+    hr, ci_low, ci_high
+  )])
+}

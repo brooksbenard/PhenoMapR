@@ -239,10 +239,6 @@ p <- ggplot(res_df, aes(y = reorder(tcga_code, hr), x = hr)) +
   scale_x_log10() +
   labs(
     title = "TCGA survival by median PhenoMapR PRECOG score",
-    subtitle = paste0(
-      "Outcomes: PANCAN clinical (OS; vital_status, days_to_death / days_to_last_followup). ",
-      "Stratified by median score; log-rank p-values. z_score_cutoff = ", z_score_cutoff
-    ),
     x = "Hazard ratio (High vs Low; log scale)",
     y = "TCGA cancer type"
   ) +
