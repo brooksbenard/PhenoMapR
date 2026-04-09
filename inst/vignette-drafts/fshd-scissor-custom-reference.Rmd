@@ -448,7 +448,7 @@ plot_data_sc <- data.frame(
     high     = "#B2182B",
     midpoint = 0
   ) +
-  labs(color = "PhenoMapR\nz-score") +
+  labs(color = NULL) +
   theme_void() +
     ggtitle("PhenoMapR Score Distribution") 
 
@@ -547,6 +547,18 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
   seu$cell_type <- ann_sub$cell_type[key]
   seu$coarse_cell_type <- ann_sub$coarse_cell_type[key]
 
+  # Consistent VSMC abbreviation (match CyteTypeR rows that already use "VSMC")
+  normalize_fshd_vsmc_celltype <- function(x) {
+    x <- as.character(x)
+    gsub("\\bvascular smooth muscle cell\\b", "VSMC", x, ignore.case = TRUE)
+  }
+  seu$cell_type <- normalize_fshd_vsmc_celltype(seu$cell_type)
+  seu$coarse_cell_type <- ifelse(
+    grepl("^vascular\\s+smooth\\s+muscle\\s+cells?$", seu$coarse_cell_type, ignore.case = TRUE),
+    "VSMC",
+    as.character(seu$coarse_cell_type)
+  )
+
   # Basic sanity check
   if (all(is.na(seu$cell_type))) {
     stop("CyteTypeR mapping produced all-NA cell_type; check cluster_id alignment.")
@@ -574,8 +586,8 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
           y = "umap2",
           size = 1,
           color = "coarse_cell_type",
-                    palette = c("Vascular Smooth Muscle Cells" = "#B4849F", 
-                      "Stromal Cells" = "#EE8866", 
+                    palette = c("VSMC" = "#B4849F",
+                      "Stromal Cells" = "#EE8866",
                       "Platelets" = "#99C399"),
           legend = "right"
 ) + guides(color = guide_legend(override.aes = list(size = 2))) +
@@ -588,7 +600,7 @@ This dataset does not provide cell type labels. Here we use pre-computed **CyteT
     geom_boxplot(outlier.alpha = 0.2) +
     scale_fill_manual(
       values = c(
-        "Vascular Smooth Muscle Cells" = "#B4849F",
+        "VSMC" = "#B4849F",
         "Stromal Cells" = "#EE8866",
         "Platelets" = "#99C399"
       ),

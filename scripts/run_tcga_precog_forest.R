@@ -7,8 +7,10 @@
 # - Test survival with Cox PH + log-rank, then compile results into a forest plot
 #
 # This script expects TCGA inputs to already be present locally:
-# - Liu et al. outcomes (Cell 2018): vignettes/Liu_Cell_2018_TCGA_Outcomes.xlsx
-#   Sheet "TCGA-CDR": OS/OS.time for most cancers; PFI/PFI.time for DLBC, TGCT, READ.
+# - PANCAN clinical follow-up: data/tcga/clinical_PANCAN_patient_with_followup.tsv
+#   OS: vital_status (Dead/Alive), days_to_death, days_to_last_followup.
+#   Progression columns are empty for DLBC, TGCT, READ in this snapshot — OS only (see
+#   results/tcga_outcomes_methods_note.txt).
 # - Expression TPM files: data/tcga/TCGA_<TCGA_CODE>_tpm.fullIDs.remapped.tsv.gz
 #
 # It does NOT download from Google Drive (downloads can be environment-dependent).
@@ -23,32 +25,30 @@ suppressPackageStartupMessages({
 z_score_cutoff <- 2
 reference <- "precog"
 
-liu_outcomes_xlsx <- "vignettes/Liu_Cell_2018_TCGA_Outcomes.xlsx"
 tpm_dir <- "data/tcga"
+clinical_file <- file.path(tpm_dir, "clinical_PANCAN_patient_with_followup.tsv")
 out_dir <- "results"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-if (!file.exists(liu_outcomes_xlsx)) {
-  stop("Missing Liu et al. outcomes file: ", liu_outcomes_xlsx)
+if (!file.exists(clinical_file)) {
+  stop("Missing PANCAN clinical file: ", clinical_file)
 }
 
-# DLBC, TGCT, READ: use PFI time/event; all other TCGA types: OS time/event (Liu Cell 2018 TCGA-CDR).
-USE_PFI_CANCERS <- c("DLBC", "TGCT", "READ")
-
-load_liu_cdr <- function(path) {
-  if (!requireNamespace("readxl", quietly = TRUE)) {
-    stop("Install readxl to read Liu outcomes: install.packages(\"readxl\")")
-  }
-  df <- readxl::read_excel(path, sheet = "TCGA-CDR")
-  data.table::as.data.table(df)
+cat("Loading PANCAN clinical:", clinical_file, "\n")
+clin <- fread(clinical_file, showProgress = FALSE)
+req <- c("bcr_patient_barcode", "acronym", "vital_status", "days_to_death", "days_to_last_followup")
+if (!all(req %in% names(clin))) {
+  stop("PANCAN clinical TSV must include: ", paste(req, collapse = ", "))
 }
 
-cat("Loading Liu outcomes:", liu_outcomes_xlsx, "\n")
-liu_dt <- load_liu_cdr(liu_outcomes_xlsx)
+na_pancan_num <- function(x) {
+  x <- trimws(as.character(x))
+  x[x %in% c("", "[Not Available]", "[Not Applicable]", "NA", "Unknown")] <- NA_character_
+  suppressWarnings(as.numeric(x))
+}
 
-build_survival_liu <- function(liu_sub) {
-  # liu_sub: rows for one TCGA type; columns from TCGA-CDR sheet
-  if (nrow(liu_sub) == 0L) {
+build_survival_pancan <- function(clin_sub) {
+  if (nrow(clin_sub) == 0L) {
     return(data.frame(
       patient = character(),
       os_time = numeric(),
@@ -56,18 +56,13 @@ build_survival_liu <- function(liu_sub) {
       stringsAsFactors = FALSE
     ))
   }
-  tcga_code <- unique(as.character(liu_sub$type))
-  if (length(tcga_code) != 1L) stop("Expected exactly one cancer type in liu_sub.")
-  use_pfi <- tcga_code %in% USE_PFI_CANCERS
-  if (use_pfi) {
-    tt <- suppressWarnings(as.numeric(liu_sub$PFI.time))
-    ev <- suppressWarnings(as.integer(round(liu_sub$PFI)))
-  } else {
-    tt <- suppressWarnings(as.numeric(liu_sub$OS.time))
-    ev <- suppressWarnings(as.integer(round(liu_sub$OS)))
-  }
+  vs <- tolower(trimws(as.character(clin_sub$vital_status)))
+  dtd <- na_pancan_num(clin_sub$days_to_death)
+  dtlfu <- na_pancan_num(clin_sub$days_to_last_followup)
+  tt <- ifelse(vs == "dead", dtd, ifelse(vs == "alive", dtlfu, NA_real_))
+  ev <- ifelse(vs == "dead", 1L, ifelse(vs == "alive", 0L, NA_integer_))
   out <- data.frame(
-    patient = liu_sub$bcr_patient_barcode,
+    patient = as.character(clin_sub$bcr_patient_barcode),
     os_time = tt,
     os_event = ev,
     stringsAsFactors = FALSE
@@ -176,9 +171,9 @@ for (tcga_code in sort(tcga_codes)) {
   tpm_file <- tpm_files[extract_tcga_code(tpm_files) == tcga_code][1]
   cat("\n---", tcga_code, "->", precog_label, "---\n")
 
-  liu_sub <- liu_dt[type == tcga_code]
-  os_df <- build_survival_liu(liu_sub)
-  endpoint_lab <- if (tcga_code %in% USE_PFI_CANCERS) "PFI" else "OS"
+  clin_sub <- clin[acronym == tcga_code]
+  os_df <- build_survival_pancan(clin_sub)
+  endpoint_lab <- "OS"
   if (nrow(os_df) < 20) {
     cat("Skipping ", tcga_code, ": too few ", endpoint_lab, " patients (n=", nrow(os_df), ").\n", sep = "")
     next
@@ -234,7 +229,7 @@ fwrite(res_df, res_tsv, sep = "\t")
 fwrite(res_df, plot_data_tsv, sep = "\t")
 cat("\nWrote results:", res_tsv, "\n")
 cat("Wrote forest plot data (same rows as simple figure):", plot_data_tsv, "\n")
-cat("For per-sample Liu + PANCAN + scores, run scripts/run_tcga_precog_forest_incremental.R\n")
+cat("For per-sample PANCAN + scores + full forest, run scripts/run_tcga_precog_forest_incremental.R\n")
 
 # Forest plot (log scale on HR)
 p <- ggplot(res_df, aes(y = reorder(tcga_code, hr), x = hr)) +
@@ -245,7 +240,7 @@ p <- ggplot(res_df, aes(y = reorder(tcga_code, hr), x = hr)) +
   labs(
     title = "TCGA survival by median PhenoMapR PRECOG score",
     subtitle = paste0(
-      "Outcomes: Liu Cell 2018 TCGA-CDR (OS/OS.time; PFI/PFI.time for DLBC, TGCT, READ). ",
+      "Outcomes: PANCAN clinical (OS; vital_status, days_to_death / days_to_last_followup). ",
       "Stratified by median score; log-rank p-values. z_score_cutoff = ", z_score_cutoff
     ),
     x = "Hazard ratio (High vs Low; log scale)",

@@ -1,0 +1,20 @@
+TCGA PhenoMapR forest analysis — outcomes sources and hazard ratios
+=================================================================
+
+Primary survival endpoint for Cox / log-rank: overall survival (OS) from PANCAN clinical follow-up.
+  File (basename): clinical_PANCAN_patient_with_followup.tsv
+
+Definition (same as script):
+  - vital_status Dead: time = days_to_death, event = 1.
+  - vital_status Alive: time = days_to_last_followup, event = 0 (censored).
+  - Other vital_status values are excluded. OS is used for all TCGA types.
+
+DLBC, TGCT, READ:
+  This PANCAN snapshot has days_to_patient_progression_free / patient_progression_status
+  effectively empty for these cohorts, so progression-free endpoints cannot be derived from
+  this file. The forest plot uses OS only for every cancer type.
+
+The file tcga_precog_forest_samples_annotated.tsv includes:
+  - PhenoMapR score columns (score, precog_label_used, stratum, ...)
+  - PANCAN columns prefixed with pancan_ plus pancan_os_time / pancan_os_event (aligned with the fit).
+
