@@ -844,19 +844,19 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] googledrive_2.1.2  dplyr_1.2.0        ggplot2_4.0.2      Seurat_5.4.0      
-    ## [5] SeuratObject_5.3.0 sp_2.2-1           PhenoMapR_0.1.0   
+    ## [1] googledrive_2.1.2  dplyr_1.2.1        ggplot2_4.0.2      Seurat_5.4.0      
+    ## [5] SeuratObject_5.4.0 sp_2.2-1           PhenoMapR_0.1.0   
     ## 
     ## loaded via a namespace (and not attached):
-    ##   [1] RColorBrewer_1.1-3     jsonlite_2.0.0         magrittr_2.0.4        
+    ##   [1] RColorBrewer_1.1-3     jsonlite_2.0.0         magrittr_2.0.5        
     ##   [4] spatstat.utils_3.2-2   farver_2.1.2           rmarkdown_2.31        
-    ##   [7] fs_2.0.1               ragg_1.5.2             vctrs_0.7.2           
+    ##   [7] fs_2.0.1               ragg_1.5.2             vctrs_0.7.3           
     ##  [10] ROCR_1.0-12            spatstat.explore_3.8-0 paletteer_1.7.0       
     ##  [13] htmltools_0.5.9        curl_7.0.0             sass_0.4.10           
     ##  [16] sctransform_0.4.3      parallelly_1.46.1      KernSmooth_2.23-26    
     ##  [19] bslib_0.10.0           htmlwidgets_1.6.4      desc_1.4.3            
     ##  [22] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         
-    ##  [25] zoo_1.8-15             cachem_1.1.0           igraph_2.2.2          
+    ##  [25] zoo_1.8-15             cachem_1.1.0           igraph_2.2.3          
     ##  [28] mime_0.13              lifecycle_1.0.5        pkgconfig_2.0.3       
     ##  [31] Matrix_1.7-4           R6_2.6.1               fastmap_1.2.0         
     ##  [34] fitdistrplus_1.2-6     future_1.70.0          shiny_1.13.0          
@@ -881,13 +881,13 @@ sessionInfo()
     ##  [91] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            
     ##  [94] gridExtra_2.3          scattermore_1.2        xfun_0.57             
     ##  [97] statmod_1.5.1          matrixStats_1.5.0      pheatmap_1.0.13       
-    ## [100] stringi_1.8.7          lazyeval_0.2.2         yaml_2.3.12           
+    ## [100] stringi_1.8.7          lazyeval_0.2.3         yaml_2.3.12           
     ## [103] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          
-    ## [106] cli_3.6.5              uwot_0.2.4             xtable_1.8-8          
-    ## [109] reticulate_1.45.0      systemfonts_1.3.2      jquerylib_0.1.4       
+    ## [106] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          
+    ## [109] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       
     ## [112] Rcpp_1.1.1             globals_0.19.1         spatstat.random_3.4-5 
     ## [115] png_0.1-9              spatstat.univar_3.1-7  parallel_4.5.3        
     ## [118] pkgdown_2.2.0          presto_1.0.0           dotCall64_1.2         
     ## [121] listenv_0.10.1         viridisLite_0.4.3      scales_1.4.0          
-    ## [124] ggridges_0.5.7         purrr_1.2.1            rlang_1.1.7           
+    ## [124] ggridges_0.5.7         purrr_1.2.2            rlang_1.2.0           
     ## [127] cowplot_1.2.0

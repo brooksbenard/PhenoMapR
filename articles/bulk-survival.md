@@ -337,7 +337,7 @@ sessionInfo()
     ## 
     ## loaded via a namespace (and not attached):
     ##  [1] gtable_0.3.6       xfun_0.57          bslib_0.10.0       htmlwidgets_1.6.4 
-    ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.2       
+    ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
     ##  [9] tools_4.5.3        generics_0.1.4     curl_7.0.0         tibble_3.3.1      
     ## [13] pkgconfig_2.0.3    Matrix_1.7-4       RColorBrewer_1.1-3 S7_0.2.1          
     ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.5.3    
@@ -345,12 +345,12 @@ sessionInfo()
     ## [25] htmltools_0.5.9    sass_0.4.10        yaml_2.3.12        Formula_1.2-5     
     ## [29] pillar_1.11.1      pkgdown_2.2.0      car_3.1-5          jquerylib_0.1.4   
     ## [33] tidyr_1.3.2        cachem_1.1.0       abind_1.4-8        commonmark_2.0.0  
-    ## [37] tidyselect_1.2.1   digest_0.6.39      stringi_1.8.7      dplyr_1.2.0       
-    ## [41] purrr_1.2.1        labeling_0.4.3     splines_4.5.3      fastmap_1.2.0     
-    ## [45] grid_4.5.3         cli_3.6.5          magrittr_2.0.4     broom_1.0.12      
-    ## [49] withr_3.0.2        scales_1.4.0       backports_1.5.0    googledrive_2.1.2 
+    ## [37] tidyselect_1.2.1   digest_0.6.39      stringi_1.8.7      dplyr_1.2.1       
+    ## [41] purrr_1.2.2        labeling_0.4.3     splines_4.5.3      fastmap_1.2.0     
+    ## [45] grid_4.5.3         cli_3.6.6          magrittr_2.0.5     broom_1.0.12      
+    ## [49] withr_3.0.2        scales_1.4.0       backports_1.5.1    googledrive_2.1.2 
     ## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
     ## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
-    ## [61] knitr_1.51         markdown_2.0       rlang_1.1.7        gridtext_0.1.6    
+    ## [61] knitr_1.51         markdown_2.0       rlang_1.2.0        gridtext_0.1.6    
     ## [65] Rcpp_1.1.1         glue_1.8.0         xml2_1.5.2         jsonlite_2.0.0    
     ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.1
