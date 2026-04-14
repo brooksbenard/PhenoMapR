@@ -14,6 +14,8 @@
 # - Expression TPM files: data/tcga/TCGA_<TCGA_CODE>_tpm.fullIDs.remapped.tsv.gz
 #
 # It does NOT download from Google Drive (downloads can be environment-dependent).
+# For TCGA-CDR outcomes (OS, DSS, DFI, PFI from TCGA-CDR-SupplementalTableS1.xlsx) use
+# scripts/run_tcga_precog_forest_incremental.R instead.
 
 suppressPackageStartupMessages({
   library(data.table)
