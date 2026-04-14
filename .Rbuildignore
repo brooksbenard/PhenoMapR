@@ -12,3 +12,7 @@
 ^pkgdown$
 ^CITATION\.cff$
 ^data/tcga$
+^inst/figures$
+^man/figures$
+^inst/extdata$
+^inst/vignette-drafts$
