@@ -50,3 +50,6 @@ figure/
 ..Rcheck/
 PhenoMapR.Rcheck/
 inst/figures/~$*
+
+# Draft vignettes (not maintained in this repository; keep local only if needed)
+inst/vignette-drafts/
