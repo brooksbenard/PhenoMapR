@@ -34,6 +34,7 @@ suppressPackageStartupMessages({
   library(Seurat)
   library(dplyr)
   library(ggplot2)
+  library(ggpubr)
 })
 
 sc_rds_path <- file.path(Sys.getenv("HOME"), "Downloads", "adsn_seuV5.rds")
@@ -317,6 +318,16 @@ plot_reference_signature(
 seu <- readRDS(sc_rds_path)
 if (!inherits(seu, "Seurat")) stop("Expected a Seurat object in adsn_seuV5.rds")
 
+seu@meta.data <- seu@meta.data %>%
+  mutate(cellType = recode(cellType,
+    "oligo"  = "Oligodendrocyte",
+    "astro"  = "Astrocyte",
+    "OPC"    = "Oligodendrocyte Precursor Cell",
+    "neuron" = "Neuron",
+    "endo"   = "Endothelial",
+    "mg"     = "Microglia"
+  ))
+
 assay_use <- Seurat::DefaultAssay(seu)
 message("Using assay: ", assay_use)
 
@@ -408,7 +419,8 @@ if (!"umap" %in% names(seu@reductions)) {
       mid = "#F7F7F7",
       high = "#B2182B",
       midpoint = 0,
-      limits = c(lim_lo, lim_hi),
+      # limits = c(lim_lo, lim_hi),
+      trans = scales::pseudo_log_trans(sigma = 0.2),
       oob = scales::squish
     ) +
     ggtitle("Alzheimer's dataset: PhenoMapR score (z) on UMAP") +
@@ -423,6 +435,47 @@ if (!"umap" %in% names(seu@reductions)) {
     print(p_score)
   }
 }
+```
+
+```{r, fig.height=2, fig.width=5.2}
+um$Source <- seu@meta.data$disease_group
+
+pal <- c(Ctrl = "#56884A", AD = "#6B4886")
+
+p_source <- ggscatter(um, 
+          x = "UMAP_1", 
+          y = "UMAP_2",
+          size = 1,
+          color = "Source",
+          palette = pal,
+          legend = "right"
+) + guides(color = guide_legend(override.aes = list(size = 2))) +
+    labs(color = "Sample\nType") +
+  theme_void() +
+    ggtitle("Sample Type Distribution") + 
+    theme(plot.title = element_text(hjust = 0.5))
+
+p_score <- ggscatter(um, 
+          x = "UMAP_1", 
+          y = "UMAP_2",
+          size = 1,
+          color = "score_z",
+          palette = pal,
+          legend = "right"
+) +
+  guides(color = guide_colorbar(override.aes = list(size = 2))) +
+  scale_color_gradient2(
+    low      = "#2166AC",
+    mid      = "#F7F7F7",
+    high     = "#B2182B",
+    midpoint = 0,
+    trans = scales::pseudo_log_trans(sigma = 0.2)
+  ) +
+  labs(color = NULL) +
+  theme_void() +
+    ggtitle("PhenoMapR Score Distribution") 
+
+print(p_source + p_score + patchwork::plot_layout(widths = c(1, 1)))
 ```
 
 ## Inspect score distributions
@@ -498,6 +551,69 @@ ggplot(
   coord_cartesian(clip = "off")
 ```
 
+```{r, fig.width=5, fig.height=6}
+cell_types <- as.data.frame(seu@reductions$umap@cell.embeddings[, 1:2, drop = FALSE])
+cell_types$cellType <- seu@meta.data$cellType 
+
+cell_types <- cell_types %>%
+  mutate(cellType = recode(cellType,
+    "Oligodendrocyte Precursor Cell" = "Oligodendrocyte\nPrecursor Cell"
+  ))
+
+# edit cell colors to be more aligned
+pal_cells[1]="#547F44"
+pal_cells[2]="#4477AA"
+pal_cells[7]="#99C399"
+names(pal_cells)[7]="Oligodendrocyte\nPrecursor Cell"
+
+ p1 <- ggscatter(cell_types, 
+          x = "UMAP_1", 
+          y = "UMAP_2",
+          size = 1,
+          color = "cellType",
+          palette = pal_cells,
+          legend = "right"
+) + guides(color = guide_legend(override.aes = list(size = 2))) +
+    labs(color = "Cell\nType") +
+  theme_void() +
+    # ggtitle("Sample Type Distribution") + 
+    theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(plot_df,
+               aes(x = cellType, y = scale(weighted_sum_score_ad_status_z), fill = cellType, color = disease_group)) +
+    geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.25, 
+                 outlier.fill = NULL, 
+                 outlier.color = NULL, outlier.shape = 21) +
+    scale_fill_manual(
+      values = pal_cells,
+      name = "Cell Type"
+    ) +
+    ggpubr::stat_compare_means(
+    aes(group = .data$disease_group),
+    method = "t.test",
+    label = "p.signif", show.legend = F
+  ) +
+  scale_color_manual(values = c("Ctrl" = "lightgrey", "AD" = "black"), name = "Source") +
+    theme_pubr(base_size = 10) +
+theme(
+  axis.text.x  = element_blank(),
+  axis.ticks.x = element_blank(),
+    axis.line.x = element_blank(),
+  legend.position = "right",
+  strip.text = element_text(size = 12)
+) +
+guides(
+  fill  = "none",   # removes fill legend
+  color = guide_legend()  # keeps color legend
+) +
+    labs(x = NULL, y = "Scaled PhenoMapR score", title = "Score Distribution by Cell Type and Source") +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+      print(p2 / p1 + patchwork::plot_layout(widths = c(1, 1), guides = "collect"))
+```
+
+
+
 ## Define phenotype tails and detect marker genes
 
 ```{r}
@@ -514,6 +630,18 @@ table(meta[[group_col]], useNA = "ifany")
 
 ```{r}
 expr_counts <- Seurat::GetAssayData(seu, assay = assay_use, layer = "counts")
+
+meta <- meta %>%
+  mutate(
+    cellType = case_when(
+      cellType == "Oligodendrocyte Precursor Cell" ~ "OPC",
+      TRUE ~ cellType
+    )
+  )
+
+# edit cell colors to be more aligned
+pal_cells[7]="#99C399"
+names(pal_cells)[7]="OPC"
 
 group_df <- data.frame(
   cell_id = meta$Cell,
@@ -598,7 +726,7 @@ This section mirrors the validation idea used in Scissor’s Alzheimer’s analy
 - Requires **`GEOquery`** and network access.
 - Runs only when this draft is running with local inputs available (`draft_data_ok`) and `ad_reference` exists.
 
-```{r alz-validation-geo, fig.width=11, fig.height=4, message=TRUE, warning=TRUE}
+```{r alz-validation-geo, fig.width=7.5, fig.height=3.5, message=TRUE, warning=TRUE}
 validation_plot_df <- NULL
 validation_tests <- list()
 
@@ -610,11 +738,11 @@ if (!exists("draft_data_ok") || !isTRUE(draft_data_ok) || !exists("ad_reference"
   score_col_bulk <- paste0("weighted_sum_score_", colnames(ad_reference)[1])
   # Validation palette (similar to Scissor Alzheimer figure): light yellow -> orange -> red
   pal_val <- c(
-    Control = "#FFF7BC",
-    Incipient = "#FEC44F",
-    Moderate = "#FB6A4A",
-    Severe = "#CB181D",
-    AD = "#CB181D"
+    Control = "#56884A",
+    Incipient = "#e7d4e8",
+    Moderate = "#c2a5cf",
+    Severe = "#6B4886",
+    AD = "#6B4886"
   )
 
   collapse_to_symbol <- function(eset) {
@@ -823,82 +951,51 @@ if (!exists("draft_data_ok") || !isTRUE(draft_data_ok) || !exists("ad_reference"
       stop("Please install ggpubr to annotate validation p-values: install.packages('ggpubr')")
     }
 
-    df_109 <- validation_plot_df[validation_plot_df$cohort == "GSE109887", , drop = FALSE]
-    df_281 <- validation_plot_df[validation_plot_df$cohort == "GSE28146", , drop = FALSE]
+    validation_plot_df$cohort <- factor(
+      validation_plot_df$cohort,
+      levels = c("GSE109887", "GSE28146")
+    )
+    validation_plot_df$group <- factor(
+      as.character(validation_plot_df$group),
+      levels = c("Control", "AD", "Incipient", "Moderate", "Severe")
+    )
 
-    p_109 <- NULL
-    if (nrow(df_109) > 0) {
-      df_109$group <- factor(as.character(df_109$group), levels = c("Control", "AD"))
-      p_109 <- ggplot(df_109, aes(x = group, y = score_scaled, fill = group)) +
-        geom_violin(trim = FALSE, alpha = 0.35, color = NA) +
-        geom_boxplot(width = 0.18, outlier.alpha = 0.0, alpha = 0.65) +
-        geom_jitter(width = 0.08, height = 0, size = 0.9, alpha = 0.85) +
-        ggpubr::stat_compare_means(
-          aes(group = group),
-          method = "wilcox.test",
-          comparisons = list(c("Control", "AD")),
-          label = "p.format",
-          label.y.npc = "top"
-        ) +
-        scale_fill_manual(values = pal_val[c("Control", "AD")], drop = FALSE) +
-        labs(
-          title = "GSE109887",
-          x = NULL,
-          y = "Scaled PhenoMap score (within cohort)"
-        ) +
-        theme_bw() +
-        theme(legend.position = "none")
-    }
+    p_val <- ggplot(validation_plot_df, aes(x = group, y = score_scaled, fill = group)) +
+      geom_violin(trim = FALSE, alpha = 0.35, color = NA) +
+      geom_boxplot(width = 0.18, outlier.alpha = 0.0, alpha = 0.65) +
+      geom_jitter(width = 0.08, height = 0, size = 0.9, alpha = 0.85) +
+      facet_wrap(~cohort, scales = "free_x", nrow = 1L) +
+      ggpubr::stat_compare_means(
+        aes(group = validation_plot_df$group),
+        method = "wilcox.test",
+        # ref.group = "Control",
+        comparisons = list(c("Control", "AD")),
+        label = "p.signif",
+        label.y.npc = "top",
+        vjust = 0.5
+      ) +
+            ggpubr::stat_compare_means(
+        aes(group = validation_plot_df$group),
+        method = "wilcox.test",
+        # ref.group = "Control",
+        comparisons = list(c("Control", "Incipient"), c("Control", "Moderate", "Severe"), c("Control", "Severe")),
+        label = "p.signif",
+        label.y.npc = "top",
+        vjust = 0.5
+      ) +
+      scale_fill_manual(
+        values = pal_val[c("Control", "AD", "Incipient", "Moderate", "Severe")],
+        drop = FALSE
+      ) +
+      labs(
+        title = "Independent GEO validation",
+        x = NULL,
+        y = "Scaled PhenoMap score (within cohort)"
+      ) +
+      theme_bw() +
+      theme(legend.position = "none")
 
-    p_281 <- NULL
-    if (nrow(df_281) > 0) {
-      df_281$group <- factor(
-        as.character(df_281$group),
-        levels = c("Control", "Incipient", "Moderate", "Severe"),
-        ordered = TRUE
-      )
-      comps <- list(
-        c("Control", "Incipient"),
-        c("Control", "Moderate"),
-        c("Control", "Severe")
-      )
-      p_281 <- ggplot(df_281, aes(x = group, y = score_scaled, fill = group)) +
-        geom_violin(trim = FALSE, alpha = 0.35, color = NA) +
-        geom_boxplot(width = 0.18, outlier.alpha = 0.0, alpha = 0.65) +
-        geom_jitter(width = 0.08, height = 0, size = 0.9, alpha = 0.85) +
-        ggpubr::stat_compare_means(
-          aes(group = group),
-          method = "wilcox.test",
-          comparisons = comps,
-          label = "p.format",
-          label.y.npc = "top"
-        ) +
-        scale_fill_manual(
-          values = pal_val[c("Control", "Incipient", "Moderate", "Severe")],
-          drop = FALSE
-        ) +
-        labs(
-          title = "GSE28146 (staging)",
-          x = NULL,
-          y = "Scaled PhenoMap score (within cohort)"
-        ) +
-        theme_bw() +
-        theme(legend.position = "none")
-    }
-
-    if (requireNamespace("patchwork", quietly = TRUE) && (!is.null(p_109) || !is.null(p_281))) {
-      suppressPackageStartupMessages(library(patchwork))
-      if (!is.null(p_109) && !is.null(p_281)) {
-        print(p_109 + p_281 + patchwork::plot_layout(widths = c(1, 1)))
-      } else if (!is.null(p_109)) {
-        print(p_109)
-      } else {
-        print(p_281)
-      }
-    } else {
-      if (!is.null(p_109)) print(p_109)
-      if (!is.null(p_281)) print(p_281)
-    }
+    print(p_val)
   } else {
     message("No validation results to plot (check GEO access and phenotype parsing).")
   }

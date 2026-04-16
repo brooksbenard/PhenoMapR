@@ -23,7 +23,8 @@ plot_phenotype_markers(
   heatmap_height = NULL,
   column_title = NULL,
   draw = TRUE,
-  use_raster = FALSE
+  use_raster = FALSE,
+  outline_marker_blocks = TRUE
 )
 }
 \arguments{
@@ -85,6 +86,10 @@ single number interpreted as millimeters.}
 \code{FALSE}, returns the \code{Heatmap} object invisibly.}
 
 \item{use_raster}{Passed to \code{Heatmap()} (default \code{FALSE}).}
+
+\item{outline_marker_blocks}{If \code{TRUE} (default) and
+\code{heatmap_type = "cell_type_specific"}, draws white outline boxes around
+each marker-gene block after \code{draw()}. Set \code{FALSE} to omit them.}
 }
 \value{
 Invisibly, the \code{ComplexHeatmap::Heatmap} object (or \code{NULL} if
@@ -112,8 +117,11 @@ score (nearest the heatmap first); annotation names on the right; legends
 are drawn explicitly (\code{Legend()} + \code{annotation_legend_list};
 \code{merge_legends = TRUE} and correct parameter name \code{merge_legends}).
 PhenoMapR score colors are diverging blue--white--red with \strong{white at
-0}: negative scores are blue, positive scores are red (using the min and max
-of the score column across \strong{all} cells in \code{meta}). Row
+0}: negative scores are blue, positive scores are red. The score column is
+coerced to a plain numeric vector (so matrix columns, e.g. from
+\code{scale()}, do not corrupt subsetting). Limits use \strong{heatmap column}
+scores only; the merged legend uses an explicit \code{Legend(at = ...)} with
+tick positions rounded to whole numbers (annotation auto-legends are disabled). Row
 annotations: for \code{left_annotation}, the first track is leftmost
 (farthest from the matrix). For \code{heatmap_type = "cell_type_specific"},
 the order is \code{anno_mark} (outer), \strong{cell type}, then
@@ -121,11 +129,11 @@ the order is \code{anno_mark} (outer), \strong{cell type}, then
 strips are first (next to the heatmap): phenotype then cell type, then
 \code{anno_mark} outermost. Favorable-tail strips and gene marks on the
 \strong{left}, adverse on the \strong{right}. For
-\code{heatmap_type = "cell_type_specific"}, after drawing, white outline
-boxes are added around each marker-gene block (EcoTyper-style
-\code{decorate_heatmap_body} + \code{grid.rect}), spanning only the
-columns for that block\'s phenotype bin and cell type (not the full matrix
-width).
+\code{heatmap_type = "cell_type_specific"}, optional white outline boxes
+(\code{outline_marker_blocks}) use \code{decorate_heatmap_body} per row slice
+with column span in native units so each box covers only the columns whose
+\code{group_col}/\code{celltype_col} match that block (see
+\code{outline_marker_blocks}).
 Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 = black. Heatmap and column annotation legends merge on the right
