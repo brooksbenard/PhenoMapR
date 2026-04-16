@@ -270,6 +270,15 @@ Visium coordinates).</p>
 <span>  <span class="va">seurat</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/add_scores_to_seurat.html">add_scores_to_seurat</a></span><span class="op">(</span><span class="va">seurat</span>, <span class="va">scores_spatial</span><span class="op">)</span></span>
 <span><span class="va">score_col</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"weighted_sum_score"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">scores_spatial</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span></span>
+<span><span class="va">spatial_ci_lite</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/chartr.html" class="external-link">tolower</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"CI"</span>, <span class="st">""</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"true"</span>, <span class="st">"yes"</span>, <span class="st">"1"</span><span class="op">)</span> <span class="op">||</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"PHENOMAPR_SPATIAL_LITE"</span>, <span class="st">""</span><span class="op">)</span> <span class="op">==</span> <span class="st">"1"</span></span>
+<span><span class="va">spatial_max_cells</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="va">spatial_ci_lite</span><span class="op">)</span> <span class="fl">2000L</span> <span class="kw">else</span> <span class="fl">5000L</span></span>
+<span><span class="va">assay_use</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Spatial"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="st">"Spatial"</span></span>
+<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>  <span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/DefaultAssay.html" class="external-link">DefaultAssay</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
 <span><span class="fu"><a href="../reference/plot_score_distribution.html">plot_score_distribution</a></span><span class="op">(</span></span>
 <span>  <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[[</span><span class="va">score_col</span><span class="op">]</span><span class="op">]</span>,</span>
 <span>  main <span class="op">=</span> <span class="st">"PRECOG Pancreatic score distribution (CytoSPACE cells)"</span>,</span>
@@ -603,403 +612,614 @@ spatial map of prognostic groups to: top 5% (Most Adverse), bottom 5%
 <!--   message("spatialCooccur neighborhood enrichment skipped (need enough cells and distinct prognostic groups).") -->
 <!-- } -->
 <!-- ``` -->
-<!-- ## Prognostic markers -->
-<!-- `find_phenotype_markers()` supports the same **marker scopes** on spatial data (cells or spots mapped to spots) as in the single-cell vignette: -->
-<!-- - **Cell type agnostic** — `marker_scope = "phenotype_groups"` (**default**): **Most Adverse** vs all other cells with a phenotype label, and **Most Favorable** vs all other cells, **ignoring** cell type. This asks which genes distinguish the prognostic extremes in the whole mixture on the slide. -->
-<!-- - **Cell type specific** — `marker_scope = "cell_type_specific"`: for each cell type in metadata (here, CytoSPACE-mapped types), contrasts that type in the adverse or favorable tail vs a reference set controlled by `celltype_contrast`. **Default** `celltype_contrast = "within_cell_type"` compares to other phenotype bins **within the same type** (reduces housekeeping genes repeating across type × tail blocks). **`celltype_contrast = "vs_cohort_rest"`** restores the **original** cohort-wide contrast: (type ∩ tail) vs **every other cell**. With **`celltype_unique_genes = TRUE`** (default), each gene is kept in at most one adverse/favorable row (strongest `avg_log2FC`). -->
-<!-- Below, **Step 1–2** use **cell-type-agnostic** markers; **Step 2** draws **`plot_phenotype_markers(..., heatmap_type = "global")`** when **ComplexHeatmap** and **circlize** are installed (same helper as the **single-cell** vignette), with a **pheatmap** fallback otherwise. **Step 3** runs **cell-type-specific** markers and **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when those packages are available. -->
-<!-- ### Step 1: Markers for adverse vs. favorable cells (cell type agnostic) -->
-<!-- ```{r markers-spatial, cache = FALSE} -->
-<!-- markers <- NULL -->
-<!-- assay_markers <- NULL -->
-<!-- if (!is.null(group_col)) { -->
-<!--   cells <- colnames(seurat) -->
-<!--   group_vec <- seurat@meta.data[cells, group_col] -->
-<!--   group_df <- data.frame( -->
-<!--     cell_id = cells, -->
-<!--     phenotype_group = as.character(group_vec), -->
-<!--     stringsAsFactors = FALSE -->
-<!--   ) -->
-<!--   for (a in unique(c(assay_use, "RNA", "SCT"))) { -->
-<!--     if (!a %in% names(seurat@assays)) next -->
-<!--     markers <- tryCatch( -->
-<!--       PhenoMapR::find_phenotype_markers( -->
-<!--         seurat, -->
-<!--         group_labels = group_df, -->
-<!--         group_column = "phenotype_group", -->
-<!--         cell_id_column = "cell_id", -->
-<!--         marker_scope = "phenotype_groups", -->
-<!--         assay = a, -->
-<!--         slot = "data", -->
-<!--         max_cells_per_ident = spatial_max_cells, -->
-<!--         verbose = FALSE -->
-<!--       ), -->
-<!--       error = function(e) { -->
-<!--         message("find_phenotype_markers (assay ", a, ") error: ", conditionMessage(e)) -->
-<!--         NULL -->
-<!--       } -->
-<!--     ) -->
-<!--     if (!is.null(markers) && (nrow(markers$adverse_markers) > 0 || nrow(markers$favorable_markers) > 0)) { -->
-<!--       assay_markers <- a -->
-<!--       break -->
-<!--     } -->
-<!--   } -->
-<!--   if (!is.null(markers)) { -->
-<!--     message("Adverse markers (top 5):") -->
-<!--     print(head(markers$adverse_markers, 5)) -->
-<!--     message("Favorable markers (top 5):") -->
-<!--     print(head(markers$favorable_markers, 5)) -->
-<!--   } else { -->
-<!--     message("Marker analysis returned no results. Check that Most Adverse and Most Favorable groups have enough cells.") -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
-<!-- ### Step 2: Heatmap of adverse vs. favorable markers (global phenotype groups) -->
-<!-- **`plot_phenotype_markers(..., heatmap_type = "global")`** matches the single-cell vignette: favorable- then adverse-marker rows, column order by PhenoMapR score, and **pheatmap** only if ComplexHeatmap is unavailable or marker tables are incomplete. -->
-<!-- ```{r heatmap-markers-spatial, fig.align='center', fig.width=10, fig.height=4} -->
-<!-- if (exists("markers") && !is.null(markers)) { -->
-<!--   n_top <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 10L else 15L -->
-<!--   expr <- NULL -->
-<!--   assay_order <- unique(c( -->
-<!--     if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0), -->
-<!--     assay_use, "RNA", "SCT" -->
-<!--   )) -->
-<!--   for (a in assay_order) { -->
-<!--     if (!a %in% names(seurat@assays)) next -->
-<!--     expr <- tryCatch( -->
-<!--       Seurat::GetAssayData(seurat, layer = "data", assay = a), -->
-<!--       error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL) -->
-<!--     ) -->
-<!--     if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break -->
-<!--     expr <- tryCatch( -->
-<!--       SeuratObject::LayerData(seurat, layer = "data", assay = a), -->
-<!--       error = function(e) NULL -->
-<!--     ) -->
-<!--     if (is.null(expr) || ncol(expr) == 0) { -->
-<!--       expr <- tryCatch( -->
-<!--         SeuratObject::LayerData(seurat, layer = "counts", assay = a), -->
-<!--         error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = NULL, assay = a), error = function(e2) NULL) -->
-<!--       ) -->
-<!--     } -->
-<!--     if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break -->
-<!--   } -->
-<!--   if (!is.null(expr) && ncol(expr) > 0) { -->
-<!--     cells_expr <- colnames(expr) -->
-<!--     if (is.null(cells_expr)) cells_expr <- character(0) -->
-<!--     cells_obj <- colnames(seurat) -->
-<!--     cells_meta <- rownames(seurat@meta.data) -->
-<!--     cells_use <- intersect(cells_expr, cells_obj) -->
-<!--     if (length(cells_use) == 0 && length(cells_meta) > 0) { -->
-<!--       cells_use <- intersect(cells_expr, cells_meta) -->
-<!--     } -->
-<!--     if (length(cells_use) == 0 && length(cells_expr) > 0 && any(grepl("_", cells_expr, fixed = TRUE))) { -->
-<!--       stripped <- sub("^[^_]+_", "", cells_expr) -->
-<!--       cells_use <- intersect(stripped, cells_obj) -->
-<!--       if (length(cells_use) == 0) cells_use <- intersect(stripped, cells_meta) -->
-<!--       if (length(cells_use) > 0) { -->
-<!--         expr_cols <- vapply(cells_use, function(c) cells_expr[which(stripped == c)[1]], character(1)) -->
-<!--         expr <- expr[, expr_cols, drop = FALSE] -->
-<!--         colnames(expr) <- cells_use -->
-<!--       } -->
-<!--     } -->
-<!--     if (length(cells_use) == 0) { -->
-<!--       message("No overlapping cells between expression and metadata; skipping heatmap. ", -->
-<!--               "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj), -->
-<!--               if (length(cells_expr) > 0) paste0("; expr sample: ", head(cells_expr, 2)) else "") -->
-<!--     } else { -->
-<!--       expr_pm <- as.matrix(expr[, cells_use, drop = FALSE]) -->
-<!--       meta_pm <- seurat@meta.data[cells_use, , drop = FALSE] -->
-<!--       meta_pm$cell_id_plot <- cells_use -->
-<!--       group_col_hm <- paste0("phenotype_group_", score_col) -->
-<!--       if (!group_col_hm %in% names(meta_pm)) group_col_hm <- group_col -->
-<!--       ct_col_hm <- NULL -->
-<!--       if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && -->
-<!--           spatial_df_celltype_col %in% names(meta_pm)) { -->
-<!--         ct_col_hm <- spatial_df_celltype_col -->
-<!--       } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(meta_pm)) { -->
-<!--         ct_col_hm <- celltype_col -->
-<!--       } -->
-<!--       if (is.null(ct_col_hm)) { -->
-<!--         meta_pm$celltype_plot <- factor(rep("Cell", nrow(meta_pm))) -->
-<!--         ct_col_hm <- "celltype_plot" -->
-<!--       } else { -->
-<!--         meta_pm[[ct_col_hm]] <- factor(as.character(meta_pm[[ct_col_hm]])) -->
-<!--       } -->
-<!--       pal_ct <- PhenoMapR::get_celltype_palette(levels(meta_pm[[ct_col_hm]])) -->
-<!--       drew_ch <- FALSE -->
-<!--       if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) { -->
-<!--         adv_ok <- !is.null(markers$adverse_markers) && nrow(markers$adverse_markers) > 0L -->
-<!--         fav_ok <- !is.null(markers$favorable_markers) && nrow(markers$favorable_markers) > 0L -->
-<!--         if (adv_ok && fav_ok) { -->
-<!--           ch_ht <- PhenoMapR::plot_phenotype_markers( -->
-<!--             markers = markers, -->
-<!--             expr_mat = expr_pm, -->
-<!--             meta = meta_pm, -->
-<!--             cell_id_col = "cell_id_plot", -->
-<!--             group_col = group_col_hm, -->
-<!--             score_col = score_col, -->
-<!--             celltype_col = ct_col_hm, -->
-<!--             celltype_palette = pal_ct, -->
-<!--             heatmap_type = "global", -->
-<!--             top_n_markers = if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 12L else 20L, -->
-<!--             n_mark_labels = 15L, -->
-<!--             p_adj_threshold = 0.05, -->
-<!--             column_title = "Global phenotype markers (spatial, CytoSPACE cells)" -->
-<!--           ) -->
-<!--           drew_ch <- !is.null(ch_ht) -->
-<!--         } -->
-<!--       } -->
-<!--       if (!drew_ch && requireNamespace("pheatmap", quietly = TRUE)) { -->
-<!--         adverse_pos <- markers$adverse_markers -->
-<!--         if (is.null(adverse_pos)) adverse_pos <- data.frame() -->
-<!--         if (nrow(adverse_pos) > 0 && "avg_log2FC" %in% names(adverse_pos)) adverse_pos <- adverse_pos[adverse_pos$avg_log2FC > 0, ] -->
-<!--         favorable_pos <- markers$favorable_markers -->
-<!--         if (is.null(favorable_pos)) favorable_pos <- data.frame() -->
-<!--         if (nrow(favorable_pos) > 0 && "avg_log2FC" %in% names(favorable_pos)) favorable_pos <- favorable_pos[favorable_pos$avg_log2FC > 0, ] -->
-<!--         adv_ref <- markers$adverse_markers -->
-<!--         pcol <- if (!is.null(adv_ref) && "p_adj" %in% names(adv_ref)) "p_adj" else if (!is.null(adv_ref) && "p_val_adj" %in% names(adv_ref)) "p_val_adj" else "p_val" -->
-<!--         top_genes <- unique(c( -->
-<!--           if (nrow(adverse_pos) > 0 && "gene" %in% names(adverse_pos)) head(adverse_pos$gene[order(adverse_pos[[pcol]])], n_top) else character(0), -->
-<!--           if (nrow(favorable_pos) > 0 && "gene" %in% names(favorable_pos)) head(favorable_pos$gene[order(favorable_pos[[pcol]])], n_top) else character(0) -->
-<!--         )) -->
-<!--         top_genes <- top_genes[top_genes %in% rownames(expr_pm)] -->
-<!--         if (length(top_genes) == 0) top_genes <- head(rownames(expr_pm), 20) -->
-<!--         mat <- as.matrix(expr_pm[top_genes, , drop = FALSE]) -->
-<!--         mat_scaled <- t(scale(t(mat))) -->
-<!--         mat_scaled[mat_scaled < -3] <- -3 -->
-<!--         mat_scaled[mat_scaled > 3] <- 3 -->
-<!--         ord <- order(meta_pm[[score_col]]) -->
-<!--         mat_scaled <- mat_scaled[, ord, drop = FALSE] -->
-<!--         meta_ord <- meta_pm[ord, , drop = FALSE] -->
-<!--         ann_col <- data.frame( -->
-<!--           `PhenoMapR Score` = meta_ord[[score_col]], -->
-<!--           `Prognostic group` = factor(meta_ord[[group_col_hm]], levels = c("Most Adverse", "Other", "Most Favorable")), -->
-<!--           check.names = FALSE -->
-<!--         ) -->
-<!--         if (ct_col_hm %in% names(meta_ord)) { -->
-<!--           ann_col$`Cell type` <- factor(meta_ord[[ct_col_hm]]) -->
-<!--         } -->
-<!--         rownames(ann_col) <- colnames(mat_scaled) -->
-<!--         pal_score <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100) -->
-<!--         pal_group <- c(`Most Adverse` = "#B2182B", Other = "#f7f7f7", `Most Favorable` = "#2166AC") -->
-<!--         pal_celltype <- if ("Cell type" %in% names(ann_col)) { -->
-<!--           PhenoMapR::get_celltype_palette(levels(ann_col$`Cell type`)) -->
-<!--         } else list() -->
-<!--         ann_colors <- list(`PhenoMapR Score` = pal_score, `Prognostic group` = pal_group) -->
-<!--         if (length(pal_celltype) > 0) ann_colors$`Cell type` <- pal_celltype -->
-<!--         heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) { -->
-<!--           colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100) -->
-<!--         } else { -->
-<!--           colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100) -->
-<!--         } -->
-<!--         message("Using pheatmap fallback (ComplexHeatmap unavailable or one marker table empty).") -->
-<!--         pheatmap::pheatmap( -->
-<!--           mat_scaled, -->
-<!--           scale = "none", -->
-<!--           cluster_cols = FALSE, -->
-<!--           cluster_rows = TRUE, -->
-<!--           show_colnames = FALSE, -->
-<!--           annotation_col = ann_col, -->
-<!--           annotation_colors = ann_colors, -->
-<!--           color = heatmap_colors, -->
-<!--           breaks = seq(-3, 3, length.out = 101), -->
-<!--           main = "Top adverse & favorable marker genes (pheatmap fallback)", -->
-<!--           fontsize = 12, -->
-<!--           fontsize_row = 10, -->
-<!--           treeheight_row = 10 -->
-<!--         ) -->
-<!--       } else if (!drew_ch) { -->
-<!--         message("Install ComplexHeatmap + circlize for plot_phenotype_markers; pheatmap for fallback.") -->
-<!--       } -->
-<!--     } -->
-<!--   } else { -->
-<!--     msg <- "Could not retrieve expression data for heatmap" -->
-<!--     if (!is.null(expr)) { -->
-<!--       msg <- paste0(msg, " (expr nrow=", nrow(expr), ", ncol=", ncol(expr), "; try LayerData for Seurat v5)") -->
-<!--     } -->
-<!--     message(msg, ".") -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
-<!-- ### Stacked barplot: adverse vs. favorable by cell type -->
-<!-- Each column is a cell type; the height is filled by the number of adverse (5th percentile) or favorable (5th percentile) cells. -->
-<!-- ```{r stacked-bar-adverse-favorable-by-celltype, fig.width=5, fig.height=5} -->
-<!-- if (!is.null(group_col)) { -->
-<!--   ct_col_bar <- NULL -->
-<!--   if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && spatial_df_celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_bar <- spatial_df_celltype_col -->
-<!--   } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_bar <- celltype_col -->
-<!--   } else { -->
-<!--     for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) { -->
-<!--       if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) { -->
-<!--         ct_col_bar <- c -->
-<!--         break -->
-<!--       } -->
-<!--     } -->
-<!--   } -->
-<!--   if (!is.null(ct_col_bar)) { -->
-<!--     meta <- seurat@meta.data -->
-<!--     meta$pg <- meta[[group_col]] -->
-<!--     meta$ct <- as.character(meta[[ct_col_bar]]) -->
-<!--     meta$ct_ok <- !is.na(meta$ct) & nzchar(trimws(meta$ct)) -->
-<!--     idx_extreme <- meta$pg %in% c("Most Adverse", "Most Favorable") & meta$ct_ok -->
-<!--     df_bar <- as.data.frame(table( -->
-<!--       CellType = meta$ct[idx_extreme], -->
-<!--       Prognostic_group = meta$pg[idx_extreme], -->
-<!--       useNA = "no" -->
-<!--     )) -->
-<!--     if (nrow(df_bar) > 0) { -->
-<!--       df_bar$Prognostic_group <- factor(df_bar$Prognostic_group, levels = c("Most Favorable", "Most Adverse")) -->
-<!--       pal_bar <- c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC") -->
-<!--       adverse <- df_bar[df_bar$Prognostic_group == "Most Adverse", c("CellType", "Freq")] -->
-<!--       fav <- df_bar[df_bar$Prognostic_group == "Most Favorable", c("CellType", "Freq")] -->
-<!--       names(adverse)[2] <- "n_adverse" -->
-<!--       names(fav)[2] <- "n_fav" -->
-<!--       df_labels <- merge(adverse, fav, by = "CellType", all = TRUE) -->
-<!--       df_labels$n_adverse[is.na(df_labels$n_adverse)] <- 0 -->
-<!--       df_labels$n_fav[is.na(df_labels$n_fav)] <- 0 -->
-<!--       df_labels$label <- paste0(df_labels$n_adverse, "/", df_labels$n_fav) -->
-<!--       df_labels$total <- df_labels$n_adverse + df_labels$n_fav -->
-<!--       ct_ord <- levels(reorder(df_bar$CellType, df_bar$Freq, function(x) -sum(x))) -->
-<!--       df_labels$CellType <- factor(df_labels$CellType, levels = ct_ord) -->
-<!--       p_bar <- ggplot(df_bar, aes(x = reorder(.data$CellType, .data$Freq, function(x) -sum(x)), y = .data$Freq, fill = .data$Prognostic_group)) + -->
-<!--         geom_col(position = "stack") + -->
-<!--         geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = .data$n_adverse), -->
-<!--                   inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#B2182B", hjust = 1.05) + -->
-<!--         geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = paste0("/", .data$n_fav)), -->
-<!--                   inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#2166AC", hjust = -0.05) + -->
-<!--         scale_fill_manual(values = pal_bar) + -->
-<!--         labs(x = "Cell type", y = "Number of cells", fill = "Prognostic group", -->
-<!--              title = "Adverse vs. favorable cells (5th percentile) by cell type") + -->
-<!--         theme_minimal(base_size = 14) + -->
-<!--         theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12), legend.position = "top") -->
-<!--       print(p_bar) -->
-<!--     } -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
-<!-- In line with the other Pancreatic cancer vignettes, PhenoMapR identifies ductal cells (and some fibroblasts) as the most associated cell type with an adverse PhenoMapR prognostic score. Alpha, plasma, and beta cells are the most associated with the more favorable prognostic signal. Interestingly, fibroblasts seems to comprise both adverse and favorable phenotypes. -->
-<!-- ### Step 3: Cell-type-specific phenotype markers -->
-<!-- Here we call `find_phenotype_markers()` with **`marker_scope = "cell_type_specific"`**, using the same cell type column as elsewhere in this vignette. The default **`celltype_contrast = "within_cell_type"`** contrasts each prognostic tail **within** a mapped cell type to the other bins in that type. For the legacy cohort-wide reference (tail vs all other cells), set **`celltype_contrast = "vs_cohort_rest"`** (see `?find_phenotype_markers`). -->
-<!-- When both adverse and favorable marker tables are non-empty and **ComplexHeatmap** is installed, **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** matches the single-cell vignette (column order: phenotype bin, cell type, score; row blocks with optional gene labels). -->
-<!-- ```{r markers-celltype-specific-spatial, cache = FALSE, fig.align='center', fig.width=14, fig.height=10, eval=!spatial_ci_lite} -->
-<!-- markers_ct_spatial <- NULL -->
-<!-- ct_col_spatial <- NULL -->
-<!-- if (!is.null(group_col)) { -->
-<!--   if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && -->
-<!--       spatial_df_celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_spatial <- spatial_df_celltype_col -->
-<!--   } else if (!is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_spatial <- celltype_col -->
-<!--   } else { -->
-<!--     for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) { -->
-<!--       if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) { -->
-<!--         ct_col_spatial <- c -->
-<!--         break -->
-<!--       } -->
-<!--     } -->
-<!--   } -->
-<!--   if (!is.null(ct_col_spatial)) { -->
-<!--     cells_ct <- colnames(seurat) -->
-<!--     group_df_ct <- data.frame( -->
-<!--       cell_id = cells_ct, -->
-<!--       phenotype_group = as.character(seurat@meta.data[cells_ct, group_col]), -->
-<!--       cell_type = as.character(seurat@meta.data[cells_ct, ct_col_spatial]), -->
-<!--       stringsAsFactors = FALSE -->
-<!--     ) -->
-<!--     assay_ct <- if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else assay_use -->
-<!--     markers_ct_spatial <- tryCatch( -->
-<!--       PhenoMapR::find_phenotype_markers( -->
-<!--         seurat, -->
-<!--         group_labels = group_df_ct, -->
-<!--         group_column = "phenotype_group", -->
-<!--         cell_id_column = "cell_id", -->
-<!--         cell_type_column = "cell_type", -->
-<!--         marker_scope = "cell_type_specific", -->
-<!--         celltype_contrast = "within_cell_type", -->
-<!--         assay = assay_ct, -->
-<!--         slot = "data", -->
-<!--         max_cells_per_ident = spatial_max_cells, -->
-<!--         verbose = FALSE -->
-<!--       ), -->
-<!--       error = function(e) { -->
-<!--         message("cell_type_specific find_phenotype_markers: ", conditionMessage(e)) -->
-<!--         NULL -->
-<!--       } -->
-<!--     ) -->
-<!--     if (!is.null(markers_ct_spatial)) { -->
-<!--       message("Cell-type-specific adverse markers (top 5):") -->
-<!--       print(utils::head(markers_ct_spatial$adverse_markers, 5)) -->
-<!--       message("Cell-type-specific favorable markers (top 5):") -->
-<!--       print(utils::head(markers_ct_spatial$favorable_markers, 5)) -->
-<!--     } -->
-<!--     expr_pm <- NULL -->
-<!--     for (a in unique(c(assay_ct, assay_use, "RNA", "SCT"))) { -->
-<!--       if (!a %in% names(seurat@assays)) next -->
-<!--       expr_pm <- tryCatch( -->
-<!--         as.matrix(Seurat::GetAssayData(seurat, layer = "data", assay = a)), -->
-<!--         error = function(e) tryCatch( -->
-<!--           as.matrix(Seurat::GetAssayData(seurat, slot = "data", assay = a)), -->
-<!--           error = function(e2) NULL -->
-<!--         ) -->
-<!--       ) -->
-<!--       if (!is.null(expr_pm) && nrow(expr_pm) > 0 && ncol(expr_pm) > 0) break -->
-<!--       expr_pm <- tryCatch( -->
-<!--         as.matrix(SeuratObject::LayerData(seurat, layer = "data", assay = a)), -->
-<!--         error = function(e) NULL -->
-<!--       ) -->
-<!--       if (!is.null(expr_pm) && nrow(expr_pm) > 0 && ncol(expr_pm) > 0) break -->
-<!--     } -->
-<!--     if (!is.null(markers_ct_spatial) && !is.null(expr_pm) && ncol(expr_pm) > 0) { -->
-<!--       meta_pm <- as.data.frame(seurat@meta.data[cells_ct, , drop = FALSE]) -->
-<!--       meta_pm$cell_id_plot <- cells_ct -->
-<!--       if (all(cells_ct %in% colnames(expr_pm))) { -->
-<!--         expr_pm <- expr_pm[, cells_ct, drop = FALSE] -->
-<!--       } -->
-<!--       pal_ct <- PhenoMapR::get_celltype_palette(levels(factor(meta_pm[[ct_col_spatial]]))) -->
-<!--       if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) { -->
-<!--         PhenoMapR::plot_phenotype_markers( -->
-<!--           markers = markers_ct_spatial, -->
-<!--           expr_mat = expr_pm, -->
-<!--           meta = meta_pm, -->
-<!--           cell_id_col = "cell_id_plot", -->
-<!--           group_col = group_col, -->
-<!--           score_col = score_col, -->
-<!--           celltype_col = ct_col_spatial, -->
-<!--           celltype_palette = pal_ct, -->
-<!--           heatmap_type = "cell_type_specific", -->
-<!--           top_n_markers = 20L, -->
-<!--           n_mark_labels = 5L, -->
-<!--           p_adj_threshold = 0.05, -->
-<!--           column_title = paste0( -->
-<!--             "Cell-type-specific phenotype markers (spatial; within_cell_type contrast; ", -->
-<!--             "use celltype_contrast = \"vs_cohort_rest\" for cohort-wide DE)" -->
-<!--           ) -->
-<!--         ) -->
-<!--       } else { -->
-<!--         message("Install packages 'ComplexHeatmap' and 'circlize' to draw the cell-type-specific marker heatmap.") -->
-<!--       } -->
-<!--     } -->
-<!--   } else { -->
-<!--     message("No suitable cell type column in metadata; skipping cell_type_specific markers.") -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
-<!-- ## Summary -->
-<!-- - **Part 1 (spots)**: Spot-level object `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds`; **H&E** via `SpatialPlot`; PhenoMapR scoring; **hex** summary of z-scaled scores plus **point** map of 5th-percentile groups (**same `coord_fixed` / limits as H&E**; no jitter). -->
-<!-- - **Part 2 (CytoSPACE)**: `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`; same PRECOG **Pancreatic** reference at **cell** resolution; score distribution, score by cell type, prognostic groups, and spatial maps (jittered cells per spot). -->
-<!-- - **Co-localization**: **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** **`nhood_enrichment()`** and **`cooccur_local()`** on Visium coordinates and prognostic groups (Part 2 only; install from GitHub). -->
-<!-- - **Markers**: (1) **Cell-type-agnostic** `find_phenotype_markers(..., marker_scope = "phenotype_groups")` with **`plot_phenotype_markers(..., heatmap_type = "global")`** (or **pheatmap** fallback); (2) **Cell-type-specific** `marker_scope = "cell_type_specific"` with **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when **ComplexHeatmap** is available. -->
-<!-- Optional download URLs: `PHENOMAPR_SPATIAL_SPOT_RDS_URL`, `PHENOMAPR_SPATIAL_CYTO_RDS_URL`; `PHENOMAPR_SPATIAL_RDS_URL` still applies to the **CytoSPACE** `.rds` if the cyto-specific variable is unset. -->
-<!-- ## References -->
-<!-- <a id="ref1"></a> -->
-<!-- **[1]** Benard, B. A. et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. Nucleic Acids Res. 54, D1579–D1589 (2026). -->
-<!-- ## Session Info -->
-<!-- ```{r session-info} -->
-<!-- sessionInfo() -->
-<!-- ``` -->
 </div>
+</div>
+<div class="section level3">
+<h3 id="prognostic-markers">Prognostic markers<a class="anchor" aria-label="anchor" href="#prognostic-markers"></a>
+</h3>
+<p><code><a href="../reference/find_phenotype_markers.html">find_phenotype_markers()</a></code> supports the same
+<strong>marker scopes</strong> on spatial data (cells or spots mapped to
+spots) as in the single-cell vignette:</p>
+<ul>
+<li>
+<strong>Cell type agnostic</strong> —
+<code>marker_scope = "phenotype_groups"</code>
+(<strong>default</strong>): <strong>Most Adverse</strong> vs all other
+cells with a phenotype label, and <strong>Most Favorable</strong> vs all
+other cells, <strong>ignoring</strong> cell type. This asks which genes
+distinguish the prognostic extremes in the whole mixture on the
+slide.</li>
+<li>
+<strong>Cell type specific</strong> —
+<code>marker_scope = "cell_type_specific"</code>: for each cell type in
+metadata (here, CytoSPACE-mapped types), contrasts that type in the
+adverse or favorable tail vs a reference set controlled by
+<code>celltype_contrast</code>. <strong>Default</strong>
+<code>celltype_contrast = "within_cell_type"</code> compares to other
+phenotype bins <strong>within the same type</strong> (reduces
+housekeeping genes repeating across type × tail blocks).
+<strong><code>celltype_contrast = "vs_cohort_rest"</code></strong>
+restores the <strong>original</strong> cohort-wide contrast: (type ∩
+tail) vs <strong>every other cell</strong>. With
+<strong><code>celltype_unique_genes = TRUE</code></strong> (default),
+each gene is kept in at most one adverse/favorable row (strongest
+<code>avg_log2FC</code>).</li>
+</ul>
+<p>Below, <strong>Step 1–2</strong> use
+<strong>cell-type-agnostic</strong> markers; <strong>Step 2</strong>
+draws
+<strong><code>plot_phenotype_markers(..., heatmap_type = "global")</code></strong>
+when <strong>ComplexHeatmap</strong> and <strong>circlize</strong> are
+installed (same helper as the <strong>single-cell</strong> vignette),
+with a <strong>pheatmap</strong> fallback otherwise. <strong>Step
+3</strong> runs <strong>cell-type-specific</strong> markers and
+<strong><code>plot_phenotype_markers(..., heatmap_type = "cell_type_specific")</code></strong>
+when those packages are available.</p>
+<div class="section level4">
+<h4 id="step-1-markers-for-adverse-vs--favorable-cells-cell-type-agnostic">Step 1: Markers for adverse vs. favorable cells (cell type
+agnostic)<a class="anchor" aria-label="anchor" href="#step-1-markers-for-adverse-vs--favorable-cells-cell-type-agnostic"></a>
+</h4>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">markers</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="va">assay_markers</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="co">## Tail labels on the Seurat object (5th / 95th percentiles via define_phenotype_groups).</span></span>
+<span><span class="va">cells</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">)</span></span>
+<span><span class="va">scores_df_markers</span> <span class="op">&lt;-</span> <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[</span><span class="va">cells</span>, <span class="va">score_col</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">scores_df_markers</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">cells</span></span>
+<span><span class="va">groups_markers</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/define_phenotype_groups.html">define_phenotype_groups</a></span><span class="op">(</span></span>
+<span>  <span class="va">scores_df_markers</span>,</span>
+<span>  percentile <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>  score_columns <span class="op">=</span> <span class="va">score_col</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">group_col</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grep</a></span><span class="op">(</span><span class="st">"phenotype_group"</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">groups_markers</span><span class="op">)</span>, value <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0L</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span> <span class="op">||</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">group_col</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>  <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[[</span><span class="va">group_col</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span></span>
+<span>    <span class="va">groups_markers</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span>, <span class="va">group_col</span>, drop <span class="op">=</span> <span class="cn">TRUE</span><span class="op">]</span></span>
+<span><span class="op">}</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">group_vec</span> <span class="op">&lt;-</span> <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[</span><span class="va">cells</span>, <span class="va">group_col</span><span class="op">]</span></span>
+<span>  <span class="va">group_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>    cell_id <span class="op">=</span> <span class="va">cells</span>,</span>
+<span>    phenotype_group <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">group_vec</span><span class="op">)</span>,</span>
+<span>    stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">a</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">assay_use</span>, <span class="st">"RNA"</span>, <span class="st">"SCT"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">a</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="kw">next</span></span>
+<span>    <span class="va">markers</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>      <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/find_phenotype_markers.html">find_phenotype_markers</a></span><span class="op">(</span></span>
+<span>        <span class="va">seurat</span>,</span>
+<span>        group_labels <span class="op">=</span> <span class="va">group_df</span>,</span>
+<span>        group_column <span class="op">=</span> <span class="st">"phenotype_group"</span>,</span>
+<span>        cell_id_column <span class="op">=</span> <span class="st">"cell_id"</span>,</span>
+<span>        marker_scope <span class="op">=</span> <span class="st">"phenotype_groups"</span>,</span>
+<span>        assay <span class="op">=</span> <span class="va">a</span>,</span>
+<span>        slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>        max_cells_per_ident <span class="op">=</span> <span class="va">spatial_max_cells</span>,</span>
+<span>        verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>      <span class="op">)</span>,</span>
+<span>      error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"find_phenotype_markers (assay "</span>, <span class="va">a</span>, <span class="st">") error: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="cn">NULL</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">adverse_markers</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">favorable_markers</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">assay_markers</span> <span class="op">&lt;-</span> <span class="va">a</span></span>
+<span>      <span class="kw">break</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Adverse markers (top 5):"</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">adverse_markers</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Favorable markers (top 5):"</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">favorable_markers</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Marker analysis returned no results. Check that Most Adverse and Most Favorable groups have enough cells."</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<pre><code><span><span class="co">##   p_val avg_log2FC pct_in_group pct_rest     gene p_adj</span></span>
+<span><span class="co">## 1     0   2.977403        0.829    0.116      MET     0</span></span>
+<span><span class="co">## 2     0   2.548452        0.851    0.153 BAIAP2L1     0</span></span>
+<span><span class="co">## 3     0   2.254532        0.870    0.176    MECOM     0</span></span>
+<span><span class="co">## 4     0   2.828253        0.916    0.226    ITGA2     0</span></span>
+<span><span class="co">## 5     0   2.855858        0.833    0.147    ITGA3     0</span></span></code></pre>
+<pre><code><span><span class="co">##   p_val avg_log2FC pct_in_group pct_rest     gene p_adj</span></span>
+<span><span class="co">## 1     0   4.271696        0.627    0.054    NRXN1     0</span></span>
+<span><span class="co">## 2     0   5.276230        0.626    0.057    RIMS2     0</span></span>
+<span><span class="co">## 3     0   5.356858        0.640    0.079   KCNMB2     0</span></span>
+<span><span class="co">## 4     0   5.375012        0.595    0.038    ABCC8     0</span></span>
+<span><span class="co">## 5     0   5.035273        0.589    0.036 TMEM132D     0</span></span></code></pre>
+</div>
+<div class="section level4">
+<h4 id="step-2-heatmap-of-adverse-vs--favorable-markers-global-phenotype-groups">Step 2: Heatmap of adverse vs. favorable markers (global phenotype
+groups)<a class="anchor" aria-label="anchor" href="#step-2-heatmap-of-adverse-vs--favorable-markers-global-phenotype-groups"></a>
+</h4>
+<p><strong><code>plot_phenotype_markers(..., heatmap_type = "global")</code></strong>
+matches the single-cell vignette: favorable- then adverse-marker rows,
+column order by PhenoMapR score, and <strong>pheatmap</strong> only if
+ComplexHeatmap is unavailable or marker tables are incomplete.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"markers"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">n_top</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"spatial_ci_lite"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="va">spatial_ci_lite</span><span class="op">)</span><span class="op">)</span> <span class="fl">10L</span> <span class="kw">else</span> <span class="fl">15L</span></span>
+<span>  <span class="va">expr</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span>  <span class="va">assay_order</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"assay_markers"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">assay_markers</span><span class="op">)</span><span class="op">)</span> <span class="va">assay_markers</span> <span class="kw">else</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>,</span>
+<span>    <span class="va">assay_use</span>, <span class="st">"RNA"</span>, <span class="st">"SCT"</span></span>
+<span>  <span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">a</span> <span class="kw">in</span> <span class="va">assay_order</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">a</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="kw">next</span></span>
+<span>    <span class="va">expr</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>      <span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData</a></span><span class="op">(</span><span class="va">seurat</span>, layer <span class="op">=</span> <span class="st">"data"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span>,</span>
+<span>      error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData</a></span><span class="op">(</span><span class="va">seurat</span>, slot <span class="op">=</span> <span class="st">"data"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e2</span><span class="op">)</span> <span class="cn">NULL</span><span class="op">)</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="kw">break</span></span>
+<span>    <span class="va">expr</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>      <span class="fu">SeuratObject</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/Layers.html" class="external-link">LayerData</a></span><span class="op">(</span><span class="va">seurat</span>, layer <span class="op">=</span> <span class="st">"data"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span>,</span>
+<span>      error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">NULL</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">expr</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>        <span class="fu">SeuratObject</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/Layers.html" class="external-link">LayerData</a></span><span class="op">(</span><span class="va">seurat</span>, layer <span class="op">=</span> <span class="st">"counts"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span>,</span>
+<span>        error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="fu">SeuratObject</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/Layers.html" class="external-link">LayerData</a></span><span class="op">(</span><span class="va">seurat</span>, layer <span class="op">=</span> <span class="cn">NULL</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e2</span><span class="op">)</span> <span class="cn">NULL</span><span class="op">)</span></span>
+<span>      <span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="kw">break</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">cells_expr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">cells_expr</span><span class="op">)</span><span class="op">)</span> <span class="va">cells_expr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
+<span>    <span class="va">cells_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">)</span></span>
+<span>    <span class="va">cells_meta</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span></span>
+<span>    <span class="va">cells_use</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="va">cells_expr</span>, <span class="va">cells_obj</span><span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_use</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_meta</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">cells_use</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="va">cells_expr</span>, <span class="va">cells_meta</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_use</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/any.html" class="external-link">any</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"_"</span>, <span class="va">cells_expr</span>, fixed <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">stripped</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">sub</a></span><span class="op">(</span><span class="st">"^[^_]+_"</span>, <span class="st">""</span>, <span class="va">cells_expr</span><span class="op">)</span></span>
+<span>      <span class="va">cells_use</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="va">stripped</span>, <span class="va">cells_obj</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_use</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="va">cells_use</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html" class="external-link">intersect</a></span><span class="op">(</span><span class="va">stripped</span>, <span class="va">cells_meta</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_use</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">expr_cols</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">cells_use</span>, <span class="kw">function</span><span class="op">(</span><span class="va">c</span><span class="op">)</span> <span class="va">cells_expr</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="va">stripped</span> <span class="op">==</span> <span class="va">c</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>, <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="va">expr</span> <span class="op">&lt;-</span> <span class="va">expr</span><span class="op">[</span>, <span class="va">expr_cols</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">cells_use</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_use</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"No overlapping cells between expression and metadata; skipping heatmap. "</span>,</span>
+<span>              <span class="st">"expr ncol="</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_expr</span><span class="op">)</span>, <span class="st">", obj ncol="</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_obj</span><span class="op">)</span>,</span>
+<span>              <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cells_expr</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"; expr sample: "</span>, <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">cells_expr</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="kw">else</span> <span class="st">""</span><span class="op">)</span></span>
+<span>    <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>      <span class="va">expr_pm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">expr</span><span class="op">[</span>, <span class="va">cells_use</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span>      <span class="va">meta_pm</span> <span class="op">&lt;-</span> <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[</span><span class="va">cells_use</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>      <span class="va">meta_pm</span><span class="op">$</span><span class="va">cell_id_plot</span> <span class="op">&lt;-</span> <span class="va">cells_use</span></span>
+<span>      <span class="va">group_col_hm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"phenotype_group_"</span>, <span class="va">score_col</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">group_col_hm</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">)</span><span class="op">)</span> <span class="va">group_col_hm</span> <span class="op">&lt;-</span> <span class="va">group_col</span></span>
+<span></span>
+<span>      <span class="va">ct_col_hm</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"spatial_df_celltype_col"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">spatial_df_celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
+<span>          <span class="va">spatial_df_celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">ct_col_hm</span> <span class="op">&lt;-</span> <span class="va">spatial_df_celltype_col</span></span>
+<span>      <span class="op">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"celltype_col"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">ct_col_hm</span> <span class="op">&lt;-</span> <span class="va">celltype_col</span></span>
+<span>      <span class="op">}</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">ct_col_hm</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">meta_pm</span><span class="op">$</span><span class="va">celltype_plot</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"Cell"</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="va">ct_col_hm</span> <span class="op">&lt;-</span> <span class="st">"celltype_plot"</span></span>
+<span>      <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>        <span class="va">meta_pm</span><span class="op">[[</span><span class="va">ct_col_hm</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">[[</span><span class="va">ct_col_hm</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="op">}</span></span>
+<span>      <span class="va">pal_ct</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/get_celltype_palette.html">get_celltype_palette</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">[[</span><span class="va">ct_col_hm</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span>      <span class="va">drew_ch</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"ComplexHeatmap"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"circlize"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">adv_ok</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">adverse_markers</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">adverse_markers</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0L</span></span>
+<span>        <span class="va">fav_ok</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">favorable_markers</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">markers</span><span class="op">$</span><span class="va">favorable_markers</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0L</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="va">adv_ok</span> <span class="op">&amp;&amp;</span> <span class="va">fav_ok</span><span class="op">)</span> <span class="op">{</span></span>
+<span>          <span class="va">ch_ht</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/plot_phenotype_markers.html">plot_phenotype_markers</a></span><span class="op">(</span></span>
+<span>            markers <span class="op">=</span> <span class="va">markers</span>,</span>
+<span>            expr_mat <span class="op">=</span> <span class="va">expr_pm</span>,</span>
+<span>            meta <span class="op">=</span> <span class="va">meta_pm</span>,</span>
+<span>            cell_id_col <span class="op">=</span> <span class="st">"cell_id_plot"</span>,</span>
+<span>            group_col <span class="op">=</span> <span class="va">group_col_hm</span>,</span>
+<span>            score_col <span class="op">=</span> <span class="va">score_col</span>,</span>
+<span>            celltype_col <span class="op">=</span> <span class="va">ct_col_hm</span>,</span>
+<span>            celltype_palette <span class="op">=</span> <span class="va">pal_ct</span>,</span>
+<span>            heatmap_type <span class="op">=</span> <span class="st">"global"</span>,</span>
+<span>            top_n_markers <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"spatial_ci_lite"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="va">spatial_ci_lite</span><span class="op">)</span><span class="op">)</span> <span class="fl">12L</span> <span class="kw">else</span> <span class="fl">20L</span>,</span>
+<span>            n_mark_labels <span class="op">=</span> <span class="fl">15L</span>,</span>
+<span>            p_adj_threshold <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>            column_title <span class="op">=</span> <span class="st">"Global phenotype markers (spatial, CytoSPACE cells)"</span></span>
+<span>          <span class="op">)</span></span>
+<span>          <span class="va">drew_ch</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">ch_ht</span><span class="op">)</span></span>
+<span>        <span class="op">}</span></span>
+<span>      <span class="op">}</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">drew_ch</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"pheatmap"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">adverse_pos</span> <span class="op">&lt;-</span> <span class="va">markers</span><span class="op">$</span><span class="va">adverse_markers</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">)</span><span class="op">)</span> <span class="va">adverse_pos</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="st">"avg_log2FC"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">)</span><span class="op">)</span> <span class="va">adverse_pos</span> <span class="op">&lt;-</span> <span class="va">adverse_pos</span><span class="op">[</span><span class="va">adverse_pos</span><span class="op">$</span><span class="va">avg_log2FC</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="op">]</span></span>
+<span>        <span class="va">favorable_pos</span> <span class="op">&lt;-</span> <span class="va">markers</span><span class="op">$</span><span class="va">favorable_markers</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">)</span><span class="op">)</span> <span class="va">favorable_pos</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="st">"avg_log2FC"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">)</span><span class="op">)</span> <span class="va">favorable_pos</span> <span class="op">&lt;-</span> <span class="va">favorable_pos</span><span class="op">[</span><span class="va">favorable_pos</span><span class="op">$</span><span class="va">avg_log2FC</span> <span class="op">&gt;</span> <span class="fl">0</span>, <span class="op">]</span></span>
+<span>        <span class="va">adv_ref</span> <span class="op">&lt;-</span> <span class="va">markers</span><span class="op">$</span><span class="va">adverse_markers</span></span>
+<span>        <span class="va">pcol</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">adv_ref</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="st">"p_adj"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">adv_ref</span><span class="op">)</span><span class="op">)</span> <span class="st">"p_adj"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">adv_ref</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="st">"p_val_adj"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">adv_ref</span><span class="op">)</span><span class="op">)</span> <span class="st">"p_val_adj"</span> <span class="kw">else</span> <span class="st">"p_val"</span></span>
+<span>        <span class="va">top_genes</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>          <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="st">"gene"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">$</span><span class="va">gene</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">adverse_pos</span><span class="op">[[</span><span class="va">pcol</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">]</span>, <span class="va">n_top</span><span class="op">)</span> <span class="kw">else</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>,</span>
+<span>          <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="st">"gene"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">$</span><span class="va">gene</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">favorable_pos</span><span class="op">[[</span><span class="va">pcol</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">]</span>, <span class="va">n_top</span><span class="op">)</span> <span class="kw">else</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span></span>
+<span>        <span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="va">top_genes</span> <span class="op">&lt;-</span> <span class="va">top_genes</span><span class="op">[</span><span class="va">top_genes</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span><span class="op">]</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">top_genes</span><span class="op">)</span> <span class="op">==</span> <span class="fl">0</span><span class="op">)</span> <span class="va">top_genes</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span>, <span class="fl">20</span><span class="op">)</span></span>
+<span>        <span class="va">mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">[</span><span class="va">top_genes</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span>        <span class="va">mat_scaled</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/scale.html" class="external-link">scale</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/t.html" class="external-link">t</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="va">mat_scaled</span><span class="op">[</span><span class="va">mat_scaled</span> <span class="op">&lt;</span> <span class="op">-</span><span class="fl">3</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="op">-</span><span class="fl">3</span></span>
+<span>        <span class="va">mat_scaled</span><span class="op">[</span><span class="va">mat_scaled</span> <span class="op">&gt;</span> <span class="fl">3</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">3</span></span>
+<span>        <span class="va">ord</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">[[</span><span class="va">score_col</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span>        <span class="va">mat_scaled</span> <span class="op">&lt;-</span> <span class="va">mat_scaled</span><span class="op">[</span>, <span class="va">ord</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>        <span class="va">meta_ord</span> <span class="op">&lt;-</span> <span class="va">meta_pm</span><span class="op">[</span><span class="va">ord</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>        <span class="va">ann_col</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>          `PhenoMapR Score` <span class="op">=</span> <span class="va">meta_ord</span><span class="op">[[</span><span class="va">score_col</span><span class="op">]</span><span class="op">]</span>,</span>
+<span>          `Prognostic group` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_ord</span><span class="op">[[</span><span class="va">group_col_hm</span><span class="op">]</span><span class="op">]</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Most Adverse"</span>, <span class="st">"Other"</span>, <span class="st">"Most Favorable"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>          check.names <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>        <span class="op">)</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="va">ct_col_hm</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">meta_ord</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>          <span class="va">ann_col</span><span class="op">$</span><span class="va">`Cell type`</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_ord</span><span class="op">[[</span><span class="va">ct_col_hm</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span>        <span class="op">}</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">ann_col</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">mat_scaled</span><span class="op">)</span></span>
+<span>        <span class="va">pal_score</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/colorRamp.html" class="external-link">colorRampPalette</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#2166AC"</span>, <span class="st">"#F7F7F7"</span>, <span class="st">"#B2182B"</span><span class="op">)</span><span class="op">)</span><span class="op">(</span><span class="fl">100</span><span class="op">)</span></span>
+<span>        <span class="va">pal_group</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`Most Adverse` <span class="op">=</span> <span class="st">"#B2182B"</span>, Other <span class="op">=</span> <span class="st">"#f7f7f7"</span>, `Most Favorable` <span class="op">=</span> <span class="st">"#2166AC"</span><span class="op">)</span></span>
+<span>        <span class="va">pal_celltype</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Cell type"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">ann_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>          <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/get_celltype_palette.html">get_celltype_palette</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">ann_col</span><span class="op">$</span><span class="va">`Cell type`</span><span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="op">}</span> <span class="kw">else</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>        <span class="va">ann_colors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>`PhenoMapR Score` <span class="op">=</span> <span class="va">pal_score</span>, `Prognostic group` <span class="op">=</span> <span class="va">pal_group</span><span class="op">)</span></span>
+<span>        <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">pal_celltype</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="va">ann_colors</span><span class="op">$</span><span class="va">`Cell type`</span> <span class="op">&lt;-</span> <span class="va">pal_celltype</span></span>
+<span>        <span class="va">heatmap_colors</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"paletteer"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>          <span class="fu"><a href="https://rdrr.io/r/grDevices/colorRamp.html" class="external-link">colorRampPalette</a></span><span class="op">(</span><span class="fu">paletteer</span><span class="fu">::</span><span class="fu"><a href="https://emilhvitfeldt.github.io/paletteer/reference/paletteer_d.html" class="external-link">paletteer_d</a></span><span class="op">(</span><span class="st">"MexBrewer::Vendedora"</span><span class="op">)</span><span class="op">)</span><span class="op">(</span><span class="fl">100</span><span class="op">)</span></span>
+<span>        <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>          <span class="fu"><a href="https://rdrr.io/r/grDevices/colorRamp.html" class="external-link">colorRampPalette</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#2166AC"</span>, <span class="st">"#F7F7F7"</span>, <span class="st">"#B2182B"</span><span class="op">)</span><span class="op">)</span><span class="op">(</span><span class="fl">100</span><span class="op">)</span></span>
+<span>        <span class="op">}</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Using pheatmap fallback (ComplexHeatmap unavailable or one marker table empty)."</span><span class="op">)</span></span>
+<span>        <span class="fu">pheatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/pheatmap/man/pheatmap.html" class="external-link">pheatmap</a></span><span class="op">(</span></span>
+<span>          <span class="va">mat_scaled</span>,</span>
+<span>          scale <span class="op">=</span> <span class="st">"none"</span>,</span>
+<span>          cluster_cols <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>          cluster_rows <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>          show_colnames <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>          annotation_col <span class="op">=</span> <span class="va">ann_col</span>,</span>
+<span>          annotation_colors <span class="op">=</span> <span class="va">ann_colors</span>,</span>
+<span>          color <span class="op">=</span> <span class="va">heatmap_colors</span>,</span>
+<span>          breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="op">-</span><span class="fl">3</span>, <span class="fl">3</span>, length.out <span class="op">=</span> <span class="fl">101</span><span class="op">)</span>,</span>
+<span>          main <span class="op">=</span> <span class="st">"Top adverse &amp; favorable marker genes (pheatmap fallback)"</span>,</span>
+<span>          fontsize <span class="op">=</span> <span class="fl">12</span>,</span>
+<span>          fontsize_row <span class="op">=</span> <span class="fl">10</span>,</span>
+<span>          treeheight_row <span class="op">=</span> <span class="fl">10</span></span>
+<span>        <span class="op">)</span></span>
+<span>      <span class="op">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">drew_ch</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Install ComplexHeatmap + circlize for plot_phenotype_markers; pheatmap for fallback."</span><span class="op">)</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="va">msg</span> <span class="op">&lt;-</span> <span class="st">"Could not retrieve expression data for heatmap"</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">msg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">msg</span>, <span class="st">" (expr nrow="</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span>, <span class="st">", ncol="</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr</span><span class="op">)</span>, <span class="st">"; try LayerData for Seurat v5)"</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="va">msg</span>, <span class="st">"."</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p><img src="spatial-transcriptomics_files/figure-html/heatmap-markers-spatial-1.png" class="r-plt" alt="" width="100%" style="display: block; margin: auto;"></p>
+</div>
+<div class="section level4">
+<h4 id="stacked-barplot-adverse-vs--favorable-by-cell-type">Stacked barplot: adverse vs. favorable by cell type<a class="anchor" aria-label="anchor" href="#stacked-barplot-adverse-vs--favorable-by-cell-type"></a>
+</h4>
+<p>Each column is a cell type; the height is filled by the number of
+adverse (5th percentile) or favorable (5th percentile) cells.</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">ct_col_bar</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"spatial_df_celltype_col"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">spatial_df_celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">spatial_df_celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">ct_col_bar</span> <span class="op">&lt;-</span> <span class="va">spatial_df_celltype_col</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"celltype_col"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">ct_col_bar</span> <span class="op">&lt;-</span> <span class="va">celltype_col</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="kw">for</span> <span class="op">(</span><span class="va">c</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CellType"</span>, <span class="st">"Celltype..major.lineage."</span>, <span class="st">"cell_type"</span>, <span class="st">"celltype"</span>, <span class="st">"annotation"</span>, <span class="st">"seurat_clusters"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="va">c</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/na.fail.html" class="external-link">na.omit</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[[</span><span class="va">c</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">ct_col_bar</span> <span class="op">&lt;-</span> <span class="va">c</span></span>
+<span>        <span class="kw">break</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">ct_col_bar</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">meta</span> <span class="op">&lt;-</span> <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span></span>
+<span>    <span class="va">meta</span><span class="op">$</span><span class="va">pg</span> <span class="op">&lt;-</span> <span class="va">meta</span><span class="op">[[</span><span class="va">group_col</span><span class="op">]</span><span class="op">]</span></span>
+<span>    <span class="va">meta</span><span class="op">$</span><span class="va">ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">meta</span><span class="op">[[</span><span class="va">ct_col_bar</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span>    <span class="va">meta</span><span class="op">$</span><span class="va">ct_ok</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">meta</span><span class="op">$</span><span class="va">ct</span><span class="op">)</span> <span class="op">&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/trimws.html" class="external-link">trimws</a></span><span class="op">(</span><span class="va">meta</span><span class="op">$</span><span class="va">ct</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="va">idx_extreme</span> <span class="op">&lt;-</span> <span class="va">meta</span><span class="op">$</span><span class="va">pg</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Most Adverse"</span>, <span class="st">"Most Favorable"</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">meta</span><span class="op">$</span><span class="va">ct_ok</span></span>
+<span>    <span class="va">df_bar</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span></span>
+<span>      CellType <span class="op">=</span> <span class="va">meta</span><span class="op">$</span><span class="va">ct</span><span class="op">[</span><span class="va">idx_extreme</span><span class="op">]</span>,</span>
+<span>      Prognostic_group <span class="op">=</span> <span class="va">meta</span><span class="op">$</span><span class="va">pg</span><span class="op">[</span><span class="va">idx_extreme</span><span class="op">]</span>,</span>
+<span>      useNA <span class="op">=</span> <span class="st">"no"</span></span>
+<span>    <span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">df_bar</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">df_bar</span><span class="op">$</span><span class="va">Prognostic_group</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">df_bar</span><span class="op">$</span><span class="va">Prognostic_group</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Most Favorable"</span>, <span class="st">"Most Adverse"</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="va">pal_bar</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>`Most Adverse` <span class="op">=</span> <span class="st">"#B2182B"</span>, `Most Favorable` <span class="op">=</span> <span class="st">"#2166AC"</span><span class="op">)</span></span>
+<span>      <span class="va">adverse</span> <span class="op">&lt;-</span> <span class="va">df_bar</span><span class="op">[</span><span class="va">df_bar</span><span class="op">$</span><span class="va">Prognostic_group</span> <span class="op">==</span> <span class="st">"Most Adverse"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CellType"</span>, <span class="st">"Freq"</span><span class="op">)</span><span class="op">]</span></span>
+<span>      <span class="va">fav</span> <span class="op">&lt;-</span> <span class="va">df_bar</span><span class="op">[</span><span class="va">df_bar</span><span class="op">$</span><span class="va">Prognostic_group</span> <span class="op">==</span> <span class="st">"Most Favorable"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CellType"</span>, <span class="st">"Freq"</span><span class="op">)</span><span class="op">]</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">adverse</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="st">"n_adverse"</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fav</span><span class="op">)</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="st">"n_fav"</span></span>
+<span>      <span class="va">df_labels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://edzer.github.io/sp/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">adverse</span>, <span class="va">fav</span>, by <span class="op">=</span> <span class="st">"CellType"</span>, all <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>      <span class="va">df_labels</span><span class="op">$</span><span class="va">n_adverse</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">df_labels</span><span class="op">$</span><span class="va">n_adverse</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>      <span class="va">df_labels</span><span class="op">$</span><span class="va">n_fav</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">df_labels</span><span class="op">$</span><span class="va">n_fav</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span>      <span class="va">df_labels</span><span class="op">$</span><span class="va">label</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">df_labels</span><span class="op">$</span><span class="va">n_adverse</span>, <span class="st">"/"</span>, <span class="va">df_labels</span><span class="op">$</span><span class="va">n_fav</span><span class="op">)</span></span>
+<span>      <span class="va">df_labels</span><span class="op">$</span><span class="va">total</span> <span class="op">&lt;-</span> <span class="va">df_labels</span><span class="op">$</span><span class="va">n_adverse</span> <span class="op">+</span> <span class="va">df_labels</span><span class="op">$</span><span class="va">n_fav</span></span>
+<span>      <span class="va">ct_ord</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/reorder.factor.html" class="external-link">reorder</a></span><span class="op">(</span><span class="va">df_bar</span><span class="op">$</span><span class="va">CellType</span>, <span class="va">df_bar</span><span class="op">$</span><span class="va">Freq</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="va">df_labels</span><span class="op">$</span><span class="va">CellType</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">df_labels</span><span class="op">$</span><span class="va">CellType</span>, levels <span class="op">=</span> <span class="va">ct_ord</span><span class="op">)</span></span>
+<span>      <span class="va">p_bar</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">df_bar</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/reorder.factor.html" class="external-link">reorder</a></span><span class="op">(</span><span class="va">.data</span><span class="op">$</span><span class="va">CellType</span>, <span class="va">.data</span><span class="op">$</span><span class="va">Freq</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span><span class="op">)</span>, y <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">Freq</span>, fill <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">Prognostic_group</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_bar.html" class="external-link">geom_col</a></span><span class="op">(</span>position <span class="op">=</span> <span class="st">"stack"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_text.html" class="external-link">geom_text</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">df_labels</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">CellType</span>, y <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">total</span>, label <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">n_adverse</span><span class="op">)</span>,</span>
+<span>                  inherit.aes <span class="op">=</span> <span class="cn">FALSE</span>, vjust <span class="op">=</span> <span class="op">-</span><span class="fl">0.3</span>, size <span class="op">=</span> <span class="fl">3.5</span>, color <span class="op">=</span> <span class="st">"#B2182B"</span>, hjust <span class="op">=</span> <span class="fl">1.05</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_text.html" class="external-link">geom_text</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">df_labels</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">CellType</span>, y <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">total</span>, label <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"/"</span>, <span class="va">.data</span><span class="op">$</span><span class="va">n_fav</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>                  inherit.aes <span class="op">=</span> <span class="cn">FALSE</span>, vjust <span class="op">=</span> <span class="op">-</span><span class="fl">0.3</span>, size <span class="op">=</span> <span class="fl">3.5</span>, color <span class="op">=</span> <span class="st">"#2166AC"</span>, hjust <span class="op">=</span> <span class="op">-</span><span class="fl">0.05</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_manual.html" class="external-link">scale_fill_manual</a></span><span class="op">(</span>values <span class="op">=</span> <span class="va">pal_bar</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Cell type"</span>, y <span class="op">=</span> <span class="st">"Number of cells"</span>, fill <span class="op">=</span> <span class="st">"Prognostic group"</span>,</span>
+<span>             title <span class="op">=</span> <span class="st">"Adverse vs. favorable cells (5th percentile) by cell type"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span>base_size <span class="op">=</span> <span class="fl">14</span><span class="op">)</span> <span class="op">+</span></span>
+<span>        <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">45</span>, hjust <span class="op">=</span> <span class="fl">1</span>, size <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>, legend.position <span class="op">=</span> <span class="st">"top"</span><span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">p_bar</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+<p><img src="spatial-transcriptomics_files/figure-html/stacked-bar-adverse-favorable-by-celltype-1.png" class="r-plt" alt="" width="100%">
+In line with the other Pancreatic cancer vignettes, PhenoMapR identifies
+ductal cells (and some fibroblasts) as the most associated cell type
+with an adverse PhenoMapR prognostic score. Alpha, plasma, and beta
+cells are the most associated with the more favorable prognostic signal.
+Interestingly, fibroblasts seems to comprise both adverse and favorable
+phenotypes.</p>
+</div>
+<div class="section level4">
+<h4 id="step-3-cell-type-specific-phenotype-markers">Step 3: Cell-type-specific phenotype markers<a class="anchor" aria-label="anchor" href="#step-3-cell-type-specific-phenotype-markers"></a>
+</h4>
+<p>Here we call <code><a href="../reference/find_phenotype_markers.html">find_phenotype_markers()</a></code> with
+<strong><code>marker_scope = "cell_type_specific"</code></strong>, using
+the same cell type column as elsewhere in this vignette. The default
+<strong><code>celltype_contrast = "within_cell_type"</code></strong>
+contrasts each prognostic tail <strong>within</strong> a mapped cell
+type to the other bins in that type. For the legacy cohort-wide
+reference (tail vs all other cells), set
+<strong><code>celltype_contrast = "vs_cohort_rest"</code></strong> (see
+<code><a href="../reference/find_phenotype_markers.html">?find_phenotype_markers</a></code>).</p>
+<p>When both adverse and favorable marker tables are non-empty and
+<strong>ComplexHeatmap</strong> is installed,
+<strong><code>plot_phenotype_markers(..., heatmap_type = "cell_type_specific")</code></strong>
+matches the single-cell vignette (column order: phenotype bin, cell
+type, score; row blocks with optional gene labels).</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">markers_ct_spatial</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="va">ct_col_spatial</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"spatial_df_celltype_col"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">spatial_df_celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
+<span>      <span class="va">spatial_df_celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">ct_col_spatial</span> <span class="op">&lt;-</span> <span class="va">spatial_df_celltype_col</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">ct_col_spatial</span> <span class="op">&lt;-</span> <span class="va">celltype_col</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="kw">for</span> <span class="op">(</span><span class="va">c</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"CellType"</span>, <span class="st">"Celltype..major.lineage."</span>, <span class="st">"cell_type"</span>, <span class="st">"celltype"</span>, <span class="st">"annotation"</span>, <span class="st">"seurat_clusters"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="va">c</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/na.fail.html" class="external-link">na.omit</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[[</span><span class="va">c</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">ct_col_spatial</span> <span class="op">&lt;-</span> <span class="va">c</span></span>
+<span>        <span class="kw">break</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">ct_col_spatial</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">cells_ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">)</span></span>
+<span>    <span class="va">group_df_ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>      cell_id <span class="op">=</span> <span class="va">cells_ct</span>,</span>
+<span>      phenotype_group <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[</span><span class="va">cells_ct</span>, <span class="va">group_col</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>      cell_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[</span><span class="va">cells_ct</span>, <span class="va">ct_col_spatial</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>      stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="va">assay_ct</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"assay_markers"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">assay_markers</span><span class="op">)</span><span class="op">)</span> <span class="va">assay_markers</span> <span class="kw">else</span> <span class="va">assay_use</span></span>
+<span>    <span class="va">markers_ct_spatial</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>      <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/find_phenotype_markers.html">find_phenotype_markers</a></span><span class="op">(</span></span>
+<span>        <span class="va">seurat</span>,</span>
+<span>        group_labels <span class="op">=</span> <span class="va">group_df_ct</span>,</span>
+<span>        group_column <span class="op">=</span> <span class="st">"phenotype_group"</span>,</span>
+<span>        cell_id_column <span class="op">=</span> <span class="st">"cell_id"</span>,</span>
+<span>        cell_type_column <span class="op">=</span> <span class="st">"cell_type"</span>,</span>
+<span>        marker_scope <span class="op">=</span> <span class="st">"cell_type_specific"</span>,</span>
+<span>        celltype_contrast <span class="op">=</span> <span class="st">"within_cell_type"</span>,</span>
+<span>        assay <span class="op">=</span> <span class="va">assay_ct</span>,</span>
+<span>        slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>        max_cells_per_ident <span class="op">=</span> <span class="va">spatial_max_cells</span>,</span>
+<span>        verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>      <span class="op">)</span>,</span>
+<span>      error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"cell_type_specific find_phenotype_markers: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
+<span>        <span class="cn">NULL</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_ct_spatial</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Cell-type-specific adverse markers (top 5):"</span><span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu">utils</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">markers_ct_spatial</span><span class="op">$</span><span class="va">adverse_markers</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Cell-type-specific favorable markers (top 5):"</span><span class="op">)</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu">utils</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">markers_ct_spatial</span><span class="op">$</span><span class="va">favorable_markers</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="va">expr_pm</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span>    <span class="kw">for</span> <span class="op">(</span><span class="va">a</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">assay_ct</span>, <span class="va">assay_use</span>, <span class="st">"RNA"</span>, <span class="st">"SCT"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="va">a</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="kw">next</span></span>
+<span>      <span class="va">expr_pm</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData</a></span><span class="op">(</span><span class="va">seurat</span>, layer <span class="op">=</span> <span class="st">"data"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>        error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>          <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu">Seurat</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData</a></span><span class="op">(</span><span class="va">seurat</span>, slot <span class="op">=</span> <span class="st">"data"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>          error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e2</span><span class="op">)</span> <span class="cn">NULL</span></span>
+<span>        <span class="op">)</span></span>
+<span>      <span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="kw">break</span></span>
+<span>      <span class="va">expr_pm</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="fu">SeuratObject</span><span class="fu">::</span><span class="fu"><a href="https://satijalab.github.io/seurat-object/reference/Layers.html" class="external-link">LayerData</a></span><span class="op">(</span><span class="va">seurat</span>, layer <span class="op">=</span> <span class="st">"data"</span>, assay <span class="op">=</span> <span class="va">a</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>        error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">NULL</span></span>
+<span>      <span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="kw">break</span></span>
+<span>    <span class="op">}</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_ct_spatial</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="va">meta_pm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">[</span><span class="va">cells_ct</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
+<span>      <span class="va">meta_pm</span><span class="op">$</span><span class="va">cell_id_plot</span> <span class="op">&lt;-</span> <span class="va">cells_ct</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/all.html" class="external-link">all</a></span><span class="op">(</span><span class="va">cells_ct</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="va">expr_pm</span> <span class="op">&lt;-</span> <span class="va">expr_pm</span><span class="op">[</span>, <span class="va">cells_ct</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
+<span>      <span class="op">}</span></span>
+<span>      <span class="va">pal_ct</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/get_celltype_palette.html">get_celltype_palette</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_pm</span><span class="op">[[</span><span class="va">ct_col_spatial</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"ComplexHeatmap"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"circlize"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>        <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/plot_phenotype_markers.html">plot_phenotype_markers</a></span><span class="op">(</span></span>
+<span>          markers <span class="op">=</span> <span class="va">markers_ct_spatial</span>,</span>
+<span>          expr_mat <span class="op">=</span> <span class="va">expr_pm</span>,</span>
+<span>          meta <span class="op">=</span> <span class="va">meta_pm</span>,</span>
+<span>          cell_id_col <span class="op">=</span> <span class="st">"cell_id_plot"</span>,</span>
+<span>          group_col <span class="op">=</span> <span class="va">group_col</span>,</span>
+<span>          score_col <span class="op">=</span> <span class="va">score_col</span>,</span>
+<span>          celltype_col <span class="op">=</span> <span class="va">ct_col_spatial</span>,</span>
+<span>          celltype_palette <span class="op">=</span> <span class="va">pal_ct</span>,</span>
+<span>          heatmap_type <span class="op">=</span> <span class="st">"cell_type_specific"</span>,</span>
+<span>          top_n_markers <span class="op">=</span> <span class="fl">20L</span>,</span>
+<span>          n_mark_labels <span class="op">=</span> <span class="fl">5L</span>,</span>
+<span>          p_adj_threshold <span class="op">=</span> <span class="fl">0.05</span>,</span>
+<span>          column_title <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span>
+<span>            <span class="st">"Cell-type-specific phenotype markers (spatial; within_cell_type contrast; "</span>,</span>
+<span>            <span class="st">"use celltype_contrast = \"vs_cohort_rest\" for cohort-wide DE)"</span></span>
+<span>          <span class="op">)</span></span>
+<span>        <span class="op">)</span></span>
+<span>      <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Install packages 'ComplexHeatmap' and 'circlize' to draw the cell-type-specific marker heatmap."</span><span class="op">)</span></span>
+<span>      <span class="op">}</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"No suitable cell type column in metadata; skipping cell_type_specific markers."</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level3">
+<h3 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
+</h3>
+<ul>
+<li>
+<strong>Part 1 (spots)</strong>: Spot-level object
+<code>HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds</code>;
+<strong>H&amp;E</strong> via <code>SpatialPlot</code>; PhenoMapR
+scoring; <strong>hex</strong> summary of z-scaled scores plus
+<strong>point</strong> map of 5th-percentile groups (<strong>same
+<code>coord_fixed</code> / limits as H&amp;E</strong>; no jitter).</li>
+<li>
+<strong>Part 2 (CytoSPACE)</strong>:
+<code>HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds</code>; same
+PRECOG <strong>Pancreatic</strong> reference at <strong>cell</strong>
+resolution; score distribution, score by cell type, prognostic groups,
+and spatial maps (jittered cells per spot).</li>
+<li>
+<strong>Co-localization</strong>: <strong><a href="https://github.com/juninamo/spatialCooccur" class="external-link"><code>spatialCooccur</code></a></strong>
+<strong><code>nhood_enrichment()</code></strong> and
+<strong><code>cooccur_local()</code></strong> on Visium coordinates and
+prognostic groups (Part 2 only; install from GitHub).</li>
+<li>
+<strong>Markers</strong>: (1) <strong>Cell-type-agnostic</strong>
+<code>find_phenotype_markers(..., marker_scope = "phenotype_groups")</code>
+with
+<strong><code>plot_phenotype_markers(..., heatmap_type = "global")</code></strong>
+(or <strong>pheatmap</strong> fallback); (2)
+<strong>Cell-type-specific</strong>
+<code>marker_scope = "cell_type_specific"</code> with
+<strong><code>plot_phenotype_markers(..., heatmap_type = "cell_type_specific")</code></strong>
+when <strong>ComplexHeatmap</strong> is available.</li>
+</ul>
+<p>Optional download URLs: <code>PHENOMAPR_SPATIAL_SPOT_RDS_URL</code>,
+<code>PHENOMAPR_SPATIAL_CYTO_RDS_URL</code>;
+<code>PHENOMAPR_SPATIAL_RDS_URL</code> still applies to the
+<strong>CytoSPACE</strong> <code>.rds</code> if the cyto-specific
+variable is unset.</p>
+</div>
+<div class="section level3">
+<h3 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
+</h3>
+<p><a id="ref1"></a> <strong>[1]</strong> Benard, B. A. et al. PRECOG
+update: an augmented resource of clinical outcome associations with gene
+expression for adult, pediatric, and immunotherapy cohorts. Nucleic
+Acids Res. 54, D1579–D1589 (2026).</p>
+</div>
+<div class="section level3">
+<h3 id="session-info">Session Info<a class="anchor" aria-label="anchor" href="#session-info"></a>
+</h3>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## R version 4.5.3 (2026-03-11)</span></span>
+<span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
+<span><span class="co">## Running under: Ubuntu 24.04.4 LTS</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## Matrix products: default</span></span>
+<span><span class="co">## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 </span></span>
+<span><span class="co">## LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.26.so;  LAPACK version 3.12.0</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## locale:</span></span>
+<span><span class="co">##  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8       </span></span>
+<span><span class="co">##  [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8   </span></span>
+<span><span class="co">##  [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C          </span></span>
+<span><span class="co">## [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C   </span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## time zone: UTC</span></span>
+<span><span class="co">## tzcode source: system (glibc)</span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## attached base packages:</span></span>
+<span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## other attached packages:</span></span>
+<span><span class="co">## [1] dplyr_1.2.1        ggplot2_4.0.2      Seurat_5.4.0       SeuratObject_5.4.0</span></span>
+<span><span class="co">## [5] sp_2.2-1           PhenoMapR_0.1.0   </span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## loaded via a namespace (and not attached):</span></span>
+<span><span class="co">##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        </span></span>
+<span><span class="co">##   [4] magrittr_2.0.5         magick_2.9.1           spatstat.utils_3.2-2  </span></span>
+<span><span class="co">##   [7] farver_2.1.2           rmarkdown_2.31         GlobalOptions_0.1.4   </span></span>
+<span><span class="co">##  [10] fs_2.0.1               ragg_1.5.2             vctrs_0.7.3           </span></span>
+<span><span class="co">##  [13] ROCR_1.0-12            spatstat.explore_3.8-0 htmltools_0.5.9       </span></span>
+<span><span class="co">##  [16] curl_7.0.0             sass_0.4.10            sctransform_0.4.3     </span></span>
+<span><span class="co">##  [19] parallelly_1.46.1      KernSmooth_2.23-26     bslib_0.10.0          </span></span>
+<span><span class="co">##  [22] htmlwidgets_1.6.4      desc_1.4.3             ica_1.0-3             </span></span>
+<span><span class="co">##  [25] plyr_1.8.9             plotly_4.12.0          zoo_1.8-15            </span></span>
+<span><span class="co">##  [28] cachem_1.1.0           igraph_2.2.3           iterators_1.0.14      </span></span>
+<span><span class="co">##  [31] mime_0.13              lifecycle_1.0.5        pkgconfig_2.0.3       </span></span>
+<span><span class="co">##  [34] Matrix_1.7-4           R6_2.6.1               fastmap_1.2.0         </span></span>
+<span><span class="co">##  [37] clue_0.3-68            fitdistrplus_1.2-6     future_1.70.0         </span></span>
+<span><span class="co">##  [40] shiny_1.13.0           digest_0.6.39          colorspace_2.1-2      </span></span>
+<span><span class="co">##  [43] S4Vectors_0.49.1-1     patchwork_1.3.2        tensor_1.5.1          </span></span>
+<span><span class="co">##  [46] RSpectra_0.16-2        irlba_2.3.7            textshaping_1.0.5     </span></span>
+<span><span class="co">##  [49] labeling_0.4.3         progressr_0.19.0       spatstat.sparse_3.1-0 </span></span>
+<span><span class="co">##  [52] httr_1.4.8             polyclip_1.10-7        abind_1.4-8           </span></span>
+<span><span class="co">##  [55] compiler_4.5.3         gargle_1.6.1           doParallel_1.0.17     </span></span>
+<span><span class="co">##  [58] withr_3.0.2            S7_0.2.1               fastDummies_1.7.5     </span></span>
+<span><span class="co">##  [61] hexbin_1.28.5          MASS_7.3-65            rjson_0.2.23          </span></span>
+<span><span class="co">##  [64] tools_4.5.3            lmtest_0.9-40          otel_0.2.0            </span></span>
+<span><span class="co">##  [67] googledrive_2.1.2      httpuv_1.6.17          future.apply_1.20.2   </span></span>
+<span><span class="co">##  [70] goftest_1.2-3          glue_1.8.0             nlme_3.1-168          </span></span>
+<span><span class="co">##  [73] promises_1.5.0         grid_4.5.3             Rtsne_0.17            </span></span>
+<span><span class="co">##  [76] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        </span></span>
+<span><span class="co">##  [79] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           </span></span>
+<span><span class="co">##  [82] data.table_1.18.2.1    BiocGenerics_0.56.0    spatstat.geom_3.7-3   </span></span>
+<span><span class="co">##  [85] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         </span></span>
+<span><span class="co">##  [88] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         </span></span>
+<span><span class="co">##  [91] spam_2.11-3            RcppHNSW_0.6.0         limma_3.66.0          </span></span>
+<span><span class="co">##  [94] later_1.4.8            circlize_0.4.18        splines_4.5.3         </span></span>
+<span><span class="co">##  [97] lattice_0.22-9         survival_3.8-6         deldir_2.0-4          </span></span>
+<span><span class="co">## [100] tidyselect_1.2.1       ComplexHeatmap_2.26.1  miniUI_0.1.2          </span></span>
+<span><span class="co">## [103] pbapply_1.7-4          knitr_1.51             gridExtra_2.3         </span></span>
+<span><span class="co">## [106] IRanges_2.44.0         scattermore_1.2        stats4_4.5.3          </span></span>
+<span><span class="co">## [109] xfun_0.57              statmod_1.5.1          matrixStats_1.5.0     </span></span>
+<span><span class="co">## [112] stringi_1.8.7          lazyeval_0.2.3         yaml_2.3.12           </span></span>
+<span><span class="co">## [115] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          </span></span>
+<span><span class="co">## [118] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          </span></span>
+<span><span class="co">## [121] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       </span></span>
+<span><span class="co">## [124] Rcpp_1.1.1             globals_0.19.1         spatstat.random_3.4-5 </span></span>
+<span><span class="co">## [127] png_0.1-9              spatstat.univar_3.1-7  parallel_4.5.3        </span></span>
+<span><span class="co">## [130] pkgdown_2.2.0          presto_1.0.0           dotCall64_1.2         </span></span>
+<span><span class="co">## [133] listenv_0.10.1         viridisLite_0.4.3      scales_1.4.0          </span></span>
+<span><span class="co">## [136] ggridges_0.5.7         crayon_1.5.3           purrr_1.2.2           </span></span>
+<span><span class="co">## [139] GetoptLong_1.1.1       rlang_1.2.0            cowplot_1.2.0</span></span></code></pre>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
