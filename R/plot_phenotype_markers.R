@@ -47,6 +47,9 @@
 #' @param draw If \code{TRUE} (default), calls \code{ComplexHeatmap::draw()}. If
 #'   \code{FALSE}, returns the \code{Heatmap} object invisibly.
 #' @param use_raster Passed to \code{Heatmap()} (default \code{FALSE}).
+#' @param outline_marker_blocks If \code{TRUE} (default) and
+#'   \code{heatmap_type = "cell_type_specific"}, draws white outline boxes around
+#'   each marker-gene block after \code{draw()}. Set \code{FALSE} to omit them.
 #'
 #' @return Invisibly, the \code{ComplexHeatmap::Heatmap} object (or \code{NULL} if
 #'   nothing was plotted).
@@ -65,10 +68,11 @@
 #' are drawn explicitly (\code{Legend()} + \code{annotation_legend_list};
 #' \code{merge_legends = TRUE} and correct parameter name \code{merge_legends}).
 #' PhenoMapR score colors are diverging blue--white--red with \strong{white at
-#' 0}: negative scores are blue, positive scores are red. Limits use the score
-#' range of \strong{cells in the heatmap columns} (not all of \code{meta}), with
-#' \code{colorRamp2} breakpoints \code{c(min, 0, max)} when the range crosses
-#' zero. Row
+#' 0}: negative scores are blue, positive scores are red. The score column is
+#' coerced to a plain numeric vector (so matrix columns, e.g. from
+#' \code{scale()}, do not corrupt subsetting). Limits use \strong{heatmap column}
+#' scores only; the merged legend uses an explicit \code{Legend(at = ...)} with
+#' tick positions rounded to whole numbers (annotation auto-legends are disabled). Row
 #' annotations: for \code{left_annotation}, the first track is leftmost
 #' (farthest from the matrix). For \code{heatmap_type = "cell_type_specific"},
 #' the order is \code{anno_mark} (outer), \strong{cell type}, then
@@ -76,11 +80,11 @@
 #' strips are first (next to the heatmap): phenotype then cell type, then
 #' \code{anno_mark} outermost. Favorable-tail strips and gene marks on the
 #' \strong{left}, adverse on the \strong{right}. For
-#' \code{heatmap_type = "cell_type_specific"}, after drawing, white outline
-#' boxes are added around each marker-gene block (EcoTyper-style
-#' \code{decorate_heatmap_body} + \code{grid.rect}), spanning only the
-#' columns for that block\'s phenotype bin and cell type (not the full matrix
-#' width).
+#' \code{heatmap_type = "cell_type_specific"}, optional white outline boxes
+#' (\code{outline_marker_blocks}) use \code{decorate_heatmap_body} per row slice
+#' with column span in native units so each box covers only the columns whose
+#' \code{group_col}/\code{celltype_col} match that block (see
+#' \code{outline_marker_blocks}).
 #' Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 #' \strong{RdGy} (11-class): \strong{high} scaled expression = red, \strong{low}
 #' = black. Heatmap and column annotation legends merge on the right
@@ -107,7 +111,8 @@ plot_phenotype_markers <- function(markers,
                                    heatmap_height = NULL,
                                    column_title = NULL,
                                    draw = TRUE,
-                                   use_raster = FALSE) {
+                                   use_raster = FALSE,
+                                   outline_marker_blocks = TRUE) {
   heatmap_type <- match.arg(heatmap_type)
   rank_by <- match.arg(rank_by)
 
@@ -197,17 +202,18 @@ plot_phenotype_markers <- function(markers,
   pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
 
   # PhenoMapR score bar: diverging blue–white–red with white at 0. Color limits
-  # use scores for heatmap columns only (meta[score_col] aligned to cell_order_hm),
-  # so the legend matches what is plotted (e.g. not max 500 in meta when this
-  # heatmap’s cells only span ~50). Fall back to all meta scores if none finite.
-  score_ann <- as.numeric(meta[[score_col]][meta_idx_hm])
-  score_ann[!is.finite(score_ann)] <- NA_real_
+  # use scores for heatmap columns only (aligned to cell_order_hm), so the
+  # legend matches what is plotted. Coerce meta[[score_col]] to a plain numeric
+  # vector first (1-column matrix / scale() columns would otherwise break
+  # subsetting and inflate the legend range). Fall back to all meta scores if
+  # no finite scores on heatmap columns.
+  score_ann <- .score_ann_for_heatmap(meta, score_col, meta_idx_hm)
   sa <- score_ann[is.finite(score_ann)]
   if (length(sa) > 0L) {
     smin <- min(sa)
     smax <- max(sa)
   } else {
-    score_all <- as.numeric(meta[[score_col]])
+    score_all <- .meta_score_numeric_vector(meta, score_col)
     score_all <- score_all[is.finite(score_all)]
     if (length(score_all) == 0L) {
       smin <- -1
@@ -273,7 +279,7 @@ plot_phenotype_markers <- function(markers,
       ),
       annotation_name_side = "right",
       show_annotation_name = TRUE,
-      show_legend = TRUE,
+      show_legend = FALSE,
       gap = grid::unit(0, "mm")
     )
 
@@ -407,8 +413,8 @@ plot_phenotype_markers <- function(markers,
 
     gene_info <- do.call(rbind, gene_info)
     block_key <- paste(
-      as.character(gene_info$phenotype_bin),
-      as.character(gene_info$cell_type),
+      trimws(as.character(gene_info$phenotype_bin)),
+      trimws(as.character(gene_info$cell_type)),
       sep = "||"
     )
 
@@ -461,7 +467,7 @@ plot_phenotype_markers <- function(markers,
       ),
       annotation_name_side = "right",
       show_annotation_name = TRUE,
-      show_legend = TRUE,
+      show_legend = FALSE,
       gap = grid::unit(0, "mm")
     )
 
@@ -562,10 +568,11 @@ plot_phenotype_markers <- function(markers,
         )
       }
     }
-    decorate_ct_rect <- list(
-      row_factor = factor(block_key, levels = unique(block_key)),
-      col_block_key = col_block_key
-    )
+    decorate_ct_rect <- if (isTRUE(outline_marker_blocks)) {
+      list(row_split = row_split, col_block_key = col_block_key)
+    } else {
+      NULL
+    }
 
     ht <- ComplexHeatmap::Heatmap(
       mat_plot,
@@ -597,10 +604,30 @@ plot_phenotype_markers <- function(markers,
   }
 
   if (isTRUE(draw)) {
-    # Manual legends for top annotations (draw() expects merge_legends, not merge_legend).
+    # Manual legends only (HeatmapAnnotation uses show_legend = FALSE so CH does
+    # not auto-build a second score legend with its own break inference).
+    lgd_at_raw <- if (smin < 0 && smax > 0) {
+      c(smin, 0, smax)
+    } else if (smax <= 0) {
+      c(smin, 0)
+    } else if (smin >= 0) {
+      c(0, smax)
+    } else {
+      c(smin, smax)
+    }
+    lgd_at <- sort(unique(round(lgd_at_raw)))
+    if (length(lgd_at) < 2L) {
+      lgd_at <- sort(unique(round(c(smin, smax))))
+    }
+    if (length(lgd_at) < 2L) {
+      lgd_at <- c(-1, 1)
+    }
+    lgd_labels <- as.character(lgd_at)
     lgd_score <- ComplexHeatmap::Legend(
       title = "PhenoMapR score",
       col_fun = score_col_fun,
+      at = lgd_at,
+      labels = lgd_labels,
       title_position = "leftcenter-rot",
       direction = "vertical",
       legend_height = grid::unit(3, "cm")
@@ -626,26 +653,38 @@ plot_phenotype_markers <- function(markers,
       merge_legends = TRUE,
       padding = grid::unit(c(4, 4, 4, 50), "mm")
     )
-    if (!is.null(decorate_ct_rect)) {
+    if (isTRUE(outline_marker_blocks) && !is.null(decorate_ct_rect)) {
       rect <- .rect_native_ct_marker_blocks(
-        decorate_ct_rect$row_factor,
-        decorate_ct_rect$col_block_key
+        decorate_ct_rect$col_block_key,
+        decorate_ct_rect$row_split
       )
-      ComplexHeatmap::decorate_heatmap_body("phenomap_ct_markers", {
-        for (j in seq_along(rect$x)) {
-          grid::grid.rect(
-            # `.rect_native_ct_marker_blocks()` currently computes coordinates in [0, 1]
-            # (normalized parent coordinates), so draw in npc, not native.
-            x = grid::unit(rect$x[j], "npc"),
-            y = grid::unit(rect$y[j], "npc"),
-            width = grid::unit(rect$w[j], "npc"),
-            height = grid::unit(rect$h[j], "npc"),
-            hjust = 0,
-            vjust = 1,
-            gp = grid::gpar(col = "white", fill = NA, lty = 1L, lwd = 1)
-          )
-        }
-      })
+      rs <- decorate_ct_rect$row_split
+      n_slice <- nlevels(rs)
+      for (si in seq_len(n_slice)) {
+        bk <- levels(rs)[si]
+        kk <- match(bk, rect$block)
+        if (is.na(kk)) next
+        rows_slice <- which(as.integer(rs) == si)
+        n_sr <- length(rows_slice)
+        if (!n_sr) next
+        j1 <- rect$jmin[kk]
+        j2 <- rect$jmax[kk]
+        ComplexHeatmap::decorate_heatmap_body(
+          "phenomap_ct_markers",
+          {
+            grid::grid.rect(
+              x = grid::unit(j1 - 1L, "native"),
+              y = grid::unit(1, "npc"),
+              width = grid::unit(j2 - j1 + 1L, "native"),
+              height = grid::unit(1, "npc"),
+              hjust = 0,
+              vjust = 1,
+              gp = grid::gpar(col = "white", fill = NA, lty = 1L, lwd = 1)
+            )
+          },
+          slice = si
+        )
+      }
     }
   }
   invisible(ht)
@@ -668,6 +707,55 @@ plot_phenotype_markers <- function(markers,
 .scaled_expr_col_fun_rdgy11 <- function(scale_clip) {
   breaks <- seq(scale_clip[1], scale_clip[2], length.out = 11L)
   circlize::colorRamp2(breaks, rev(.rdgy11_brewer))
+}
+
+#' Coerce \code{meta[[score_col]]} to a length-\code{nrow(meta)} numeric vector.
+#' Handles 1-column matrices (e.g. \code{scale()} bound into a data.frame).
+#'
+#' @noRd
+#' @keywords internal
+.meta_score_numeric_vector <- function(meta, score_col) {
+  v <- meta[[score_col]]
+  n <- nrow(meta)
+  if (is.null(v)) {
+    return(rep(NA_real_, n))
+  }
+  if (is.matrix(v)) {
+    if (nrow(v) == n && ncol(v) >= 1L) {
+      v <- as.numeric(v[, 1L])
+    } else if (ncol(v) == n && nrow(v) >= 1L) {
+      v <- as.numeric(v[1L, ])
+    } else {
+      v <- suppressWarnings(as.numeric(v))
+      if (length(v) != n) {
+        v <- rep(NA_real_, n)
+      }
+    }
+  } else {
+    v <- suppressWarnings(as.numeric(v))
+  }
+  if (length(v) != n) {
+    if (length(v) == 1L) {
+      v <- rep(v, n)
+    } else if (length(v) > n) {
+      v <- v[seq_len(n)]
+    } else {
+      v <- c(v, rep(NA_real_, n - length(v)))
+    }
+  }
+  v
+}
+
+#' PhenoMapR scores aligned to heatmap column order (\code{meta_idx_hm}).
+#'
+#' @noRd
+#' @keywords internal
+.score_ann_for_heatmap <- function(meta, score_col, meta_idx_hm) {
+  scv <- .meta_score_numeric_vector(meta, score_col)
+  out <- rep(NA_real_, length(meta_idx_hm))
+  ok <- !is.na(meta_idx_hm) & meta_idx_hm >= 1L & meta_idx_hm <= length(scv)
+  out[ok] <- scv[as.integer(meta_idx_hm[ok])]
+  out
 }
 
 #' Diverging PhenoMapR score colors: blue (\eqn{< 0}), white at 0, red (\eqn{> 0}).
@@ -697,69 +785,54 @@ plot_phenotype_markers <- function(markers,
   }
 }
 
-#' Native heatmap-body coordinates for white boxes around each cell-type-specific
-#' marker block. Rows follow \code{block_key}; columns use the same
-#' \code{phenotype||cell_type} string as \code{col_block_key[j]} (from
-#' \code{meta} via \code{meta_idx_hm}), matching \code{block_key} for genes.
+#' Column and row spans for white boxes around each cell-type-specific marker block.
+#'
+#' One row per \code{levels(row_split)} with a matching \code{col_block_key};
+#' \code{jmin}/\code{jmax} are 1-based column indices (heatmap body native width
+#' units). \code{r1}/\code{r2} are global matrix row indices for that block.
 #'
 #' @noRd
 #' @keywords internal
-.rect_native_ct_marker_blocks <- function(row_factor, col_block_key) {
-  # Robust EcoTyper-like rectangles, but *never* default to full heatmap width
-  # when a level is absent in the columns. That behavior causes "full-width"
-  # boxes if `col_block_key` contains levels not present in `row_factor` (e.g.,
-  # an "Other" phenotype group) or if a block has no columns.
-  rows <- factor(as.character(row_factor), levels = unique(as.character(row_factor)))
+.rect_native_ct_marker_blocks <- function(col_block_key, row_split) {
+  empty <- data.frame(
+    block = character(),
+    jmin = integer(),
+    jmax = integer(),
+    r1 = integer(),
+    r2 = integer(),
+    stringsAsFactors = FALSE
+  )
   columns <- as.character(col_block_key)
-
-  nrow <- length(rows)
-  ncol <- length(columns)
-  if (nrow < 1L || ncol < 1L) {
-    return(list(x = numeric(0), y = numeric(0), w = numeric(0), h = numeric(0)))
+  nc <- length(columns)
+  nr <- length(row_split)
+  if (nc < 1L || nr < 1L) {
+    return(empty)
   }
-
+  rows <- factor(as.character(row_split), levels = levels(row_split))
   lvls <- levels(rows)
-
-  # Row coordinates (EcoTyper approach: first occurrence defines block start).
-  row_start0 <- vapply(lvls, function(lvl) {
-    ii <- which(rows == lvl)
-    if (length(ii) == 0L) return(NA_real_)
-    as.numeric(ii[1L] - 1L)
-  }, numeric(1))
-  fract_y <- row_start0 / nrow
-  # Fill NAs from bottom to top (EcoTyper logic).
-  for (i in length(lvls):1) {
-    if (i == 1) {
-      if (is.na(fract_y[i])) fract_y[i] <- 0
-    } else if (i == length(lvls)) {
-      if (is.na(fract_y[i])) fract_y[i] <- 1
-    } else {
-      if (is.na(fract_y[i])) fract_y[i] <- fract_y[i + 1L]
-    }
-  }
-  h <- c(fract_y[-1], 1) - fract_y
-  y <- 1 - fract_y
-
-  # Column span per level: use min/max matching columns (more precise than
-  # first-occurrence and avoids full-width defaults).
-  x <- w <- rep(NA_real_, length(lvls))
-  for (k in seq_along(lvls)) {
-    lvl <- lvls[k]
+  blocks <- character()
+  jmin <- jmax <- r1 <- r2 <- integer()
+  for (lvl in lvls) {
+    idx_rows <- which(rows == lvl)
+    if (!length(idx_rows)) next
     jj <- which(!is.na(columns) & columns == lvl)
-    if (length(jj) == 0L) next
-    jmin <- min(jj)
-    jmax <- max(jj)
-    x[k] <- (jmin - 1L) / ncol
-    w[k] <- (jmax - jmin + 1L) / ncol
+    if (!length(jj)) next
+    blocks <- c(blocks, lvl)
+    jmin <- c(jmin, min(jj))
+    jmax <- c(jmax, max(jj))
+    r1 <- c(r1, min(idx_rows))
+    r2 <- c(r2, max(idx_rows))
   }
-
-  # Drop blocks that don't have corresponding columns.
-  keep <- which(is.finite(x) & is.finite(w) & w > 0)
-  list(
-    y = unname(y[keep]),
-    h = unname(h[keep]),
-    x = unname(x[keep]),
-    w = unname(w[keep])
+  if (!length(blocks)) {
+    return(empty)
+  }
+  data.frame(
+    block = blocks,
+    jmin = jmin,
+    jmax = jmax,
+    r1 = r1,
+    r2 = r2,
+    stringsAsFactors = FALSE
   )
 }
 
@@ -811,7 +884,7 @@ plot_phenotype_markers <- function(markers,
     stop("'expr_mat' must have non-empty colnames (cell IDs).")
   }
   meta_ids <- meta[[cell_id_col]]
-  score_vec <- as.numeric(meta[[score_col]])
+  score_vec <- .meta_score_numeric_vector(meta, score_col)
   idx_match <- match(cn, meta_ids)
   sc <- rep(NA_real_, length(cn))
   ok <- which(!is.na(idx_match))
@@ -834,7 +907,7 @@ plot_phenotype_markers <- function(markers,
                                             score_col,
                                             hm_group_levels,
                                             hm_celltype_levels) {
-  score_vec <- meta[[score_col]]
+  score_vec <- .meta_score_numeric_vector(meta, score_col)
   group_vec <- meta[[group_col]]
   ct_vec <- meta[[celltype_col]]
   cell_ids_hm <- meta[[cell_id_col]]

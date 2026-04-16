@@ -140,25 +140,24 @@ test_that(".pick_marker_genes can rank by lfc vs p_adj with different filters", 
   expect_false("G3" %in% g_p) # fails avg_log2FC > 1 filter
 })
 
-test_that(".rect_native_ct_marker_blocks uses col_block_key for x/w (not full width)", {
-  row_factor <- factor(
-    c("Most Favorable||T1", "Most Favorable||T1", "Most Adverse||T2"),
-    levels = c("Most Favorable||T1", "Most Adverse||T2")
+test_that(".meta_score_numeric_vector uses first column of matrix score column", {
+  meta <- data.frame(
+    id = 1:3,
+    score = I(cbind(c(10, 20, 30))),
+    stringsAsFactors = FALSE
   )
-  col_block_key <- c(
-    rep("Most Favorable||T1", 3L),
-    rep("Most Adverse||T2", 2L)
-  )
-  r <- PhenoMapR:::.rect_native_ct_marker_blocks(row_factor, col_block_key)
-  expect_length(r$x, 2L)
-  expect_equal(r$x[1], 0)
-  expect_equal(r$w[1], 3 / 5)
-  expect_equal(r$x[2], 3 / 5)
-  expect_equal(r$w[2], 2 / 5)
+  v <- PhenoMapR:::.meta_score_numeric_vector(meta, "score")
+  expect_equal(v, c(10, 20, 30))
 })
 
-test_that(".rect_native_ct_marker_blocks uses col_block_key for x/w (not full width)", {
-  row_factor <- factor(
+test_that(".score_ann_for_heatmap indexes meta rows safely", {
+  meta <- data.frame(score = c(1, 99, 3), stringsAsFactors = FALSE)
+  idx <- c(1L, 3L, NA_integer_)
+  expect_equal(PhenoMapR:::.score_ann_for_heatmap(meta, "score", idx), c(1, 3, NA_real_))
+})
+
+test_that(".rect_native_ct_marker_blocks returns jmin/jmax per row_split block", {
+  row_split <- factor(
     c("Most Favorable||T1", "Most Favorable||T1", "Most Adverse||T2"),
     levels = c("Most Favorable||T1", "Most Adverse||T2")
   )
@@ -166,10 +165,11 @@ test_that(".rect_native_ct_marker_blocks uses col_block_key for x/w (not full wi
     rep("Most Favorable||T1", 3L),
     rep("Most Adverse||T2", 2L)
   )
-  r <- PhenoMapR:::.rect_native_ct_marker_blocks(row_factor, col_block_key)
-  expect_length(r$x, 2L)
-  expect_equal(r$x[1], 0)
-  expect_equal(r$w[1], 3 / 5)
-  expect_equal(r$x[2], 3 / 5)
-  expect_equal(r$w[2], 2 / 5)
+  r <- PhenoMapR:::.rect_native_ct_marker_blocks(col_block_key, row_split)
+  expect_equal(nrow(r), 2L)
+  expect_equal(r$block, c("Most Favorable||T1", "Most Adverse||T2"))
+  expect_equal(r$jmin, c(1L, 4L))
+  expect_equal(r$jmax, c(3L, 5L))
+  expect_equal(r$r1, c(1L, 3L))
+  expect_equal(r$r2, c(2L, 3L))
 })
