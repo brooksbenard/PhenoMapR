@@ -186,6 +186,15 @@ seurat <- readRDS(rds_cyto)
   seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
 score_col <- grep("weighted_sum_score", names(scores_spatial), value = TRUE)[1]
 
+spatial_ci_lite <- tolower(Sys.getenv("CI", "")) %in% c("true", "yes", "1") ||
+  Sys.getenv("PHENOMAPR_SPATIAL_LITE", "") == "1"
+spatial_max_cells <- if (spatial_ci_lite) 2000L else 5000L
+assay_use <- if ("Spatial" %in% names(seurat@assays)) {
+  "Spatial"
+} else {
+  Seurat::DefaultAssay(seurat)
+}
+
 plot_score_distribution(
   seurat@meta.data[[score_col]],
   main = "PRECOG Pancreatic score distribution (CytoSPACE cells)",
@@ -532,424 +541,439 @@ cell_locations <- cell_locations %>%
 <!-- ``` -->
 
 
-<!-- ## Prognostic markers -->
+## Prognostic markers
 
-<!-- `find_phenotype_markers()` supports the same **marker scopes** on spatial data (cells or spots mapped to spots) as in the single-cell vignette: -->
+`find_phenotype_markers()` supports the same **marker scopes** on spatial data (cells or spots mapped to spots) as in the single-cell vignette:
 
-<!-- - **Cell type agnostic** — `marker_scope = "phenotype_groups"` (**default**): **Most Adverse** vs all other cells with a phenotype label, and **Most Favorable** vs all other cells, **ignoring** cell type. This asks which genes distinguish the prognostic extremes in the whole mixture on the slide. -->
-<!-- - **Cell type specific** — `marker_scope = "cell_type_specific"`: for each cell type in metadata (here, CytoSPACE-mapped types), contrasts that type in the adverse or favorable tail vs a reference set controlled by `celltype_contrast`. **Default** `celltype_contrast = "within_cell_type"` compares to other phenotype bins **within the same type** (reduces housekeeping genes repeating across type × tail blocks). **`celltype_contrast = "vs_cohort_rest"`** restores the **original** cohort-wide contrast: (type ∩ tail) vs **every other cell**. With **`celltype_unique_genes = TRUE`** (default), each gene is kept in at most one adverse/favorable row (strongest `avg_log2FC`). -->
+- **Cell type agnostic** — `marker_scope = "phenotype_groups"` (**default**): **Most Adverse** vs all other cells with a phenotype label, and **Most Favorable** vs all other cells, **ignoring** cell type. This asks which genes distinguish the prognostic extremes in the whole mixture on the slide.
+- **Cell type specific** — `marker_scope = "cell_type_specific"`: for each cell type in metadata (here, CytoSPACE-mapped types), contrasts that type in the adverse or favorable tail vs a reference set controlled by `celltype_contrast`. **Default** `celltype_contrast = "within_cell_type"` compares to other phenotype bins **within the same type** (reduces housekeeping genes repeating across type × tail blocks). **`celltype_contrast = "vs_cohort_rest"`** restores the **original** cohort-wide contrast: (type ∩ tail) vs **every other cell**. With **`celltype_unique_genes = TRUE`** (default), each gene is kept in at most one adverse/favorable row (strongest `avg_log2FC`).
 
-<!-- Below, **Step 1–2** use **cell-type-agnostic** markers; **Step 2** draws **`plot_phenotype_markers(..., heatmap_type = "global")`** when **ComplexHeatmap** and **circlize** are installed (same helper as the **single-cell** vignette), with a **pheatmap** fallback otherwise. **Step 3** runs **cell-type-specific** markers and **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when those packages are available. -->
+Below, **Step 1–2** use **cell-type-agnostic** markers; **Step 2** draws **`plot_phenotype_markers(..., heatmap_type = "global")`** when **ComplexHeatmap** and **circlize** are installed (same helper as the **single-cell** vignette), with a **pheatmap** fallback otherwise. **Step 3** runs **cell-type-specific** markers and **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when those packages are available.
 
-<!-- ### Step 1: Markers for adverse vs. favorable cells (cell type agnostic) -->
+### Step 1: Markers for adverse vs. favorable cells (cell type agnostic)
 
-<!-- ```{r markers-spatial, cache = FALSE} -->
-<!-- markers <- NULL -->
-<!-- assay_markers <- NULL -->
-<!-- if (!is.null(group_col)) { -->
-<!--   cells <- colnames(seurat) -->
-<!--   group_vec <- seurat@meta.data[cells, group_col] -->
-<!--   group_df <- data.frame( -->
-<!--     cell_id = cells, -->
-<!--     phenotype_group = as.character(group_vec), -->
-<!--     stringsAsFactors = FALSE -->
-<!--   ) -->
-<!--   for (a in unique(c(assay_use, "RNA", "SCT"))) { -->
-<!--     if (!a %in% names(seurat@assays)) next -->
-<!--     markers <- tryCatch( -->
-<!--       PhenoMapR::find_phenotype_markers( -->
-<!--         seurat, -->
-<!--         group_labels = group_df, -->
-<!--         group_column = "phenotype_group", -->
-<!--         cell_id_column = "cell_id", -->
-<!--         marker_scope = "phenotype_groups", -->
-<!--         assay = a, -->
-<!--         slot = "data", -->
-<!--         max_cells_per_ident = spatial_max_cells, -->
-<!--         verbose = FALSE -->
-<!--       ), -->
-<!--       error = function(e) { -->
-<!--         message("find_phenotype_markers (assay ", a, ") error: ", conditionMessage(e)) -->
-<!--         NULL -->
-<!--       } -->
-<!--     ) -->
-<!--     if (!is.null(markers) && (nrow(markers$adverse_markers) > 0 || nrow(markers$favorable_markers) > 0)) { -->
-<!--       assay_markers <- a -->
-<!--       break -->
-<!--     } -->
-<!--   } -->
-<!--   if (!is.null(markers)) { -->
-<!--     message("Adverse markers (top 5):") -->
-<!--     print(head(markers$adverse_markers, 5)) -->
-<!--     message("Favorable markers (top 5):") -->
-<!--     print(head(markers$favorable_markers, 5)) -->
-<!--   } else { -->
-<!--     message("Marker analysis returned no results. Check that Most Adverse and Most Favorable groups have enough cells.") -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
+```{r markers-spatial, cache = FALSE}
+markers <- NULL
+assay_markers <- NULL
+## Tail labels on the Seurat object (5th / 95th percentiles via define_phenotype_groups).
+cells <- colnames(seurat)
+scores_df_markers <- seurat@meta.data[cells, score_col, drop = FALSE]
+rownames(scores_df_markers) <- cells
+groups_markers <- PhenoMapR::define_phenotype_groups(
+  scores_df_markers,
+  percentile = 0.05,
+  score_columns = score_col
+)
+group_col <- grep("phenotype_group", names(groups_markers), value = TRUE)[1]
+if (length(group_col) == 0L || is.na(group_col) || !nzchar(group_col)) {
+  group_col <- NULL
+} else {
+  seurat@meta.data[[group_col]] <-
+    groups_markers[rownames(seurat@meta.data), group_col, drop = TRUE]
+}
+if (!is.null(group_col)) {
+  group_vec <- seurat@meta.data[cells, group_col]
+  group_df <- data.frame(
+    cell_id = cells,
+    phenotype_group = as.character(group_vec),
+    stringsAsFactors = FALSE
+  )
+  for (a in unique(c(assay_use, "RNA", "SCT"))) {
+    if (!a %in% names(seurat@assays)) next
+    markers <- tryCatch(
+      PhenoMapR::find_phenotype_markers(
+        seurat,
+        group_labels = group_df,
+        group_column = "phenotype_group",
+        cell_id_column = "cell_id",
+        marker_scope = "phenotype_groups",
+        assay = a,
+        slot = "data",
+        max_cells_per_ident = spatial_max_cells,
+        verbose = FALSE
+      ),
+      error = function(e) {
+        message("find_phenotype_markers (assay ", a, ") error: ", conditionMessage(e))
+        NULL
+      }
+    )
+    if (!is.null(markers) && (nrow(markers$adverse_markers) > 0 || nrow(markers$favorable_markers) > 0)) {
+      assay_markers <- a
+      break
+    }
+  }
+  if (!is.null(markers)) {
+    message("Adverse markers (top 5):")
+    print(head(markers$adverse_markers, 5))
+    message("Favorable markers (top 5):")
+    print(head(markers$favorable_markers, 5))
+  } else {
+    message("Marker analysis returned no results. Check that Most Adverse and Most Favorable groups have enough cells.")
+  }
+}
+```
 
-<!-- ### Step 2: Heatmap of adverse vs. favorable markers (global phenotype groups) -->
+### Step 2: Heatmap of adverse vs. favorable markers (global phenotype groups)
 
-<!-- **`plot_phenotype_markers(..., heatmap_type = "global")`** matches the single-cell vignette: favorable- then adverse-marker rows, column order by PhenoMapR score, and **pheatmap** only if ComplexHeatmap is unavailable or marker tables are incomplete. -->
+**`plot_phenotype_markers(..., heatmap_type = "global")`** matches the single-cell vignette: favorable- then adverse-marker rows, column order by PhenoMapR score, and **pheatmap** only if ComplexHeatmap is unavailable or marker tables are incomplete.
 
-<!-- ```{r heatmap-markers-spatial, fig.align='center', fig.width=10, fig.height=4} -->
-<!-- if (exists("markers") && !is.null(markers)) { -->
-<!--   n_top <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 10L else 15L -->
-<!--   expr <- NULL -->
-<!--   assay_order <- unique(c( -->
-<!--     if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0), -->
-<!--     assay_use, "RNA", "SCT" -->
-<!--   )) -->
-<!--   for (a in assay_order) { -->
-<!--     if (!a %in% names(seurat@assays)) next -->
-<!--     expr <- tryCatch( -->
-<!--       Seurat::GetAssayData(seurat, layer = "data", assay = a), -->
-<!--       error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL) -->
-<!--     ) -->
-<!--     if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break -->
-<!--     expr <- tryCatch( -->
-<!--       SeuratObject::LayerData(seurat, layer = "data", assay = a), -->
-<!--       error = function(e) NULL -->
-<!--     ) -->
-<!--     if (is.null(expr) || ncol(expr) == 0) { -->
-<!--       expr <- tryCatch( -->
-<!--         SeuratObject::LayerData(seurat, layer = "counts", assay = a), -->
-<!--         error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = NULL, assay = a), error = function(e2) NULL) -->
-<!--       ) -->
-<!--     } -->
-<!--     if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break -->
-<!--   } -->
-<!--   if (!is.null(expr) && ncol(expr) > 0) { -->
-<!--     cells_expr <- colnames(expr) -->
-<!--     if (is.null(cells_expr)) cells_expr <- character(0) -->
-<!--     cells_obj <- colnames(seurat) -->
-<!--     cells_meta <- rownames(seurat@meta.data) -->
-<!--     cells_use <- intersect(cells_expr, cells_obj) -->
-<!--     if (length(cells_use) == 0 && length(cells_meta) > 0) { -->
-<!--       cells_use <- intersect(cells_expr, cells_meta) -->
-<!--     } -->
-<!--     if (length(cells_use) == 0 && length(cells_expr) > 0 && any(grepl("_", cells_expr, fixed = TRUE))) { -->
-<!--       stripped <- sub("^[^_]+_", "", cells_expr) -->
-<!--       cells_use <- intersect(stripped, cells_obj) -->
-<!--       if (length(cells_use) == 0) cells_use <- intersect(stripped, cells_meta) -->
-<!--       if (length(cells_use) > 0) { -->
-<!--         expr_cols <- vapply(cells_use, function(c) cells_expr[which(stripped == c)[1]], character(1)) -->
-<!--         expr <- expr[, expr_cols, drop = FALSE] -->
-<!--         colnames(expr) <- cells_use -->
-<!--       } -->
-<!--     } -->
-<!--     if (length(cells_use) == 0) { -->
-<!--       message("No overlapping cells between expression and metadata; skipping heatmap. ", -->
-<!--               "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj), -->
-<!--               if (length(cells_expr) > 0) paste0("; expr sample: ", head(cells_expr, 2)) else "") -->
-<!--     } else { -->
-<!--       expr_pm <- as.matrix(expr[, cells_use, drop = FALSE]) -->
-<!--       meta_pm <- seurat@meta.data[cells_use, , drop = FALSE] -->
-<!--       meta_pm$cell_id_plot <- cells_use -->
-<!--       group_col_hm <- paste0("phenotype_group_", score_col) -->
-<!--       if (!group_col_hm %in% names(meta_pm)) group_col_hm <- group_col -->
+```{r heatmap-markers-spatial, fig.align='center', fig.width=10, fig.height=4}
+if (exists("markers") && !is.null(markers)) {
+  n_top <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 10L else 15L
+  expr <- NULL
+  assay_order <- unique(c(
+    if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0),
+    assay_use, "RNA", "SCT"
+  ))
+  for (a in assay_order) {
+    if (!a %in% names(seurat@assays)) next
+    expr <- tryCatch(
+      Seurat::GetAssayData(seurat, layer = "data", assay = a),
+      error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL)
+    )
+    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
+    expr <- tryCatch(
+      SeuratObject::LayerData(seurat, layer = "data", assay = a),
+      error = function(e) NULL
+    )
+    if (is.null(expr) || ncol(expr) == 0) {
+      expr <- tryCatch(
+        SeuratObject::LayerData(seurat, layer = "counts", assay = a),
+        error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = NULL, assay = a), error = function(e2) NULL)
+      )
+    }
+    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
+  }
+  if (!is.null(expr) && ncol(expr) > 0) {
+    cells_expr <- colnames(expr)
+    if (is.null(cells_expr)) cells_expr <- character(0)
+    cells_obj <- colnames(seurat)
+    cells_meta <- rownames(seurat@meta.data)
+    cells_use <- intersect(cells_expr, cells_obj)
+    if (length(cells_use) == 0 && length(cells_meta) > 0) {
+      cells_use <- intersect(cells_expr, cells_meta)
+    }
+    if (length(cells_use) == 0 && length(cells_expr) > 0 && any(grepl("_", cells_expr, fixed = TRUE))) {
+      stripped <- sub("^[^_]+_", "", cells_expr)
+      cells_use <- intersect(stripped, cells_obj)
+      if (length(cells_use) == 0) cells_use <- intersect(stripped, cells_meta)
+      if (length(cells_use) > 0) {
+        expr_cols <- vapply(cells_use, function(c) cells_expr[which(stripped == c)[1]], character(1))
+        expr <- expr[, expr_cols, drop = FALSE]
+        colnames(expr) <- cells_use
+      }
+    }
+    if (length(cells_use) == 0) {
+      message("No overlapping cells between expression and metadata; skipping heatmap. ",
+              "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj),
+              if (length(cells_expr) > 0) paste0("; expr sample: ", head(cells_expr, 2)) else "")
+    } else {
+      expr_pm <- as.matrix(expr[, cells_use, drop = FALSE])
+      meta_pm <- seurat@meta.data[cells_use, , drop = FALSE]
+      meta_pm$cell_id_plot <- cells_use
+      group_col_hm <- paste0("phenotype_group_", score_col)
+      if (!group_col_hm %in% names(meta_pm)) group_col_hm <- group_col
 
-<!--       ct_col_hm <- NULL -->
-<!--       if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && -->
-<!--           spatial_df_celltype_col %in% names(meta_pm)) { -->
-<!--         ct_col_hm <- spatial_df_celltype_col -->
-<!--       } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(meta_pm)) { -->
-<!--         ct_col_hm <- celltype_col -->
-<!--       } -->
-<!--       if (is.null(ct_col_hm)) { -->
-<!--         meta_pm$celltype_plot <- factor(rep("Cell", nrow(meta_pm))) -->
-<!--         ct_col_hm <- "celltype_plot" -->
-<!--       } else { -->
-<!--         meta_pm[[ct_col_hm]] <- factor(as.character(meta_pm[[ct_col_hm]])) -->
-<!--       } -->
-<!--       pal_ct <- PhenoMapR::get_celltype_palette(levels(meta_pm[[ct_col_hm]])) -->
+      ct_col_hm <- NULL
+      if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) &&
+          spatial_df_celltype_col %in% names(meta_pm)) {
+        ct_col_hm <- spatial_df_celltype_col
+      } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(meta_pm)) {
+        ct_col_hm <- celltype_col
+      }
+      if (is.null(ct_col_hm)) {
+        meta_pm$celltype_plot <- factor(rep("Cell", nrow(meta_pm)))
+        ct_col_hm <- "celltype_plot"
+      } else {
+        meta_pm[[ct_col_hm]] <- factor(as.character(meta_pm[[ct_col_hm]]))
+      }
+      pal_ct <- PhenoMapR::get_celltype_palette(levels(meta_pm[[ct_col_hm]]))
 
-<!--       drew_ch <- FALSE -->
-<!--       if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) { -->
-<!--         adv_ok <- !is.null(markers$adverse_markers) && nrow(markers$adverse_markers) > 0L -->
-<!--         fav_ok <- !is.null(markers$favorable_markers) && nrow(markers$favorable_markers) > 0L -->
-<!--         if (adv_ok && fav_ok) { -->
-<!--           ch_ht <- PhenoMapR::plot_phenotype_markers( -->
-<!--             markers = markers, -->
-<!--             expr_mat = expr_pm, -->
-<!--             meta = meta_pm, -->
-<!--             cell_id_col = "cell_id_plot", -->
-<!--             group_col = group_col_hm, -->
-<!--             score_col = score_col, -->
-<!--             celltype_col = ct_col_hm, -->
-<!--             celltype_palette = pal_ct, -->
-<!--             heatmap_type = "global", -->
-<!--             top_n_markers = if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 12L else 20L, -->
-<!--             n_mark_labels = 15L, -->
-<!--             p_adj_threshold = 0.05, -->
-<!--             column_title = "Global phenotype markers (spatial, CytoSPACE cells)" -->
-<!--           ) -->
-<!--           drew_ch <- !is.null(ch_ht) -->
-<!--         } -->
-<!--       } -->
-<!--       if (!drew_ch && requireNamespace("pheatmap", quietly = TRUE)) { -->
-<!--         adverse_pos <- markers$adverse_markers -->
-<!--         if (is.null(adverse_pos)) adverse_pos <- data.frame() -->
-<!--         if (nrow(adverse_pos) > 0 && "avg_log2FC" %in% names(adverse_pos)) adverse_pos <- adverse_pos[adverse_pos$avg_log2FC > 0, ] -->
-<!--         favorable_pos <- markers$favorable_markers -->
-<!--         if (is.null(favorable_pos)) favorable_pos <- data.frame() -->
-<!--         if (nrow(favorable_pos) > 0 && "avg_log2FC" %in% names(favorable_pos)) favorable_pos <- favorable_pos[favorable_pos$avg_log2FC > 0, ] -->
-<!--         adv_ref <- markers$adverse_markers -->
-<!--         pcol <- if (!is.null(adv_ref) && "p_adj" %in% names(adv_ref)) "p_adj" else if (!is.null(adv_ref) && "p_val_adj" %in% names(adv_ref)) "p_val_adj" else "p_val" -->
-<!--         top_genes <- unique(c( -->
-<!--           if (nrow(adverse_pos) > 0 && "gene" %in% names(adverse_pos)) head(adverse_pos$gene[order(adverse_pos[[pcol]])], n_top) else character(0), -->
-<!--           if (nrow(favorable_pos) > 0 && "gene" %in% names(favorable_pos)) head(favorable_pos$gene[order(favorable_pos[[pcol]])], n_top) else character(0) -->
-<!--         )) -->
-<!--         top_genes <- top_genes[top_genes %in% rownames(expr_pm)] -->
-<!--         if (length(top_genes) == 0) top_genes <- head(rownames(expr_pm), 20) -->
-<!--         mat <- as.matrix(expr_pm[top_genes, , drop = FALSE]) -->
-<!--         mat_scaled <- t(scale(t(mat))) -->
-<!--         mat_scaled[mat_scaled < -3] <- -3 -->
-<!--         mat_scaled[mat_scaled > 3] <- 3 -->
-<!--         ord <- order(meta_pm[[score_col]]) -->
-<!--         mat_scaled <- mat_scaled[, ord, drop = FALSE] -->
-<!--         meta_ord <- meta_pm[ord, , drop = FALSE] -->
-<!--         ann_col <- data.frame( -->
-<!--           `PhenoMapR Score` = meta_ord[[score_col]], -->
-<!--           `Prognostic group` = factor(meta_ord[[group_col_hm]], levels = c("Most Adverse", "Other", "Most Favorable")), -->
-<!--           check.names = FALSE -->
-<!--         ) -->
-<!--         if (ct_col_hm %in% names(meta_ord)) { -->
-<!--           ann_col$`Cell type` <- factor(meta_ord[[ct_col_hm]]) -->
-<!--         } -->
-<!--         rownames(ann_col) <- colnames(mat_scaled) -->
-<!--         pal_score <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100) -->
-<!--         pal_group <- c(`Most Adverse` = "#B2182B", Other = "#f7f7f7", `Most Favorable` = "#2166AC") -->
-<!--         pal_celltype <- if ("Cell type" %in% names(ann_col)) { -->
-<!--           PhenoMapR::get_celltype_palette(levels(ann_col$`Cell type`)) -->
-<!--         } else list() -->
-<!--         ann_colors <- list(`PhenoMapR Score` = pal_score, `Prognostic group` = pal_group) -->
-<!--         if (length(pal_celltype) > 0) ann_colors$`Cell type` <- pal_celltype -->
-<!--         heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) { -->
-<!--           colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100) -->
-<!--         } else { -->
-<!--           colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100) -->
-<!--         } -->
-<!--         message("Using pheatmap fallback (ComplexHeatmap unavailable or one marker table empty).") -->
-<!--         pheatmap::pheatmap( -->
-<!--           mat_scaled, -->
-<!--           scale = "none", -->
-<!--           cluster_cols = FALSE, -->
-<!--           cluster_rows = TRUE, -->
-<!--           show_colnames = FALSE, -->
-<!--           annotation_col = ann_col, -->
-<!--           annotation_colors = ann_colors, -->
-<!--           color = heatmap_colors, -->
-<!--           breaks = seq(-3, 3, length.out = 101), -->
-<!--           main = "Top adverse & favorable marker genes (pheatmap fallback)", -->
-<!--           fontsize = 12, -->
-<!--           fontsize_row = 10, -->
-<!--           treeheight_row = 10 -->
-<!--         ) -->
-<!--       } else if (!drew_ch) { -->
-<!--         message("Install ComplexHeatmap + circlize for plot_phenotype_markers; pheatmap for fallback.") -->
-<!--       } -->
-<!--     } -->
-<!--   } else { -->
-<!--     msg <- "Could not retrieve expression data for heatmap" -->
-<!--     if (!is.null(expr)) { -->
-<!--       msg <- paste0(msg, " (expr nrow=", nrow(expr), ", ncol=", ncol(expr), "; try LayerData for Seurat v5)") -->
-<!--     } -->
-<!--     message(msg, ".") -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
+      drew_ch <- FALSE
+      if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
+        adv_ok <- !is.null(markers$adverse_markers) && nrow(markers$adverse_markers) > 0L
+        fav_ok <- !is.null(markers$favorable_markers) && nrow(markers$favorable_markers) > 0L
+        if (adv_ok && fav_ok) {
+          ch_ht <- PhenoMapR::plot_phenotype_markers(
+            markers = markers,
+            expr_mat = expr_pm,
+            meta = meta_pm,
+            cell_id_col = "cell_id_plot",
+            group_col = group_col_hm,
+            score_col = score_col,
+            celltype_col = ct_col_hm,
+            celltype_palette = pal_ct,
+            heatmap_type = "global",
+            top_n_markers = if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 12L else 20L,
+            n_mark_labels = 15L,
+            p_adj_threshold = 0.05,
+            column_title = "Global phenotype markers (spatial, CytoSPACE cells)"
+          )
+          drew_ch <- !is.null(ch_ht)
+        }
+      }
+      if (!drew_ch && requireNamespace("pheatmap", quietly = TRUE)) {
+        adverse_pos <- markers$adverse_markers
+        if (is.null(adverse_pos)) adverse_pos <- data.frame()
+        if (nrow(adverse_pos) > 0 && "avg_log2FC" %in% names(adverse_pos)) adverse_pos <- adverse_pos[adverse_pos$avg_log2FC > 0, ]
+        favorable_pos <- markers$favorable_markers
+        if (is.null(favorable_pos)) favorable_pos <- data.frame()
+        if (nrow(favorable_pos) > 0 && "avg_log2FC" %in% names(favorable_pos)) favorable_pos <- favorable_pos[favorable_pos$avg_log2FC > 0, ]
+        adv_ref <- markers$adverse_markers
+        pcol <- if (!is.null(adv_ref) && "p_adj" %in% names(adv_ref)) "p_adj" else if (!is.null(adv_ref) && "p_val_adj" %in% names(adv_ref)) "p_val_adj" else "p_val"
+        top_genes <- unique(c(
+          if (nrow(adverse_pos) > 0 && "gene" %in% names(adverse_pos)) head(adverse_pos$gene[order(adverse_pos[[pcol]])], n_top) else character(0),
+          if (nrow(favorable_pos) > 0 && "gene" %in% names(favorable_pos)) head(favorable_pos$gene[order(favorable_pos[[pcol]])], n_top) else character(0)
+        ))
+        top_genes <- top_genes[top_genes %in% rownames(expr_pm)]
+        if (length(top_genes) == 0) top_genes <- head(rownames(expr_pm), 20)
+        mat <- as.matrix(expr_pm[top_genes, , drop = FALSE])
+        mat_scaled <- t(scale(t(mat)))
+        mat_scaled[mat_scaled < -3] <- -3
+        mat_scaled[mat_scaled > 3] <- 3
+        ord <- order(meta_pm[[score_col]])
+        mat_scaled <- mat_scaled[, ord, drop = FALSE]
+        meta_ord <- meta_pm[ord, , drop = FALSE]
+        ann_col <- data.frame(
+          `PhenoMapR Score` = meta_ord[[score_col]],
+          `Prognostic group` = factor(meta_ord[[group_col_hm]], levels = c("Most Adverse", "Other", "Most Favorable")),
+          check.names = FALSE
+        )
+        if (ct_col_hm %in% names(meta_ord)) {
+          ann_col$`Cell type` <- factor(meta_ord[[ct_col_hm]])
+        }
+        rownames(ann_col) <- colnames(mat_scaled)
+        pal_score <- colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+        pal_group <- c(`Most Adverse` = "#B2182B", Other = "#f7f7f7", `Most Favorable` = "#2166AC")
+        pal_celltype <- if ("Cell type" %in% names(ann_col)) {
+          PhenoMapR::get_celltype_palette(levels(ann_col$`Cell type`))
+        } else list()
+        ann_colors <- list(`PhenoMapR Score` = pal_score, `Prognostic group` = pal_group)
+        if (length(pal_celltype) > 0) ann_colors$`Cell type` <- pal_celltype
+        heatmap_colors <- if (requireNamespace("paletteer", quietly = TRUE)) {
+          colorRampPalette(paletteer::paletteer_d("MexBrewer::Vendedora"))(100)
+        } else {
+          colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
+        }
+        message("Using pheatmap fallback (ComplexHeatmap unavailable or one marker table empty).")
+        pheatmap::pheatmap(
+          mat_scaled,
+          scale = "none",
+          cluster_cols = FALSE,
+          cluster_rows = TRUE,
+          show_colnames = FALSE,
+          annotation_col = ann_col,
+          annotation_colors = ann_colors,
+          color = heatmap_colors,
+          breaks = seq(-3, 3, length.out = 101),
+          main = "Top adverse & favorable marker genes (pheatmap fallback)",
+          fontsize = 12,
+          fontsize_row = 10,
+          treeheight_row = 10
+        )
+      } else if (!drew_ch) {
+        message("Install ComplexHeatmap + circlize for plot_phenotype_markers; pheatmap for fallback.")
+      }
+    }
+  } else {
+    msg <- "Could not retrieve expression data for heatmap"
+    if (!is.null(expr)) {
+      msg <- paste0(msg, " (expr nrow=", nrow(expr), ", ncol=", ncol(expr), "; try LayerData for Seurat v5)")
+    }
+    message(msg, ".")
+  }
+}
+```
 
-<!-- ### Stacked barplot: adverse vs. favorable by cell type -->
+### Stacked barplot: adverse vs. favorable by cell type
 
-<!-- Each column is a cell type; the height is filled by the number of adverse (5th percentile) or favorable (5th percentile) cells. -->
+Each column is a cell type; the height is filled by the number of adverse (5th percentile) or favorable (5th percentile) cells.
 
-<!-- ```{r stacked-bar-adverse-favorable-by-celltype, fig.width=5, fig.height=5} -->
-<!-- if (!is.null(group_col)) { -->
-<!--   ct_col_bar <- NULL -->
-<!--   if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && spatial_df_celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_bar <- spatial_df_celltype_col -->
-<!--   } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_bar <- celltype_col -->
-<!--   } else { -->
-<!--     for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) { -->
-<!--       if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) { -->
-<!--         ct_col_bar <- c -->
-<!--         break -->
-<!--       } -->
-<!--     } -->
-<!--   } -->
-<!--   if (!is.null(ct_col_bar)) { -->
-<!--     meta <- seurat@meta.data -->
-<!--     meta$pg <- meta[[group_col]] -->
-<!--     meta$ct <- as.character(meta[[ct_col_bar]]) -->
-<!--     meta$ct_ok <- !is.na(meta$ct) & nzchar(trimws(meta$ct)) -->
-<!--     idx_extreme <- meta$pg %in% c("Most Adverse", "Most Favorable") & meta$ct_ok -->
-<!--     df_bar <- as.data.frame(table( -->
-<!--       CellType = meta$ct[idx_extreme], -->
-<!--       Prognostic_group = meta$pg[idx_extreme], -->
-<!--       useNA = "no" -->
-<!--     )) -->
-<!--     if (nrow(df_bar) > 0) { -->
-<!--       df_bar$Prognostic_group <- factor(df_bar$Prognostic_group, levels = c("Most Favorable", "Most Adverse")) -->
-<!--       pal_bar <- c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC") -->
-<!--       adverse <- df_bar[df_bar$Prognostic_group == "Most Adverse", c("CellType", "Freq")] -->
-<!--       fav <- df_bar[df_bar$Prognostic_group == "Most Favorable", c("CellType", "Freq")] -->
-<!--       names(adverse)[2] <- "n_adverse" -->
-<!--       names(fav)[2] <- "n_fav" -->
-<!--       df_labels <- merge(adverse, fav, by = "CellType", all = TRUE) -->
-<!--       df_labels$n_adverse[is.na(df_labels$n_adverse)] <- 0 -->
-<!--       df_labels$n_fav[is.na(df_labels$n_fav)] <- 0 -->
-<!--       df_labels$label <- paste0(df_labels$n_adverse, "/", df_labels$n_fav) -->
-<!--       df_labels$total <- df_labels$n_adverse + df_labels$n_fav -->
-<!--       ct_ord <- levels(reorder(df_bar$CellType, df_bar$Freq, function(x) -sum(x))) -->
-<!--       df_labels$CellType <- factor(df_labels$CellType, levels = ct_ord) -->
-<!--       p_bar <- ggplot(df_bar, aes(x = reorder(.data$CellType, .data$Freq, function(x) -sum(x)), y = .data$Freq, fill = .data$Prognostic_group)) + -->
-<!--         geom_col(position = "stack") + -->
-<!--         geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = .data$n_adverse), -->
-<!--                   inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#B2182B", hjust = 1.05) + -->
-<!--         geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = paste0("/", .data$n_fav)), -->
-<!--                   inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#2166AC", hjust = -0.05) + -->
-<!--         scale_fill_manual(values = pal_bar) + -->
-<!--         labs(x = "Cell type", y = "Number of cells", fill = "Prognostic group", -->
-<!--              title = "Adverse vs. favorable cells (5th percentile) by cell type") + -->
-<!--         theme_minimal(base_size = 14) + -->
-<!--         theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12), legend.position = "top") -->
-<!--       print(p_bar) -->
-<!--     } -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
-<!-- In line with the other Pancreatic cancer vignettes, PhenoMapR identifies ductal cells (and some fibroblasts) as the most associated cell type with an adverse PhenoMapR prognostic score. Alpha, plasma, and beta cells are the most associated with the more favorable prognostic signal. Interestingly, fibroblasts seems to comprise both adverse and favorable phenotypes. -->
+```{r stacked-bar-adverse-favorable-by-celltype, fig.width=5, fig.height=5}
+if (!is.null(group_col)) {
+  ct_col_bar <- NULL
+  if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && spatial_df_celltype_col %in% names(seurat@meta.data)) {
+    ct_col_bar <- spatial_df_celltype_col
+  } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) {
+    ct_col_bar <- celltype_col
+  } else {
+    for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) {
+      if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) {
+        ct_col_bar <- c
+        break
+      }
+    }
+  }
+  if (!is.null(ct_col_bar)) {
+    meta <- seurat@meta.data
+    meta$pg <- meta[[group_col]]
+    meta$ct <- as.character(meta[[ct_col_bar]])
+    meta$ct_ok <- !is.na(meta$ct) & nzchar(trimws(meta$ct))
+    idx_extreme <- meta$pg %in% c("Most Adverse", "Most Favorable") & meta$ct_ok
+    df_bar <- as.data.frame(table(
+      CellType = meta$ct[idx_extreme],
+      Prognostic_group = meta$pg[idx_extreme],
+      useNA = "no"
+    ))
+    if (nrow(df_bar) > 0) {
+      df_bar$Prognostic_group <- factor(df_bar$Prognostic_group, levels = c("Most Favorable", "Most Adverse"))
+      pal_bar <- c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC")
+      adverse <- df_bar[df_bar$Prognostic_group == "Most Adverse", c("CellType", "Freq")]
+      fav <- df_bar[df_bar$Prognostic_group == "Most Favorable", c("CellType", "Freq")]
+      names(adverse)[2] <- "n_adverse"
+      names(fav)[2] <- "n_fav"
+      df_labels <- merge(adverse, fav, by = "CellType", all = TRUE)
+      df_labels$n_adverse[is.na(df_labels$n_adverse)] <- 0
+      df_labels$n_fav[is.na(df_labels$n_fav)] <- 0
+      df_labels$label <- paste0(df_labels$n_adverse, "/", df_labels$n_fav)
+      df_labels$total <- df_labels$n_adverse + df_labels$n_fav
+      ct_ord <- levels(reorder(df_bar$CellType, df_bar$Freq, function(x) -sum(x)))
+      df_labels$CellType <- factor(df_labels$CellType, levels = ct_ord)
+      p_bar <- ggplot(df_bar, aes(x = reorder(.data$CellType, .data$Freq, function(x) -sum(x)), y = .data$Freq, fill = .data$Prognostic_group)) +
+        geom_col(position = "stack") +
+        geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = .data$n_adverse),
+                  inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#B2182B", hjust = 1.05) +
+        geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = paste0("/", .data$n_fav)),
+                  inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#2166AC", hjust = -0.05) +
+        scale_fill_manual(values = pal_bar) +
+        labs(x = "Cell type", y = "Number of cells", fill = "Prognostic group",
+             title = "Adverse vs. favorable cells (5th percentile) by cell type") +
+        theme_minimal(base_size = 14) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12), legend.position = "top")
+      print(p_bar)
+    }
+  }
+}
+```
+In line with the other Pancreatic cancer vignettes, PhenoMapR identifies ductal cells (and some fibroblasts) as the most associated cell type with an adverse PhenoMapR prognostic score. Alpha, plasma, and beta cells are the most associated with the more favorable prognostic signal. Interestingly, fibroblasts seems to comprise both adverse and favorable phenotypes.
 
 
-<!-- ### Step 3: Cell-type-specific phenotype markers -->
+### Step 3: Cell-type-specific phenotype markers
 
-<!-- Here we call `find_phenotype_markers()` with **`marker_scope = "cell_type_specific"`**, using the same cell type column as elsewhere in this vignette. The default **`celltype_contrast = "within_cell_type"`** contrasts each prognostic tail **within** a mapped cell type to the other bins in that type. For the legacy cohort-wide reference (tail vs all other cells), set **`celltype_contrast = "vs_cohort_rest"`** (see `?find_phenotype_markers`). -->
+Here we call `find_phenotype_markers()` with **`marker_scope = "cell_type_specific"`**, using the same cell type column as elsewhere in this vignette. The default **`celltype_contrast = "within_cell_type"`** contrasts each prognostic tail **within** a mapped cell type to the other bins in that type. For the legacy cohort-wide reference (tail vs all other cells), set **`celltype_contrast = "vs_cohort_rest"`** (see `?find_phenotype_markers`).
 
-<!-- When both adverse and favorable marker tables are non-empty and **ComplexHeatmap** is installed, **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** matches the single-cell vignette (column order: phenotype bin, cell type, score; row blocks with optional gene labels). -->
+When both adverse and favorable marker tables are non-empty and **ComplexHeatmap** is installed, **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** matches the single-cell vignette (column order: phenotype bin, cell type, score; row blocks with optional gene labels).
 
-<!-- ```{r markers-celltype-specific-spatial, cache = FALSE, fig.align='center', fig.width=14, fig.height=10, eval=!spatial_ci_lite} -->
-<!-- markers_ct_spatial <- NULL -->
-<!-- ct_col_spatial <- NULL -->
-<!-- if (!is.null(group_col)) { -->
-<!--   if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) && -->
-<!--       spatial_df_celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_spatial <- spatial_df_celltype_col -->
-<!--   } else if (!is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) { -->
-<!--     ct_col_spatial <- celltype_col -->
-<!--   } else { -->
-<!--     for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) { -->
-<!--       if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) { -->
-<!--         ct_col_spatial <- c -->
-<!--         break -->
-<!--       } -->
-<!--     } -->
-<!--   } -->
-<!--   if (!is.null(ct_col_spatial)) { -->
-<!--     cells_ct <- colnames(seurat) -->
-<!--     group_df_ct <- data.frame( -->
-<!--       cell_id = cells_ct, -->
-<!--       phenotype_group = as.character(seurat@meta.data[cells_ct, group_col]), -->
-<!--       cell_type = as.character(seurat@meta.data[cells_ct, ct_col_spatial]), -->
-<!--       stringsAsFactors = FALSE -->
-<!--     ) -->
-<!--     assay_ct <- if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else assay_use -->
-<!--     markers_ct_spatial <- tryCatch( -->
-<!--       PhenoMapR::find_phenotype_markers( -->
-<!--         seurat, -->
-<!--         group_labels = group_df_ct, -->
-<!--         group_column = "phenotype_group", -->
-<!--         cell_id_column = "cell_id", -->
-<!--         cell_type_column = "cell_type", -->
-<!--         marker_scope = "cell_type_specific", -->
-<!--         celltype_contrast = "within_cell_type", -->
-<!--         assay = assay_ct, -->
-<!--         slot = "data", -->
-<!--         max_cells_per_ident = spatial_max_cells, -->
-<!--         verbose = FALSE -->
-<!--       ), -->
-<!--       error = function(e) { -->
-<!--         message("cell_type_specific find_phenotype_markers: ", conditionMessage(e)) -->
-<!--         NULL -->
-<!--       } -->
-<!--     ) -->
-<!--     if (!is.null(markers_ct_spatial)) { -->
-<!--       message("Cell-type-specific adverse markers (top 5):") -->
-<!--       print(utils::head(markers_ct_spatial$adverse_markers, 5)) -->
-<!--       message("Cell-type-specific favorable markers (top 5):") -->
-<!--       print(utils::head(markers_ct_spatial$favorable_markers, 5)) -->
-<!--     } -->
-<!--     expr_pm <- NULL -->
-<!--     for (a in unique(c(assay_ct, assay_use, "RNA", "SCT"))) { -->
-<!--       if (!a %in% names(seurat@assays)) next -->
-<!--       expr_pm <- tryCatch( -->
-<!--         as.matrix(Seurat::GetAssayData(seurat, layer = "data", assay = a)), -->
-<!--         error = function(e) tryCatch( -->
-<!--           as.matrix(Seurat::GetAssayData(seurat, slot = "data", assay = a)), -->
-<!--           error = function(e2) NULL -->
-<!--         ) -->
-<!--       ) -->
-<!--       if (!is.null(expr_pm) && nrow(expr_pm) > 0 && ncol(expr_pm) > 0) break -->
-<!--       expr_pm <- tryCatch( -->
-<!--         as.matrix(SeuratObject::LayerData(seurat, layer = "data", assay = a)), -->
-<!--         error = function(e) NULL -->
-<!--       ) -->
-<!--       if (!is.null(expr_pm) && nrow(expr_pm) > 0 && ncol(expr_pm) > 0) break -->
-<!--     } -->
-<!--     if (!is.null(markers_ct_spatial) && !is.null(expr_pm) && ncol(expr_pm) > 0) { -->
-<!--       meta_pm <- as.data.frame(seurat@meta.data[cells_ct, , drop = FALSE]) -->
-<!--       meta_pm$cell_id_plot <- cells_ct -->
-<!--       if (all(cells_ct %in% colnames(expr_pm))) { -->
-<!--         expr_pm <- expr_pm[, cells_ct, drop = FALSE] -->
-<!--       } -->
-<!--       pal_ct <- PhenoMapR::get_celltype_palette(levels(factor(meta_pm[[ct_col_spatial]]))) -->
-<!--       if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) { -->
-<!--         PhenoMapR::plot_phenotype_markers( -->
-<!--           markers = markers_ct_spatial, -->
-<!--           expr_mat = expr_pm, -->
-<!--           meta = meta_pm, -->
-<!--           cell_id_col = "cell_id_plot", -->
-<!--           group_col = group_col, -->
-<!--           score_col = score_col, -->
-<!--           celltype_col = ct_col_spatial, -->
-<!--           celltype_palette = pal_ct, -->
-<!--           heatmap_type = "cell_type_specific", -->
-<!--           top_n_markers = 20L, -->
-<!--           n_mark_labels = 5L, -->
-<!--           p_adj_threshold = 0.05, -->
-<!--           column_title = paste0( -->
-<!--             "Cell-type-specific phenotype markers (spatial; within_cell_type contrast; ", -->
-<!--             "use celltype_contrast = \"vs_cohort_rest\" for cohort-wide DE)" -->
-<!--           ) -->
-<!--         ) -->
-<!--       } else { -->
-<!--         message("Install packages 'ComplexHeatmap' and 'circlize' to draw the cell-type-specific marker heatmap.") -->
-<!--       } -->
-<!--     } -->
-<!--   } else { -->
-<!--     message("No suitable cell type column in metadata; skipping cell_type_specific markers.") -->
-<!--   } -->
-<!-- } -->
-<!-- ``` -->
+```{r markers-celltype-specific-spatial, cache = FALSE, fig.align='center', fig.width=14, fig.height=10, eval=!spatial_ci_lite}
+markers_ct_spatial <- NULL
+ct_col_spatial <- NULL
+if (!is.null(group_col)) {
+  if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) &&
+      spatial_df_celltype_col %in% names(seurat@meta.data)) {
+    ct_col_spatial <- spatial_df_celltype_col
+  } else if (!is.null(celltype_col) && celltype_col %in% names(seurat@meta.data)) {
+    ct_col_spatial <- celltype_col
+  } else {
+    for (c in c("CellType", "Celltype..major.lineage.", "cell_type", "celltype", "annotation", "seurat_clusters")) {
+      if (c %in% names(seurat@meta.data) && length(unique(na.omit(seurat@meta.data[[c]]))) >= 2) {
+        ct_col_spatial <- c
+        break
+      }
+    }
+  }
+  if (!is.null(ct_col_spatial)) {
+    cells_ct <- colnames(seurat)
+    group_df_ct <- data.frame(
+      cell_id = cells_ct,
+      phenotype_group = as.character(seurat@meta.data[cells_ct, group_col]),
+      cell_type = as.character(seurat@meta.data[cells_ct, ct_col_spatial]),
+      stringsAsFactors = FALSE
+    )
+    assay_ct <- if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else assay_use
+    markers_ct_spatial <- tryCatch(
+      PhenoMapR::find_phenotype_markers(
+        seurat,
+        group_labels = group_df_ct,
+        group_column = "phenotype_group",
+        cell_id_column = "cell_id",
+        cell_type_column = "cell_type",
+        marker_scope = "cell_type_specific",
+        celltype_contrast = "within_cell_type",
+        assay = assay_ct,
+        slot = "data",
+        max_cells_per_ident = spatial_max_cells,
+        verbose = FALSE
+      ),
+      error = function(e) {
+        message("cell_type_specific find_phenotype_markers: ", conditionMessage(e))
+        NULL
+      }
+    )
+    if (!is.null(markers_ct_spatial)) {
+      message("Cell-type-specific adverse markers (top 5):")
+      print(utils::head(markers_ct_spatial$adverse_markers, 5))
+      message("Cell-type-specific favorable markers (top 5):")
+      print(utils::head(markers_ct_spatial$favorable_markers, 5))
+    }
+    expr_pm <- NULL
+    for (a in unique(c(assay_ct, assay_use, "RNA", "SCT"))) {
+      if (!a %in% names(seurat@assays)) next
+      expr_pm <- tryCatch(
+        as.matrix(Seurat::GetAssayData(seurat, layer = "data", assay = a)),
+        error = function(e) tryCatch(
+          as.matrix(Seurat::GetAssayData(seurat, slot = "data", assay = a)),
+          error = function(e2) NULL
+        )
+      )
+      if (!is.null(expr_pm) && nrow(expr_pm) > 0 && ncol(expr_pm) > 0) break
+      expr_pm <- tryCatch(
+        as.matrix(SeuratObject::LayerData(seurat, layer = "data", assay = a)),
+        error = function(e) NULL
+      )
+      if (!is.null(expr_pm) && nrow(expr_pm) > 0 && ncol(expr_pm) > 0) break
+    }
+    if (!is.null(markers_ct_spatial) && !is.null(expr_pm) && ncol(expr_pm) > 0) {
+      meta_pm <- as.data.frame(seurat@meta.data[cells_ct, , drop = FALSE])
+      meta_pm$cell_id_plot <- cells_ct
+      if (all(cells_ct %in% colnames(expr_pm))) {
+        expr_pm <- expr_pm[, cells_ct, drop = FALSE]
+      }
+      pal_ct <- PhenoMapR::get_celltype_palette(levels(factor(meta_pm[[ct_col_spatial]])))
+      if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
+        PhenoMapR::plot_phenotype_markers(
+          markers = markers_ct_spatial,
+          expr_mat = expr_pm,
+          meta = meta_pm,
+          cell_id_col = "cell_id_plot",
+          group_col = group_col,
+          score_col = score_col,
+          celltype_col = ct_col_spatial,
+          celltype_palette = pal_ct,
+          heatmap_type = "cell_type_specific",
+          top_n_markers = 20L,
+          n_mark_labels = 5L,
+          p_adj_threshold = 0.05,
+          column_title = paste0(
+            "Cell-type-specific phenotype markers (spatial; within_cell_type contrast; ",
+            "use celltype_contrast = \"vs_cohort_rest\" for cohort-wide DE)"
+          )
+        )
+      } else {
+        message("Install packages 'ComplexHeatmap' and 'circlize' to draw the cell-type-specific marker heatmap.")
+      }
+    }
+  } else {
+    message("No suitable cell type column in metadata; skipping cell_type_specific markers.")
+  }
+}
+```
 
-<!-- ## Summary -->
+## Summary
 
-<!-- - **Part 1 (spots)**: Spot-level object `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds`; **H&E** via `SpatialPlot`; PhenoMapR scoring; **hex** summary of z-scaled scores plus **point** map of 5th-percentile groups (**same `coord_fixed` / limits as H&E**; no jitter). -->
-<!-- - **Part 2 (CytoSPACE)**: `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`; same PRECOG **Pancreatic** reference at **cell** resolution; score distribution, score by cell type, prognostic groups, and spatial maps (jittered cells per spot). -->
-<!-- - **Co-localization**: **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** **`nhood_enrichment()`** and **`cooccur_local()`** on Visium coordinates and prognostic groups (Part 2 only; install from GitHub). -->
-<!-- - **Markers**: (1) **Cell-type-agnostic** `find_phenotype_markers(..., marker_scope = "phenotype_groups")` with **`plot_phenotype_markers(..., heatmap_type = "global")`** (or **pheatmap** fallback); (2) **Cell-type-specific** `marker_scope = "cell_type_specific"` with **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when **ComplexHeatmap** is available. -->
+- **Part 1 (spots)**: Spot-level object `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds`; **H&E** via `SpatialPlot`; PhenoMapR scoring; **hex** summary of z-scaled scores plus **point** map of 5th-percentile groups (**same `coord_fixed` / limits as H&E**; no jitter).
+- **Part 2 (CytoSPACE)**: `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`; same PRECOG **Pancreatic** reference at **cell** resolution; score distribution, score by cell type, prognostic groups, and spatial maps (jittered cells per spot).
+- **Co-localization**: **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** **`nhood_enrichment()`** and **`cooccur_local()`** on Visium coordinates and prognostic groups (Part 2 only; install from GitHub).
+- **Markers**: (1) **Cell-type-agnostic** `find_phenotype_markers(..., marker_scope = "phenotype_groups")` with **`plot_phenotype_markers(..., heatmap_type = "global")`** (or **pheatmap** fallback); (2) **Cell-type-specific** `marker_scope = "cell_type_specific"` with **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when **ComplexHeatmap** is available.
 
-<!-- Optional download URLs: `PHENOMAPR_SPATIAL_SPOT_RDS_URL`, `PHENOMAPR_SPATIAL_CYTO_RDS_URL`; `PHENOMAPR_SPATIAL_RDS_URL` still applies to the **CytoSPACE** `.rds` if the cyto-specific variable is unset. -->
+Optional download URLs: `PHENOMAPR_SPATIAL_SPOT_RDS_URL`, `PHENOMAPR_SPATIAL_CYTO_RDS_URL`; `PHENOMAPR_SPATIAL_RDS_URL` still applies to the **CytoSPACE** `.rds` if the cyto-specific variable is unset.
 
-<!-- ## References -->
+## References
 
-<!-- <a id="ref1"></a> -->
-<!-- **[1]** Benard, B. A. et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. Nucleic Acids Res. 54, D1579–D1589 (2026). -->
+<a id="ref1"></a>
+**[1]** Benard, B. A. et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. Nucleic Acids Res. 54, D1579–D1589 (2026).
 
-<!-- ## Session Info -->
+## Session Info
 
-<!-- ```{r session-info} -->
-<!-- sessionInfo() -->
-<!-- ``` -->
+```{r session-info}
+sessionInfo()
+```
