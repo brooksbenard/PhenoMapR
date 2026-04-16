@@ -941,7 +941,7 @@ cell_locations <- cell_locations %>%
 <!-- - **Co-localization**: **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** **`nhood_enrichment()`** and **`cooccur_local()`** on Visium coordinates and prognostic groups (Part 2 only; install from GitHub). -->
 <!-- - **Markers**: (1) **Cell-type-agnostic** `find_phenotype_markers(..., marker_scope = "phenotype_groups")` with **`plot_phenotype_markers(..., heatmap_type = "global")`** (or **pheatmap** fallback); (2) **Cell-type-specific** `marker_scope = "cell_type_specific"` with **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when **ComplexHeatmap** is available. -->
 
-<!-- Optional download URLs: `PHENOMAPR_SPATIAL_SPOT_RDS_URL`, `PHENOMAPR_SPATIAL_CYTO_RDS_URL`; `PHENOMAPR_SPATIAL_RDS_URL` still applies to the **CytoSPACE** `.rds` if the cyto-specific variable is unset. Optional **`PHENOMAPR_VISIUM_SPATIAL_DIR`**: path to the 10X **`spatial`** folder to re-sync the slide with `tissue_positions*.csv` via `sync_visium_spatial_image_from_10x_dir()`. -->
+<!-- Optional download URLs: `PHENOMAPR_SPATIAL_SPOT_RDS_URL`, `PHENOMAPR_SPATIAL_CYTO_RDS_URL`; `PHENOMAPR_SPATIAL_RDS_URL` still applies to the **CytoSPACE** `.rds` if the cyto-specific variable is unset. -->
 
 <!-- ## References -->
 
