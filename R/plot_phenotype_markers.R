@@ -65,8 +65,10 @@
 #' are drawn explicitly (\code{Legend()} + \code{annotation_legend_list};
 #' \code{merge_legends = TRUE} and correct parameter name \code{merge_legends}).
 #' PhenoMapR score colors are diverging blue--white--red with \strong{white at
-#' 0}: negative scores are blue, positive scores are red (using the min and max
-#' of the score column across \strong{all} cells in \code{meta}). Row
+#' 0}: negative scores are blue, positive scores are red. Limits use the score
+#' range of \strong{cells in the heatmap columns} (not all of \code{meta}), with
+#' \code{colorRamp2} breakpoints \code{c(min, 0, max)} when the range crosses
+#' zero. Row
 #' annotations: for \code{left_annotation}, the first track is leftmost
 #' (farthest from the matrix). For \code{heatmap_type = "cell_type_specific"},
 #' the order is \code{anno_mark} (outer), \strong{cell type}, then
@@ -194,22 +196,31 @@ plot_phenotype_markers <- function(markers,
   pal_celltype <- celltype_palette[hm_celltype_levels]
   pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
 
-  # PhenoMapR score bar: diverging blue–white–red with white anchored at 0 (all cells in meta)
-  score_all <- as.numeric(meta[[score_col]])
-  score_all <- score_all[is.finite(score_all)]
-  if (length(score_all) == 0L) {
-    smin <- -1
-    smax <- 1
+  # PhenoMapR score bar: diverging blue–white–red with white at 0. Color limits
+  # use scores for heatmap columns only (meta[score_col] aligned to cell_order_hm),
+  # so the legend matches what is plotted (e.g. not max 500 in meta when this
+  # heatmap’s cells only span ~50). Fall back to all meta scores if none finite.
+  score_ann <- as.numeric(meta[[score_col]][meta_idx_hm])
+  score_ann[!is.finite(score_ann)] <- NA_real_
+  sa <- score_ann[is.finite(score_ann)]
+  if (length(sa) > 0L) {
+    smin <- min(sa)
+    smax <- max(sa)
   } else {
-    smin <- min(score_all)
-    smax <- max(score_all)
+    score_all <- as.numeric(meta[[score_col]])
+    score_all <- score_all[is.finite(score_all)]
+    if (length(score_all) == 0L) {
+      smin <- -1
+      smax <- 1
+    } else {
+      smin <- min(score_all)
+      smax <- max(score_all)
+    }
   }
   if (!is.finite(smin) || !is.finite(smax) || smin == smax) {
     smin <- -1
     smax <- 1
   }
-  score_ann <- as.numeric(meta[[score_col]][meta_idx_hm])
-  score_ann[!is.finite(score_ann)] <- NA_real_
   score_col_fun <- .phenomap_score_col_fun(smin, smax)
 
   decorate_ct_rect <- NULL
@@ -660,6 +671,10 @@ plot_phenotype_markers <- function(markers,
 }
 
 #' Diverging PhenoMapR score colors: blue (\eqn{< 0}), white at 0, red (\eqn{> 0}).
+#'
+#' Breakpoints use \code{smin} and \code{smax} supplied by the caller (typically
+#' the range of scores on heatmap columns). When the range crosses zero,
+#' breakpoints are \code{c(smin, 0, smax)}.
 #'
 #' @noRd
 #' @keywords internal
