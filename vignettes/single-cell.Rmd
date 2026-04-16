@@ -413,7 +413,8 @@ We then use the original cell type annotations from the authors to provide a mor
     labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell Type (original) abundance in adverse vs favorable extremes"))
 
 ```
-Here, we see that the vase majority of the top 5th percentile of adverse PhenoMapR cells are from the Ductal type 2 cells, in line with the results of [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2). The majority of favorably scoring cells were Acinar and C cell populations. 
+Here, we see that the vase majority of the top 5th percentile of adverse PhenoMapR cells are from the Ductal type 2 cells, in line with the results of [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2). The majority of favorably scoring cells were Acinar and B cell populations. 
+
 
 
 ## Phenotype groups and marker genes
@@ -442,9 +443,9 @@ meta[[group_col]] <- groups[rownames(meta), group_col]
 
 ## Marker genes heatmap
 
-After identifying marker genes for the adverse and favorable **`PhenoMapR`** populations, we take up to **20** positive markers per tail with **FDR < 0.05** and the **largest `avg_log2FC`** (same thresholds as the cell-type–specific heatmap). The helper **`plot_phenotype_markers()`** subsets the expression matrix to those genes and the ordered cells, then applies **row-wise `scale`** only to that submatrix. **ComplexHeatmap** shows favorable-marker rows, then adverse-marker rows, with **`anno_mark`** for the top five genes in each block.
+After identifying marker genes for the adverse and favorable **`PhenoMapR`** populations, we take up to **10** positive markers per tail with **FDR < 0.05** and the **largest `avg_log2FC`** (same thresholds as the cell-type–specific heatmap). The helper **`plot_phenotype_markers()`** subsets the expression matrix to those genes and the ordered cells, then applies **row-wise `scale`** only to that submatrix. **ComplexHeatmap** shows favorable-marker rows, then adverse-marker rows, with **`anno_mark`** for the top five genes in each block.
 
-```{r heatmap-markers, fig.align='center', fig.width=12, fig.height=8}
+```{r heatmap-markers, fig.align='center', fig.width=12, fig.height=5}
 plot_phenotype_markers(
     markers = markers,
     expr_mat = expr_mat,
@@ -455,15 +456,15 @@ plot_phenotype_markers(
     celltype_col = "celltype_original",
     celltype_palette = pal_cells,
     heatmap_type = "global",
-    top_n_markers = 20L,
-    n_mark_labels = 5L,
+    top_n_markers = 10L,
+    n_mark_labels = 10L,
     p_adj_threshold = 0.05
   )
 ```
 It's clear from the heatmap that the cell type driving the favorable prognostic signal is the Acinar cell type. Cell-type specific marker identification within the most prgnostic group would further resolve other cell type markers associated with favorable outcomes in this dataset. 
 
 ## Cell-type-specific phenotype marker genes
-The `find_phenotype_markers()` function can also identify marker genes **for each cell type** by contrasting cells in the phenotype tail (Most Adverse or Most Favorable) against a reference group. By default (`celltype_contrast = "within_cell_type"`), the reference is **only other cells of the same type** (`Other` and the opposite tail)—this reduces ubiquitous genes appearing in many blocks. The **original** cohort-wide contrast `(cell type ∩ tail)` vs **all other cells** is available as `celltype_contrast = "vs_cohort_rest"`. By default (`celltype_unique_genes = TRUE`), each gene is kept in a **single** cell-type–phenotype block (the one with the strongest `avg_log2FC`), so ubiquitous transcripts are not repeated across many blocks. We visualize the top marker genes per cell type and phenotype bin in a heatmap that includes *all* cells, ordered by:
+The `find_phenotype_markers()` function can also identify marker genes **for each cell type** by contrasting cells in the phenotype tails (Most Adverse or Most Favorable) against a reference group. By default (`celltype_contrast = "within_cell_type"`), the reference is **only other cells of the same type** (`Other` and the opposite tail)—this reduces ubiquitous genes appearing in many blocks. The **original** cohort-wide contrast `(cell type ∩ tail)` vs **all other cells** is available as `celltype_contrast = "vs_cohort_rest"`. By default (`celltype_unique_genes = TRUE`), each gene is kept in a **single** cell-type–phenotype block (the one with the strongest `avg_log2FC`), so ubiquitous transcripts are not repeated across many blocks. We visualize the top marker genes per cell type and phenotype bin in a heatmap that includes *all* cells, ordered by:
 1) phenotype bin (Most Favorable, Other, Most Adverse), then
 2) cell type, then
 3) phenotype score.
@@ -500,7 +501,7 @@ plot_phenotype_markers(
   celltype_col = "celltype_original",
   celltype_palette = pal_cells,
   heatmap_type = "cell_type_specific",
-  top_n_markers = 20L,
+  top_n_markers = 10L,
   n_mark_labels = 5L,
   p_adj_threshold = 0.05
 )
@@ -594,7 +595,7 @@ if (nrow(meta_plot) > 0) {
     ) +
     theme_minimal() +
     theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
-    labs(x = NULL, y = "Cell type", title = NULL)
+    labs(x = NULL, y = "Cell type (broad)", title = NULL)
 
   # Same plot, but using original cell type labels (when available)
   p_dots_orig <- NULL
@@ -622,7 +623,7 @@ if (nrow(meta_plot) > 0) {
       theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), 
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
             legend.position = "none") +
-      labs(x = "Sample", y = "Cell type (original)", title = NULL) +
+      labs(x = "Sample", y = "Cell type (detailed)", title = NULL) +
       guides(color = guide_legend(override.aes = list(size = 3)))
   }
 
@@ -645,7 +646,7 @@ if (nrow(meta_plot) > 0) {
 
 ## Conclusions
 
-Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (malignant and ductal type 1). These results agree with those of Jolasun et al., however our **`PhenoMapR`** results provide an increased level of granularity compared to other methods, since we retain absolute and rank-ordered information regarding all cell's phenotype association. We also nominate cells most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
+Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq data in a pancreatic cancer dataset successfully identified cells known to be associated with disease (primarily Malignant and Ductal type 2). These results agree with those of [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2), however our **`PhenoMapR`** results provide an increased level of granularity compared to other methods, since we retain absolute and rank-ordered information regarding all cell's phenotype association. We also nominate cells most associated with favorable outcomes in PAAD, highlighting potential areas for additional therapeutic focus.
 
 ## References
 

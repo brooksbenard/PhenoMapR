@@ -637,7 +637,9 @@ theme(
 
 p2 <- ggplot(plot_data_sc,
                aes(x = cell_type, y = score_scaled, fill = cell_type, color = source)) +
-    geom_boxplot(outlier.alpha = 0.2) +
+    geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.25, 
+                 outlier.fill = NULL, 
+                 outlier.color = NULL, outlier.shape = 21) +
     scale_fill_manual(
       values = pal_ct,
       name = "Cell Type"
