@@ -471,7 +471,7 @@ Here, we see that the vase majority of the top 5th percentile of adverse
 PhenoMapR cells are from the Ductal type 2 cells, in line with the
 results of [Jolasun et
 al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2). The
-majority of favorably scoring cells were Acinar and C cell populations.
+majority of favorably scoring cells were Acinar and B cell populations.
 
 ## Phenotype groups and marker genes
 
@@ -518,7 +518,7 @@ meta[[group_col]] <- groups[rownames(meta), group_col]
 ## Marker genes heatmap
 
 After identifying marker genes for the adverse and favorable
-**`PhenoMapR`** populations, we take up to **20** positive markers per
+**`PhenoMapR`** populations, we take up to **10** positive markers per
 tail with **FDR \< 0.05** and the **largest `avg_log2FC`** (same
 thresholds as the cell-type–specific heatmap). The helper
 **[`plot_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_phenotype_markers.md)**
@@ -538,8 +538,8 @@ plot_phenotype_markers(
     celltype_col = "celltype_original",
     celltype_palette = pal_cells,
     heatmap_type = "global",
-    top_n_markers = 20L,
-    n_mark_labels = 5L,
+    top_n_markers = 10L,
+    n_mark_labels = 10L,
     p_adj_threshold = 0.05
   )
 ```
@@ -555,8 +555,8 @@ associated with favorable outcomes in this dataset.
 The
 [`find_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/find_phenotype_markers.md)
 function can also identify marker genes **for each cell type** by
-contrasting cells in the phenotype tail (Most Adverse or Most Favorable)
-against a reference group. By default
+contrasting cells in the phenotype tails (Most Adverse or Most
+Favorable) against a reference group. By default
 (`celltype_contrast = "within_cell_type"`), the reference is **only
 other cells of the same type** (`Other` and the opposite tail)—this
 reduces ubiquitous genes appearing in many blocks. The **original**
@@ -609,7 +609,7 @@ plot_phenotype_markers(
   celltype_col = "celltype_original",
   celltype_palette = pal_cells,
   heatmap_type = "cell_type_specific",
-  top_n_markers = 20L,
+  top_n_markers = 10L,
   n_mark_labels = 5L,
   p_adj_threshold = 0.05
 )
@@ -705,7 +705,7 @@ if (nrow(meta_plot) > 0) {
     ) +
     theme_minimal() +
     theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
-    labs(x = NULL, y = "Cell type", title = NULL)
+    labs(x = NULL, y = "Cell type (broad)", title = NULL)
 
   # Same plot, but using original cell type labels (when available)
   p_dots_orig <- NULL
@@ -733,7 +733,7 @@ if (nrow(meta_plot) > 0) {
       theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), 
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
             legend.position = "none") +
-      labs(x = "Sample", y = "Cell type (original)", title = NULL) +
+      labs(x = "Sample", y = "Cell type (detailed)", title = NULL) +
       guides(color = guide_legend(override.aes = list(size = 3)))
   }
 
@@ -760,13 +760,14 @@ if (nrow(meta_plot) > 0) {
 
 Here, we demonstrate that using **`PhenoMapR`** on single-cell RNAseq
 data in a pancreatic cancer dataset successfully identified cells known
-to be associated with disease (malignant and ductal type 1). These
-results agree with those of Jolasun et al., however our **`PhenoMapR`**
-results provide an increased level of granularity compared to other
-methods, since we retain absolute and rank-ordered information regarding
-all cell’s phenotype association. We also nominate cells most associated
-with favorable outcomes in PAAD, highlighting potential areas for
-additional therapeutic focus.
+to be associated with disease (primarily Malignant and Ductal type 2).
+These results agree with those of [Jolasun et
+al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2),
+however our **`PhenoMapR`** results provide an increased level of
+granularity compared to other methods, since we retain absolute and
+rank-ordered information regarding all cell’s phenotype association. We
+also nominate cells most associated with favorable outcomes in PAAD,
+highlighting potential areas for additional therapeutic focus.
 
 ## References
 
@@ -835,7 +836,7 @@ sessionInfo()
     ##  [25] spatstat.sparse_3.1-0  reticulate_1.46.0      cowplot_1.2.0         
     ##  [28] pbapply_1.7-4          RColorBrewer_1.1-3     abind_1.4-8           
     ##  [31] Rtsne_0.17             presto_1.0.0           purrr_1.2.2           
-    ##  [34] BiocGenerics_0.56.0    IRanges_2.44.0         S4Vectors_0.48.1      
+    ##  [34] BiocGenerics_0.56.0    IRanges_2.44.0         S4Vectors_0.49.1-1    
     ##  [37] ggrepel_0.9.8          irlba_2.3.7            listenv_0.10.1        
     ##  [40] spatstat.utils_3.2-2   goftest_1.2-3          RSpectra_0.16-2       
     ##  [43] spatstat.random_3.4-5  fitdistrplus_1.2-6     parallelly_1.46.1     

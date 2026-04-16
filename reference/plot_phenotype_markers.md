@@ -29,7 +29,8 @@ plot_phenotype_markers(
   heatmap_height = NULL,
   column_title = NULL,
   draw = TRUE,
-  use_raster = FALSE
+  use_raster = FALSE,
+  outline_marker_blocks = TRUE
 )
 ```
 
@@ -137,6 +138,12 @@ plot_phenotype_markers(
 
   Passed to `Heatmap()` (default `FALSE`).
 
+- outline_marker_blocks:
+
+  If `TRUE` (default) and `heatmap_type = "cell_type_specific"`, draws
+  white outline boxes around each marker-gene block after `draw()`. Set
+  `FALSE` to omit them.
+
 ## Value
 
 Invisibly, the
@@ -162,23 +169,27 @@ right; legends are drawn explicitly (`Legend()` +
 `annotation_legend_list`; `merge_legends = TRUE` and correct parameter
 name `merge_legends`). PhenoMapR score colors are diverging
 blue–white–red with **white at 0**: negative scores are blue, positive
-scores are red (using the min and max of the score column across **all**
-cells in `meta`). Row annotations: for `left_annotation`, the first
-track is leftmost (farthest from the matrix). For
-`heatmap_type = "cell_type_specific"`, the order is `anno_mark` (outer),
-**cell type**, then **phenotype bin** (adjacent to the heatmap). For
-`right_annotation`, strips are first (next to the heatmap): phenotype
-then cell type, then `anno_mark` outermost. Favorable-tail strips and
-gene marks on the **left**, adverse on the **right**. For
-`heatmap_type = "cell_type_specific"`, after drawing, white outline
-boxes are added around each marker-gene block (EcoTyper-style
-`decorate_heatmap_body` + `grid.rect`), spanning only the columns for
-that block\\s phenotype bin and cell type (not the full matrix width).
-Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
-**RdGy** (11-class): **high** scaled expression = red, **low** = black.
-Heatmap and column annotation legends merge on the right
-(`merge_legends = TRUE`; extra right `padding` for PDFs). `row_gap = 0`
-between split blocks.
+scores are red. The score column is coerced to a plain numeric vector
+(so matrix columns, e.g. from
+[`scale()`](https://rdrr.io/r/base/scale.html), do not corrupt
+subsetting). Limits use **heatmap column** scores only; the merged
+legend uses an explicit `Legend(at = ...)` with tick positions rounded
+to whole numbers (annotation auto-legends are disabled). Row
+annotations: for `left_annotation`, the first track is leftmost
+(farthest from the matrix). For `heatmap_type = "cell_type_specific"`,
+the order is `anno_mark` (outer), **cell type**, then **phenotype bin**
+(adjacent to the heatmap). For `right_annotation`, strips are first
+(next to the heatmap): phenotype then cell type, then `anno_mark`
+outermost. Favorable-tail strips and gene marks on the **left**, adverse
+on the **right**. For `heatmap_type = "cell_type_specific"`, optional
+white outline boxes (`outline_marker_blocks`) use
+`decorate_heatmap_body` per row slice with column span in native units
+so each box covers only the columns whose `group_col`/`celltype_col`
+match that block (see `outline_marker_blocks`). Row-split slice titles
+are suppressed. Heatmap fill uses ColorBrewer **RdGy** (11-class):
+**high** scaled expression = red, **low** = black. Heatmap and column
+annotation legends merge on the right (`merge_legends = TRUE`; extra
+right `padding` for PDFs). `row_gap = 0` between split blocks.
 
 ## See also
 

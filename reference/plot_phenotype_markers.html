@@ -79,7 +79,8 @@ transpose/scale costs small on large matrices.</p>
 <span>  heatmap_height <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  column_title <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  draw <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  use_raster <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  use_raster <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  outline_marker_blocks <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -183,6 +184,12 @@ single number interpreted as millimeters.</p></dd>
 <dt id="arg-use-raster">use_raster<a class="anchor" aria-label="anchor" href="#arg-use-raster"></a></dt>
 <dd><p>Passed to <code>Heatmap()</code> (default <code>FALSE</code>).</p></dd>
 
+
+<dt id="arg-outline-marker-blocks">outline_marker_blocks<a class="anchor" aria-label="anchor" href="#arg-outline-marker-blocks"></a></dt>
+<dd><p>If <code>TRUE</code> (default) and
+<code>heatmap_type = "cell_type_specific"</code>, draws white outline boxes around
+each marker-gene block after <code>draw()</code>. Set <code>FALSE</code> to omit them.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -204,8 +211,11 @@ score (nearest the heatmap first); annotation names on the right; legends
 are drawn explicitly (<code>Legend()</code> + <code>annotation_legend_list</code>;
 <code>merge_legends = TRUE</code> and correct parameter name <code>merge_legends</code>).
 PhenoMapR score colors are diverging blue–white–red with <strong>white at
-0</strong>: negative scores are blue, positive scores are red (using the min and max
-of the score column across <strong>all</strong> cells in <code>meta</code>). Row
+0</strong>: negative scores are blue, positive scores are red. The score column is
+coerced to a plain numeric vector (so matrix columns, e.g. from
+<code><a href="https://rdrr.io/r/base/scale.html" class="external-link">scale()</a></code>, do not corrupt subsetting). Limits use <strong>heatmap column</strong>
+scores only; the merged legend uses an explicit <code>Legend(at = ...)</code> with
+tick positions rounded to whole numbers (annotation auto-legends are disabled). Row
 annotations: for <code>left_annotation</code>, the first track is leftmost
 (farthest from the matrix). For <code>heatmap_type = "cell_type_specific"</code>,
 the order is <code>anno_mark</code> (outer), <strong>cell type</strong>, then
@@ -213,11 +223,11 @@ the order is <code>anno_mark</code> (outer), <strong>cell type</strong>, then
 strips are first (next to the heatmap): phenotype then cell type, then
 <code>anno_mark</code> outermost. Favorable-tail strips and gene marks on the
 <strong>left</strong>, adverse on the <strong>right</strong>. For
-<code>heatmap_type = "cell_type_specific"</code>, after drawing, white outline
-boxes are added around each marker-gene block (EcoTyper-style
-<code>decorate_heatmap_body</code> + <code>grid.rect</code>), spanning only the
-columns for that block\'s phenotype bin and cell type (not the full matrix
-width).
+<code>heatmap_type = "cell_type_specific"</code>, optional white outline boxes
+(<code>outline_marker_blocks</code>) use <code>decorate_heatmap_body</code> per row slice
+with column span in native units so each box covers only the columns whose
+<code>group_col</code>/<code>celltype_col</code> match that block (see
+<code>outline_marker_blocks</code>).
 Row-split slice titles are suppressed. Heatmap fill uses ColorBrewer
 <strong>RdGy</strong> (11-class): <strong>high</strong> scaled expression = red, <strong>low</strong>
 = black. Heatmap and column annotation legends merge on the right
