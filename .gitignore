@@ -51,5 +51,6 @@ figure/
 PhenoMapR.Rcheck/
 inst/figures/~$*
 
-# Draft vignettes (not maintained in this repository; keep local only if needed)
-inst/vignette-drafts/
+# Local outputs / data next to draft vignettes (sources under inst/vignette-drafts/ are tracked)
+inst/vignette-drafts/*.html
+inst/vignette-drafts/*.rds
