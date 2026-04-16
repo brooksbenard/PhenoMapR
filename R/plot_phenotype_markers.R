@@ -623,10 +623,12 @@ plot_phenotype_markers <- function(markers,
       ComplexHeatmap::decorate_heatmap_body("phenomap_ct_markers", {
         for (j in seq_along(rect$x)) {
           grid::grid.rect(
-            x = grid::unit(rect$x[j], "native"),
-            y = grid::unit(rect$y[j], "native"),
-            width = grid::unit(rect$w[j], "native"),
-            height = grid::unit(rect$h[j], "native"),
+            # `.rect_native_ct_marker_blocks()` currently computes coordinates in [0, 1]
+            # (normalized parent coordinates), so draw in npc, not native.
+            x = grid::unit(rect$x[j], "npc"),
+            y = grid::unit(rect$y[j], "npc"),
+            width = grid::unit(rect$w[j], "npc"),
+            height = grid::unit(rect$h[j], "npc"),
             hjust = 0,
             vjust = 1,
             gp = grid::gpar(col = "white", fill = NA, lty = 1L, lwd = 1)
@@ -688,38 +690,62 @@ plot_phenotype_markers <- function(markers,
 #' @noRd
 #' @keywords internal
 .rect_native_ct_marker_blocks <- function(row_factor, col_block_key) {
-  nrow <- length(row_factor)
-  ncol <- length(col_block_key)
+  # Robust EcoTyper-like rectangles, but *never* default to full heatmap width
+  # when a level is absent in the columns. That behavior causes "full-width"
+  # boxes if `col_block_key` contains levels not present in `row_factor` (e.g.,
+  # an "Other" phenotype group) or if a block has no columns.
+  rows <- factor(as.character(row_factor), levels = unique(as.character(row_factor)))
+  columns <- as.character(col_block_key)
+
+  nrow <- length(rows)
+  ncol <- length(columns)
   if (nrow < 1L || ncol < 1L) {
     return(list(x = numeric(0), y = numeric(0), w = numeric(0), h = numeric(0)))
   }
-  col_block_key <- as.character(col_block_key)
-  row_factor <- factor(as.character(row_factor), levels = unique(as.character(row_factor)))
-  levels_u <- levels(row_factor)
-  xs <- ys <- ws <- hs <- numeric(0)
-  for (bk in levels_u) {
-    idx_rows <- which(row_factor == bk)
-    if (length(idx_rows) == 0L) next
-    col_j <- which(col_block_key == bk & !is.na(col_block_key))
-    if (length(col_j) == 0L) {
-      x0 <- 0
-      w0 <- 1
+
+  lvls <- levels(rows)
+
+  # Row coordinates (EcoTyper approach: first occurrence defines block start).
+  row_start0 <- vapply(lvls, function(lvl) {
+    ii <- which(rows == lvl)
+    if (length(ii) == 0L) return(NA_real_)
+    as.numeric(ii[1L] - 1L)
+  }, numeric(1))
+  fract_y <- row_start0 / nrow
+  # Fill NAs from bottom to top (EcoTyper logic).
+  for (i in length(lvls):1) {
+    if (i == 1) {
+      if (is.na(fract_y[i])) fract_y[i] <- 0
+    } else if (i == length(lvls)) {
+      if (is.na(fract_y[i])) fract_y[i] <- 1
     } else {
-      jmin <- min(col_j)
-      jmax <- max(col_j)
-      x0 <- (jmin - 1L) / ncol
-      w0 <- (jmax - jmin + 1L) / ncol
+      if (is.na(fract_y[i])) fract_y[i] <- fract_y[i + 1L]
     }
-    first_row <- min(idx_rows)
-    last_row <- max(idx_rows)
-    y0 <- 1 - (first_row - 1L) / nrow
-    h0 <- (last_row - first_row + 1L) / nrow
-    xs <- c(xs, x0)
-    ys <- c(ys, y0)
-    ws <- c(ws, w0)
-    hs <- c(hs, h0)
   }
-  list(x = xs, y = ys, w = ws, h = hs)
+  h <- c(fract_y[-1], 1) - fract_y
+  y <- 1 - fract_y
+
+  # Column span per level: use min/max matching columns (more precise than
+  # first-occurrence and avoids full-width defaults).
+  x <- w <- rep(NA_real_, length(lvls))
+  for (k in seq_along(lvls)) {
+    lvl <- lvls[k]
+    jj <- which(!is.na(columns) & columns == lvl)
+    if (length(jj) == 0L) next
+    jmin <- min(jj)
+    jmax <- max(jj)
+    x[k] <- (jmin - 1L) / ncol
+    w[k] <- (jmax - jmin + 1L) / ncol
+  }
+
+  # Drop blocks that don't have corresponding columns.
+  keep <- which(is.finite(x) & is.finite(w) & w > 0)
+  list(
+    y = unname(y[keep]),
+    h = unname(h[keep]),
+    x = unname(x[keep]),
+    w = unname(w[keep])
+  )
 }
 
 
