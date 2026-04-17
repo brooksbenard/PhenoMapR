@@ -543,8 +543,14 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
     z = zm[cbind(ij$i, ij$j)],
     stringsAsFactors = FALSE
   )
+  # Plot only Adverse/Favorable labels (keep *_Other in results, but hide in plot)
+  keep_lab <- unique(c(
+    zlong$from[grepl("_(Adverse|Favorable)$", zlong$from)],
+    zlong$to[grepl("_(Adverse|Favorable)$", zlong$to)]
+  ))
+  zlong_plot <- zlong[zlong$from %in% keep_lab & zlong$to %in% keep_lab, , drop = FALSE]
   print(scoc_nhood$count)
-  p_nh <- ggplot(zlong, aes(x = .data$to, y = .data$from, fill = .data$z)) +
+  p_nh <- ggplot(zlong_plot, aes(x = .data$to, y = .data$from, fill = .data$z)) +
     geom_tile(color = "white", linewidth = 0.2) +
     scale_fill_gradient2(
       low = "#2166AC",
