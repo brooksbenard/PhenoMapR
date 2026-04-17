@@ -650,8 +650,7 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
         left_annotation = row_ha,
         top_annotation = col_ha,
         column_title = paste0(
-          "Neighborhood Enrichment of Prognostic Cell Types\n",
-          "Stars use Benjamini–Hochberg FDR on two-sided p(|Z|): *** q<0.001, ** q<0.01, * q<0.05"
+          "Neighborhood Enrichment of Prognostic Cell Types\n"
         ),
         heatmap_legend_param = list(title = "Z-score"),
         border = TRUE,
@@ -689,12 +688,50 @@ if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
       y = unique(scoc_local_by_ct$metric)[1]
     ) +
     theme_minimal(base_size = 11)
-  print(p_loc)
+  # print(p_loc)
 }
+```
+Stars use Benjamini–Hochberg FDR on two-sided p(|Z|): *** q<0.001, ** q<0.01, * q<0.05
 
-if (is.null(scoc_nhood) && requireNamespace("spatialCooccur", quietly = TRUE)) {
-  message("spatialCooccur neighborhood enrichment skipped (need enough cells and distinct prognostic groups).")
-}
+## Now, we cluster to find broader patterns
+```{r}
+ht <- ComplexHeatmap::Heatmap(
+        mat,
+        name = "Z",
+        col = col_fun,
+        cluster_rows = T,
+        cluster_columns = T,
+        show_row_names = FALSE,
+        show_column_names = FALSE,
+        show_row_dend = FALSE,
+        show_column_dend = FALSE,
+        row_names_gp = grid::gpar(fontsize = 7),
+        column_names_gp = grid::gpar(fontsize = 7),
+        left_annotation = row_ha,
+        top_annotation = col_ha,
+        column_title = paste0(
+          "Neighborhood Enrichment of Prognostic Cell Types\n"
+        ),
+        heatmap_legend_param = list(title = "Z-score"),
+        border = TRUE,
+        cell_fun = function(j, i, x, y, w, h, fill) {
+          qv <- mat_p_adj[i, j]
+          if (!is.finite(qv)) {
+            return(invisible(NULL))
+          }
+          sym <- if (qv < 0.001) {
+            "***"
+          } else if (qv < 0.01) {
+            "**"
+          } else if (qv < 0.05) {
+            "*"
+          } else {
+            return(invisible(NULL))
+          }
+          grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+        }
+      )
+      ComplexHeatmap::draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right")
 ```
 
 
