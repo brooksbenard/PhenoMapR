@@ -564,6 +564,7 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
     stringsAsFactors = FALSE
   )
   meta_labs$Prognostic <- factor(meta_labs$Prognostic, levels = suffix_pg)
+  meta_labs <- meta_labs[!is.na(meta_labs$Prognostic), , drop = FALSE]
   ord <- order(meta_labs$CellType, meta_labs$Prognostic)
   labs_ord <- meta_labs$label[ord]
   labs_ord <- labs_ord[labs_ord %in% rn & labs_ord %in% cn]
