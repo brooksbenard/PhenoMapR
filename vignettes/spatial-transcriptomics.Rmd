@@ -583,6 +583,15 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
     uct <- sort(unique(c(row_ct, col_ct)))
     pal_ct <- PhenoMapR::get_celltype_palette(uct)
 
+    ## Cell counts per combined label (cells entering nhood_enrichment, same order as heatmap columns).
+    col_ncells <- rep(0L, ncol(mat))
+    names(col_ncells) <- colnames(mat)
+    if (exists("scoc_df") && is.data.frame(scoc_df) && "ct_pg" %in% names(scoc_df)) {
+      tab_ct <- table(scoc_df$ct_pg)
+      hit <- names(col_ncells) %in% names(tab_ct)
+      col_ncells[hit] <- as.integer(tab_ct[names(col_ncells)[hit]])
+    }
+
     ## Two-sided p-values from |Z| (normal approximation; spatialCooccur returns zscore + count only).
     mat_p <- 2 * stats::pnorm(-abs(mat))
     mat_p[!is.finite(mat)] <- NA_real_
@@ -605,6 +614,13 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
       col_ha <- ComplexHeatmap::HeatmapAnnotation(
         CellType = col_ct,
         `Prognostic Group` = col_pg,
+        `n cells` = ComplexHeatmap::anno_barplot(
+          col_ncells,
+          gp = grid::gpar(fill = "#666666"),
+          border = FALSE,
+          height = grid::unit(14, "mm"),
+          ylim = c(0, max(col_ncells, 1L, na.rm = TRUE))
+        ),
         col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
         annotation_name_side = "right",
         simple_anno_size = grid::unit(4, "mm")
