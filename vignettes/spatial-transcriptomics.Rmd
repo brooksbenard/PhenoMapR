@@ -391,7 +391,7 @@ Visually, adverse and favorable cells can appear to segregate on the tissue. The
 
 ## Co-localization of prognostic cells (CytoSPACE)
 
-We use the same **Visium row / column** coordinates as the spatial plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and **`prognostic_group`** (and **`cell_type`** as a copy of the latter for **`cooccur_local()`**, which expects that column name).
+We use the same **Visium row / column** coordinates as the spatial plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and a **combined label** that includes **cell type and prognostic group**. Each cell is labeled as `CellType_prognostic_group` (e.g. `Ductal_Most Adverse`). This lets us ask whether, for example, **adverse ductal cells** co-localize differently than **favorable ductal cells**.
 
 Install **`spatialCooccur`** from GitHub if needed: `remotes::install_github("juninamo/spatialCooccur")`.
 
@@ -399,33 +399,37 @@ Install **`spatialCooccur`** from GitHub if needed: `remotes::install_github("ju
 
 ```{r cytospace-spatialcooccur, fig.width=9, fig.height=4.5, out.width=NULL}
 scoc_nhood <- NULL
-scoc_local <- NULL
+scoc_local_by_ct <- NULL
 
 if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   message("Install spatialCooccur for co-localization: remotes::install_github(\"juninamo/spatialCooccur\")")
 } else if (!exists("cell_locations") ||
-           !all(c("Cell", "row", "col", "prognostic_group") %in% names(cell_locations))) {
-  message("Co-localization skipped: expected `cell_locations` with columns Cell, row, col, prognostic_group.")
+           !all(c("Cell", "row", "col", "CellType", "prognostic_group") %in% names(cell_locations))) {
+  message("Co-localization skipped: expected `cell_locations` with columns Cell, row, col, CellType, prognostic_group.")
 } else {
   dfb <- cell_locations[
-    stats::complete.cases(cell_locations[, c("Cell", "row", "col", "prognostic_group")]),
+    stats::complete.cases(cell_locations[, c("Cell", "row", "col", "CellType", "prognostic_group")]),
     ,
     drop = FALSE
   ]
   dfb$Cell <- as.character(dfb$Cell)
   dfb$row <- as.numeric(dfb$row)
   dfb$col <- as.numeric(dfb$col)
+  dfb$CellType <- as.character(dfb$CellType)
   dfb$prognostic_group <- as.character(dfb$prognostic_group)
   dfb <- dfb[dfb$prognostic_group %in% c("Most Adverse", "Most Favorable", "Other"), , drop = FALSE]
+  dfb <- dfb[!is.na(dfb$CellType) & nzchar(trimws(dfb$CellType)), , drop = FALSE]
+  dfb$ct_pg <- paste0(dfb$CellType, "_", dfb$prognostic_group)
 
   scoc_df <- data.frame(
     x = dfb$row,
     y = dfb$col,
-    prognostic_group = dfb$prognostic_group,
+    ct_pg = dfb$ct_pg,
     stringsAsFactors = FALSE
   )
   rownames(scoc_df) <- dfb$Cell
-  scoc_df$cell_type <- scoc_df$prognostic_group
+  # spatialCooccur::cooccur_local expects the label column to be named `cell_type`
+  scoc_df$cell_type <- scoc_df$ct_pg
 
   # Keep runtime bounded while preserving enough cells for stable permutation nulls.
   max_cells_sc <- 4000L
@@ -451,12 +455,12 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   k_sc <- min(20L, max(5L, nrow(scoc_df) - 1L))
   n_perm_sc <- 100L
 
-  n_grp <- length(unique(scoc_df$prognostic_group))
+  n_grp <- length(unique(scoc_df$ct_pg))
   if (nrow(scoc_df) >= (k_sc + 3L) && n_grp >= 2L) {
     scoc_nhood <- tryCatch(
       spatialCooccur::nhood_enrichment(
         scoc_df,
-        cluster_key = "prognostic_group",
+        cluster_key = "ct_pg",
         neighbors.k = k_sc,
         connectivity_key = "nn",
         transformation = TRUE,
@@ -476,24 +480,50 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
     diff(range(scoc_df$y, na.rm = TRUE)),
     na.rm = TRUE
   ))
-  if (nrow(scoc_df) >= 20L &&
-      sum(scoc_df$prognostic_group == "Most Adverse") >= 3L &&
-      sum(scoc_df$prognostic_group == "Most Favorable") >= 3L) {
-    scoc_local <- tryCatch(
+
+  # Local co-occurrence within each cell type:
+  # compare CellType_Most Adverse neighborhoods for presence of CellType_Most Favorable (and vice versa).
+  df_local_list <- list()
+  cell_types <- sort(unique(sub("_Most (Adverse|Favorable|Other)$", "", unique(scoc_df$ct_pg))))
+  for (ct in cell_types) {
+    xlab <- paste0(ct, "_Most Adverse")
+    ylab <- paste0(ct, "_Most Favorable")
+    if (!(xlab %in% scoc_df$ct_pg && ylab %in% scoc_df$ct_pg)) next
+    if (sum(scoc_df$ct_pg == xlab) < 3L || sum(scoc_df$ct_pg == ylab) < 3L) next
+
+    loc_one <- tryCatch(
       spatialCooccur::cooccur_local(
         scoc_df,
-        cluster_x = "Most Adverse",
-        cluster_y = "Most Favorable",
+        cluster_x = xlab,
+        cluster_y = ylab,
         connectivity_key = "nn",
         neighbors.k = k_sc,
         radius = rad_sc,
         maxnsteps = 3L
       ),
       error = function(e) {
-        message("spatialCooccur::cooccur_local failed: ", conditionMessage(e))
+        message("spatialCooccur::cooccur_local failed for ", ct, ": ", conditionMessage(e))
         NULL
       }
     )
+    if (is.null(loc_one) || ncol(loc_one) < 1L) next
+
+    cn <- colnames(loc_one)[1]
+    v <- loc_one[[1]]
+    ids <- rownames(loc_one)
+    if (is.null(ids) || length(ids) != length(v)) ids <- names(v)
+    if (is.null(ids) || length(ids) != length(v)) ids <- as.character(seq_len(length(v)))
+
+    df_local_list[[ct]] <- data.frame(
+      cell = as.character(ids),
+      cell_type = ct,
+      score = as.numeric(v),
+      metric = cn,
+      stringsAsFactors = FALSE
+    )
+  }
+  if (length(df_local_list) > 0) {
+    scoc_local_by_ct <- do.call(rbind, df_local_list)
   }
 }
 
@@ -519,7 +549,7 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
     ) +
     labs(
       title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)",
-      subtitle = "Z-scores for co-occurrence on kNN graph vs permuted labels",
+      subtitle = "Z-scores for co-occurrence of CellType_prognostic_group labels vs permuted labels",
       x = "Neighbor label",
       y = "Cell label"
     ) +
@@ -528,34 +558,17 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
   print(p_nh)
 }
 
-if (!is.null(scoc_local) && ncol(scoc_local) >= 1L) {
-  cn <- colnames(scoc_local)[1]
-  loc_vec <- scoc_local[[1]]
-  # rownames() hold barcodes; names(loc_vec) is often NULL after diffusion (as.numeric(matrix))
-  nr <- length(loc_vec)
-  cell_ids <- rownames(scoc_local)
-  if (length(cell_ids) != nr) cell_ids <- names(loc_vec)
-  if (is.null(cell_ids) || length(cell_ids) != nr) {
-    cell_ids <- if (exists("scoc_df") && nrow(scoc_df) == nr) rownames(scoc_df) else as.character(seq_len(nr))
-  }
-  loc_df <- data.frame(
-    score = as.numeric(loc_vec),
-    cell = as.character(cell_ids),
-    stringsAsFactors = FALSE
-  )
-  if (exists("scoc_df")) {
-    loc_df$prognostic_group <- scoc_df$prognostic_group[match(loc_df$cell, rownames(scoc_df))]
-  }
-  p_loc <- ggplot(loc_df, aes(x = stats::reorder(.data$prognostic_group, .data$score, median), y = .data$score, fill = .data$prognostic_group)) +
-    geom_boxplot(outlier.alpha = 0.3, show.legend = FALSE) +
+if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
+  p_loc <- ggplot(scoc_local_by_ct, aes(x = stats::reorder(.data$cell_type, .data$score, median), y = .data$score)) +
+    geom_boxplot(outlier.alpha = 0.3) +
+    coord_flip() +
     labs(
       title = "Local co-occurrence score (spatialCooccur::cooccur_local)",
-      subtitle = paste0("Neighborhoods (radius ≈ ", signif(rad_sc, 3), ") containing both Most Adverse and Most Favorable cells"),
-      x = "Prognostic group",
-      y = cn
+      subtitle = paste0("Within-cell-type neighborhoods (radius ≈ ", signif(rad_sc, 3), "): adverse vs favorable"),
+      x = "Cell type",
+      y = unique(scoc_local_by_ct$metric)[1]
     ) +
-    theme_minimal(base_size = 11) +
-    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+    theme_minimal(base_size = 11)
   print(p_loc)
 }
 
