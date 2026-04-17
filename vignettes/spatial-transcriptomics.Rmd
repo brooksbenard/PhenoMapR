@@ -595,12 +595,21 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
     ## Two-sided p-values from |Z| (normal approximation; spatialCooccur returns zscore + count only).
     mat_p <- 2 * stats::pnorm(-abs(mat))
     mat_p[!is.finite(mat)] <- NA_real_
+    ## Benjamini–Hochberg FDR across all matrix cells (multiple pairwise label comparisons).
+    mat_p_adj <- mat_p
+    pv_flat <- as.vector(mat_p)
+    ok_flat <- is.finite(pv_flat)
+    mat_p_adj[] <- NA_real_
+    mat_p_adj[ok_flat] <- stats::p.adjust(pv_flat[ok_flat], method = "BH")
 
     drew_ch <- FALSE
     if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
       mabs <- suppressWarnings(max(abs(as.numeric(mat)), na.rm = TRUE))
       if (!is.finite(mabs) || mabs <= 0) mabs <- 1
-      col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#2166AC", "#f7f7f7", "#B2182B"))
+      
+      # "#7F312FFF", "#BE4A47FF", "#FD817EFF", "#FEA19EFF", "#FEC0BFFF", "#F5F5F5FF", "#99E3DDFF", "#66D4CCFF", "#33C6BBFF", "#008A80FF", "#005C55FF"
+      
+      col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#7F312FFF", "#f7f7f7", "#005C55FF"))
 
       row_ha <- ComplexHeatmap::rowAnnotation(
         CellType = row_ct,
@@ -612,15 +621,15 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
         show_legend = c(FALSE)
       )
       col_ha <- ComplexHeatmap::HeatmapAnnotation(
-        CellType = col_ct,
-        `Prognostic Group` = col_pg,
-        `n cells` = ComplexHeatmap::anno_barplot(
+                `n cells` = ComplexHeatmap::anno_barplot(
           col_ncells,
           gp = grid::gpar(fill = "#666666"),
           border = FALSE,
           height = grid::unit(14, "mm"),
           ylim = c(0, max(col_ncells, 1L, na.rm = TRUE))
         ),
+        CellType = col_ct,
+        `Prognostic Group` = col_pg,
         col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
         annotation_name_side = "right",
         simple_anno_size = grid::unit(4, "mm")
@@ -630,8 +639,8 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
         mat,
         name = "Z",
         col = col_fun,
-        cluster_rows = T,
-        cluster_columns = T,
+        cluster_rows = F,
+        cluster_columns = F,
         show_row_names = FALSE,
         show_column_names = FALSE,
         show_row_dend = FALSE,
@@ -642,20 +651,20 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
         top_annotation = col_ha,
         column_title = paste0(
           "Neighborhood Enrichment of Prognostic Cell Types\n",
-          "Stars: two-sided p from |Z| (pnorm); *** p<0.001, ** p<0.01, * p<0.05"
+          "Stars use Benjamini–Hochberg FDR on two-sided p(|Z|): *** q<0.001, ** q<0.01, * q<0.05"
         ),
         heatmap_legend_param = list(title = "Z-score"),
         border = TRUE,
         cell_fun = function(j, i, x, y, w, h, fill) {
-          pv <- mat_p[i, j]
-          if (!is.finite(pv)) {
+          qv <- mat_p_adj[i, j]
+          if (!is.finite(qv)) {
             return(invisible(NULL))
           }
-          sym <- if (pv < 0.001) {
+          sym <- if (qv < 0.001) {
             "***"
-          } else if (pv < 0.01) {
+          } else if (qv < 0.01) {
             "**"
-          } else if (pv < 0.05) {
+          } else if (qv < 0.05) {
             "*"
           } else {
             return(invisible(NULL))
@@ -665,36 +674,6 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
       )
       ComplexHeatmap::draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right")
       drew_ch <- TRUE
-    }
-
-    if (!drew_ch) {
-      ij <- expand.grid(i = seq_len(nrow(mat)), j = seq_len(ncol(mat)), stringsAsFactors = FALSE)
-      zlong_plot <- data.frame(
-        from = rownames(mat)[ij$i],
-        to = colnames(mat)[ij$j],
-        z = mat[cbind(ij$i, ij$j)],
-        stringsAsFactors = FALSE
-      )
-      message("Using ggplot tile heatmap (install ComplexHeatmap + circlize for annotated heatmap).")
-      p_nh <- ggplot(zlong_plot, aes(x = .data$to, y = .data$from, fill = .data$z)) +
-        geom_tile(color = "white", linewidth = 0.2) +
-        scale_fill_gradient2(
-          low = "#2166AC",
-          mid = "white",
-          high = "#B2182B",
-          midpoint = 0,
-          name = "Z"
-        ) +
-        labs(
-          title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)",
-          subtitle = "Z-scores for co-occurrence of CellType_prognostic_group labels (ggplot fallback)",
-          x = "Neighbor label",
-          y = "Cell label"
-        ) +
-        theme_minimal(base_size = 11) +
-        theme(axis.text.x = element_text(angle = 35, hjust = 1)) +
-        coord_fixed()
-      print(p_nh)
     }
   }
 }
@@ -713,6 +692,9 @@ if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
   print(p_loc)
 }
 
+if (is.null(scoc_nhood) && requireNamespace("spatialCooccur", quietly = TRUE)) {
+  message("spatialCooccur neighborhood enrichment skipped (need enough cells and distinct prognostic groups).")
+}
 ```
 
 
