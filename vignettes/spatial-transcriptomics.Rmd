@@ -398,7 +398,9 @@ Install **`spatialCooccur`** from GitHub if needed: `remotes::install_github("ju
 
 **`spatialCooccur::nhood_enrichment()`** builds a **kNN graph** (**`Seurat::FindNeighbors()`** inside the package), optionally normalizes adjacency, aggregates **co-occurrence** between cluster pairs, and compares the observed matrix to **permutation** nulls to produce a **z-score** matrix. We use **`n_jobs = 1`** so the vignette runs on a single core (set higher locally if you install the package). **`spatialCooccur::cooccur_local()`** scores each cell by whether its **radius** neighborhood contains both **Adverse** and **Favorable** labels, then applies a short diffusion-style step when **`maxnsteps > 0`**. Duplicate spot coordinates (many CytoSPACE cells per spot) get a small jitter.
 
-```{r cytospace-spatialcooccur, fig.width=9, fig.height=4.5, out.width=NULL}
+The neighborhood **Z-score** matrix is shown with **ComplexHeatmap** when available: **row and column annotations** split **`CellType`** and **`Adverse` / `Favorable` / `Other`** (combined labels remain `CellType_prognostic_group`). If **ComplexHeatmap** is not installed, a **ggplot** tile heatmap is used instead.
+
+```{r cytospace-spatialcooccur, fig.width=12, fig.height=10, out.width=NULL}
 scoc_nhood <- NULL
 scoc_local_by_ct <- NULL
 
@@ -438,11 +440,11 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   scoc_df$cell_type <- scoc_df$ct_pg
 
   # Keep runtime bounded while preserving enough cells for stable permutation nulls.
-  max_cells_sc <- 4000L
-  if (nrow(scoc_df) > max_cells_sc) {
-    set.seed(3L)
-    scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
-  }
+  # max_cells_sc <- 4000L
+  # if (nrow(scoc_df) > max_cells_sc) {
+  #   set.seed(3L)
+  #   scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
+  # }
 
   # Many CytoSPACE cells share identical spot coordinates; jitter to avoid duplicates in kNN/radius logic.
   xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
@@ -534,40 +536,123 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
 }
 
 if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
+  print(scoc_nhood$count)
+
   zm <- as.matrix(scoc_nhood$zscore)
   lab_clean <- function(nm) gsub("^Cluster", "", nm)
-  ij <- expand.grid(i = seq_len(nrow(zm)), j = seq_len(ncol(zm)), stringsAsFactors = FALSE)
-  zlong <- data.frame(
-    from = lab_clean(rownames(zm)[ij$i]),
-    to = lab_clean(colnames(zm)[ij$j]),
-    z = zm[cbind(ij$i, ij$j)],
+  rn <- lab_clean(rownames(zm))
+  cn <- lab_clean(colnames(zm))
+
+  suffix_pg <- c("Adverse", "Favorable", "Other")
+  .parse_ct_pg <- function(lab) {
+    for (s in suffix_pg) {
+      suff <- paste0("_", s)
+      if (nzchar(lab) && endsWith(lab, suff)) {
+        ct <- substr(lab, 1L, nchar(lab) - nchar(suff))
+        return(c(ct = ct, pg = s))
+      }
+    }
+    c(ct = lab, pg = NA_character_)
+  }
+
+  all_labs <- sort(unique(c(rn, cn)))
+  meta_labs <- as.data.frame(
+    do.call(rbind, lapply(all_labs, function(l) {
+      p <- .parse_ct_pg(l)
+      data.frame(label = l, CellType = p[["ct"]], Prognostic = p[["pg"]], stringsAsFactors = FALSE)
+    })),
     stringsAsFactors = FALSE
   )
-  # Plot only Adverse/Favorable labels (keep *_Other in results, but hide in plot)
-  keep_lab <- unique(c(
-    zlong$from[grepl("_(Adverse|Favorable)$", zlong$from)],
-    zlong$to[grepl("_(Adverse|Favorable)$", zlong$to)]
-  ))
-  zlong_plot <- zlong[zlong$from %in% keep_lab & zlong$to %in% keep_lab, , drop = FALSE]
-  print(scoc_nhood$count)
-  p_nh <- ggplot(zlong_plot, aes(x = .data$to, y = .data$from, fill = .data$z)) +
-    geom_tile(color = "white", linewidth = 0.2) +
-    scale_fill_gradient2(
-      low = "#2166AC",
-      mid = "white",
-      high = "#B2182B",
-      midpoint = 0,
-      name = "Z"
-    ) +
-    labs(
-      title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)",
-      subtitle = "Z-scores for co-occurrence of CellType_prognostic_group labels vs permuted labels",
-      x = "Neighbor label",
-      y = "Cell label"
-    ) +
-    theme_minimal(base_size = 11) +
-    theme(axis.text.x = element_text(angle = 35, hjust = 1))
-  print(p_nh)
+  meta_labs$Prognostic <- factor(meta_labs$Prognostic, levels = suffix_pg)
+  ord <- order(meta_labs$CellType, meta_labs$Prognostic)
+  labs_ord <- meta_labs$label[ord]
+  labs_ord <- labs_ord[labs_ord %in% rn & labs_ord %in% cn]
+  if (length(labs_ord) < 2L) {
+    message("Not enough overlapping labels in zscore matrix for heatmap.")
+  } else {
+    mat <- zm[match(labs_ord, rn), match(labs_ord, cn), drop = FALSE]
+    dimnames(mat) <- list(labs_ord, labs_ord)
+
+    row_ct <- as.character(meta_labs$CellType[match(rownames(mat), meta_labs$label)])
+    row_pg <- as.character(meta_labs$Prognostic[match(rownames(mat), meta_labs$label)])
+    col_ct <- as.character(meta_labs$CellType[match(colnames(mat), meta_labs$label)])
+    col_pg <- as.character(meta_labs$Prognostic[match(colnames(mat), meta_labs$label)])
+
+    pal_pg <- c(Adverse = "#B2182B", Favorable = "#2166AC", Other = "#bdbdbd")
+    uct <- sort(unique(c(row_ct, col_ct)))
+    pal_ct <- PhenoMapR::get_celltype_palette(uct)
+
+    drew_ch <- FALSE
+    if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
+      mabs <- suppressWarnings(max(abs(as.numeric(mat)), na.rm = TRUE))
+      if (!is.finite(mabs) || mabs <= 0) mabs <- 1
+      col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#2166AC", "white", "#B2182B"))
+
+      row_ha <- ComplexHeatmap::rowAnnotation(
+        CellType = row_ct,
+        Prognostic = row_pg,
+        col = list(CellType = pal_ct, Prognostic = pal_pg),
+        annotation_name_side = "top",
+        simple_anno_size = grid::unit(4, "mm")
+      )
+      col_ha <- ComplexHeatmap::HeatmapAnnotation(
+        CellType = col_ct,
+        Prognostic = col_pg,
+        col = list(CellType = pal_ct, Prognostic = pal_pg),
+        annotation_name_side = "left",
+        simple_anno_size = grid::unit(4, "mm")
+      )
+
+      ht <- ComplexHeatmap::Heatmap(
+        mat,
+        name = "Z",
+        col = col_fun,
+        cluster_rows = FALSE,
+        cluster_columns = FALSE,
+        row_names_side = "left",
+        column_names_side = "bottom",
+        row_names_gp = grid::gpar(fontsize = 7),
+        column_names_gp = grid::gpar(fontsize = 7),
+        left_annotation = row_ha,
+        top_annotation = col_ha,
+        column_title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)\nZ-score vs permuted labels (rows = cell label, columns = neighbor label)",
+        heatmap_legend_param = list(title = "Z"),
+        border = TRUE
+      )
+      ComplexHeatmap::draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right")
+      drew_ch <- TRUE
+    }
+
+    if (!drew_ch) {
+      ij <- expand.grid(i = seq_len(nrow(mat)), j = seq_len(ncol(mat)), stringsAsFactors = FALSE)
+      zlong_plot <- data.frame(
+        from = rownames(mat)[ij$i],
+        to = colnames(mat)[ij$j],
+        z = mat[cbind(ij$i, ij$j)],
+        stringsAsFactors = FALSE
+      )
+      message("Using ggplot tile heatmap (install ComplexHeatmap + circlize for annotated heatmap).")
+      p_nh <- ggplot(zlong_plot, aes(x = .data$to, y = .data$from, fill = .data$z)) +
+        geom_tile(color = "white", linewidth = 0.2) +
+        scale_fill_gradient2(
+          low = "#2166AC",
+          mid = "white",
+          high = "#B2182B",
+          midpoint = 0,
+          name = "Z"
+        ) +
+        labs(
+          title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)",
+          subtitle = "Z-scores for co-occurrence of CellType_prognostic_group labels (ggplot fallback)",
+          x = "Neighbor label",
+          y = "Cell label"
+        ) +
+        theme_minimal(base_size = 11) +
+        theme(axis.text.x = element_text(angle = 35, hjust = 1)) +
+        coord_fixed()
+      print(p_nh)
+    }
+  }
 }
 
 if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
