@@ -26,6 +26,7 @@ suppressPackageStartupMessages({
   library(SeuratObject)
   library(ggplot2)
   library(dplyr)
+  library(patchwork)
 })
 
 knitr::opts_chunk$set(fig.width = 12, out.width = "100%", warning = FALSE)
@@ -347,8 +348,8 @@ In order to make the visualization more apparent, we restrict the spatial map of
 cell_locations <- cell_locations %>% 
   mutate(percentile = percent_rank(weighted_sum_score_Pancreatic)) %>%
   mutate(prognostic_group = case_when(
-    percentile < 0.05 ~ "Most Favorable",
-    percentile >= 0.95 ~ "Most Adverse",
+    percentile < 0.05 ~ "Favorable",
+    percentile >= 0.95 ~ "Adverse",
     TRUE ~ "Other"
   ))
 
@@ -365,7 +366,7 @@ cell_locations <- cell_locations %>%
       size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
     # ggtitle("5th percentile: Most Adverse vs Most Favorable") +
     scale_color_manual(
-      values = c(`Most Adverse` = "#B2182B", Other = "#f7f7f7", `Most Favorable` = "#2166AC"),
+      values = c(`Adverse` = "#B2182B", Other = "#f7f7f7", `Favorable` = "#2166AC"),
       name = "Prognostic group",
       na.value = "grey90",
       drop = FALSE
@@ -391,11 +392,11 @@ Visually, adverse and favorable cells can appear to segregate on the tissue. The
 
 ## Co-localization of prognostic cells (CytoSPACE)
 
-We use the same **Visium row / column** coordinates as the spatial plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and a **combined label** that includes **cell type and prognostic group**. Each cell is labeled as `CellType_prognostic_group` (e.g. `Ductal_Most Adverse`). This lets us ask whether, for example, **adverse ductal cells** co-localize differently than **favorable ductal cells**.
+We use the same **Visium row / column** coordinates as the spatial plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and a **combined label** that includes **cell type and prognostic group**. Each cell is labeled as `CellType_prognostic_group` (e.g. `Ductal_Adverse`). This lets us ask whether, for example, **adverse ductal cells** co-localize differently than **favorable ductal cells**.
 
 Install **`spatialCooccur`** from GitHub if needed: `remotes::install_github("juninamo/spatialCooccur")`.
 
-**`spatialCooccur::nhood_enrichment()`** builds a **kNN graph** (**`Seurat::FindNeighbors()`** inside the package), optionally normalizes adjacency, aggregates **co-occurrence** between cluster pairs, and compares the observed matrix to **permutation** nulls to produce a **z-score** matrix. We use **`n_jobs = 1`** so the vignette runs on a single core (set higher locally if you install the package). **`spatialCooccur::cooccur_local()`** scores each cell by whether its **radius** neighborhood contains both **Most Adverse** and **Most Favorable** cells, then applies a short diffusion-style step when **`maxnsteps > 0`**. Duplicate spot coordinates (many CytoSPACE cells per spot) get a small jitter.
+**`spatialCooccur::nhood_enrichment()`** builds a **kNN graph** (**`Seurat::FindNeighbors()`** inside the package), optionally normalizes adjacency, aggregates **co-occurrence** between cluster pairs, and compares the observed matrix to **permutation** nulls to produce a **z-score** matrix. We use **`n_jobs = 1`** so the vignette runs on a single core (set higher locally if you install the package). **`spatialCooccur::cooccur_local()`** scores each cell by whether its **radius** neighborhood contains both **Adverse** and **Favorable** labels, then applies a short diffusion-style step when **`maxnsteps > 0`**. Duplicate spot coordinates (many CytoSPACE cells per spot) get a small jitter.
 
 ```{r cytospace-spatialcooccur, fig.width=9, fig.height=4.5, out.width=NULL}
 scoc_nhood <- NULL
@@ -417,7 +418,12 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   dfb$col <- as.numeric(dfb$col)
   dfb$CellType <- as.character(dfb$CellType)
   dfb$prognostic_group <- as.character(dfb$prognostic_group)
-  dfb <- dfb[dfb$prognostic_group %in% c("Most Adverse", "Most Favorable", "Other"), , drop = FALSE]
+  dfb$prognostic_group <- dplyr::recode(
+    dfb$prognostic_group,
+    `Most Adverse` = "Adverse",
+    `Most Favorable` = "Favorable"
+  )
+  dfb <- dfb[dfb$prognostic_group %in% c("Adverse", "Favorable", "Other"), , drop = FALSE]
   dfb <- dfb[!is.na(dfb$CellType) & nzchar(trimws(dfb$CellType)), , drop = FALSE]
   dfb$ct_pg <- paste0(dfb$CellType, "_", dfb$prognostic_group)
 
@@ -482,12 +488,12 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   ))
 
   # Local co-occurrence within each cell type:
-  # compare CellType_Most Adverse neighborhoods for presence of CellType_Most Favorable (and vice versa).
+  # compare CellType_Adverse neighborhoods for presence of CellType_Favorable (and vice versa).
   df_local_list <- list()
-  cell_types <- sort(unique(sub("_Most (Adverse|Favorable|Other)$", "", unique(scoc_df$ct_pg))))
+  cell_types <- sort(unique(sub("_(Adverse|Favorable|Other)$", "", unique(scoc_df$ct_pg))))
   for (ct in cell_types) {
-    xlab <- paste0(ct, "_Most Adverse")
-    ylab <- paste0(ct, "_Most Favorable")
+    xlab <- paste0(ct, "_Adverse")
+    ylab <- paste0(ct, "_Favorable")
     if (!(xlab %in% scoc_df$ct_pg && ylab %in% scoc_df$ct_pg)) next
     if (sum(scoc_df$ct_pg == xlab) < 3L || sum(scoc_df$ct_pg == ylab) < 3L) next
 
