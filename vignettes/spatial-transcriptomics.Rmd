@@ -14,11 +14,11 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
 
 ## Overview
 
-This vignette demonstrates **{PhenoMapR}** on spatial transcriptomics in two parts. **Part 1** uses **spot-level** 10X Visium data (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds`): we show the **H&E** with `SpatialPlot`, then score with PRECOG **Pancreatic** and map **z-scaled** scores with **`stat_summary_hex`** (same coordinates and aspect as H&E; no jitter). **Part 2** uses the same sample after [**CytoSPACE**](https://www.nature.com/articles/s41587-023-01697-9) mapped single cells onto spots (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`); we then mirror the single-cell workflow (score by cell type, markers, heatmaps) at **cell** resolution and assess **co-localization** of prognostic groups with **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** (**`nhood_enrichment()`**, **`cooccur_local()`**).
+This vignette demonstrates applying `{PhenoMapR}` to spatial transcriptomics data in two parts. **Part 1** uses **spot-level** 10X Visium data from an HTAN PDAC sample to show broad tissue regions of phenotypic interest. **Part 2** uses the same sample after we mapped paired single-cell data to the spots using [**CytoSPACE**](https://www.nature.com/articles/s41587-023-01697-9); we then mirror the single-cell workflow (score by cell type, identify marker genes, and plot heatmaps) at **cell** resolution and assess **co-localization** of prognostic cell types.
 
-The sample is from a pancreatic cancer dataset available from [HTAN](https://humantumoratlas.org/).
+The sample (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test`) is from a pancreatic cancer dataset available from [HTAN](https://humantumoratlas.org/).
 
-## Download data and vizualize H&E histology
+## Download data and vizualize H&E
 ```{r load-setup}
 suppressPackageStartupMessages({
   library(PhenoMapR)
@@ -41,11 +41,13 @@ googledrive::drive_download(googledrive::as_id(gd_id_spot), rds_spot, overwrite 
 
 seurat_spot <- readRDS("HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds")
 
-SpatialPlot(object = seurat_spot,
+h_and_e <- SpatialPlot(object = seurat_spot,
   features = NULL,
   image.alpha = 1,
   pt.size.factor = 0) +
   guides(fill = "none") 
+
+print(h_and_e)
 ```
 
 ## Score spots with PhenoMapR
@@ -76,7 +78,7 @@ plot_score_distribution(
 ```
 
 ## PhenoMapR score distribution across spots 
-```{r}
+```{r plot-spot-scores}
 p <- SpatialPlot(
   object = seurat_spot,
   features = "weighted_sum_score_Pancreatic", image.alpha = 0
@@ -87,7 +89,7 @@ df <- p$data  # extract data from SpatialPlot
 
 spot_hex_bins <- max(10, min(50L, as.integer(round(sqrt(nrow(df))))))
 
-ggplot(df, aes(
+hex_phenomapr <- ggplot(df, aes(
   x = x,
   y = -y,
   z = scale(weighted_sum_score_Pancreatic)
@@ -104,8 +106,16 @@ ggplot(df, aes(
   )+
   coord_fixed() +
   theme_void()
-```
 
+
+(h_and_e | hex_phenomapr) + 
+  plot_layout(guides = "collect") & 
+  theme(aspect.ratio = 1)
+```
+We can see that there are clear morphological associations with where adverse and favorable signals are being mapped to.
+
+
+Next, let's define the most adverse and favorable groups by selecting the top and bottom 5th percentile of spots based on PhenoMapR scores.
 ```{r}
 df <- SpatialPlot(
   object = seurat_spot,
@@ -124,7 +134,7 @@ mode_val <- function(z) {
   as.numeric(names(sort(table(z), decreasing = TRUE)[1L]))
 }
 
-ggplot(df, aes(
+hex_phenomapr_groups <- ggplot(df, aes(
   x = x,
   y = -y,
   z = as.numeric(factor(
@@ -155,26 +165,31 @@ ggplot(df, aes(
   ) +
   coord_fixed() +
   theme_void()
+
+
+(hex_phenomapr | hex_phenomapr_groups) + 
+  plot_layout(guides = "collect") & 
+  theme(aspect.ratio = 1)
+
 ```
-Here, we can see that the most favorable spots seem to cluster together, while a subset of the most adverse also tend to co-localize.
+Here, we can still see that the most favorable spots seem to cluster together, while a subset of the most adverse also tend to co-localize.
 
 
 # Part 2: CytoSPACE-mapped cells
 
-Load the **CytoSPACE** object (single cells placed on Visium coordinates).
+This sample from HTAN contains a paired single-cell sample from the same tissue block. In order to leverage the increased resolution of the single-cell data in a spatial context, we use CytoSPACE to map the single-cells to their spots.
 
-```{r load-cytospace-object}
+## Load and score sample with PhenoMapR (CytoSPACE)
+Here, we load the pre-processed Seurat object with the cells already maped.
+```{r score-spots}
+# Load the **CytoSPACE** object (single cells placed on Visium coordinates).
 rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 gd_id_cyto <- "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
 
 googledrive::drive_download(googledrive::as_id(gd_id_cyto), rds_cyto, overwrite = TRUE)
 
 seurat <- readRDS(rds_cyto)
-```
 
-## Score sample with PhenoMapR (CytoSPACE)
-
-```{r score-spots}
   scores_spatial <- PhenoMapR::PhenoMap(
     expression = seurat,
     reference = "precog",
@@ -185,15 +200,6 @@ seurat <- readRDS(rds_cyto)
   )
   seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
 score_col <- grep("weighted_sum_score", names(scores_spatial), value = TRUE)[1]
-
-spatial_ci_lite <- tolower(Sys.getenv("CI", "")) %in% c("true", "yes", "1") ||
-  Sys.getenv("PHENOMAPR_SPATIAL_LITE", "") == "1"
-spatial_max_cells <- if (spatial_ci_lite) 2000L else 5000L
-assay_use <- if ("Spatial" %in% names(seurat@assays)) {
-  "Spatial"
-} else {
-  Seurat::DefaultAssay(seurat)
-}
 
 plot_score_distribution(
   seurat@meta.data[[score_col]],
@@ -251,7 +257,7 @@ As seen in the other pancreatic cancer vignettes, the ductal cell type is the mo
 
 ## Where are the different cell types?
 
-Here, we use the coordinates information from the spatial seurat object and pair them with the cell level metadata in order to plot the results in spatial context.
+Here, we use the single-cell coordinates from the spatial seurat object and pair them with the cell level metadata in order to plot the results in spatial context.
 
 ```{r}
 cell_locations <- seurat@meta.data %>%
@@ -278,7 +284,7 @@ cell_locations$CellType <- as.factor(cell_locations$CellType)
   cell_locations$celltype_zorder <- as.numeric(factor(as.character(cell_locations$CellType), levels = ct_order))
   ct_pal <- if (!is.null(spatial_celltype_pal)) spatial_celltype_pal else PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
  
-   ggplot(cell_locations, aes(x = .data$row, y = -.data$col, color = .data$CellType,
+ cytospace_loc <-  ggplot(cell_locations, aes(x = .data$row, y = -.data$col, color = .data$CellType,
     size = points_per_location, zorder = .data$celltype_zorder)) +
     geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
     scale_color_manual(values = ct_pal, name = "Cell Type", na.value = "grey90") +
@@ -297,18 +303,19 @@ cell_locations$CellType <- as.factor(cell_locations$CellType)
        coord_fixed(ratio = 0.6) +
   theme_void()
   
+ print(cytospace_loc)
 ```
-
+Interestingly, it appears that several cell types tend to co-localize with themselves, some of which seem to be localized to the areas where we saw the greatest adverse and favorable scores mapping to at the spot level.
 
 
 ### Where raw PhenoMapR scores are
 
 Spatial map of PhenoMapR score (z-scaled for color gradient). Blue = more favorable, red = more adverse.
 
-```{r}
+```{r, fig.width=12}
 cell_locations <- cell_locations[order(abs(cell_locations$weighted_sum_score_Pancreatic)), ]
 
-ggplot(cell_locations, aes(
+sc_phenomapr <- ggplot(cell_locations, aes(
   x = .data$row,
   y = -.data$col,
   color = scale(weighted_sum_score_Pancreatic),
@@ -324,7 +331,13 @@ ggplot(cell_locations, aes(
   ) +
   coord_fixed(ratio = 0.6) +
   theme_void()
+
+(cytospace_loc | sc_phenomapr) + 
+  # plot_layout(guides = "collect") & 
+  theme(aspect.ratio = 1)
 ```
+
+
 
 ### Where 5th percentile cells are
 
@@ -374,171 +387,182 @@ cell_locations <- cell_locations %>%
 
 ```
 
-<!-- Visually, adverse and favorable cells can appear to segregate on the tissue. The next section quantifies **neighborhood co-occurrence** of prognostic groups with **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** (Inamo *et al.*, [medRxiv 2025](https://doi.org/10.1101/2025.08.05.25332835)). -->
+Visually, adverse and favorable cells can appear to segregate on the tissue. The next section quantifies **neighborhood co-occurrence** of prognostic groups with **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** (Inamo *et al.*, [medRxiv 2025](https://doi.org/10.1101/2025.08.05.25332835)).
 
-<!-- ## Co-localization of prognostic cells (CytoSPACE) -->
+## Co-localization of prognostic cells (CytoSPACE)
 
-<!-- We use the same **Visium row / column** coordinates as the spatial plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and **`prognostic_group`** (and **`cell_type`** as a copy of the latter for **`cooccur_local()`**, which expects that column name). -->
+We use the same **Visium row / column** coordinates as the spatial plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and **`prognostic_group`** (and **`cell_type`** as a copy of the latter for **`cooccur_local()`**, which expects that column name).
 
-<!-- Install **`spatialCooccur`** from GitHub if needed: `remotes::install_github("juninamo/spatialCooccur")`. -->
+Install **`spatialCooccur`** from GitHub if needed: `remotes::install_github("juninamo/spatialCooccur")`.
 
-<!-- **`spatialCooccur::nhood_enrichment()`** builds a **kNN graph** (**`Seurat::FindNeighbors()`** inside the package), optionally normalizes adjacency, aggregates **co-occurrence** between cluster pairs, and compares the observed matrix to **permutation** nulls to produce a **z-score** matrix. We use **`n_jobs = 1`** so the vignette runs on a single core (set higher locally if you install the package). **`spatialCooccur::cooccur_local()`** scores each cell by whether its **radius** neighborhood contains both **Most Adverse** and **Most Favorable** cells, then applies a short diffusion-style step when **`maxnsteps > 0`**. Parameters **`neighbors.k`**, **`n_perms`**, and **`radius`** are reduced when **`PHENOMAPR_SPATIAL_LITE`** or **CI** is set; duplicate spot coordinates (many CytoSPACE cells per spot) get a small jitter. -->
+**`spatialCooccur::nhood_enrichment()`** builds a **kNN graph** (**`Seurat::FindNeighbors()`** inside the package), optionally normalizes adjacency, aggregates **co-occurrence** between cluster pairs, and compares the observed matrix to **permutation** nulls to produce a **z-score** matrix. We use **`n_jobs = 1`** so the vignette runs on a single core (set higher locally if you install the package). **`spatialCooccur::cooccur_local()`** scores each cell by whether its **radius** neighborhood contains both **Most Adverse** and **Most Favorable** cells, then applies a short diffusion-style step when **`maxnsteps > 0`**. Duplicate spot coordinates (many CytoSPACE cells per spot) get a small jitter.
 
-<!-- ```{r cytospace-spatialcooccur, fig.width=9, fig.height=4.5, out.width=NULL} -->
-<!-- scoc_nhood <- NULL -->
-<!-- scoc_local <- NULL -->
+```{r cytospace-spatialcooccur, fig.width=9, fig.height=4.5, out.width=NULL}
+scoc_nhood <- NULL
+scoc_local <- NULL
 
-<!-- if (exists("has_spatial_coords") && isTRUE(has_spatial_coords) && exists("spatial_df") && -->
-<!--     all(c("row", "col", "prognostic_group", "cell_id") %in% names(spatial_df)) && -->
-<!--     requireNamespace("spatialCooccur", quietly = TRUE)) { -->
-<!--   dfb <- spatial_df[ -->
-<!--     stats::complete.cases(spatial_df[, c("row", "col", "prognostic_group")]), -->
-<!--     , -->
-<!--     drop = FALSE -->
-<!--   ] -->
-<!--   scoc_df <- data.frame( -->
-<!--     x = as.numeric(dfb$row), -->
-<!--     y = as.numeric(dfb$col), -->
-<!--     prognostic_group = as.character(dfb$prognostic_group), -->
-<!--     stringsAsFactors = FALSE -->
-<!--   ) -->
-<!--   rownames(scoc_df) <- as.character(dfb$cell_id) -->
-<!--   scoc_df$cell_type <- scoc_df$prognostic_group -->
+if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
+  message("Install spatialCooccur for co-localization: remotes::install_github(\"juninamo/spatialCooccur\")")
+} else if (!exists("cell_locations") ||
+           !all(c("Cell", "row", "col", "prognostic_group") %in% names(cell_locations))) {
+  message("Co-localization skipped: expected `cell_locations` with columns Cell, row, col, prognostic_group.")
+} else {
+  dfb <- cell_locations[
+    stats::complete.cases(cell_locations[, c("Cell", "row", "col", "prognostic_group")]),
+    ,
+    drop = FALSE
+  ]
+  dfb$Cell <- as.character(dfb$Cell)
+  dfb$row <- as.numeric(dfb$row)
+  dfb$col <- as.numeric(dfb$col)
+  dfb$prognostic_group <- as.character(dfb$prognostic_group)
+  dfb <- dfb[dfb$prognostic_group %in% c("Most Adverse", "Most Favorable", "Other"), , drop = FALSE]
 
-<!--   max_cells_sc <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 1500L else 4000L -->
-<!--   if (nrow(scoc_df) > max_cells_sc) { -->
-<!--     set.seed(3L) -->
-<!--     scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE] -->
-<!--   } -->
+  scoc_df <- data.frame(
+    x = dfb$row,
+    y = dfb$col,
+    prognostic_group = dfb$prognostic_group,
+    stringsAsFactors = FALSE
+  )
+  rownames(scoc_df) <- dfb$Cell
+  scoc_df$cell_type <- scoc_df$prognostic_group
 
-<!--   xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE]) -->
-<!--   if (any(duplicated(xy_mat) | duplicated(xy_mat, fromLast = TRUE))) { -->
-<!--     rng <- max(diff(range(xy_mat[, 1], na.rm = TRUE)), diff(range(xy_mat[, 2], na.rm = TRUE)), na.rm = TRUE) -->
-<!--     eps <- if (is.finite(rng) && rng > 0) rng * 1e-5 else 1e-6 -->
-<!--     scoc_df$x <- scoc_df$x + stats::runif(nrow(scoc_df), 0, eps) -->
-<!--     scoc_df$y <- scoc_df$y + stats::runif(nrow(scoc_df), 0, eps) -->
-<!--   } -->
+  # Keep runtime bounded while preserving enough cells for stable permutation nulls.
+  max_cells_sc <- 4000L
+  if (nrow(scoc_df) > max_cells_sc) {
+    set.seed(3L)
+    scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
+  }
 
-<!--   k_sc <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 12L else 20L -->
-<!--   n_perm_sc <- if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 40L else 100L -->
-<!--   k_sc <- min(k_sc, max(5L, nrow(scoc_df) - 1L)) -->
+  # Many CytoSPACE cells share identical spot coordinates; jitter to avoid duplicates in kNN/radius logic.
+  xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
+  if (any(duplicated(xy_mat) | duplicated(xy_mat, fromLast = TRUE))) {
+    rng <- max(
+      diff(range(xy_mat[, 1], na.rm = TRUE)),
+      diff(range(xy_mat[, 2], na.rm = TRUE)),
+      na.rm = TRUE
+    )
+    eps <- if (is.finite(rng) && rng > 0) rng * 1e-5 else 1e-6
+    set.seed(4L)
+    scoc_df$x <- scoc_df$x + stats::runif(nrow(scoc_df), 0, eps)
+    scoc_df$y <- scoc_df$y + stats::runif(nrow(scoc_df), 0, eps)
+  }
 
-<!--   n_grp <- length(unique(scoc_df$prognostic_group)) -->
-<!--   if (nrow(scoc_df) >= (k_sc + 3L) && n_grp >= 2L) { -->
-<!--     scoc_nhood <- tryCatch( -->
-<!--       spatialCooccur::nhood_enrichment( -->
-<!--         scoc_df, -->
-<!--         cluster_key = "prognostic_group", -->
-<!--         neighbors.k = k_sc, -->
-<!--         connectivity_key = "nn", -->
-<!--         transformation = TRUE, -->
-<!--         n_perms = n_perm_sc, -->
-<!--         seed = 42L, -->
-<!--         n_jobs = 1L -->
-<!--       ), -->
-<!--       error = function(e) { -->
-<!--         message("spatialCooccur::nhood_enrichment failed: ", conditionMessage(e)) -->
-<!--         NULL -->
-<!--       } -->
-<!--     ) -->
-<!--   } -->
+  k_sc <- min(20L, max(5L, nrow(scoc_df) - 1L))
+  n_perm_sc <- 100L
 
-<!--   rad_sc <- max(3, 0.04 * max( -->
-<!--     diff(range(scoc_df$x, na.rm = TRUE)), -->
-<!--     diff(range(scoc_df$y, na.rm = TRUE)), -->
-<!--     na.rm = TRUE -->
-<!--   )) -->
-<!--   if (nrow(scoc_df) >= 20L && -->
-<!--       sum(scoc_df$prognostic_group == "Most Adverse") >= 3L && -->
-<!--       sum(scoc_df$prognostic_group == "Most Favorable") >= 3L) { -->
-<!--     scoc_local <- tryCatch( -->
-<!--       spatialCooccur::cooccur_local( -->
-<!--         scoc_df, -->
-<!--         cluster_x = "Most Adverse", -->
-<!--         cluster_y = "Most Favorable", -->
-<!--         connectivity_key = "nn", -->
-<!--         neighbors.k = k_sc, -->
-<!--         radius = rad_sc, -->
-<!--         maxnsteps = if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 1L else 3L -->
-<!--       ), -->
-<!--       error = function(e) { -->
-<!--         message("spatialCooccur::cooccur_local failed: ", conditionMessage(e)) -->
-<!--         NULL -->
-<!--       } -->
-<!--     ) -->
-<!--   } -->
-<!-- } else if (!requireNamespace("spatialCooccur", quietly = TRUE)) { -->
-<!--   message( -->
-<!--     "Install spatialCooccur for co-localization: remotes::install_github(\"juninamo/spatialCooccur\")" -->
-<!--   ) -->
-<!-- } -->
+  n_grp <- length(unique(scoc_df$prognostic_group))
+  if (nrow(scoc_df) >= (k_sc + 3L) && n_grp >= 2L) {
+    scoc_nhood <- tryCatch(
+      spatialCooccur::nhood_enrichment(
+        scoc_df,
+        cluster_key = "prognostic_group",
+        neighbors.k = k_sc,
+        connectivity_key = "nn",
+        transformation = TRUE,
+        n_perms = n_perm_sc,
+        seed = 42L,
+        n_jobs = 1L
+      ),
+      error = function(e) {
+        message("spatialCooccur::nhood_enrichment failed: ", conditionMessage(e))
+        NULL
+      }
+    )
+  }
 
-<!-- if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) { -->
-<!--   zm <- as.matrix(scoc_nhood$zscore) -->
-<!--   lab_clean <- function(nm) gsub("^Cluster", "", nm) -->
-<!--   ij <- expand.grid(i = seq_len(nrow(zm)), j = seq_len(ncol(zm)), stringsAsFactors = FALSE) -->
-<!--   zlong <- data.frame( -->
-<!--     from = lab_clean(rownames(zm)[ij$i]), -->
-<!--     to = lab_clean(colnames(zm)[ij$j]), -->
-<!--     z = zm[cbind(ij$i, ij$j)], -->
-<!--     stringsAsFactors = FALSE -->
-<!--   ) -->
-<!--   print(scoc_nhood$count) -->
-<!--   p_nh <- ggplot(zlong, aes(x = .data$to, y = .data$from, fill = .data$z)) + -->
-<!--     geom_tile(color = "white", linewidth = 0.2) + -->
-<!--     scale_fill_gradient2( -->
-<!--       low = "#2166AC", -->
-<!--       mid = "white", -->
-<!--       high = "#B2182B", -->
-<!--       midpoint = 0, -->
-<!--       name = "Z" -->
-<!--     ) + -->
-<!--     labs( -->
-<!--       title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)", -->
-<!--       subtitle = "Z-scores for co-occurrence on kNN graph vs permuted labels", -->
-<!--       x = "Neighbor label", -->
-<!--       y = "Cell label" -->
-<!--     ) + -->
-<!--     theme_minimal(base_size = 11) + -->
-<!--     theme(axis.text.x = element_text(angle = 35, hjust = 1)) -->
-<!--   print(p_nh) -->
-<!-- } -->
+  rad_sc <- max(3, 0.04 * max(
+    diff(range(scoc_df$x, na.rm = TRUE)),
+    diff(range(scoc_df$y, na.rm = TRUE)),
+    na.rm = TRUE
+  ))
+  if (nrow(scoc_df) >= 20L &&
+      sum(scoc_df$prognostic_group == "Most Adverse") >= 3L &&
+      sum(scoc_df$prognostic_group == "Most Favorable") >= 3L) {
+    scoc_local <- tryCatch(
+      spatialCooccur::cooccur_local(
+        scoc_df,
+        cluster_x = "Most Adverse",
+        cluster_y = "Most Favorable",
+        connectivity_key = "nn",
+        neighbors.k = k_sc,
+        radius = rad_sc,
+        maxnsteps = 3L
+      ),
+      error = function(e) {
+        message("spatialCooccur::cooccur_local failed: ", conditionMessage(e))
+        NULL
+      }
+    )
+  }
+}
 
-<!-- if (!is.null(scoc_local) && ncol(scoc_local) >= 1L) { -->
-<!--   cn <- colnames(scoc_local)[1] -->
-<!--   loc_vec <- scoc_local[[1]] -->
-<!--   # rownames() hold barcodes; names(loc_vec) is often NULL after diffusion (as.numeric(matrix)) -->
-<!--   nr <- length(loc_vec) -->
-<!--   cell_ids <- rownames(scoc_local) -->
-<!--   if (length(cell_ids) != nr) cell_ids <- names(loc_vec) -->
-<!--   if (is.null(cell_ids) || length(cell_ids) != nr) { -->
-<!--     cell_ids <- if (exists("scoc_df") && nrow(scoc_df) == nr) rownames(scoc_df) else as.character(seq_len(nr)) -->
-<!--   } -->
-<!--   loc_df <- data.frame( -->
-<!--     score = as.numeric(loc_vec), -->
-<!--     cell = as.character(cell_ids), -->
-<!--     stringsAsFactors = FALSE -->
-<!--   ) -->
-<!--   if (exists("scoc_df")) { -->
-<!--     loc_df$prognostic_group <- scoc_df$prognostic_group[match(loc_df$cell, rownames(scoc_df))] -->
-<!--   } -->
-<!--   p_loc <- ggplot(loc_df, aes(x = stats::reorder(.data$prognostic_group, .data$score, median), y = .data$score, fill = .data$prognostic_group)) + -->
-<!--     geom_boxplot(outlier.alpha = 0.3, show.legend = FALSE) + -->
-<!--     labs( -->
-<!--       title = "Local co-occurrence score (spatialCooccur::cooccur_local)", -->
-<!--       subtitle = paste0("Neighborhoods (radius ≈ ", signif(rad_sc, 3), ") containing both Most Adverse and Most Favorable cells"), -->
-<!--       x = "Prognostic group", -->
-<!--       y = cn -->
-<!--     ) + -->
-<!--     theme_minimal(base_size = 11) + -->
-<!--     theme(axis.text.x = element_text(angle = 30, hjust = 1)) -->
-<!--   print(p_loc) -->
-<!-- } -->
+if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
+  zm <- as.matrix(scoc_nhood$zscore)
+  lab_clean <- function(nm) gsub("^Cluster", "", nm)
+  ij <- expand.grid(i = seq_len(nrow(zm)), j = seq_len(ncol(zm)), stringsAsFactors = FALSE)
+  zlong <- data.frame(
+    from = lab_clean(rownames(zm)[ij$i]),
+    to = lab_clean(colnames(zm)[ij$j]),
+    z = zm[cbind(ij$i, ij$j)],
+    stringsAsFactors = FALSE
+  )
+  print(scoc_nhood$count)
+  p_nh <- ggplot(zlong, aes(x = .data$to, y = .data$from, fill = .data$z)) +
+    geom_tile(color = "white", linewidth = 0.2) +
+    scale_fill_gradient2(
+      low = "#2166AC",
+      mid = "white",
+      high = "#B2182B",
+      midpoint = 0,
+      name = "Z"
+    ) +
+    labs(
+      title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)",
+      subtitle = "Z-scores for co-occurrence on kNN graph vs permuted labels",
+      x = "Neighbor label",
+      y = "Cell label"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x = element_text(angle = 35, hjust = 1))
+  print(p_nh)
+}
 
-<!-- if (is.null(scoc_nhood) && requireNamespace("spatialCooccur", quietly = TRUE)) { -->
-<!--   message("spatialCooccur neighborhood enrichment skipped (need enough cells and distinct prognostic groups).") -->
-<!-- } -->
-<!-- ``` -->
+if (!is.null(scoc_local) && ncol(scoc_local) >= 1L) {
+  cn <- colnames(scoc_local)[1]
+  loc_vec <- scoc_local[[1]]
+  # rownames() hold barcodes; names(loc_vec) is often NULL after diffusion (as.numeric(matrix))
+  nr <- length(loc_vec)
+  cell_ids <- rownames(scoc_local)
+  if (length(cell_ids) != nr) cell_ids <- names(loc_vec)
+  if (is.null(cell_ids) || length(cell_ids) != nr) {
+    cell_ids <- if (exists("scoc_df") && nrow(scoc_df) == nr) rownames(scoc_df) else as.character(seq_len(nr))
+  }
+  loc_df <- data.frame(
+    score = as.numeric(loc_vec),
+    cell = as.character(cell_ids),
+    stringsAsFactors = FALSE
+  )
+  if (exists("scoc_df")) {
+    loc_df$prognostic_group <- scoc_df$prognostic_group[match(loc_df$cell, rownames(scoc_df))]
+  }
+  p_loc <- ggplot(loc_df, aes(x = stats::reorder(.data$prognostic_group, .data$score, median), y = .data$score, fill = .data$prognostic_group)) +
+    geom_boxplot(outlier.alpha = 0.3, show.legend = FALSE) +
+    labs(
+      title = "Local co-occurrence score (spatialCooccur::cooccur_local)",
+      subtitle = paste0("Neighborhoods (radius ≈ ", signif(rad_sc, 3), ") containing both Most Adverse and Most Favorable cells"),
+      x = "Prognostic group",
+      y = cn
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  print(p_loc)
+}
+
+if (is.null(scoc_nhood) && requireNamespace("spatialCooccur", quietly = TRUE)) {
+  message("spatialCooccur neighborhood enrichment skipped (need enough cells and distinct prognostic groups).")
+}
+```
 
 
 ## Prognostic markers
@@ -707,7 +731,7 @@ if (exists("markers") && !is.null(markers)) {
             top_n_markers = if (exists("spatial_ci_lite") && isTRUE(spatial_ci_lite)) 12L else 20L,
             n_mark_labels = 15L,
             p_adj_threshold = 0.05,
-            column_title = "Global phenotype markers (spatial, CytoSPACE cells)"
+            column_title = ""
           )
           drew_ch <- !is.null(ch_ht)
         }
