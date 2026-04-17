@@ -579,28 +579,34 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
     col_ct <- as.character(meta_labs$CellType[match(colnames(mat), meta_labs$label)])
     col_pg <- as.character(meta_labs$Prognostic[match(colnames(mat), meta_labs$label)])
 
-    pal_pg <- c(Adverse = "#B2182B", Favorable = "#2166AC", Other = "#bdbdbd")
+    pal_pg <- c(Adverse = "#B2182B", Favorable = "#2166AC", Other = "#f7f7f7")
     uct <- sort(unique(c(row_ct, col_ct)))
     pal_ct <- PhenoMapR::get_celltype_palette(uct)
+
+    ## Two-sided p-values from |Z| (normal approximation; spatialCooccur returns zscore + count only).
+    mat_p <- 2 * stats::pnorm(-abs(mat))
+    mat_p[!is.finite(mat)] <- NA_real_
 
     drew_ch <- FALSE
     if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
       mabs <- suppressWarnings(max(abs(as.numeric(mat)), na.rm = TRUE))
       if (!is.finite(mabs) || mabs <= 0) mabs <- 1
-      col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#2166AC", "white", "#B2182B"))
+      col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#2166AC", "#f7f7f7", "#B2182B"))
 
       row_ha <- ComplexHeatmap::rowAnnotation(
         CellType = row_ct,
-        Prognostic = row_pg,
-        col = list(CellType = pal_ct, Prognostic = pal_pg),
-        annotation_name_side = "top",
-        simple_anno_size = grid::unit(4, "mm")
+        `Prognostic Group` = row_pg,
+        col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
+        # annotation_name_side = NULL,
+        show_annotation_name = FALSE,
+        simple_anno_size = grid::unit(4, "mm"),
+        show_legend = c(FALSE)
       )
       col_ha <- ComplexHeatmap::HeatmapAnnotation(
         CellType = col_ct,
-        Prognostic = col_pg,
-        col = list(CellType = pal_ct, Prognostic = pal_pg),
-        annotation_name_side = "left",
+        `Prognostic Group` = col_pg,
+        col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
+        annotation_name_side = "right",
         simple_anno_size = grid::unit(4, "mm")
       )
 
@@ -608,17 +614,38 @@ if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
         mat,
         name = "Z",
         col = col_fun,
-        cluster_rows = FALSE,
-        cluster_columns = FALSE,
-        row_names_side = "left",
-        column_names_side = "bottom",
+        cluster_rows = T,
+        cluster_columns = T,
+        show_row_names = FALSE,
+        show_column_names = FALSE,
+        show_row_dend = FALSE,
+        show_column_dend = FALSE,
         row_names_gp = grid::gpar(fontsize = 7),
         column_names_gp = grid::gpar(fontsize = 7),
         left_annotation = row_ha,
         top_annotation = col_ha,
-        column_title = "Neighborhood enrichment (spatialCooccur::nhood_enrichment)\nZ-score vs permuted labels (rows = cell label, columns = neighbor label)",
-        heatmap_legend_param = list(title = "Z"),
-        border = TRUE
+        column_title = paste0(
+          "Neighborhood Enrichment of Prognostic Cell Types\n",
+          "Stars: two-sided p from |Z| (pnorm); *** p<0.001, ** p<0.01, * p<0.05"
+        ),
+        heatmap_legend_param = list(title = "Z-score"),
+        border = TRUE,
+        cell_fun = function(j, i, x, y, w, h, fill) {
+          pv <- mat_p[i, j]
+          if (!is.finite(pv)) {
+            return(invisible(NULL))
+          }
+          sym <- if (pv < 0.001) {
+            "***"
+          } else if (pv < 0.01) {
+            "**"
+          } else if (pv < 0.05) {
+            "*"
+          } else {
+            return(invisible(NULL))
+          }
+          grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+        }
       )
       ComplexHeatmap::draw(ht, heatmap_legend_side = "right", annotation_legend_side = "right")
       drew_ch <- TRUE
@@ -670,9 +697,6 @@ if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
   print(p_loc)
 }
 
-if (is.null(scoc_nhood) && requireNamespace("spatialCooccur", quietly = TRUE)) {
-  message("spatialCooccur neighborhood enrichment skipped (need enough cells and distinct prognostic groups).")
-}
 ```
 
 
