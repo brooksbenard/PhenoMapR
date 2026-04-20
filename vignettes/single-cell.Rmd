@@ -471,7 +471,7 @@ The `find_phenotype_markers()` function can also identify marker genes **for eac
 
 For the heatmap, we take up to **20** positive markers per cell type and phenotype tail with the **largest `avg_log2FC`**, restricting to genes that are **FDR-significant** (`p_adj` from Benjamini–Hochberg `< 0.05`). Rows follow the same column order: **Most Favorable** (each cell type), **Other** cells, **Most Adverse** (each cell type). **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** draws row splits between blocks; **`anno_mark`** labels the **top five** genes (by log2FC) within each (phenotype tail × cell type) group, with **cell type** and **phenotype** strips on the left.
 
-```{r celltype-specific-phenotype-markers, cache = FALSE, fig.align='center', fig.width=14, fig.height=10}
+```{r celltype-specific-phenotype-markers, fig.width=15, fig.height=7}
 group_df <- data.frame(
   cell_id = meta$Cell,
   phenotype_group = meta[[group_col]],
@@ -512,9 +512,9 @@ plot_phenotype_markers(
 
 ## Dataset summary of PhenoMapR results
 
-Here, we summarize the enrichment of prognostic PhenoMapR scores across samples and cell types to highlight the difference in signal between healthy and tumor samples as well as between different cell populations across the sample groups.
+Here, we summarize the enrichment of prognostic PhenoMapR scores across samples and cell types to highlight the difference in signal between healthy and tumor samples as well as between different cell populations across the sample groups. The **top panel** shows a **pseudobulk** sample score: the mean cell-level PhenoMapR score within each sample, **z-scaled across samples** (so bars are comparable for relative high/low bulk-like signal per sample).
 
-```{r proportion-by-sample-celltype, fig.height=6, fig.align='center'}
+```{r proportion-by-sample-celltype, fig.height=5.6, fig.align='center'}
 sample_col <- NULL
 for (cand in c("Sample", "sample", "Patient", "patient", "Sample_ID", "orig.ident")) {
   if (cand %in% names(meta)) {
@@ -534,6 +534,41 @@ sample_lev <- levels(factor(meta[[sample_col]]))
 meta_plot$sample <- factor(meta_plot[[sample_col]], levels = sample_lev)
 n_per_sample <- setNames(as.numeric(table(meta[[sample_col]])[sample_lev]), sample_lev)
 n_per_sample[is.na(n_per_sample)] <- 0
+
+## Pseudobulk: mean cell-level PhenoMapR score per sample (all cells), z-scaled across samples
+pb_mean <- tapply(as.numeric(meta[[score_precog_col]]), meta[[sample_col]], mean, na.rm = TRUE)
+pb_mean <- as.numeric(pb_mean[as.character(sample_lev)])
+pb_mean[is.na(pb_mean)] <- NA_real_
+ok_pb <- is.finite(pb_mean)
+pb_scaled <- rep(NA_real_, length(pb_mean))
+if (sum(ok_pb) >= 2L && stats::sd(pb_mean[ok_pb], na.rm = TRUE) > 0) {
+  pb_scaled[ok_pb] <- as.numeric(scale(pb_mean[ok_pb]))
+} else if (any(ok_pb)) {
+  pb_scaled[ok_pb] <- 0
+}
+pb_df <- data.frame(
+  sample = factor(sample_lev, levels = sample_lev),
+  pb_score_scaled = pb_scaled,
+  stringsAsFactors = FALSE
+)
+p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled)) +
+  geom_col(width = 0.65, fill = "#4d4d4d") +
+  geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", color = "grey40") +
+  scale_x_continuous(
+    breaks = seq_along(sample_lev),
+    labels = sample_lev,
+    limits = c(0.5, length(sample_lev) + 0.5),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.08, 0.08))) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "none"
+  ) +
+  labs(y = "Pseudobulk score\n(z across samples)", title = NULL)
 
 # Per-sample proportion of adverse and favorable (5th percentile) for stacked bar
 meta_adv_fav <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
@@ -595,7 +630,7 @@ if (nrow(meta_plot) > 0) {
     ) +
     theme_minimal() +
     theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
-    labs(x = NULL, y = "Cell type (broad)", title = NULL)
+    labs(x = NULL, y = "Cell type\n(broad)", title = NULL)
 
   # Same plot, but using original cell type labels (when available)
   p_dots_orig <- NULL
@@ -623,18 +658,19 @@ if (nrow(meta_plot) > 0) {
       theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), 
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
             legend.position = "none") +
-      labs(x = "Sample", y = "Cell type (detailed)", title = NULL) +
+      labs(x = "Sample", y = "Cell type\n(detailed)", title = NULL) +
       guides(color = guide_legend(override.aes = list(size = 3)))
   }
 
   if (requireNamespace("patchwork", quietly = TRUE)) {
     suppressPackageStartupMessages(library(patchwork))
     if (!is.null(p_dots_orig)) {
-      print(p_bar / p_dots / p_dots_orig + plot_layout(heights = c(1, 2, 2)))
+      print(p_pbulk / p_bar / p_dots / p_dots_orig + plot_layout(heights = c(0.75, 1, 1, 2)))
     } else {
-      print(p_bar / p_dots + plot_layout(heights = c(1, 2)))
+      print(p_pbulk / p_bar / p_dots + plot_layout(heights = c(0.75, 1, 2)))
     }
   } else {
+    print(p_pbulk)
     print(p_bar)
     print(p_dots)
     if (!is.null(p_dots_orig)) print(p_dots_orig)
