@@ -327,27 +327,75 @@ In both TCGA and PRECOG results, we see that the Ductal cell type 2 is the most 
 Theoretically, the PhenoMapR scores should be differentially distributed between tumor or normal samples. We plot the scores per cell type, split by tumor/normal source:
 
 ```{r, fig.height=5}
+library(ggsignif)
+library(purrr)
+library(dplyr)
+
 dl <- 
   data.frame(Reference = "PRECOG Pancreatic", Source = meta$Source, Score = meta[[score_precog_col]], Cell_type = meta$celltype_original, stringsAsFactors = FALSE)
 
+cell_levels <- levels(factor(dl$Cell_type))  # or your factor order
+
+# For each cell type, check which sources are present
+source_offsets <- c("Normal" = -0.2, "Tumor" = 0.2)  # matches dodge width = 0.8 → each side ±0.2
+
+# --- 2. Compute p-values per cell type ---
+pval_df <- dl %>%
+  group_by(Cell_type) %>%
+  summarise(
+    n_sources = n_distinct(Source),
+    p_val = ifelse(
+      n_distinct(Source) > 1,
+      wilcox.test(scale(Score)[Source == "Normal"],
+                  scale(Score)[Source == "Tumor"])$p.value,
+      NA_real_
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(p_val)) %>%
+  mutate(
+    # Use the SAME factor used in ggplot
+    x_pos  = as.integer(factor(Cell_type, levels = levels(factor(dl$Cell_type)))),
+    xmin   = x_pos - 0.2,
+    xmax   = x_pos + 0.2,
+    # Per-group y_pos based on actual data max for that cell type
+    y_pos  = max(scale(dl$Score), na.rm = TRUE) * 1.05,
+    label  = case_when(
+      p_val < 0.001 ~ "***",
+      p_val < 0.01  ~ "**",
+      p_val < 0.05  ~ "*",
+      TRUE          ~ "ns"
+    )
+  )
+
+# --- 3. Plot ---
 ggplot(dl, aes(x = Cell_type, y = scale(Score), fill = Cell_type, color = Source)) +
   geom_boxplot(outlier.alpha = 0.2, position = position_dodge(width = 0.8)) +
+  geom_signif(
+    data        = pval_df,
+    aes(xmin = xmin, xmax = xmax, annotations = label, y_position = y_pos),
+    manual      = TRUE,
+    tip_length  = 0.02,
+    textsize    = 4,
+    color       = "black",   # override the color aes from the main plot
+    inherit.aes = T
+  ) +
   scale_fill_manual(values = pal_cells, name = "\nCell Type") +
   scale_color_manual(values = c("Normal" = "lightgrey", "Tumor" = "black"), name = "Source") +
   guides(
-    fill  = guide_legend(order = 1),  # appears first
-    color = guide_legend(order = 2)   # appears second
+    fill  = guide_legend(order = 1),
+    color = guide_legend(order = 2)
   ) +
   theme_pubr(base_size = 14) +
   theme(
-    axis.text.x    = element_text(angle = 45, hjust = 1),
+    axis.text.x     = element_text(angle = 45, hjust = 1),
     legend.position = "right",
     strip.text      = element_text(size = 12),
     plot.title      = element_text(hjust = 0.5)
   ) +
   labs(x = NULL, y = "PhenoMapR score (scaled)", title = "PhenoMapR Score distribution by Source and Cell Type")
 ```
-Indeed, tumor samples are significantly enriched for more adverse scores across all cell types.
+Indeed, tumor samples are significantly enriched for more adverse scores across all cell types except B cells.
 
 ## Cell types in the most prognostic populations
 
@@ -551,8 +599,16 @@ pb_df <- data.frame(
   pb_score_scaled = pb_scaled,
   stringsAsFactors = FALSE
 )
-p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled)) +
-  geom_col(width = 0.65, fill = "#4d4d4d") +
+p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled, fill = .data$pb_score_scaled)) +
+  geom_col(width = 0.65) +
+  scale_fill_gradient2(
+    low = "#2166AC",
+    mid = "#FFFFFF",
+    high = "#B2182B",
+    midpoint = 0,
+    na.value = "#d9d9d9",
+    guide = "none"
+  ) +
   geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", color = "grey40") +
   scale_x_continuous(
     breaks = seq_along(sample_lev),
@@ -568,7 +624,7 @@ p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_sc
     axis.title.x = element_blank(),
     legend.position = "none"
   ) +
-  labs(y = "Pseudobulk score\n(z across samples)", title = NULL)
+  labs(y = "Sample\nPseudobulk\nscore", title = NULL)
 
 # Per-sample proportion of adverse and favorable (5th percentile) for stacked bar
 meta_adv_fav <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
@@ -616,7 +672,7 @@ if (nrow(meta_plot) > 0) {
     scale_y_continuous(expand = c(0, 0)) +
     theme_minimal() +
     theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
-    labs(y = "Proportion\n(5th percentile)", title = NULL)
+    labs(y = "Proportion\n(5th %)", title = NULL)
 
   p_dots <- ggplot(counts, aes(x = x_num, y = cell_type, size = proportion, color = pg)) +
     geom_point(alpha = 0.85) +
