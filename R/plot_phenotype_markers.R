@@ -593,7 +593,9 @@ plot_phenotype_markers <- function(markers,
       left_annotation = ha_left,
       right_annotation = ha_right,
       column_title = ct,
-      border = TRUE,
+      # Avoid black borders around every row-split slice and/or cell.
+      border = FALSE,
+      rect_gp = grid::gpar(col = NA),
       heatmap_legend_param = list(
         title = "Scaled expr",
         direction = "vertical",
@@ -672,6 +674,9 @@ plot_phenotype_markers <- function(markers,
         ComplexHeatmap::decorate_heatmap_body(
           "phenomap_ct_markers",
           {
+            # Ensure outline boxes are clipped to the heatmap body viewport so they
+            # cannot extend into annotation/legend areas.
+            grid::pushViewport(grid::viewport(clip = "on"))
             grid::grid.rect(
               x = grid::unit(j1 - 1L, "native"),
               y = grid::unit(1, "npc"),
@@ -681,6 +686,7 @@ plot_phenotype_markers <- function(markers,
               vjust = 1,
               gp = grid::gpar(col = "white", fill = NA, lty = 1L, lwd = 1)
             )
+            grid::popViewport()
           },
           slice = si
         )
