@@ -13,21 +13,7 @@ knitr::opts_chunk$set(
   warning = FALSE,
   message = FALSE,
   out.width = "100%"
-  # cache = TRUE,
-  # cache.path = "cache/fshd-vignette/"
 )
-
-# Full vignette (bulk download, sc, validation GEO). Set PHENOMAPR_VIGNETTE_RUN=false to skip
-# data-heavy chunks in custom builds (not used by default pkgdown).
-vignette_run <- tolower(Sys.getenv("PHENOMAPR_VIGNETTE_RUN", "true")) %in% c("1", "true", "yes")
-
-# Seurat's FindNeighbors / FindClusters use future::future_lapply. A multisession
-# or multicore plan (e.g. from .Rprofile) can trigger FutureLaunchError when
-# workers see a different 'future' version than the parent, or when unloading
-# 'future' fails because Seurat imports it. Sequential plan avoids forked workers.
-if (requireNamespace("future", quietly = TRUE)) {
-  future::plan("sequential", gc = FALSE)
-}
 ```
 
 ## Overview
@@ -221,9 +207,9 @@ Processed **year 2** supplementary files ([GEO FTP](https://ftp.ncbi.nlm.nih.gov
 # https://drive.google.com/file/d/14g_uHDVbjDA2Tl6-ttY7yF76s8Sy7CuH/view?usp=drive_link
 # https://drive.google.com/file/d/13jTizdcmWPYMlEnjEIZ-V8U1wQzch2o1/view?usp=drive_link
 
-if (!vignette_run) {
-  message("Skipping bulk reference build (PHENOMAPR_VIGNETTE_RUN is false).")
-} else {
+# if (!vignette_run) {
+#   message("Skipping bulk reference build (PHENOMAPR_VIGNETTE_RUN is false).")
+# } else {
   options(googledrive_quiet = TRUE)
   googledrive::drive_deauth()
   googledrive::drive_download(
@@ -250,7 +236,7 @@ if (!vignette_run) {
     binary_positive_reference = "first",
     verbose = TRUE
   )
-}
+# }
 ```
 
 With **`levels = c("FSHD", "Control")`** and **`binary_positive_reference = "first"`**, genes with **positive** z-scores are **higher in FSHD** bulk samples.
@@ -382,7 +368,7 @@ scores_sc <- PhenoMap(
   assay = "RNA",
   slot = "data",
   z_score_cutoff = 2,
-  verbose = FALSE
+  verbose = T
 )
 seu <- add_scores_to_seurat(seu, scores_sc)
 score_col <- grep("weighted_sum_score", colnames(scores_sc), value = TRUE)[1]
@@ -465,68 +451,9 @@ print(p2 + p3 + patchwork::plot_layout(widths = c(1, 1)))
 This dataset does not provide cell type labels. Here we use pre-computed **CyteTypeR** annotations (saved alongside this vignette) and attach them to the Seurat object metadata as `cell_type` and `coarse_cell_type`. The next figure shows those labels on the **UMAP** (`label = TRUE`).
 
 ```{r cytetype-annotations}
-  ann_base <- "cytetype_annotations_ce748d9d-6191-42bc-a212-4bace7e97e4b.csv"
+  # ann_base <- "cytetype_annotations_ce748d9d-6191-42bc-a212-4bace7e97e4b.csv"
 
-  find_cytetype_csv <- function(fn) {
-    try_one <- function(p) {
-      if (is.na(p) || !nzchar(p)) return(NA_character_)
-      p <- path.expand(p)
-      if (file.exists(p)) return(normalizePath(p, winslash = "/", mustWork = TRUE))
-      NA_character_
-    }
-
-    # 1) same directory as this vignette Rmd (works when knitr sets full path)
-    fnm <- tryCatch(knitr::opts_knit$get("filename"), error = function(e) NULL)
-    if (!is.null(fnm) && nzchar(fnm)) {
-      hit <- try_one(file.path(dirname(fnm), fn))
-      if (!is.na(hit)) return(hit)
-    }
-
-    # 2) current_input() basename-only breaks dirname(); use dirname(fnm) only above
-    in_path <- tryCatch(knitr::current_input(), error = function(e) NA_character_)
-    if (!is.na(in_path) && nzchar(in_path) && basename(in_path) != in_path) {
-      hit <- try_one(file.path(dirname(in_path), fn))
-      if (!is.na(hit)) return(hit)
-    }
-
-    # 3) repo root / cwd layouts
-    for (p in c(file.path("vignettes", fn), fn)) {
-      hit <- try_one(p)
-      if (!is.na(hit)) return(hit)
-    }
-
-    # 4) walk up from cwd to find package/vignettes/<fn> or inst/vignette-drafts/<fn>
-    d <- normalizePath(getwd(), winslash = "/")
-    for (i in 1:20) {
-      for (sub in c("vignettes", file.path("inst", "vignette-drafts"))) {
-        hit <- try_one(file.path(d, sub, fn))
-        if (!is.na(hit)) return(hit)
-      }
-      nd <- dirname(d)
-      if (identical(nd, d)) break
-      d <- nd
-    }
-
-    # 5) installed package (draft vignettes ship under inst/vignette-drafts/)
-    if (requireNamespace("PhenoMapR", quietly = TRUE)) {
-      hit <- try_one(system.file("vignette-drafts", fn, package = "PhenoMapR"))
-      if (!is.na(hit)) return(hit)
-      hit <- try_one(system.file("vignettes", fn, package = "PhenoMapR"))
-      if (!is.na(hit)) return(hit)
-    }
-
-    NA_character_
-  }
-
-  ann_path <- find_cytetype_csv(ann_base)
-  if (is.na(ann_path) || !nzchar(ann_path)) {
-    stop(
-      "Missing CyteTypeR annotations CSV (", ann_base, "). ",
-      "Place it next to this Rmd or under inst/vignette-drafts/ in the package source."
-    )
-  }
-
-  ann <- utils::read.csv(ann_path, stringsAsFactors = FALSE, check.names = FALSE)
+  ann <- utils::read.csv("~/Desktop/scIMPEL/inst/vignette-drafts/cytetype_annotations_ce748d9d-6191-42bc-a212-4bace7e97e4b.csv", stringsAsFactors = FALSE, check.names = FALSE)
   req_cols <- c("cluster_id", "cell_type", "coarse_cell_type")
   if (!all(req_cols %in% names(ann))) {
     stop("CyteTypeR annotations missing required columns: ", paste(setdiff(req_cols, names(ann)), collapse = ", "))
@@ -635,15 +562,64 @@ theme(
   theme_void() +
     theme(plot.title = element_text(hjust = 0.5)) 
 
+plot_data_sc$source <- as.factor(plot_data_sc$source)
+
+library(ggsignif)
+library(purrr)
+library(dplyr)
+
+cell_levels <- levels(factor(plot_data_sc$cell_type))  # or your factor order
+
+# For each cell type, check which sources are present
+source_offsets <- c("Control" = -0.2, "FSHD" = 0.2)  # matches dodge width = 0.8 → each side ±0.2
+
+# --- 2. Compute p-values per cell type ---
+pval_df <- plot_data_sc %>%
+  group_by(cell_type) %>%
+  summarise(
+    n_sources = n_distinct(source),
+    p_val = ifelse(
+      n_distinct(source) > 1,
+      wilcox.test(scale(score)[source == "Control"],
+                  scale(score)[source == "FSHD"])$p.value,
+      NA_real_
+    ),
+    .groups = "drop"
+  ) %>%
+  filter(!is.na(p_val)) %>%
+  mutate(
+    # Use the SAME factor used in ggplot
+    x_pos  = as.integer(factor(cell_type, levels = levels(factor(plot_data_sc$cell_type)))),
+    xmin   = x_pos - 0.2,
+    xmax   = x_pos + 0.2,
+    # Per-group y_pos based on actual data max for that cell type
+    y_pos  = max(scale(plot_data_sc$score_scaled), na.rm = TRUE) * 1.02,
+    label  = case_when(
+      p_val < 0.001 ~ "***",
+      p_val < 0.01  ~ "**",
+      p_val < 0.05  ~ "*",
+      TRUE          ~ "ns"
+    )
+  )
+
 p2 <- ggplot(plot_data_sc,
                aes(x = cell_type, y = score_scaled, fill = cell_type, color = source)) +
-    geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.25, 
-                 outlier.fill = NULL, 
+    geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.5,
+                 outlier.fill = NULL,
                  outlier.color = NULL, outlier.shape = 21) +
     scale_fill_manual(
       values = pal_ct,
       name = "Cell Type"
     ) +
+  geom_signif(
+    data        = pval_df,
+    aes(xmin = xmin, xmax = xmax, annotations = label, y_position = y_pos),
+    manual      = TRUE,
+    tip_length  = 0.01,
+    textsize    = 3,
+    color       = "black",   # override the color aes from the main plot
+    inherit.aes = T
+  ) +
   scale_color_manual(values = c("Control" = "lightgrey", "FSHD" = "black"), name = "Source") +
     theme_pubr(base_size = 10) +
 theme(
@@ -659,6 +635,7 @@ guides(
 ) +
     labs(x = NULL, y = "Scaled PhenoMapR score", title = "Score Distribution by Cell Type and Source") +
     theme(plot.title = element_text(hjust = 0.5))
+
 
   
       print(p2 / p1 + patchwork::plot_layout(widths = c(1, 1), guides = "collect"))
@@ -739,10 +716,6 @@ We label **Most Adverse** / **Most Favorable** / **Other** tails from the custom
 After **`find_phenotype_markers()`**, **`plot_phenotype_markers()`** builds a **ComplexHeatmap** of marker expression with column annotations for **phenotype group**, **cell type**, and the continuous **PhenoMapR score**.
 
 ```{r plot-phenotype-markers-fshd, fig.align='center', fig.width=13, fig.height=4.5}
-if (vignette_run && exists("mk") && exists("groups") && exists("group_col")) {
-  if (!requireNamespace("ComplexHeatmap", quietly = TRUE) || !requireNamespace("circlize", quietly = TRUE)) {
-    message("Install packages 'ComplexHeatmap' and 'circlize' to draw plot_phenotype_markers().")
-  } else {
     expr_mat <- tryCatch(
       Seurat::GetAssayData(seu, layer = "data", assay = "RNA"),
       error = function(e) Seurat::GetAssayData(seu, slot = "data", assay = "RNA")
@@ -782,11 +755,10 @@ if (vignette_run && exists("mk") && exists("groups") && exists("group_col")) {
         top_n_markers = 15L,
         n_mark_labels = 3L,
         p_adj_threshold = 0.05,
-        column_title = "Cell-type-specific phenotype markers (CyteTypeR cell_type)"
+        column_title = "Cell-type-specific phenotype marker genes"
       )
     }
-  }
-}
+
 ```
 
 ## 6. Independent validation cohorts (GEO)
@@ -867,9 +839,7 @@ collapse_ensembl_counts_to_symbol_sum <- function(cnt) {
 validation_plot_df <- NULL
 validation_wilcox <- list()
 
-if (!vignette_run) {
-  message("Section 6 skipped (PHENOMAPR_VIGNETTE_RUN is false).")
-} else if (!exists("ref_fshd")) {
+ if (!exists("ref_fshd")) {
   message("Section 6 skipped: ref_fshd not found (bulk reference chunk must run first).")
 } else if (!requireNamespace("GEOquery", quietly = TRUE)) {
   message("Install package 'GEOquery' to run Section 6 validation (BiocManager::install(\"GEOquery\")).")

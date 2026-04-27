@@ -370,7 +370,10 @@ pval_df <- dl %>%
 
 # --- 3. Plot ---
 ggplot(dl, aes(x = Cell_type, y = scale(Score), fill = Cell_type, color = Source)) +
-  geom_boxplot(outlier.alpha = 0.2, position = position_dodge(width = 0.8)) +
+  # geom_boxplot(outlier.alpha = 0.2, position = position_dodge(width = 0.8)) +
+      geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.5,
+                 outlier.fill = NULL,
+                 outlier.color = NULL, outlier.shape = 21) +
   geom_signif(
     data        = pval_df,
     aes(xmin = xmin, xmax = xmax, annotations = label, y_position = y_pos),
@@ -560,7 +563,7 @@ plot_phenotype_markers(
 
 ## Dataset summary of PhenoMapR results
 
-Here, we summarize the enrichment of prognostic PhenoMapR scores across samples and cell types to highlight the difference in signal between healthy and tumor samples as well as between different cell populations across the sample groups. The **top panel** shows a **pseudobulk** sample score: the mean cell-level PhenoMapR score within each sample, **z-scaled across samples** (so bars are comparable for relative high/low bulk-like signal per sample).
+Here, we summarize the enrichment of prognostic PhenoMapR scores across samples and cell types to highlight the difference in signal between healthy and tumor samples as well as between different cell populations across the sample groups. The **top panel** shows **one PRECOG score per pseudo-bulk sample profile** without building a **`Seurat`** object: we map each cell’s barcode to a sample ID (same column used elsewhere in this figure), **sum counts per gene across all cells in that sample**, and assemble a **genes × samples** table (`expr_agg_df`, one column per sample). That object is the usual **bulk-style** input to **`PhenoMap()`** (rows = genes, columns = samples), so each column is scored once with the same weighted-sum PRECOG logic used for bulk data. (The **`pseudobulk = TRUE`** argument applies when **`PhenoMap`** aggregates from a **`Seurat`** object; here aggregation is explicit in the table, which avoids large **`Seurat`** allocations and matches **sum-per-sample** pseudo-bulk expression.) Values are **z-scaled across samples** so bars are comparable for relative high/low bulk-like signal per sample. The **stacked bar** uses the same **5th / 95th percentile** PRECOG tails as elsewhere in the vignette (**`define_phenotype_groups(..., percentile = 0.05)`**), applied again in this chunk so every cell receives a **Most Adverse**, **Most Favorable**, or **Other** label and **per-sample proportions of tail cells always sum sensibly** over the full cohort. **All panels share one sample axis order** (`sample_lev`): factor **levels** are used when the sample column is already a factor (e.g. **`Patient`** after ordering earlier in the vignette); otherwise **first appearance in `meta`**. **`merge()`** output for bar heights is **re-sorted** to that order so horizontal positions match the pseudo-bulk and dot plots.
 
 ```{r proportion-by-sample-celltype, fig.height=5.6, fig.align='center'}
 sample_col <- NULL
@@ -577,16 +580,63 @@ meta_plot$sample <- meta_plot[[sample_col]]
 meta_plot$cell_type <- meta_plot$celltype_malignancy
 # meta_plot$cell_type_original <- if (!is.null(celltype_original) && celltype_original %in% names(meta_plot)) meta_plot$celltype_original else NA_character_
 meta_plot$cell_type_original <- meta$celltype_original
-meta_plot$prognostic_grp <- meta_plot[[group_col]]
-sample_lev <- levels(factor(meta[[sample_col]]))
-meta_plot$sample <- factor(meta_plot[[sample_col]], levels = sample_lev)
+## Tail labels for p_bar / dots: same rule as marker chunk (5% / 95% on PRECOG score), keyed by Cell
+scores_tail <- meta[, score_precog_col, drop = FALSE]
+rownames(scores_tail) <- meta$Cell
+groups_tail <- define_phenotype_groups(scores_tail, percentile = 0.05, score_columns = score_precog_col)
+tail_col_bar <- grep("^phenotype_group_", names(groups_tail), value = TRUE)[1]
+meta_plot$prognostic_grp <- unname(groups_tail[as.character(meta_plot$Cell), tail_col_bar])
+## Canonical sample order for every panel: preserve factor levels if set upstream (e.g. Patient),
+## else first appearance in `meta` (stable, not alphabetical).
+sc_ids <- meta[[sample_col]]
+sample_lev <- if (is.factor(sc_ids)) {
+  levels(droplevels(sc_ids))
+} else {
+  unique(as.character(sc_ids))
+}
+meta_plot$sample <- factor(as.character(meta_plot[[sample_col]]), levels = sample_lev)
 n_per_sample <- setNames(as.numeric(table(meta[[sample_col]])[sample_lev]), sample_lev)
 n_per_sample[is.na(n_per_sample)] <- 0
 
-## Pseudobulk: mean cell-level PhenoMapR score per sample (all cells), z-scaled across samples
-pb_mean <- tapply(as.numeric(meta[[score_precog_col]]), meta[[sample_col]], mean, na.rm = TRUE)
-pb_mean <- as.numeric(pb_mean[as.character(sample_lev)])
-pb_mean[is.na(pb_mean)] <- NA_real_
+## Pseudo-bulk table: cell → sample mapping, sum counts per gene per sample, score with PhenoMap (no Seurat)
+cells_pb <- intersect(colnames(expr_mat), meta$Cell)
+expr_pb <- expr_mat[, cells_pb, drop = FALSE]
+meta_pb <- meta[match(cells_pb, meta$Cell), , drop = FALSE]
+rownames(meta_pb) <- cells_pb
+sample_ids <- as.character(meta_pb[[sample_col]])
+ns <- length(sample_lev)
+pb_mat <- matrix(
+  0,
+  nrow = nrow(expr_pb),
+  ncol = ns,
+  dimnames = list(rownames(expr_pb), as.character(sample_lev))
+)
+col_filled <- rep(FALSE, ns)
+for (j in seq_len(ns)) {
+  idx <- sample_ids == as.character(sample_lev[j])
+  if (!any(idx)) next
+  col_filled[j] <- TRUE
+  sm <- expr_pb[, idx, drop = FALSE]
+  pb_mat[, j] <- if (inherits(sm, "Matrix") || inherits(sm, "sparseMatrix")) {
+    as.numeric(Matrix::rowSums(sm))
+  } else {
+    rowSums(sm)
+  }
+}
+expr_agg_df <- as.data.frame(pb_mat, stringsAsFactors = FALSE, check.names = FALSE)
+scores_precog_pb <- PhenoMap(
+  expression = expr_agg_df,
+  reference = "precog",
+  cancer_type = "Pancreatic",
+  verbose = FALSE
+)
+pb_score_col <- if (score_precog_col %in% names(scores_precog_pb)) {
+  score_precog_col
+} else {
+  grep("^weighted_sum_score", names(scores_precog_pb), value = TRUE)[1]
+}
+pb_mean <- as.numeric(scores_precog_pb[[pb_score_col]][match(as.character(sample_lev), rownames(scores_precog_pb))])
+pb_mean[!col_filled] <- NA_real_
 ok_pb <- is.finite(pb_mean)
 pb_scaled <- rep(NA_real_, length(pb_mean))
 if (sum(ok_pb) >= 2L && stats::sd(pb_mean[ok_pb], na.rm = TRUE) > 0) {
@@ -626,7 +676,7 @@ p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_sc
   ) +
   labs(y = "Sample\nPseudobulk\nscore", title = NULL)
 
-# Per-sample proportion of adverse and favorable (5th percentile) for stacked bar
+# Per-sample proportion of adverse and favorable (5th / 95th % tails on PRECOG) for stacked bar
 meta_adv_fav <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
 bar_df <- as.data.frame(table(sample = meta_adv_fav$sample, pg = meta_adv_fav$prognostic_grp, useNA = "no"))
 bar_df <- bar_df[bar_df$pg %in% c("Most Adverse", "Most Favorable"), ]
@@ -640,39 +690,45 @@ bar_stack <- merge(data.frame(sample = sample_lev, stringsAsFactors = FALSE), fa
 bar_stack <- merge(bar_stack, adv, by = "sample", all.x = TRUE)
 bar_stack$p_fav[is.na(bar_stack$p_fav)] <- 0
 bar_stack$p_adv[is.na(bar_stack$p_adv)] <- 0
+## merge() sorts by `by`; restore cohort order so x positions match p_pbulk and dot plots
+bar_stack <- bar_stack[match(sample_lev, as.character(bar_stack$sample)), , drop = FALSE]
 bar_stack$sample <- factor(bar_stack$sample, levels = sample_lev)
 
-meta_plot <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
-meta_plot$cell_type <- factor(meta_plot$cell_type)
+# Stacked bar: per-sample fraction of cohort tail cells (from define_phenotype_groups above)
+bar_long <- rbind(
+  data.frame(sample = bar_stack$sample, pg = "Most Favorable", y_min = 0, y_max = bar_stack$p_fav),
+  data.frame(sample = bar_stack$sample, pg = "Most Adverse", y_min = bar_stack$p_fav, y_max = bar_stack$p_fav + bar_stack$p_adv)
+)
+bar_long$pg <- factor(bar_long$pg, levels = c("Most Favorable", "Most Adverse"))
+p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
+  geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
+  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
+  scale_x_continuous(
+    breaks = seq_along(sample_lev),
+    labels = sample_lev,
+    limits = c(0.5, length(sample_lev) + 0.5),
+    expand = c(0, 0)
+  ) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
+  labs(y = "Proportion\n(5th %)", title = NULL)
 
-if (nrow(meta_plot) > 0) {
-  counts <- as.data.frame(table(meta_plot$sample, meta_plot$cell_type, meta_plot$prognostic_grp, dnn = c("sample", "cell_type", "pg")))
+meta_plot_dots <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
+p_dots <- NULL
+p_dots_orig <- NULL
+if (nrow(meta_plot_dots) > 0) {
+  ## Full `sample_lev` level order so x positions match p_pbulk / p_bar (subset can drop unused levels)
+  meta_plot_dots$sample <- factor(as.character(meta_plot_dots$sample), levels = sample_lev)
+  meta_plot_dots$cell_type <- factor(meta_plot_dots$cell_type)
+  counts <- as.data.frame(table(meta_plot_dots$sample, meta_plot_dots$cell_type, meta_plot_dots$prognostic_grp, dnn = c("sample", "cell_type", "pg")))
   totals <- aggregate(counts$Freq, by = list(sample = counts$sample, pg = counts$pg), FUN = sum)
   names(totals)[3] <- "total"
   counts <- merge(counts, totals, by = c("sample", "pg"))
   counts$proportion <- counts$Freq / counts$total
   counts$proportion[counts$total == 0] <- 0
+  counts$sample <- factor(as.character(counts$sample), levels = sample_lev)
   counts$x_num <- as.numeric(counts$sample) + ifelse(counts$pg == "Most Adverse", -0.18, 0.18)
-
-  # Stacked bar: adverse + favorable proportion per sample
-  bar_long <- rbind(
-    data.frame(sample = bar_stack$sample, pg = "Most Favorable", y_min = 0, y_max = bar_stack$p_fav),
-    data.frame(sample = bar_stack$sample, pg = "Most Adverse", y_min = bar_stack$p_fav, y_max = bar_stack$p_fav + bar_stack$p_adv)
-  )
-  bar_long$pg <- factor(bar_long$pg, levels = c("Most Favorable", "Most Adverse"))
-  p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
-    geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
-    scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-    scale_x_continuous(
-      breaks = seq_along(sample_lev),
-      labels = sample_lev,
-      limits = c(0.5, length(sample_lev) + 0.5),
-      expand = c(0, 0)
-    ) +
-    scale_y_continuous(expand = c(0, 0)) +
-    theme_minimal() +
-    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
-    labs(y = "Proportion\n(5th %)", title = NULL)
 
   p_dots <- ggplot(counts, aes(x = x_num, y = cell_type, size = proportion, color = pg)) +
     geom_point(alpha = 0.85) +
@@ -688,16 +744,15 @@ if (nrow(meta_plot) > 0) {
     theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
     labs(x = NULL, y = "Cell type\n(broad)", title = NULL)
 
-  # Same plot, but using original cell type labels (when available)
-  p_dots_orig <- NULL
-  if (!all(is.na(meta_plot$cell_type_original))) {
-    meta_plot$cell_type_original <- factor(meta_plot$cell_type_original)
-    counts_orig <- as.data.frame(table(meta_plot$sample, meta_plot$cell_type_original, meta_plot$prognostic_grp, dnn = c("sample", "cell_type_original", "pg")))
+  if (!all(is.na(meta_plot_dots$cell_type_original))) {
+    meta_plot_dots$cell_type_original <- factor(meta_plot_dots$cell_type_original)
+    counts_orig <- as.data.frame(table(meta_plot_dots$sample, meta_plot_dots$cell_type_original, meta_plot_dots$prognostic_grp, dnn = c("sample", "cell_type_original", "pg")))
     totals_orig <- aggregate(counts_orig$Freq, by = list(sample = counts_orig$sample, pg = counts_orig$pg), FUN = sum)
     names(totals_orig)[3] <- "total"
     counts_orig <- merge(counts_orig, totals_orig, by = c("sample", "pg"))
     counts_orig$proportion <- counts_orig$Freq / counts_orig$total
     counts_orig$proportion[counts_orig$total == 0] <- 0
+    counts_orig$sample <- factor(as.character(counts_orig$sample), levels = sample_lev)
     counts_orig$x_num <- as.numeric(counts_orig$sample) + ifelse(counts_orig$pg == "Most Adverse", -0.18, 0.18)
 
     p_dots_orig <- ggplot(counts_orig, aes(x = x_num, y = cell_type_original, size = proportion, color = pg)) +
@@ -711,28 +766,30 @@ if (nrow(meta_plot) > 0) {
         expand = c(0, 0)
       ) +
       theme_minimal() +
-      theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), 
+      theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10),
             axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
             legend.position = "none") +
       labs(x = "Sample", y = "Cell type\n(detailed)", title = NULL) +
       guides(color = guide_legend(override.aes = list(size = 3)))
   }
+} else {
+  warning("No cells labeled Most Adverse or Most Favorable after define_phenotype_groups; check PRECOG scores (e.g. all NA). Cell-type dot panels omitted.")
+}
 
-  if (requireNamespace("patchwork", quietly = TRUE)) {
-    suppressPackageStartupMessages(library(patchwork))
-    if (!is.null(p_dots_orig)) {
-      print(p_pbulk / p_bar / p_dots / p_dots_orig + plot_layout(heights = c(0.75, 1, 1, 2)))
-    } else {
-      print(p_pbulk / p_bar / p_dots + plot_layout(heights = c(0.75, 1, 2)))
-    }
+if (requireNamespace("patchwork", quietly = TRUE)) {
+  suppressPackageStartupMessages(library(patchwork))
+  if (!is.null(p_dots_orig)) {
+    print(p_pbulk / p_bar / p_dots / p_dots_orig + plot_layout(heights = c(0.75, 1, 1, 2)))
+  } else if (!is.null(p_dots)) {
+    print(p_pbulk / p_bar / p_dots + plot_layout(heights = c(0.75, 1, 2)))
   } else {
-    print(p_pbulk)
-    print(p_bar)
-    print(p_dots)
-    if (!is.null(p_dots_orig)) print(p_dots_orig)
+    print(p_pbulk / p_bar + plot_layout(heights = c(0.75, 1)))
   }
 } else {
-  message("No Most Adverse or Most Favorable cells found; proportion plot skipped.")
+  print(p_pbulk)
+  print(p_bar)
+  if (!is.null(p_dots)) print(p_dots)
+  if (!is.null(p_dots_orig)) print(p_dots_orig)
 }
 ```
 
