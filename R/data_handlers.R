@@ -192,14 +192,50 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
       stop(glue::glue("'{group_by}' not found in Seurat metadata"))
     }
 
-    # AggregateExpression works with both v4 and v5
-    agg_expr <- Seurat::AggregateExpression(
-      obj,
-      assays = assay,
-      group.by = group_by
-    )
+    grp_vec <- obj@meta.data[[group_by]]
+    grp_u <- unique(stats::na.omit(as.character(grp_vec)))
+    if (length(grp_u) < 1L) {
+      stop(glue::glue("No non-NA values in metadata column '{group_by}' for pseudobulk aggregation"))
+    }
 
-    expr_matrix <- as.matrix(agg_expr[[assay]])
+    if (length(grp_u) == 1L) {
+      # Single pseudobulk group: Seurat::AggregateExpression can fail internally
+      # (e.g. colnames<- on a 1D category matrix). Sum across cells = same RNA
+      # aggregation as one group in AggregateExpression(counts).
+      assay_data <- tryCatch({
+        Seurat::GetAssayData(obj, assay = assay, layer = layer_name)
+      }, error = function(e) {
+        Seurat::GetAssayData(obj, assay = assay, slot = slot)
+      })
+      if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
+        summed <- Matrix::rowSums(assay_data)
+      } else {
+        summed <- rowSums(assay_data)
+      }
+      expr_matrix <- matrix(
+        as.numeric(summed),
+        ncol = 1L,
+        dimnames = list(rownames(assay_data), grp_u)
+      )
+    } else {
+      agg_expr <- Seurat::AggregateExpression(
+        obj,
+        assays = assay,
+        group.by = group_by
+      )
+      expr_matrix <- as.matrix(agg_expr[[assay]])
+      if (!is.matrix(expr_matrix)) {
+        cn <- tryCatch(colnames(agg_expr[[assay]]), error = function(e) NULL)
+        if (is.null(cn) || length(cn) < 1L) cn <- grp_u[1]
+        rn <- rownames(agg_expr[[assay]])
+        if (is.null(rn)) rn <- names(expr_matrix)
+        expr_matrix <- matrix(
+          as.numeric(expr_matrix),
+          ncol = 1L,
+          dimnames = list(rn, cn[1])
+        )
+      }
+    }
 
   } else {
   # nocov end
@@ -278,12 +314,16 @@ process_sce <- function(obj, pseudobulk, group_by, assay, genes_to_extract = NUL
     # Aggregate by group
     groups <- SummarizedExperiment::colData(obj)[[group_by]]
     expr_matrix <- SummarizedExperiment::assay(obj, assay)
+    grp_uniq <- unique(groups)
 
-    # Sum across groups
-    agg_matrix <- sapply(unique(groups), function(g) {
+    # Sum across groups (cbind so a single group stays a matrix, not a vector)
+    agg_cols <- lapply(grp_uniq, function(g) {
       cells <- which(groups == g)
       Matrix::rowSums(expr_matrix[, cells, drop = FALSE])
     })
+    agg_matrix <- do.call(cbind, agg_cols)
+    colnames(agg_matrix) <- as.character(grp_uniq)
+    rownames(agg_matrix) <- rownames(expr_matrix)
 
     expr_matrix <- as.matrix(agg_matrix)
 

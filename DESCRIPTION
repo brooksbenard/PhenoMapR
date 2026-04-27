@@ -56,7 +56,8 @@ Suggests:
     survminer,
     ggpubr,
     readxl,
-    spatialCooccur
+    spatialCooccur,
+    profmem
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave,
