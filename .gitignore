@@ -18,6 +18,9 @@
 revdep/
 library/
 
+# Benchmark Python venv (shears / SIDISH; Python ≥3.10)
+inst/benchmarks/.venv-bench-py312/
+
 # pkgdown build (site is deployed to gh-pages by GitHub Actions)
 docs/
 Rplots.pdf

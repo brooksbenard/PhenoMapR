@@ -27,11 +27,14 @@ authors:
 home:
   title: PhenoMapR
   sidebar:
-    structure: [links, license, community, citation, authors, dev]
+    structure: [links, license, community, citation, funding, authors, dev]
     components:
       license:
         title: License
         text: "[Stanford Non-Commercial License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE)"
+      funding:
+        title: Funding
+        text: "Development of PhenoMapR was supported by the National Institutes of Health (R01CA276828)"
 
 navbar:
   type: default
