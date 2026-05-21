@@ -57,3 +57,60 @@ inst/figures/~$*
 # Local outputs / data next to draft vignettes (sources under inst/vignette-drafts/ are tracked)
 inst/vignette-drafts/*.html
 inst/vignette-drafts/*.rds
+
+# ============================================================
+# Benchmarking inputs, outputs, and run artifacts (DO NOT COMMIT)
+# Only the benchmark *source* files in inst/benchmarks/ should be tracked
+# (e.g. *_benchmark_reticulate.py, *_benchmark_sizes_peakRAM.R, helpers).
+# Everything below is generated, downloaded, or per-run output and stays local.
+# ============================================================
+
+# --- Raw input datasets (downloaded from GEO / authors) -----------------------
+# At repo root
+/FSHD_GSE122873_seurat.rds
+/FSHD_GSE140261_*.rds
+/GSE253260_expression.rds
+/GSE253260_info.rds
+/PAAD_CRA001160_CellMetainfo_table.tsv
+/PAAD_CRA001160_expression.h5
+# Mirrored under inst/benchmarks/
+inst/benchmarks/GSE*_expression.rds
+inst/benchmarks/GSE*_info.rds
+inst/benchmarks/PAAD_*
+inst/benchmarks/FSHD_*.rds
+inst/benchmarks/Scissor_*.RData
+
+# --- Per-run benchmark output directories ------------------------------------
+inst/benchmarks/*_benchmark_out/
+inst/benchmarks/results/
+inst/benchmarks/cell_level_by_method/
+inst/benchmarks/degas_temps/
+# Per-driver/per-size scratch dirs (PDAC_*_n5000/, n10000/, etc.)
+inst/benchmarks/artifacts/PDAC_*_n*/
+inst/benchmarks/artifacts/*/cell_level/
+inst/benchmarks/artifacts/*/python_subprocess/
+# Per-method cell-level outputs inside artifacts (the small reference .rds for
+# PhenoMapR / scAB at inst/benchmarks/artifacts/<dataset>/<METHOD>.rds remain
+# tracked; only the large per-run outputs and PENCIL outputs are ignored.)
+inst/benchmarks/artifacts/*/PENCIL.rds
+inst/benchmarks/artifacts/*/PENCIL.tsv
+inst/benchmarks/artifacts/*/PENCIL_value.rds
+inst/benchmarks/artifacts/*/scAB.tsv
+
+# --- Per-driver timing / cell-level result files -----------------------------
+inst/benchmarks/*_timing_*.tsv
+inst/benchmarks/benchmark_integration_cell_level.tsv
+
+# --- Top-level benchmark output sinks ----------------------------------------
+/results/
+vignettes/results/
+
+# --- Cached / extracted upstream package trees -------------------------------
+/.tmp_scsurv_pkg/
+
+# --- Review / manuscript build artifacts (we don't commit the rendered docs) -
+/Review_Bulk_phenotype_mapping_to_scRNA_and_spatial.*
+/Review_for_GoogleDocs.*
+/Review_for_GoogleDocs_with_citekeys.*
+/Review_for_Zotero.bib
+/GOOGLE_DOCS_AND_ZOTERO_EXPORT.md
