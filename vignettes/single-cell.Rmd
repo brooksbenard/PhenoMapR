@@ -31,6 +31,7 @@ suppressPackageStartupMessages({
   library(patchwork)
   library(ComplexHeatmap)
   library(circlize)
+  library(ggchicklet2)
 })
 
 options(googledrive_quiet = TRUE)
@@ -106,7 +107,8 @@ prop_data_mal$Patient <- factor(prop_data_mal$Patient, levels = sample_order)
 
 # Plot
 p_mal <- ggplot(prop_data_mal, aes(x = Patient, y = proportion, fill = celltype_malignancy)) +
-  geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
+  # geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
+    ggchicklet2::geom_chicklet_bar(stat = "identity",radius = grid::unit(1, "pt"),linewidth = 0.2) +
   scale_y_continuous(labels = scales::percent) +
   scale_fill_manual(values = malignant_colors) +
   theme_pubclean(base_size = 8) +
@@ -131,7 +133,8 @@ prop_data$Patient <- factor(prop_data$Patient, levels = sample_order)
 
 # Plot
 p_cell <- ggplot(prop_data, aes(x = Patient, y = proportion, fill = celltype_original)) +
-  geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
+  # geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
+  ggchicklet2::geom_chicklet_bar(stat = "identity",radius = grid::unit(1, "pt"),linewidth = 0.2) +
   scale_y_continuous(labels = scales::percent) +
     scale_fill_manual(values = pal_cells) +
   theme_pubclean(base_size = 8) +
@@ -148,7 +151,11 @@ p_cell <- ggplot(prop_data, aes(x = Patient, y = proportion, fill = celltype_ori
 meta$Patient <- factor(meta$Patient, levels = sample_order)
 
 p_num <- ggplot(meta, aes(x = Patient)) +
-  geom_bar(fill = "grey55", color = "white", linewidth = 0.2) +
+  # geom_bar(fill = "grey55", color = "white", linewidth = 0.2) +
+    ggchicklet2::geom_chicklet_bar(
+                                   radius = grid::unit(1, "pt"), 
+                                   color = "white", linewidth = 0.2,
+                                   fill = "grey55") +
   theme_pubclean(base_size = 8) +
   theme(
     axis.title.x = element_blank(),
@@ -281,7 +288,10 @@ dl <- rbind(
 )
 dl$Reference <- factor(dl$Reference, levels = c("TCGA PAAD", "PRECOG Pancreatic"))
 ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
-  geom_boxplot(outlier.alpha = 0.2) +
+  # geom_boxplot(outlier.alpha = 0.2) +
+  ggchicklet2::geom_chicklet_boxplot(radius = grid::unit(1, "pt"),outlier.alpha = 0.5, median.linewidth = 0.5,
+                 outlier.fill = NULL,
+                 outlier.color = NULL, outlier.shape = 21) +
   facet_wrap(~ Reference, ncol = 2) +
   scale_fill_manual(values = malignant_colors, name = "Cell Type (Broad)") +
   theme_pubr(base_size = 10) +
@@ -310,7 +320,11 @@ dl <- rbind(
 )
 dl$Reference <- factor(dl$Reference, levels = c("TCGA PAAD", "PRECOG Pancreatic"))
 ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
-  geom_boxplot(outlier.alpha = 0.2) +
+  # geom_boxplot(outlier.alpha = 0.2) +
+  ggchicklet2::geom_chicklet_boxplot(radius = grid::unit(1, "pt"),
+                                     outlier.alpha = 0.5, median.linewidth = 0.5,
+                 outlier.fill = NULL,
+                 outlier.color = NULL, outlier.shape = 21) +
   facet_wrap(~ Reference, ncol = 2) +
   scale_fill_manual(values = pal_cells, name = "Cell Type (Original)") +
   theme_pubr(base_size = 10) +
@@ -371,7 +385,12 @@ pval_df <- dl %>%
 # --- 3. Plot ---
 ggplot(dl, aes(x = Cell_type, y = scale(Score), fill = Cell_type, color = Source)) +
   # geom_boxplot(outlier.alpha = 0.2, position = position_dodge(width = 0.8)) +
-      geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.5,
+    #   geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.5,
+    #              outlier.fill = NULL,
+    #              outlier.color = NULL, outlier.shape = 21) +
+    # # geom_boxplot(outlier.alpha = 0.2) +
+  ggchicklet2::geom_chicklet_boxplot(radius = grid::unit(1, "pt"),
+                                     outlier.alpha = 0.5, median.linewidth = 0.5,
                  outlier.fill = NULL,
                  outlier.color = NULL, outlier.shape = 21) +
   geom_signif(
@@ -425,7 +444,8 @@ ct_long <- rbind(
 ct_long$pg <- factor(ct_long$pg, levels = c("Most Favorable", "Most Adverse"))
 max_n <- max(abs(ct_long$n), 1)
 ggplot(ct_long, aes(x = Cell_type, y = n, fill = pg)) +
-  geom_col() +
+  # geom_col() +
+  ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(1, "pt")) +
   coord_flip() +
   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
   scale_y_continuous(breaks = seq(-max_n, max_n, length.out = 5), labels = abs(seq(-max_n, max_n, length.out = 5))) +
@@ -455,7 +475,8 @@ We then use the original cell type annotations from the authors to provide a mor
   ct_orig_long$pg <- factor(ct_orig_long$pg, levels = c("Most Favorable", "Most Adverse"))
   max_n_orig <- max(abs(ct_orig_long$n), 1)
   print(ggplot(ct_orig_long, aes(x = Cell_type_original, y = n, fill = pg)) +
-    geom_col() +
+    # geom_col() +
+        ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(1, "pt")) +
     coord_flip() +
     scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
     scale_y_continuous(breaks = seq(-max_n_orig, max_n_orig, length.out = 5), labels = abs(seq(-max_n_orig, max_n_orig, length.out = 5))) +
@@ -650,7 +671,8 @@ pb_df <- data.frame(
   stringsAsFactors = FALSE
 )
 p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled, fill = .data$pb_score_scaled)) +
-  geom_col(width = 0.65) +
+  # geom_col(width = 0.65) +
+  ggchicklet2::geom_chicklet(width = 0.65, radius = grid::unit(1.5, "pt")) +
   scale_fill_gradient2(
     low = "#2166AC",
     mid = "#FFFFFF",
@@ -700,9 +722,27 @@ bar_long <- rbind(
   data.frame(sample = bar_stack$sample, pg = "Most Adverse", y_min = bar_stack$p_fav, y_max = bar_stack$p_fav + bar_stack$p_adv)
 )
 bar_long$pg <- factor(bar_long$pg, levels = c("Most Favorable", "Most Adverse"))
-p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
-  geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
-  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
+# p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
+#   geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
+#     # ggchicklet2::geom_chicklet_bar(width = 0.65, radius = grid::unit(1.5, "pt")) +
+#   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
+#   scale_x_continuous(
+#     breaks = seq_along(sample_lev),
+#     labels = sample_lev,
+#     limits = c(0.5, length(sample_lev) + 0.5),
+#     expand = c(0, 0)
+#   ) +
+#   scale_y_continuous(expand = c(0, 0)) +
+#   theme_minimal() +
+#   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
+#   labs(y = "Proportion\n(5th %)", title = NULL)
+p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
+                               ymin = y_min, ymax = y_max,
+                               xmin = as.numeric(sample) - 0.4,
+                               xmax = as.numeric(sample) + 0.4)) +
+  ggchicklet:::geom_rrect(radius = grid::unit(1, "pt")) +
+  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), 
+                    name = "Prognostic group") +
   scale_x_continuous(
     breaks = seq_along(sample_lev),
     labels = sample_lev,
@@ -711,7 +751,12 @@ p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
   ) +
   scale_y_continuous(expand = c(0, 0)) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
+  theme(
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "none"
+  ) +
   labs(y = "Proportion\n(5th %)", title = NULL)
 
 meta_plot_dots <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]

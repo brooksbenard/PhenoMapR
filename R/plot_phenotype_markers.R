@@ -158,7 +158,18 @@ plot_phenotype_markers <- function(markers,
   if (top_n_markers < 1L) stop("'top_n_markers' must be >= 1.")
   if (n_mark_labels < 1L) stop("'n_mark_labels' must be >= 1.")
 
-  req_meta <- c(cell_id_col, group_col, score_col, celltype_col)
+  # celltype_col is mandatory for cell-type-specific heatmaps (every block
+  # is keyed by a cell type) but only decorative for the global heatmap (used
+  # for the top "Cell type" annotation strip). Treat NULL / "" / a column not
+  # present in `meta` the same way and gracefully drop the cell-type strip
+  # when running in global mode.
+  has_celltype <- !is.null(celltype_col) && nzchar(celltype_col) &&
+    celltype_col %in% names(meta)
+  if (heatmap_type == "cell_type_specific" && !has_celltype) {
+    stop("'celltype_col' must name an existing column of 'meta' when heatmap_type = 'cell_type_specific'.")
+  }
+  req_meta <- c(cell_id_col, group_col, score_col)
+  if (has_celltype) req_meta <- c(req_meta, celltype_col)
   if (!all(req_meta %in% names(meta))) {
     stop("meta must contain columns: ", paste(req_meta, collapse = ", "))
   }
@@ -169,7 +180,11 @@ plot_phenotype_markers <- function(markers,
   }
 
   hm_group_levels <- c("Most Favorable", "Other", "Most Adverse")
-  hm_celltype_levels <- levels(factor(meta[[celltype_col]]))
+  hm_celltype_levels <- if (has_celltype) {
+    levels(factor(meta[[celltype_col]]))
+  } else {
+    character(0)
+  }
 
   if (heatmap_type == "global") {
     ord <- .global_marker_heatmap_cell_order(
@@ -195,11 +210,15 @@ plot_phenotype_markers <- function(markers,
 
   pal_group <- c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC")
 
-  if (is.null(celltype_palette)) {
-    celltype_palette <- get_celltype_palette(hm_celltype_levels)
+  if (has_celltype) {
+    if (is.null(celltype_palette)) {
+      celltype_palette <- get_celltype_palette(hm_celltype_levels)
+    }
+    pal_celltype <- celltype_palette[hm_celltype_levels]
+    pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
+  } else {
+    pal_celltype <- character(0)
   }
-  pal_celltype <- celltype_palette[hm_celltype_levels]
-  pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
 
   # PhenoMapR score bar: diverging blue–white–red with white at 0. Color limits
   # use scores for heatmap columns only (aligned to cell_order_hm), so the
@@ -261,65 +280,84 @@ plot_phenotype_markers <- function(markers,
     n_adv <- length(adv_only)
     marker_tail <- c(rep("Most Favorable", n_fav), rep("Most Adverse", n_adv))
 
-    # Top stack (CH: first = nearest heatmap): phenotype → cell type → score
-    ha_top <- ComplexHeatmap::HeatmapAnnotation(
+    # Top stack (CH: first = nearest heatmap): phenotype → (cell type) → score.
+    # Cell type strip is omitted when the user hasn't mapped a cell-type column.
+    top_anno_args <- list(
       `Phenotype group` = ComplexHeatmap::anno_simple(
         as.character(meta[[group_col]][meta_idx_hm]),
         col = pal_group,
         width = grid::unit(3, "mm")
-      ),
-      `Cell type` = ComplexHeatmap::anno_simple(
+      )
+    )
+    if (has_celltype) {
+      top_anno_args[["Cell type"]] <- ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
         width = grid::unit(3, "mm")
-      ),
-      `PhenoMapR score` = ComplexHeatmap::anno_simple(
-        score_ann,
-        col = score_col_fun
-      ),
-      annotation_name_side = "right",
-      show_annotation_name = TRUE,
-      show_legend = FALSE,
-      gap = grid::unit(0, "mm")
+      )
+    }
+    top_anno_args[["PhenoMapR score"]] <- ComplexHeatmap::anno_simple(
+      score_ann,
+      col = score_col_fun
+    )
+    ha_top <- do.call(
+      ComplexHeatmap::HeatmapAnnotation,
+      c(top_anno_args, list(
+        annotation_name_side = "right",
+        show_annotation_name = TRUE,
+        show_legend = FALSE,
+        gap = grid::unit(0, "mm")
+      ))
     )
 
     pal_marker_row <- c(`Most Favorable` = "#2166AC", `Most Adverse` = "#B2182B")
     # Left = favorable; right = adverse.
     strip_l <- rep(NA_character_, nrow(mat_plot))
-    strip_l[seq_len(n_fav)] <- "Most Favorable"
+    if (n_fav > 0L) {
+      strip_l[seq_len(n_fav)] <- "Most Favorable"
+    }
     strip_r <- rep(NA_character_, nrow(mat_plot))
     if (n_adv > 0L) {
       strip_r[n_fav + seq_len(n_adv)] <- "Most Adverse"
     }
-    marks_at_fav <- seq_len(min(n_mark_labels, n_fav))
-    marks_lab_fav <- fav_genes[seq_len(min(n_mark_labels, n_fav))]
+    marks_at_fav <- if (n_fav > 0L) seq_len(min(n_mark_labels, n_fav)) else integer(0)
+    marks_lab_fav <- if (n_fav > 0L) fav_genes[marks_at_fav] else character(0)
     marks_at_adv <- if (n_adv > 0L) {
       n_fav + seq_len(min(n_mark_labels, n_adv))
     } else {
       integer(0)
     }
-    marks_lab_adv <- adv_only[seq_len(min(n_mark_labels, n_adv))]
+    marks_lab_adv <- if (n_adv > 0L) {
+      adv_only[seq_len(min(n_mark_labels, n_adv))]
+    } else {
+      character(0)
+    }
 
-    # Left (favorable): marks leftmost, strip next to heatmap.
-    ha_left <- ComplexHeatmap::rowAnnotation(
-      marks = ComplexHeatmap::anno_mark(
-        at = marks_at_fav,
-        labels = marks_lab_fav,
-        side = "left",
-        labels_gp = grid::gpar(fontsize = 7),
-        link_gp = grid::gpar(col = "grey50", lwd = 0.6),
-        padding = grid::unit(0.5, "mm")
-      ),
-      `Phenotype` = ComplexHeatmap::anno_simple(
-        strip_l,
-        col = pal_marker_row,
-        width = grid::unit(3, "mm"),
-        na_col = "transparent"
-      ),
-      show_annotation_name = FALSE,
-      gap = grid::unit(0, "mm"),
-      annotation_width = grid::unit(c(18, 3), c("mm", "mm"))
-    )
+    # Left (favorable): marks leftmost, strip next to heatmap. Only built when
+    # we actually have favorable rows — `anno_mark(at = integer(0))` triggers
+    # a "select less than one element" error inside ComplexHeatmap.
+    ha_left <- NULL
+    if (n_fav > 0L) {
+      ha_left <- ComplexHeatmap::rowAnnotation(
+        marks = ComplexHeatmap::anno_mark(
+          at = marks_at_fav,
+          labels = marks_lab_fav,
+          side = "left",
+          labels_gp = grid::gpar(fontsize = 7),
+          link_gp = grid::gpar(col = "grey50", lwd = 0.6),
+          padding = grid::unit(0.5, "mm")
+        ),
+        `Phenotype` = ComplexHeatmap::anno_simple(
+          strip_l,
+          col = pal_marker_row,
+          width = grid::unit(3, "mm"),
+          na_col = "transparent"
+        ),
+        show_annotation_name = FALSE,
+        gap = grid::unit(0, "mm"),
+        annotation_width = grid::unit(c(18, 3), c("mm", "mm"))
+      )
+    }
 
     # Right (adverse): strip next to heatmap, gene marks on the outer right.
     ha_right <- NULL
@@ -345,7 +383,10 @@ plot_phenotype_markers <- function(markers,
       )
     }
 
-    row_split_g <- factor(marker_tail, levels = c("Most Favorable", "Most Adverse"))
+    # Drop empty tail levels so ComplexHeatmap doesn't try to slice a row block
+    # with zero rows (another way to surface "select less than one element").
+    present_tails <- intersect(c("Most Favorable", "Most Adverse"), unique(marker_tail))
+    row_split_g <- factor(marker_tail, levels = present_tails)
     hm_col_fun <- .scaled_expr_col_fun_rdgy11(scale_clip)
 
     ct <- column_title %||% "Global phenotype marker genes (favorable vs adverse)"
@@ -641,17 +682,23 @@ plot_phenotype_markers <- function(markers,
         fill = pal_group[c("Most Favorable", "Other", "Most Adverse")]
       )
     )
-    lgd_ct <- ComplexHeatmap::Legend(
-      title = "Cell type",
-      at = hm_celltype_levels,
-      legend_gp = grid::gpar(fill = pal_celltype[hm_celltype_levels])
-    )
+    annotation_legend_list <- list(lgd_score, lgd_group)
+    if (has_celltype && length(hm_celltype_levels) > 0L) {
+      annotation_legend_list <- c(
+        annotation_legend_list,
+        list(ComplexHeatmap::Legend(
+          title = "Cell type",
+          at = hm_celltype_levels,
+          legend_gp = grid::gpar(fill = pal_celltype[hm_celltype_levels])
+        ))
+      )
+    }
     ComplexHeatmap::draw(
       ht,
       heatmap_legend_side = "right",
       annotation_legend_side = "right",
       show_annotation_legend = TRUE,
-      annotation_legend_list = list(lgd_score, lgd_group, lgd_ct),
+      annotation_legend_list = annotation_legend_list,
       merge_legends = TRUE,
       padding = grid::unit(c(4, 4, 4, 50), "mm")
     )

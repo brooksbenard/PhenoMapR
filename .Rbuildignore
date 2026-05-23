@@ -1,18 +1,70 @@
+# Patterns are Perl regex matched against the package-root-relative path of
+# each candidate file. Anything that matches is dropped from the source tarball
+# produced by `R CMD build` (and therefore from any install). Keep this list
+# tight: only R/, man/, data/ (sans data/tcga), tests/, inst/shiny/, the root
+# DESCRIPTION/NAMESPACE/LICENSE/README, and the .Rbuildignore itself should
+# ship.
+
+# -- editor / VCS / IDE state -------------------------------------------------
 ^PhenoMapR\.Rproj$
 ^\.Rproj\.user$
-^GITHUB_SETUP\.md$
-^docs$
-^_pkgdown\.yml$
+^\.Rhistory$
+^\.DS_Store$
+^\.cursor$
 ^\.github$
-^data-raw$
-^.*~\$
+^\.gitattributes$
+^\.gitignore$
+^.*~$
+
+# -- pkgdown / docs / vignette infrastructure ---------------------------------
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^vignettes$
 ^doc$
 ^Meta$
-^vignettes$
-^pkgdown$
 ^CITATION\.cff$
-^data/tcga$
-^inst/figures$
-^man/figures$
+
+# -- raw / scratch / dev assets at repo root ----------------------------------
+^data-raw$
+^results$
+^scripts$
+^tools$
+^library$
+^bench_render_nohup\.sh$
+^codecov\.yml$
+^GITHUB_SETUP\.md$
+^GOOGLE_DOCS_AND_ZOTERO_EXPORT\.md$
+^\.tmp_scsurv_pkg$
+
+# -- R CMD build / R CMD check leftovers --------------------------------------
+^.*\.Rcheck$
+^\.\.Rcheck$
+
+# -- inst/ subtrees that are dev-only or far too large for an install ---------
+# inst/benchmarks holds 7+ GB of datasets, artifacts, and Python scripts used
+# only for benchmarking write-ups; nothing in there is needed at runtime.
+^inst/benchmarks$
+^inst/benchmarking$
 ^inst/extdata$
 ^inst/vignette-drafts$
+^inst/figures$
+^man/figures$
+^data/tcga$
+
+# -- raw / scratch data files dropped in the repo root ------------------------
+# These are inputs/outputs for the benchmarking pipeline, not package data.
+# Package data (PRECOG/TCGA/Pediatric/ICI z-score tables) lives in /data/*.rda
+# and is unaffected by these patterns.
+^FSHD_.*\.rds$
+^GSE.*\.(rds|csv|tsv|h5)$
+^PAAD_.*$
+^HT.*\.rds$
+^PRECOG_V2_.*\.rds$
+^TCGA_metaz\.csv$
+^ici_precog_.*\.rds$
+^pediatric_metaZ\.xlsx$
+^datasets_info_for_scoring\.rds$
+
+# -- review / manuscript build artifacts --------------------------------------
+^Review_.*$

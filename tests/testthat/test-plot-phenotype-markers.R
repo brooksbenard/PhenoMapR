@@ -122,6 +122,147 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
   expect_s4_class(ht, "Heatmap")
 })
 
+test_that("plot_phenotype_markers global mode runs with celltype_col = NULL (no cell-type strip)", {
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(7)
+  genes <- paste0("G", 1:12)
+  cells <- paste0("C", 1:18)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells))),
+    length(genes),
+    length(cells),
+    dimnames = list(genes, cells)
+  )
+  # No celltype_original column on purpose — this mimics the Shiny "global"
+  # path where the user hasn't mapped a cell-type column.
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 6),
+    score = rnorm(18),
+    stringsAsFactors = FALSE
+  )
+
+  markers <- list(
+    adverse_markers = data.frame(
+      gene = c("G1", "G2"),
+      avg_log2FC = c(1.2, 1.0),
+      p_adj = c(0.01, 0.02),
+      stringsAsFactors = FALSE
+    ),
+    favorable_markers = data.frame(
+      gene = c("G3", "G4"),
+      avg_log2FC = c(1.1, 0.9),
+      p_adj = c(0.01, 0.03),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  expect_no_error({
+    ht <- plot_phenotype_markers(
+      markers = markers,
+      expr_mat = expr,
+      meta = meta,
+      group_col = "phenotype_group",
+      score_col = "score",
+      celltype_col = NULL,
+      heatmap_type = "global",
+      top_n_markers = 5L,
+      n_mark_labels = 2L,
+      draw = FALSE
+    )
+  })
+  expect_s4_class(ht, "Heatmap")
+})
+
+test_that("plot_phenotype_markers global mode survives an empty favorable tail", {
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(11)
+  genes <- paste0("G", 1:8)
+  cells <- paste0("C", 1:12)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells))),
+    length(genes),
+    length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 4),
+    score = rnorm(12),
+    celltype_original = rep("T1", 12),
+    stringsAsFactors = FALSE
+  )
+  # Favorable table exists but every row fails the LFC + p_adj filters,
+  # so n_fav -> 0 in the global path.
+  markers <- list(
+    adverse_markers = data.frame(
+      gene = c("G1", "G2"),
+      avg_log2FC = c(1.5, 1.0),
+      p_adj = c(0.001, 0.01),
+      stringsAsFactors = FALSE
+    ),
+    favorable_markers = data.frame(
+      gene = c("G3", "G4"),
+      avg_log2FC = c(-0.5, -0.2),  # negative LFC -> filtered out
+      p_adj = c(0.01, 0.02),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  expect_no_error({
+    ht <- plot_phenotype_markers(
+      markers = markers,
+      expr_mat = expr,
+      meta = meta,
+      group_col = "phenotype_group",
+      score_col = "score",
+      celltype_col = "celltype_original",
+      heatmap_type = "global",
+      top_n_markers = 5L,
+      n_mark_labels = 2L,
+      draw = FALSE
+    )
+  })
+  expect_s4_class(ht, "Heatmap")
+})
+
+test_that("plot_phenotype_markers errors clearly when cell-type-specific is asked without celltype_col", {
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  meta <- data.frame(
+    Cell = paste0("C", 1:6),
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 2),
+    score = 1:6,
+    stringsAsFactors = FALSE
+  )
+  expr <- matrix(0, nrow = 2, ncol = 6,
+                 dimnames = list(c("G1", "G2"), paste0("C", 1:6)))
+  markers <- list(
+    adverse_markers = data.frame(gene = "G1", avg_log2FC = 1, p_adj = 0.01,
+                                 stringsAsFactors = FALSE),
+    favorable_markers = data.frame(gene = "G2", avg_log2FC = 1, p_adj = 0.01,
+                                   stringsAsFactors = FALSE)
+  )
+  expect_error(
+    plot_phenotype_markers(
+      markers = markers,
+      expr_mat = expr,
+      meta = meta,
+      group_col = "phenotype_group",
+      score_col = "score",
+      celltype_col = NULL,
+      heatmap_type = "cell_type_specific",
+      draw = FALSE
+    ),
+    regexp = "celltype_col"
+  )
+})
+
 test_that(".pick_marker_genes can rank by lfc vs p_adj with different filters", {
   df <- data.frame(
     gene = c("G1", "G2", "G3", "G4"),
@@ -154,6 +295,66 @@ test_that(".score_ann_for_heatmap indexes meta rows safely", {
   meta <- data.frame(score = c(1, 99, 3), stringsAsFactors = FALSE)
   idx <- c(1L, 3L, NA_integer_)
   expect_equal(PhenoMapR:::.score_ann_for_heatmap(meta, "score", idx), c(1, 3, NA_real_))
+})
+
+test_that("plot_phenotype_markers writes anno_mark labels into a real PNG", {
+  # Regression for the Shiny "labels are blank, lines are there" report:
+  # under renderPlot() Shiny replays plot expressions on a screen device,
+  # which can blank anno_mark text grobs even though the link lines stay
+  # drawn. The Shiny app now uses renderImage() and writes a PNG via the
+  # exact path tested here. Reading the PNG back and grepping for any
+  # rendered text content lets us catch a regression in the package
+  # function (font availability, wrong viewport, empty `labels`, ...)
+  # without needing a real Shiny session.
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(101)
+  n_cells <- 60L
+  n_genes <- 60L
+  expr <- matrix(rnorm(n_cells * n_genes), nrow = n_genes, ncol = n_cells,
+                 dimnames = list(paste0("Gene", sprintf("%03d", seq_len(n_genes))),
+                                 paste0("C", seq_len(n_cells))))
+  meta <- data.frame(
+    cell_id   = colnames(expr),
+    group     = rep(c("Most Adverse", "Other", "Most Favorable"),
+                    times = c(20, 20, 20)),
+    score     = runif(n_cells, -1, 1),
+    cell_type = rep(c("Tumor", "T cell", "Macrophage"), each = 20L),
+    stringsAsFactors = FALSE
+  )
+  fav <- data.frame(
+    gene       = paste0("Gene", sprintf("%03d", 1:30)),
+    avg_log2FC = sort(runif(30, 0.5, 3), decreasing = TRUE),
+    p_adj      = sort(runif(30, 1e-10, 1e-3)),
+    stringsAsFactors = FALSE
+  )
+  adv <- data.frame(
+    gene       = paste0("Gene", sprintf("%03d", 31:60)),
+    avg_log2FC = sort(runif(30, 0.5, 3), decreasing = TRUE),
+    p_adj      = sort(runif(30, 1e-10, 1e-3)),
+    stringsAsFactors = FALSE
+  )
+
+  tmp <- tempfile(fileext = ".png")
+  grDevices::png(tmp, width = 1400, height = 640, res = 110)
+  PhenoMapR::plot_phenotype_markers(
+    markers      = list(adverse_markers = adv, favorable_markers = fav),
+    expr_mat     = expr,
+    meta         = meta,
+    cell_id_col  = "cell_id",
+    group_col    = "group",
+    score_col    = "score",
+    celltype_col = "cell_type",
+    heatmap_type = "global",
+    top_n_markers = 20L,
+    n_mark_labels = 5L,
+    draw         = TRUE
+  )
+  grDevices::dev.off()
+
+  expect_true(file.exists(tmp))
+  expect_gt(file.info(tmp)$size, 30000)  # rich PNG, not just an empty header
 })
 
 test_that(".rect_native_ct_marker_blocks returns jmin/jmax per row_split block", {

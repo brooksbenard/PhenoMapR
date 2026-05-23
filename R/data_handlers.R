@@ -25,7 +25,7 @@ process_expression_input <- function(expression,
     # nocov end
     "sce" = process_sce(expression, pseudobulk, group_by, assay, genes_to_extract),
     "spatial_experiment" = process_spatial_experiment(expression, pseudobulk, group_by, assay, genes_to_extract),
-    "anndata" = process_anndata(expression, pseudobulk, group_by),
+    "anndata" = process_anndata(expression, pseudobulk, group_by, genes_to_extract),
     stop("Unsupported input type")
   )
 
@@ -373,47 +373,54 @@ process_spatial_experiment <- function(obj, pseudobulk, group_by, assay, genes_t
 
 #' Process AnnData Object
 #'
+#' Convert a Python \pkg{anndata} object into a genes × cells expression matrix
+#' that the rest of PhenoMapR understands. Optimized for very large objects:
+#' \itemize{
+#'   \item When \code{genes_to_extract} is supplied (e.g. the reference genes
+#'         that pass the z-score cutoff in \code{PhenoMap()}), the AnnData is
+#'         subset \emph{on the Python side} before any data is copied into R.
+#'         This is the single biggest memory win for multi-GB \code{.h5ad}
+#'         files: only a few hundred to a few thousand genes typically pass
+#'         the cutoff, so we transfer ~1-3\% of the matrix instead of all of
+#'         it.
+#'   \item scipy-sparse \code{.X} is reinterpreted directly as a
+#'         \code{dgCMatrix} in genes × cells orientation by treating the
+#'         native CSR-of-(cells×genes) storage as CSC-of-(genes×cells); this
+#'         avoids \code{Matrix::t()} and the doubling of memory it would
+#'         otherwise cause.
+#' }
+#'
 #' @keywords internal
 # nocov start - optional AnnData/reticulate
-process_anndata <- function(obj, pseudobulk, group_by) {
+process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) {
 
   if (!requireNamespace("reticulate", quietly = TRUE)) {
     stop("reticulate package required for AnnData objects")
   }
 
-  # Extract expression matrix (use .X which is usually normalized)
-  expr_matrix <- as.matrix(obj$X)
-
-  # Set rownames and colnames
-  if (reticulate::py_has_attr(obj, "var_names")) {
-    rownames(expr_matrix) <- reticulate::py_to_r(obj$var_names)
-  }
-  if (reticulate::py_has_attr(obj, "obs_names")) {
-    colnames(expr_matrix) <- reticulate::py_to_r(obj$obs_names)
-  }
-
-  # Transpose (AnnData stores as cells x genes)
-  expr_matrix <- t(expr_matrix)
+  expr_matrix <- .anndata_X_to_genes_cells(obj, gene_subset = genes_to_extract)
 
   if (pseudobulk) {
     if (is.null(group_by)) {
       stop("group_by must be specified for pseudobulk aggregation")
     }
 
-    obs_df <- reticulate::py_to_r(obj$obs)
-
-    if (!group_by %in% colnames(obs_df)) {
+    obs_df <- .anndata_obs_df(obj)
+    if (is.null(obs_df) || !group_by %in% colnames(obs_df)) {
       stop(glue::glue("'{group_by}' not found in AnnData obs"))
     }
 
-    groups <- obs_df[[group_by]]
+    groups <- as.character(obs_df[[group_by]])
+    grp_uniq <- unique(stats::na.omit(groups))
 
-    # Aggregate
-    agg_matrix <- sapply(unique(groups), function(g) {
+    # Sum per group while keeping sparsity (rowSums on dgCMatrix returns dense)
+    agg_cols <- lapply(grp_uniq, function(g) {
       cells <- which(groups == g)
       Matrix::rowSums(expr_matrix[, cells, drop = FALSE])
     })
-
+    agg_matrix <- do.call(cbind, agg_cols)
+    colnames(agg_matrix) <- as.character(grp_uniq)
+    rownames(agg_matrix) <- rownames(expr_matrix)
     expr_matrix <- as.matrix(agg_matrix)
   }
 
@@ -423,6 +430,343 @@ process_anndata <- function(obj, pseudobulk, group_by) {
     gene_names = rownames(expr_matrix)
   )
 }
+
+#' Convert AnnData.X into a genes × cells Matrix
+#'
+#' Returns a \code{dgCMatrix} (sparse) when \code{adata.X} is a scipy sparse
+#' matrix, or a regular dense matrix otherwise. Always genes × cells (i.e.
+#' the transpose of AnnData's native cells × genes layout) with
+#' \code{rownames = var_names} and \code{colnames = obs_names}.
+#'
+#' Two memory optimisations versus the naive \code{as.matrix(adata$X)} approach:
+#'
+#' \enumerate{
+#'   \item When \code{gene_subset} is supplied, the AnnData is sliced on the
+#'         var axis \emph{in Python} (\code{adata[:, mask].X}) before any data
+#'         is copied into R. This is the dominant cost reduction for multi-GB
+#'         AnnData objects: only the genes that actually contribute to the
+#'         score are transferred.
+#'   \item For scipy-sparse \code{.X}, the AnnData native CSR storage of a
+#'         (n_obs × n_vars) matrix is the same as the CSC storage of the
+#'         transposed (n_vars × n_obs) matrix. We reuse \code{indices},
+#'         \code{indptr} and \code{data} arrays directly to build a
+#'         \code{dgCMatrix} in genes × cells orientation, with no extra
+#'         allocation for a transpose pass.
+#' }
+#'
+#' @keywords internal
+.anndata_X_to_genes_cells <- function(obj, gene_subset = NULL) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("reticulate package required for AnnData objects")
+  }
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop("Matrix package required for sparse AnnData conversion")
+  }
+
+  # ----- 1. Optionally subset on the Python side --------------------------
+  X <- obj$X
+  obs_names_use <- .anndata_obs_names(obj)
+  var_names_use <- .anndata_var_names(obj)
+
+  # rename_to: when set, we replace rownames of the final matrix with these
+  # values (used when we matched via a .var symbol column rather than the
+  # raw var_names — see the Ensembl-ID fallback below).
+  rename_to <- NULL
+
+  if (!is.null(gene_subset) && length(gene_subset) > 0L) {
+    gene_subset_c <- as.character(gene_subset)
+    keep_direct   <- intersect(gene_subset_c, var_names_use)
+
+    if (length(keep_direct) > 0L && length(keep_direct) < length(var_names_use)) {
+      # Standard happy path: var_names overlap the reference, subset directly.
+      sub <- .anndata_subset_var(obj, keep_direct)
+      X             <- sub$X
+      var_names_use <- sub$var_names
+      obs_names_use <- sub$obs_names
+
+    } else if (length(keep_direct) == 0L) {
+      # Zero overlap on var_names. This is overwhelmingly because the file
+      # stores Ensembl IDs (ENSG…) as var_names with HUGO symbols hiding in
+      # a column of .var. Try to recover automatically.
+      sym <- .anndata_find_symbol_column(obj, gene_subset_c)
+      if (!is.null(sym) && length(sym$var_names) > 0L) {
+        message(sprintf(
+          "AnnData.var_names do not overlap the reference (looks like a non-HUGO naming scheme); matched %d genes via AnnData.var$%s and will use those symbols as rownames.",
+          length(sym$var_names), sym$column
+        ))
+        sub <- .anndata_subset_var(obj, sym$var_names)
+        X             <- sub$X
+        var_names_use <- sub$var_names
+        obs_names_use <- sub$obs_names
+        # The Python subset preserves the original var_names order, which
+        # may differ from the order we found symbols in. Re-look up symbols
+        # by the actual var_names returned.
+        rename_to <- as.character(setNames(sym$symbols, sym$var_names)[var_names_use])
+
+      } else {
+        stop(
+          "None of the requested genes are present in AnnData.var_names, ",
+          "and no recognisable gene-symbol column was found in AnnData.var. ",
+          "First few var_names are: ",
+          paste(head(var_names_use, 5L), collapse = ", "), ". ",
+          "Either rename AnnData.var_names to HUGO symbols before saving the .h5ad ",
+          "(e.g. with `adata.var_names = adata.var['gene_symbols']`), or add a ",
+          "column like 'gene_symbol' / 'feature_name' / 'Symbol' to AnnData.var ",
+          "with HUGO symbols — PhenoMapR will pick it up automatically."
+        )
+      }
+    }
+    # If keep_direct == length(var_names_use) we don't subset at all
+    # (every gene is requested) and fall through to the full conversion.
+  }
+
+  # ----- 2. Build the R matrix in genes × cells orientation ---------------
+  # Already an R-side object (e.g. user passed convert = TRUE on import)
+  if (is.matrix(X) || inherits(X, "Matrix")) {
+    m <- if (inherits(X, "Matrix")) Matrix::t(X) else t(X)
+    if (length(var_names_use) == nrow(m)) rownames(m) <- var_names_use
+    if (length(obs_names_use) == ncol(m)) colnames(m) <- obs_names_use
+    return(m)
+  }
+
+  scipy_sparse <- tryCatch(
+    reticulate::import("scipy.sparse", convert = FALSE),
+    error = function(e) NULL
+  )
+  is_sparse <- !is.null(scipy_sparse) && isTRUE(tryCatch(
+    reticulate::py_to_r(scipy_sparse$issparse(X)),
+    error = function(e) FALSE
+  ))
+
+  if (is_sparse) {
+    # Convert to CSR (cheap if already CSR — AnnData typically stores CSR).
+    # Then reuse the CSR(n_obs, n_vars) storage as CSC(n_vars, n_obs):
+    # CSR.indices (column indices of X) === CSC.i (row indices of t(X))
+    # CSR.indptr  (row pointers of X)    === CSC.p (column pointers of t(X))
+    # CSR.data    (values)               === CSC.x (values)
+    # Resulting dgCMatrix is genes × cells with no Matrix::t() pass.
+    csr <- X$tocsr()
+    shape   <- as.integer(reticulate::py_to_r(csr$shape))     # (n_obs, n_vars)
+    indices <- as.integer(reticulate::py_to_r(csr$indices))
+    indptr  <- as.integer(reticulate::py_to_r(csr$indptr))
+    values  <- as.numeric(reticulate::py_to_r(csr$data))
+    m <- Matrix::sparseMatrix(
+      i      = indices,
+      p      = indptr,
+      x      = values,
+      dims   = c(shape[2L], shape[1L]),     # transpose: n_vars × n_obs
+      index1 = FALSE
+    )
+  } else {
+    # Dense path: pull the (n_obs × n_vars) array and transpose to genes × cells.
+    dense <- reticulate::py_to_r(X)
+    if (!is.matrix(dense) && !inherits(dense, "Matrix")) {
+      dense <- as.matrix(dense)
+    }
+    m <- t(dense)
+  }
+
+  # If we matched via a .var symbol column, rownames are the human-readable
+  # HUGO symbols rather than the (Ensembl) var_names. Otherwise the matrix
+  # is labelled by var_names exactly as in the AnnData.
+  effective_rownames <- if (!is.null(rename_to)) rename_to else var_names_use
+  if (length(effective_rownames) == nrow(m)) {
+    rownames(m) <- effective_rownames
+  }
+  if (length(obs_names_use) == ncol(m)) colnames(m) <- obs_names_use
+  m
+}
+
+#' Find a HUGO-symbol-style column in AnnData.var that overlaps the reference
+#'
+#' Scans \code{AnnData.var} for the most common gene-symbol column conventions
+#' (\code{gene_symbol}, \code{gene_symbols}, \code{feature_name}, \code{Symbol},
+#' \code{gene_short_name}, \code{hgnc_symbol}, \code{gene_name}) and returns
+#' the first column with any overlap against \code{gene_subset}.
+#'
+#' @return A list with \code{column}, \code{var_names} (the AnnData
+#'   \code{var_names} whose symbol matched, suitable for passing to
+#'   \code{.anndata_subset_var}) and \code{symbols} (the matched HUGO symbols
+#'   in the same order). Returns \code{NULL} when no usable column is found.
+#'
+#' @keywords internal
+.anndata_find_symbol_column <- function(obj, gene_subset) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
+  if (!reticulate::py_has_attr(obj, "var")) return(NULL)
+  var_df <- tryCatch(reticulate::py_to_r(obj$var), error = function(e) NULL)
+  if (is.null(var_df)) return(NULL)
+  if (!is.data.frame(var_df)) {
+    var_df <- tryCatch(as.data.frame(var_df, stringsAsFactors = FALSE),
+                       error = function(e) NULL)
+    if (is.null(var_df)) return(NULL)
+  }
+  rn <- rownames(var_df)
+  if (is.null(rn) || identical(rn, as.character(seq_len(nrow(var_df))))) {
+    rn <- .anndata_var_names(obj, n = nrow(var_df))
+  }
+
+  candidates <- c(
+    "gene_symbol", "gene_symbols", "feature_name", "Symbol", "symbol",
+    "gene_short_name", "hgnc_symbol", "gene_name", "Gene", "gene"
+  )
+  candidates <- intersect(candidates, colnames(var_df))
+  if (!length(candidates)) return(NULL)
+
+  for (col in candidates) {
+    symbols <- as.character(var_df[[col]])
+    ok <- which(!is.na(symbols) & nzchar(symbols) & symbols %in% gene_subset)
+    if (length(ok) == 0L) next
+    # If duplicate symbols exist, keep the first occurrence so the resulting
+    # matrix has unique rownames downstream.
+    dedup <- !duplicated(symbols[ok])
+    ok <- ok[dedup]
+    return(list(
+      column    = col,
+      var_names = rn[ok],
+      symbols   = symbols[ok]
+    ))
+  }
+  NULL
+}
+
+#' Subset an AnnData on the var (gene) axis in Python
+#'
+#' Uses a tiny Python helper defined in \code{__main__} to mask AnnData on
+#' \code{var_names} and return the subset's \code{.X} plus the new
+#' \code{var_names} / \code{obs_names}. All return values are kept as Python
+#' objects so the caller can apply the most memory-efficient conversion.
+#'
+#' @keywords internal
+.anndata_subset_var <- function(obj, gene_keep) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("reticulate required for AnnData subsetting")
+  }
+  # py_run_string is idempotent in __main__ — re-defining is cheap so we
+  # don't bother caching the module reference across calls.
+  reticulate::py_run_string(
+    paste(
+      "def _phenomapr_subset_anndata_var(adata, gene_names):",
+      "    keep_list = list(gene_names)",
+      "    mask = adata.var_names.isin(keep_list)",
+      "    sub = adata[:, mask]",
+      "    return {",
+      "        'X': sub.X,",
+      "        'var_names': sub.var_names.tolist(),",
+      "        'obs_names': sub.obs_names.tolist(),",
+      "    }",
+      sep = "\n"
+    ),
+    convert = FALSE
+  )
+  main <- reticulate::import_main(convert = FALSE)
+  res <- main$`_phenomapr_subset_anndata_var`(obj, as.character(gene_keep))
+  list(
+    X         = reticulate::py_get_item(res, "X"),
+    var_names = as.character(reticulate::py_to_r(reticulate::py_get_item(res, "var_names"))),
+    obs_names = as.character(reticulate::py_to_r(reticulate::py_get_item(res, "obs_names")))
+  )
+}
+
+#' Extract AnnData.obs as an R data.frame with cell IDs in rownames
+#'
+#' @keywords internal
+.anndata_obs_df <- function(obj) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
+  if (!reticulate::py_has_attr(obj, "obs")) return(NULL)
+  df <- tryCatch(reticulate::py_to_r(obj$obs), error = function(e) NULL)
+  if (is.null(df)) return(NULL)
+  if (!is.data.frame(df)) df <- as.data.frame(df, stringsAsFactors = FALSE)
+  rn <- rownames(df)
+  if (is.null(rn) || identical(rn, as.character(seq_len(nrow(df))))) {
+    ids <- .anndata_obs_names(obj, n = nrow(df))
+    if (length(ids) == nrow(df)) rownames(df) <- ids
+  }
+  df
+}
+
+#' List AnnData.obsm keys whose value is at least 2 columns wide
+#' @keywords internal
+.anndata_obsm_keys <- function(obj) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(character(0))
+  if (!reticulate::py_has_attr(obj, "obsm")) return(character(0))
+  # Importantly, when the AnnData was imported with convert = FALSE,
+  # iterate(obj$obsm$keys()) returns a list of Python str objects whose
+  # R-side print is "<environment>". Converting via builtins.list() first
+  # gives us a Python list of strs that py_to_r() turns into an R character
+  # vector cleanly. We also fall back to iterate() with per-element py_to_r
+  # in case builtins is unavailable.
+  builtins <- tryCatch(
+    reticulate::import_builtins(convert = FALSE),
+    error = function(e) NULL
+  )
+  keys <- tryCatch({
+    if (!is.null(builtins)) {
+      as.character(reticulate::py_to_r(builtins$list(obj$obsm$keys())))
+    } else {
+      vapply(
+        reticulate::iterate(obj$obsm$keys()),
+        function(k) as.character(reticulate::py_to_r(k)),
+        character(1L)
+      )
+    }
+  }, error = function(e) character(0))
+  if (!length(keys)) return(character(0))
+  out <- character(0)
+  for (k in keys) {
+    arr <- tryCatch(reticulate::py_get_item(obj$obsm, k),
+                    error = function(e) NULL)
+    if (is.null(arr)) next
+    shape <- tryCatch(reticulate::py_to_r(arr$shape),
+                      error = function(e) NULL)
+    if (!is.null(shape) && length(shape) >= 2L && shape[[2L]] >= 2L) {
+      out <- c(out, k)
+    }
+  }
+  out
+}
+
+#' Pull a 2D embedding from AnnData.obsm
+#' @keywords internal
+.anndata_obsm_array <- function(obj, key) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
+  if (!reticulate::py_has_attr(obj, "obsm")) return(NULL)
+  arr <- tryCatch(reticulate::py_get_item(obj$obsm, key),
+                  error = function(e) NULL)
+  if (is.null(arr)) return(NULL)
+  emb <- tryCatch(reticulate::py_to_r(arr), error = function(e) NULL)
+  if (is.null(emb)) return(NULL)
+  if (!is.matrix(emb)) emb <- as.matrix(emb)
+  ids <- .anndata_obs_names(obj, n = nrow(emb))
+  if (length(ids) == nrow(emb)) rownames(emb) <- ids
+  emb
+}
+
+#' AnnData obs_names / var_names with safe fallback
+#' @keywords internal
+.anndata_obs_names <- function(obj, n = NULL) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    return(if (is.null(n)) character(0) else paste0("Cell_", seq_len(n)))
+  }
+  ids <- tryCatch(
+    as.character(reticulate::py_to_r(obj$obs_names$tolist())),
+    error = function(e) NULL
+  )
+  if (is.null(ids) && !is.null(n)) ids <- paste0("Cell_", seq_len(n))
+  if (is.null(ids)) character(0) else ids
+}
+#' @keywords internal
+.anndata_var_names <- function(obj, n = NULL) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    return(if (is.null(n)) character(0) else paste0("Gene_", seq_len(n)))
+  }
+  ids <- tryCatch(
+    as.character(reticulate::py_to_r(obj$var_names$tolist())),
+    error = function(e) NULL
+  )
+  if (is.null(ids) && !is.null(n)) ids <- paste0("Gene_", seq_len(n))
+  if (is.null(ids)) character(0) else ids
+}
+
 # nocov end
 
 

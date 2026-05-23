@@ -27,6 +27,7 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(dplyr)
   library(patchwork)
+  library(ggchicklet2)
 })
 
 knitr::opts_chunk$set(fig.width = 12, out.width = "100%", warning = FALSE)
@@ -240,8 +241,11 @@ print(ggplot(df, aes(
     y = .data[[score_col]],
     fill = .data$annotation
   )) +
-    # geom_boxplot(outlier.alpha = 0.3) +
-        geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.5,
+        # geom_boxplot(outlier.alpha = 0.5, median.linewidth = 0.5,
+        #          outlier.fill = NULL,
+        #          outlier.color = NULL, outlier.shape = 21) +
+      ggchicklet2::geom_chicklet_boxplot(radius = grid::unit(1, "pt"),
+                                     outlier.alpha = 0.5, median.linewidth = 0.5,
                  outlier.fill = NULL,
                  outlier.color = NULL, outlier.shape = 21) +
     scale_fill_manual(values = pal, name = celltype_col) +
@@ -938,6 +942,7 @@ if (!is.null(group_col)) {
       df_labels$CellType <- factor(df_labels$CellType, levels = ct_ord)
       p_bar <- ggplot(df_bar, aes(x = reorder(.data$CellType, .data$Freq, function(x) -sum(x)), y = .data$Freq, fill = .data$Prognostic_group)) +
         geom_col(position = "stack") +
+        # ggchicklet2::geom_chicklet_bar(radius = grid::unit(1.5, "pt"), position = "stack") +
         geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = .data$n_adverse),
                   inherit.aes = FALSE, vjust = -0.3, size = 3.5, color = "#B2182B", hjust = 1.05) +
         geom_text(data = df_labels, aes(x = .data$CellType, y = .data$total, label = paste0("/", .data$n_fav)),

@@ -58,10 +58,17 @@ Suggests:
     readxl,
     spatialCooccur,
     profmem,
-    peakRAM
+    peakRAM,
+    shiny,
+    bslib,
+    DT,
+    htmltools,
+    ggsignif,
+    ggchicklet2
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave,
-    juninamo/spatialCooccur
+    juninamo/spatialCooccur,
+    brooksbenard/ggchicklet2
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
