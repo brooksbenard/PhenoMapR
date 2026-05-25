@@ -346,16 +346,37 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
 list_available_embeddings <- function(obj) {
   if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
     nms <- names(obj@reductions)
+    # Surface tissue / spot coordinates from spatial Seurat objects (Visium
+    # etc.) as a synthetic "spatial" reduction so the Visualization tab can
+    # overlay PhenoMapR scores on the tissue without any extra UI plumbing.
+    if (length(methods::slot(obj, "images") %||% list()) > 0L) {
+      nms <- c(nms, "spatial")
+    }
     return(nms %||% character(0))
   }
   if ((inherits(obj, "SingleCellExperiment") || inherits(obj, "SpatialExperiment")) &&
       requireNamespace("SingleCellExperiment", quietly = TRUE)) {
     nms <- SingleCellExperiment::reducedDimNames(obj)
+    if (inherits(obj, "SpatialExperiment") &&
+        requireNamespace("SpatialExperiment", quietly = TRUE)) {
+      coords <- tryCatch(SpatialExperiment::spatialCoords(obj),
+                         error = function(e) NULL)
+      if (!is.null(coords) && NROW(coords) > 0L && NCOL(coords) >= 2L) {
+        nms <- unique(c(nms, "spatial"))
+      }
+    }
     return(nms %||% character(0))
   }
   if (inherits(obj, "python.builtin.object")) {
-    return(tryCatch(PhenoMapR:::.anndata_obsm_keys(obj),
-                    error = function(e) character(0)))
+    keys <- tryCatch(PhenoMapR:::.anndata_obsm_keys(obj),
+                     error = function(e) character(0))
+    # AnnData spatial coordinates conventionally live in obsm["spatial"];
+    # if present, expose them under the same "spatial" label as Seurat /
+    # SpatialExperiment so the UI is consistent across object kinds.
+    if ("spatial" %in% keys) {
+      keys <- unique(c(setdiff(keys, "spatial"), "spatial"))
+    }
+    return(keys)
   }
   character(0)
 }
@@ -364,11 +385,41 @@ list_available_embeddings <- function(obj) {
 # cell_id, dim1, dim2, dim1_name, dim2_name.
 extract_embedding <- function(obj, name) {
   emb <- NULL
+  is_spatial <- identical(name, "spatial")
   if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
-    emb <- Seurat::Embeddings(obj, reduction = name)
+    if (is_spatial) {
+      # Pull tissue coordinates from the first image slot. `imagecol`
+      # holds the x position; `imagerow` holds the y but is image-space
+      # (origin top-left). We negate it later in the plot via
+      # `scale_y_reverse()` rather than mutating values here, so the raw
+      # coordinates stay in their native frame and any axis text is
+      # accurate.
+      imgs <- methods::slot(obj, "images") %||% list()
+      first <- imgs[[1L]]
+      coords <- tryCatch(first@coordinates, error = function(e) NULL)
+      if (!is.null(coords) && all(c("imagerow", "imagecol") %in% colnames(coords))) {
+        emb <- as.matrix(coords[, c("imagecol", "imagerow"), drop = FALSE])
+        rownames(emb) <- rownames(coords)
+        colnames(emb) <- c("x", "y")
+      }
+    } else {
+      emb <- Seurat::Embeddings(obj, reduction = name)
+    }
   } else if ((inherits(obj, "SingleCellExperiment") || inherits(obj, "SpatialExperiment")) &&
              requireNamespace("SingleCellExperiment", quietly = TRUE)) {
-    emb <- SingleCellExperiment::reducedDim(obj, name)
+    if (is_spatial && inherits(obj, "SpatialExperiment") &&
+        requireNamespace("SpatialExperiment", quietly = TRUE)) {
+      emb <- tryCatch(as.matrix(SpatialExperiment::spatialCoords(obj)),
+                      error = function(e) NULL)
+      if (!is.null(emb) && is.null(rownames(emb))) {
+        rownames(emb) <- colnames(obj)
+      }
+      if (!is.null(emb) && (is.null(colnames(emb)) || !length(colnames(emb)))) {
+        colnames(emb) <- c("x", "y")
+      }
+    } else {
+      emb <- SingleCellExperiment::reducedDim(obj, name)
+    }
   } else if (inherits(obj, "python.builtin.object")) {
     emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, name),
                     error = function(e) NULL)
@@ -394,6 +445,7 @@ extract_embedding <- function(obj, name) {
     dim2 = as.numeric(emb[, 2L]),
     dim1_name = d1_name,
     dim2_name = d2_name,
+    is_spatial = is_spatial,
     stringsAsFactors = FALSE
   )
 }
@@ -639,6 +691,62 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
   } else {
     ggplot2::geom_boxplot(...)
   }
+}
+
+# ---- PhenoMapR brand palette ---------------------------------------------
+#
+# Curated qualitative palette anchored on the app's brand primary (#264653)
+# and secondary (#2A9D8F), extended with complementary earth + jewel tones.
+# Used as the default discrete fill in the Data-tab composition plots so
+# they don't look like default ggplot2 hue swatches. Falls back to
+# `colorRampPalette` when more colors than the curated set are needed.
+pm_brand_colors <- c(
+  "#2A9D8F",  # brand teal
+  "#E76F51",  # coral
+  "#E9C46A",  # saffron
+  "#264653",  # brand charcoal
+  "#6A4C93",  # purple
+  "#3A86FF",  # azure
+  "#8AC926",  # lime
+  "#F4A261",  # tangerine
+  "#8DA0CB",  # periwinkle
+  "#A65A4A"   # terracotta
+)
+
+# Pick `n` colors from the brand palette, interpolating with
+# `colorRampPalette` when `n` exceeds the curated count so the palette
+# still feels coherent for high-cardinality factors.
+pm_brand_palette <- function(n) {
+  n <- as.integer(n)
+  if (is.na(n) || n <= 0L) return(character(0))
+  if (n <= length(pm_brand_colors)) {
+    return(unname(pm_brand_colors[seq_len(n)]))
+  }
+  grDevices::colorRampPalette(pm_brand_colors)(n)
+}
+
+# Drop-in ggplot2 discrete fill scale that picks `n` colors lazily based on
+# the number of factor levels seen at training time. Usage:
+#   ggplot(...) + scale_fill_phenomapr_d()
+#
+# Note: the `scale_name` arg of `discrete_scale()` was deprecated in
+# ggplot2 3.5.0, so it's omitted here.
+scale_fill_phenomapr_d <- function(..., na.value = "#BBBBBB") {
+  ggplot2::discrete_scale(
+    aesthetics = "fill",
+    palette = function(n) pm_brand_palette(n),
+    na.value = na.value,
+    ...
+  )
+}
+
+scale_color_phenomapr_d <- function(..., na.value = "#BBBBBB") {
+  ggplot2::discrete_scale(
+    aesthetics = "colour",
+    palette = function(n) pm_brand_palette(n),
+    na.value = na.value,
+    ...
+  )
 }
 
 # ---- pairwise Wilcoxon tests between cell types ---------------------------

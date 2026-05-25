@@ -185,6 +185,18 @@ plot_phenotype_markers <- function(markers,
   } else {
     character(0)
   }
+  # In `global` mode, a cell-type column with a single unique value is not
+  # informative — the top annotation strip becomes a uniform colored bar
+  # and the legend renders as one stray colored swatch (e.g. a teal "1"
+  # box if the user mapped a column whose only level is "1"). Skip the
+  # cell-type strip and legend in that case. We keep this guard global-only
+  # because cell-type-specific heatmaps still slice on cell type even when
+  # there's just one of them.
+  if (has_celltype && heatmap_type == "global" &&
+      length(hm_celltype_levels) <= 1L) {
+    has_celltype <- FALSE
+    hm_celltype_levels <- character(0)
+  }
 
   if (heatmap_type == "global") {
     ord <- .global_marker_heatmap_cell_order(
@@ -683,7 +695,10 @@ plot_phenotype_markers <- function(markers,
       )
     )
     annotation_legend_list <- list(lgd_score, lgd_group)
-    if (has_celltype && length(hm_celltype_levels) > 0L) {
+    # Only include the Cell type legend when there are at least 2 distinct
+    # cell types — a 1-entry legend is just a stray colored swatch with no
+    # discriminative value.
+    if (has_celltype && length(hm_celltype_levels) > 1L) {
       annotation_legend_list <- c(
         annotation_legend_list,
         list(ComplexHeatmap::Legend(

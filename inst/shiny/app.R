@@ -64,11 +64,11 @@ if (is.null(getOption("shiny.maxRequestSize"))) {
 # Reference catalogue + cancer-type pre-load (cheap)
 # ============================================================================
 REFERENCE_CHOICES <- c(
-  "PRECOG (adult cancers, multi-cohort)"          = "precog",
-  "TCGA (adult cancers, single-cohort)"           = "tcga",
-  "Pediatric PRECOG"                              = "pediatric_precog",
-  "ICI PRECOG (immune checkpoint cohorts)"        = "ici_precog",
-  "Custom (upload or derive from your own data)"  = "_custom"
+  "PRECOG"           = "precog",
+  "TCGA"             = "tcga",
+  "Pediatric PRECOG" = "pediatric_precog",
+  "ICI-PRECOG"       = "ici_precog",
+  "Custom"           = "_custom"
 )
 .cancer_types_cache <- new.env(parent = emptyenv())
 get_cancer_types <- function(ref) {
@@ -91,23 +91,29 @@ help_icon <- function(text) {
   )
 }
 
-# A small card showing the loaded data summary; reused on multiple tabs.
-data_status_card <- function() {
-  card(
-    class = "status-card",
-    card_header(class = "py-2", tags$strong("Loaded data")),
-    card_body(class = "py-2", uiOutput("data_status"))
-  )
-}
-
 ui <- page_navbar(
   title = tagList(
-    # Brand: large "PhenoMapR" wordmark followed by the hex logo. The logo
-    # lives in inst/shiny/www/ and so is served at the app root by Shiny.
-    tags$span("PhenoMapR", class = "brand-title"),
-    tags$img(src = "PhenoMapR_logo.png",
-             class = "brand-logo",
-             alt = "PhenoMapR hex logo")
+    # Brand: large "PhenoMapR" wordmark followed by the hex logo. The brand
+    # is wrapped in a clickable <a> that bumps `input$nav_to_welcome` via
+    # Shiny.setInputValue; the server-side observer calls
+    # `bslib::nav_select()` to switch the navbar to the Welcome panel.
+    # `return false` prevents the default `href="#"` from scrolling the
+    # page. The Welcome tab itself is hidden from the navbar tab strip
+    # (see styles.css `.nav-welcome-hidden`), so the brand is the only
+    # way to get back to it.
+    tags$a(
+      class = "navbar-brand-link",
+      href = "#",
+      title = "Back to overview",
+      onclick = paste(
+        "Shiny.setInputValue('nav_to_welcome', Math.random(),",
+        "{priority: 'event'}); return false;"
+      ),
+      tags$span("PhenoMapR", class = "brand-title"),
+      tags$img(src = "PhenoMapR_logo.png",
+               class = "brand-logo",
+               alt = "PhenoMapR hex logo")
+    )
   ),
   id = "main_nav",
   fillable = FALSE,
@@ -129,10 +135,14 @@ ui <- page_navbar(
   # Welcome
   # -------------------------------------------------------------------------
   nav_panel(
-    title = tagList(icon("house"), " Welcome"),
+    # The .nav-welcome-hidden marker class lets styles.css hide this nav
+    # link from the navbar tab strip without disabling the panel itself
+    # (the brand-link above is the only way back to this panel now).
+    title = tagList(tags$span(class = "nav-welcome-hidden",
+                              icon("house"), " Welcome")),
     value = "welcome",
     card(
-      card_header("PhenoMapR — interactive workflow"),
+      card_header("Overview of PhenoMapR Shiny App"),
       card_body(
         layout_columns(
           col_widths = c(7, 5),
@@ -142,46 +152,148 @@ ui <- page_navbar(
               single-cell, spatial, and pseudobulk transcriptomics data using
               weighted-sum scoring against curated prognostic z-scores
               (PRECOG, TCGA, Pediatric PRECOG, ICI PRECOG) or a custom
-              reference you supply.
+              reference you supply."
+            ),
 
-              ### How to use this app
+            # "How to use this app" — card-style panel with a numbered
+            # stepper. Each step's headline is large + brand-primary so it
+            # reads as the section's "main part," while the body text stays
+            # in a softer color for visual hierarchy.
+            tags$div(
+              class = "welcome-section welcome-howto",
+              tags$div(
+                class = "welcome-section-header",
+                icon("compass"),
+                tags$span("How to use this app")
+              ),
+              tags$div(
+                class = "welcome-section-body",
+                tags$ol(
+                  class = "welcome-steps",
+                  tags$li(
+                    class = "welcome-step",
+                    tags$div(class = "welcome-step-num", "1"),
+                    tags$div(
+                      class = "welcome-step-text",
+                      tags$div(class = "welcome-step-title", "Upload data"),
+                      tags$div(
+                        class = "welcome-step-desc",
+                        HTML("RDS (Seurat / SCE / matrix), TSV/CSV ",
+                             "(genes &times; samples), or 10X HDF5 / ",
+                             "AnnData <code>.h5ad</code>. Add optional ",
+                             "cell metadata for cell-type-specific ",
+                             "analyses.")
+                      )
+                    )
+                  ),
+                  tags$li(
+                    class = "welcome-step",
+                    tags$div(class = "welcome-step-num", "2"),
+                    tags$div(
+                      class = "welcome-step-text",
+                      tags$div(class = "welcome-step-title",
+                               "Choose a phenotype signature"),
+                      tags$div(
+                        class = "welcome-step-desc",
+                        HTML("Pick a built-in cohort meta-z ",
+                             "(PRECOG / TCGA / Pediatric / ICI), upload ",
+                             "a precomputed signature file, or ",
+                             "<em>derive</em> a custom signature from your ",
+                             "own bulk expression + phenotype on the ",
+                             "<strong>Phenotype</strong> tab (binary, ",
+                             "continuous, or survival outcomes).")
+                      )
+                    )
+                  ),
+                  tags$li(
+                    class = "welcome-step",
+                    tags$div(class = "welcome-step-num", "3"),
+                    tags$div(
+                      class = "welcome-step-text",
+                      tags$div(class = "welcome-step-title", "Score"),
+                      tags$div(
+                        class = "welcome-step-desc",
+                        HTML("Compute weighted-sum PhenoMapR scores for each ",
+                             "cell / sample / spot, view histograms, ",
+                             "score-rank plots, and per-cell-type &times; ",
+                             "source Wilcoxon comparisons, then immediately ",
+                             "tag the top / bottom <em>N</em>&nbsp;% of cells ",
+                             "as <strong>Most Adverse</strong> / ",
+                             "<strong>Most Favorable</strong> phenotype ",
+                             "groups.")
+                      )
+                    )
+                  ),
+                  tags$li(
+                    class = "welcome-step",
+                    tags$div(class = "welcome-step-num", "4"),
+                    tags$div(
+                      class = "welcome-step-text",
+                      tags$div(class = "welcome-step-title",
+                               "Visualization"),
+                      tags$div(
+                        class = "welcome-step-desc",
+                        HTML("Overlay PhenoMapR score, cell type, source, ",
+                             "or phenotype-group label onto any 2D ",
+                             "embedding stored on your object (UMAP, tSNE, ",
+                             "PCA, or tissue / spot coordinates for ",
+                             "spatial inputs) or an uploaded coordinate ",
+                             "file.")
+                      )
+                    )
+                  ),
+                  tags$li(
+                    class = "welcome-step",
+                    tags$div(class = "welcome-step-num", "5"),
+                    tags$div(
+                      class = "welcome-step-text",
+                      tags$div(class = "welcome-step-title", "Marker genes"),
+                      tags$div(
+                        class = "welcome-step-desc",
+                        HTML("Run differential expression for the adverse ",
+                             "vs. favorable tails (globally or per cell ",
+                             "type) and draw a ComplexHeatmap of the top ",
+                             "markers per block.")
+                      )
+                    )
+                  )
+                )
+              )
+            ),
 
-              1. **Upload data** — RDS (Seurat / SCE / matrix), TSV/CSV
-                 (genes × samples), or 10X HDF5 / AnnData `.h5ad`. Add
-                 optional cell metadata for cell-type-specific analyses.
-              2. **Choose a phenotype signature** — pick a built-in cohort
-                 meta-z (PRECOG / TCGA / Pediatric / ICI), upload a precomputed
-                 signature file, or *derive* a custom signature from your own
-                 bulk expression + phenotype on the **Phenotype** tab
-                 (binary, continuous, or survival outcomes).
-              3. **Score** — compute weighted-sum PhenoMapR scores for each
-                 cell / sample / spot, view histograms, score-rank plots,
-                 and per-cell-type × source Wilcoxon comparisons, then
-                 immediately tag the top / bottom *N* % of cells as
-                 **Most Adverse** / **Most Favorable** phenotype groups.
-              4. **UMAP / embedding** — overlay PhenoMapR score, cell type,
-                 source, or phenotype-group label onto any 2D embedding
-                 stored on your object (or an uploaded coordinate file).
-              5. **Marker genes** — run differential expression for the
-                 adverse vs. favorable tails (globally or per cell type)
-                 and draw a ComplexHeatmap of the top markers per block.
-
-              Reference diagnostics (gene coverage, top prognostic genes,
-              reference signature) live alongside the signature picker on
-              the **Phenotype** tab so you can inspect any built-in
-              reference without leaving your scoring workflow.
-
-              ### Server / remote use
-
-              This app is just a thin UI over the regular PhenoMapR API.
-              Run it on a remote workstation with:
-
-              ```r
-              PhenoMapR::run_app(host = \"0.0.0.0\", port = 3838)
-              ```
-
-              and open `http://<server>:3838` from your browser. No data
-              leaves the machine the app runs on."
+            # "Server / remote use" — companion card matching the stepper
+            # chrome, with the code block visually called out so users can
+            # spot the remote-launch command at a glance.
+            tags$div(
+              class = "welcome-section welcome-server",
+              tags$div(
+                class = "welcome-section-header",
+                icon("server"),
+                tags$span("Server / remote use")
+              ),
+              tags$div(
+                class = "welcome-section-body",
+                tags$p(
+                  HTML("This app is just a thin UI over the regular ",
+                       "PhenoMapR API. Run it on a remote workstation with:")
+                ),
+                # Emit <pre><code>…</code></pre> as a single HTML string so
+                # htmltools' default pretty-printing doesn't insert newlines
+                # between the <pre> and <code> tags — those newlines are
+                # preserved by `white-space: pre` on .welcome-code and would
+                # render as a stray blank line below the command.
+                HTML(paste0(
+                  '<pre class="welcome-code"><code>',
+                  'PhenoMapR::run_app(host = "0.0.0.0", port = 3838)',
+                  '</code></pre>'
+                )),
+                tags$p(
+                  HTML("and open ",
+                       "<code>http://&lt;server&gt;:3838</code> from your ",
+                       "browser. <em>No data leaves the machine the app ",
+                       "runs on.</em>")
+                )
+              )
             )
           ),
           tags$div(
@@ -209,7 +321,10 @@ ui <- page_navbar(
   # 1. Upload data
   # -------------------------------------------------------------------------
   nav_panel(
-    title = tagList(icon("upload"), " 1. Data"),
+    title = tagList(
+      tags$span(class = "nav-step", icon("upload"), " 1. Data"),
+      tags$span(class = "nav-step-arrow", "\u2192")
+    ),
     value = "upload",
     layout_sidebar(
       sidebar = sidebar(
@@ -270,7 +385,6 @@ ui <- page_navbar(
           )
         )
       ),
-      data_status_card(),
       uiOutput("expr_axes_warning"),
 
       # ---- Dataset overview --------------------------------------------------
@@ -309,7 +423,10 @@ ui <- page_navbar(
   # 2. Phenotype
   # -------------------------------------------------------------------------
   nav_panel(
-    title = tagList(icon("book"), " 2. Phenotype"),
+    title = tagList(
+      tags$span(class = "nav-step", icon("book"), " 2. Phenotype"),
+      tags$span(class = "nav-step-arrow", "\u2192")
+    ),
     value = "reference",  # internal value preserved for stability
     layout_sidebar(
       # fillable = FALSE prevents bslib from stretching cards to fill the
@@ -319,12 +436,19 @@ ui <- page_navbar(
       fillable = FALSE,
       sidebar = sidebar(
         width = 360,
-        # Top-level signature source. Promoted from a dropdown to a radio
-        # group so the "Derive a custom signature from your own data" path
-        # is visible at first glance instead of being hidden behind a
-        # nested option.
-        radioButtons("reference_choice", "Phenotype signature source",
-                     choices = REFERENCE_CHOICES, selected = "precog"),
+        # Top-level signature source. The radio group is wrapped in a
+        # `.reference-pills` div so styles.css can re-skin each option as a
+        # colored click-target widget (the underlying input is still a
+        # shiny radio so server-side `input$reference_choice` semantics are
+        # unchanged). The label uses a plain `h4` to match the sizing of
+        # the other sidebar section headers ("Expression input", "Cell
+        # metadata", "PhenoMap() parameters", …).
+        h4("Phenotype signature source"),
+        tags$div(
+          class = "reference-pills",
+          radioButtons("reference_choice", label = NULL,
+                       choices = REFERENCE_CHOICES, selected = "precog")
+        ),
         conditionalPanel(
           "input.reference_choice != '_custom'",
           selectInput("cancer_type", "Cancer / tissue type", choices = NULL),
@@ -420,16 +544,17 @@ ui <- page_navbar(
           )
         ),
         # ---- Reference diagnostics inputs (moved from the old "6. Diagnostics"
-        # tab so all reference-signature info lives in one place). Lets the user
-        # inspect any built-in reference's top prognostic genes for any cancer
-        # type, independent of the signature being used for scoring above.
+        # tab so all reference-signature info lives in one place). The
+        # reference + cancer type are NOT re-asked here — the diagnostics
+        # below automatically follow the "Phenotype signature source" /
+        # "Cancer / tissue type" selection at the top of this sidebar. Only
+        # the diagnostic-specific knobs (top-N and direction) live here.
         hr(),
         h4(tagList(icon("stethoscope"), " Reference diagnostics")),
-        helpText("Browse the top prognostic genes / cancer types for any built-in reference."),
-        selectInput("top_genes_ref", "Reference",
-                    choices = REFERENCE_CHOICES[REFERENCE_CHOICES != "_custom"],
-                    selected = "precog"),
-        selectInput("top_genes_cancer", "Cancer type", choices = NULL),
+        helpText(
+          "Top prognostic genes for the phenotype signature selected ",
+          "above. Adjust how many genes to list and the direction filter."
+        ),
         numericInput("top_genes_n", "Top N genes",
                      value = 50, min = 5, max = 1000),
         radioButtons(
@@ -438,9 +563,7 @@ ui <- page_navbar(
                       "negative" = "negative"),
           selected = "both",
           inline = TRUE
-        ),
-        actionButton("show_top_genes", "Show top prognostic genes",
-                     icon = icon("list"), class = "btn-primary")
+        )
       ),
       card(
         card_header(icon("info"), " Choosing a phenotype signature"),
@@ -532,11 +655,11 @@ ui <- page_navbar(
         card_header(icon("info"), " About reference diagnostics"),
         card_body(
           markdown(
-            "Browse the top prognostic genes for any built-in reference and
-            cancer type. The picker is independent of the signature you've
-            chosen above, so you can compare your scoring signature against
-            other cancer types or directionalities without changing your
-            scoring setup."
+            "These tables follow the **Phenotype signature source** and
+            **Cancer / tissue type** you picked at the top of the sidebar
+            — they update automatically whenever you change the signature.
+            Use the *Top N genes* and *Direction* knobs in the sidebar to
+            tune the listing."
           )
         )
       ),
@@ -546,8 +669,8 @@ ui <- page_navbar(
           card_header(tags$strong("Top prognostic genes")),
           card_body(
             helpText(
-              "Reference, cancer type, top-N count, and direction are set ",
-              "in the sidebar (\"Reference diagnostics\")."
+              "Auto-updates from the phenotype signature selected above. ",
+              "Adjust top-N and direction in the sidebar."
             ),
             DTOutput("top_genes_tbl")
           )
@@ -564,7 +687,10 @@ ui <- page_navbar(
   # 3. Score
   # -------------------------------------------------------------------------
   nav_panel(
-    title = tagList(icon("chart-line"), " 3. Score"),
+    title = tagList(
+      tags$span(class = "nav-step", icon("chart-line"), " 3. Score"),
+      tags$span(class = "nav-step-arrow", "\u2192")
+    ),
     value = "score",
     layout_sidebar(
       sidebar = sidebar(
@@ -592,17 +718,16 @@ ui <- page_navbar(
         hr(),
         h4("Phenotype groups"),
         helpText(
-          "After scoring, tag the top / bottom percentile of cells as ",
-          "Most Adverse and Most Favorable. These labels feed the ",
-          "marker-finding step and downstream visualizations."
+          "After scoring, the top / bottom percentile of cells are ",
+          "automatically tagged as Most Adverse and Most Favorable as you ",
+          "drag the slider. These labels feed the marker-finding step and ",
+          "downstream visualizations."
         ),
         sliderInput("percentile", "Tail percentile (top and bottom)",
                     min = 0.01, max = 0.40, value = 0.05, step = 0.01),
         selectInput("groups_score_col",
                     "Score column to tag (if multiple)",
                     choices = NULL),
-        actionButton("run_groups", "Tag phenotype groups",
-                     icon = icon("flag"), class = "btn-primary"),
         downloadButton("download_groups", "Download labels (TSV)",
                        class = "btn-outline-primary")
       ),
@@ -619,15 +744,25 @@ ui <- page_navbar(
           )
         )
       ),
-      card(
-        card_header(tags$strong("Score summary")),
-        card_body(uiOutput("score_summary"))
-      ),
       layout_columns(
         col_widths = c(6, 6),
         card(
           card_header(tags$strong("Score distribution")),
-          card_body(plotOutput("score_dist_plot", height = "320px"))
+          card_body(
+            # Score scale toggle drives both the histogram data and its
+            # title. "PhenoMapR score" uses the raw weighted-sum score
+            # straight out of PhenoMap(); "Z-score" uses the same value
+            # standardized (mean 0, sd 1) across the cells / samples so
+            # users can see the distribution in a unit-free scale.
+            radioButtons(
+              "dist_score_scale", NULL,
+              choices = c("PhenoMapR score" = "raw",
+                          "Z-score"         = "scaled"),
+              selected = "raw",
+              inline = TRUE
+            ),
+            plotOutput("score_dist_plot", height = "300px")
+          )
         ),
         card(
           card_header(tags$strong("Cells ordered by PhenoMapR score")),
@@ -704,26 +839,47 @@ ui <- page_navbar(
   ),
 
   # -------------------------------------------------------------------------
-  # 4. UMAP / embedding
+  # 4. Visualization
+  #
+  # Generalized from "UMAP / embedding" to also handle spatial-transcriptomics
+  # inputs. Spatial coordinates (Seurat `@images`, SpatialExperiment
+  # `spatialCoords()`, AnnData `obsm["spatial"]`) surface as a synthetic
+  # "spatial" reduction in the same dropdown, and the plot below applies
+  # `coord_fixed()` + a reversed Y so spots are drawn in their tissue frame.
   # -------------------------------------------------------------------------
   nav_panel(
-    title = tagList(icon("braille"), " 4. UMAP / embedding"),
-    value = "umap",
+    title = tagList(
+      tags$span(class = "nav-step", icon("braille"), " 4. Visualization"),
+      tags$span(class = "nav-step-arrow", "\u2192")
+    ),
+    value = "umap",  # value kept for backward-compat with bookmarks/tests
     layout_sidebar(
       sidebar = sidebar(
         width = 360,
         h4("Embedding"),
-        helpText(
-          "Reductions stored on a Seurat / SingleCellExperiment / AnnData ",
-          "object are picked up automatically. For matrix uploads, the app ",
-          "also auto-detects 2D coordinate column pairs (e.g. UMAP_1/UMAP_2, ",
-          "tSNE_1/tSNE_2, X_umap_0/X_umap_1) on the metadata table from the ",
-          "Data tab — no second upload needed. Use the file picker below to ",
-          "supply a separate embedding file if you don't have one in your ",
-          "metadata."
-        ),
+        # Collapse the long "how detection works" copy into a <details>
+        # block so the sidebar isn't dominated by a wall of text by
+        # default. The Reduction dropdown is the primary control and now
+        # sits right under the section header.
         selectInput("umap_reduction", "Reduction", choices = NULL),
         uiOutput("umap_reduction_status"),
+        tags$details(
+          class = "embedding-help-details",
+          tags$summary("About reductions & auto-detection"),
+          helpText(
+            "Reductions stored on a Seurat / SingleCellExperiment / ",
+            "AnnData object are picked up automatically. Spatial inputs ",
+            "(Seurat with @images, SpatialExperiment, AnnData with ",
+            "obsm['spatial']) also surface tissue coordinates as a ",
+            "\"spatial\" reduction in the dropdown above. For matrix ",
+            "uploads, the app additionally auto-detects 2D coordinate ",
+            "column pairs (e.g. UMAP_1/UMAP_2, tSNE_1/tSNE_2, ",
+            "X_umap_0/X_umap_1) on the metadata table from the Data tab ",
+            "\u2014 no second upload needed. Use the file picker below ",
+            "to supply a separate embedding file if you don't have one ",
+            "in your metadata."
+          )
+        ),
         tags$details(
           tags$summary("Upload a separate embedding file"),
           helpText(
@@ -747,6 +903,23 @@ ui <- page_navbar(
                       "Phenotype group" = "group"),
           selected = "score"
         ),
+        # Score-scale toggle: only relevant when the embedding is colored
+        # by score. "PhenoMapR score" plots the raw weighted-sum score
+        # straight out of PhenoMap(); "Z-score" plots the same value
+        # standardized (mean 0, sd 1) across all cells / samples so a
+        # 0-centered diverging palette matches the unit-free magnitudes.
+        # Mirrors the same control on the Score tab so users can compare
+        # the same statistic across tabs without re-deriving it.
+        conditionalPanel(
+          "input.umap_color_by == 'score'",
+          radioButtons(
+            "umap_score_scale", "Score scale",
+            choices = c("PhenoMapR score" = "raw",
+                        "Z-score"         = "scaled"),
+            selected = "raw",
+            inline = TRUE
+          )
+        ),
         sliderInput("umap_point_size", "Point size", min = 0.2, max = 3,
                     value = 0.8, step = 0.1),
         sliderInput("umap_point_alpha", "Point opacity", min = 0.1, max = 1,
@@ -754,21 +927,6 @@ ui <- page_navbar(
         checkboxInput("umap_facet_source", "Facet by source", value = FALSE),
         downloadButton("download_umap_table", "Download embedding (TSV)",
                        class = "btn-outline-primary")
-      ),
-      card(
-        card_header(icon("info"), " About embedding views"),
-        card_body(
-          markdown(
-            "If your Seurat / SCE object already has `umap`, `tsne`, `pca`, …
-            stored, they show up automatically. You can also upload any 2D
-            embedding (cell IDs + two coordinate columns) and overlay the
-            PhenoMapR score, cell type, source, or phenotype-group label.
-
-            **Tip:** *Color by PhenoMapR score* shows cells on a
-            diverging blue → white → red scale centered at zero so favorable
-            and adverse tails are easy to spot."
-          )
-        )
       ),
       card(
         card_header(tags$strong("Embedding")),
@@ -781,7 +939,9 @@ ui <- page_navbar(
   # 5. Markers
   # -------------------------------------------------------------------------
   nav_panel(
-    title = tagList(icon("dna"), " 5. Markers"),
+    title = tagList(
+      tags$span(class = "nav-step nav-step-last", icon("dna"), " 5. Markers")
+    ),
     value = "markers",
     layout_sidebar(
       sidebar = sidebar(
@@ -819,6 +979,12 @@ ui <- page_navbar(
                      icon = icon("th"), class = "btn-primary")
       ),
       card(
+        # `fill = FALSE` keeps this short explanatory card from being
+        # stretched to fill the column height when its taller siblings
+        # below (the marker tables and the heatmap card) push the
+        # layout. Without it, bslib's default flex behavior leaves a
+        # large empty band beneath the markdown blurb.
+        fill = FALSE,
         card_header(icon("info"), " About markers"),
         card_body(
           markdown(
@@ -854,13 +1020,36 @@ ui <- page_navbar(
             "in the sidebar to set the number of genes per block, the number ",
             "of labels, and to redraw."
           ),
+          # The imageOutput is only mounted *after* the user clicks "Draw
+          # heatmap" in the sidebar. Mounting it lazily prevents Shiny /
+          # browser placeholders from rendering inside the empty
+          # `.shiny-image-output` container before any PNG exists, which
+          # was surfacing as a stray small teal "1" badge in some
+          # browsers when the card sat empty. It also keeps the card
+          # visually compact until the user actually requests a heatmap.
+          #
           # ComplexHeatmap + anno_mark: rendered to a PNG file via
           # renderImage() rather than renderPlot() because Shiny replays
           # plot expressions on each device-size change, and anno_mark
           # labels do not survive those replays (lines redraw, but the
           # text glyphs come out blank). renderImage() serves the PNG
           # we draw once at a fixed DPI, which keeps gene labels intact.
-          imageOutput("marker_heatmap", height = "640px")
+          conditionalPanel(
+            "input.draw_marker_heatmap > 0",
+            imageOutput("marker_heatmap", height = "640px")
+          ),
+          conditionalPanel(
+            "!input.draw_marker_heatmap",
+            tags$div(
+              class = "marker-heatmap-empty",
+              tags$em(
+                "Click ",
+                tags$strong("Draw heatmap"),
+                " in the sidebar to render the marker-gene heatmap once",
+                " marker discovery has completed."
+              )
+            )
+          )
         )
       )
     )
@@ -881,6 +1070,18 @@ ui <- page_navbar(
 # Server
 # ============================================================================
 server <- function(input, output, session) {
+
+  # ------------------------------------------------------------------------
+  # Brand click -> jump to Welcome panel
+  # ------------------------------------------------------------------------
+  # The PhenoMapR wordmark + hex logo in the navbar is a clickable link
+  # that bumps `input$nav_to_welcome` (see the `title = tagList(...)` in
+  # `page_navbar` above). The Welcome nav-link itself is hidden from the
+  # tab strip, so this observer is the only path back to the overview.
+  observeEvent(input$nav_to_welcome, {
+    bslib::nav_select(id = "main_nav", selected = "welcome",
+                      session = session)
+  })
 
   # ------------------------------------------------------------------------
   # Reactive state container
@@ -945,23 +1146,6 @@ server <- function(input, output, session) {
     state$meta_columns <- colnames(state$metadata)
     state$metadata_source <- "demo"
     showNotification("Demo matrix loaded.", type = "message", duration = 4)
-  })
-
-  output$data_status <- renderUI({
-    s <- state$expr_summary
-    if (is.null(s)) return(tags$p(tags$em("No data loaded yet.")))
-    tags$div(
-      tags$p(tags$strong("Kind: "), s$kind),
-      tags$p(tags$strong("Genes: "), .fmt_int(s$n_genes %||% 0)),
-      tags$p(tags$strong("Cells / samples: "), .fmt_int(s$n_samples %||% 0)),
-      if (!is.null(state$metadata)) {
-        tags$p(tags$strong("Metadata columns: "),
-               paste(head(colnames(state$metadata), 8), collapse = ", "),
-               if (ncol(state$metadata) > 8) " …" else "")
-      } else {
-        tags$p(tags$em("No metadata loaded."))
-      }
-    )
   })
 
   # Optional metadata upload
@@ -1172,8 +1356,20 @@ server <- function(input, output, session) {
                        else tags$div(class = "stat-caption",
                                      sprintf("from %s", sample_col))
 
-    layout_columns(
-      col_widths = c(2, 2, 2, 2, 2, 2),
+    # Stat tiles flow in a single CSS-grid row so all tiles share the full
+    # width of the overview card equally. Tiles with potentially longer
+    # text content (Input kind, Available embeddings) get `stat-box-wide`,
+    # which makes them span 2 grid cells so their text has room without
+    # forcing the count tiles to be wider than they need to be.
+    tags$div(
+      class = "stat-row",
+      # "Input: …" (e.g. Seurat / SingleCellExperiment / matrix / AnnData)
+      # was formerly shown in the "Loaded data" panel — surfaced here so
+      # the Dataset overview is a single, complete summary of the input.
+      div(class = "stat-box stat-box-wide",
+          tags$div(class = "stat-label", "Input"),
+          tags$div(class = "stat-value-sm stat-value-input",
+                   s$kind %||% "—")),
       div(class = "stat-box",
           tags$div(class = "stat-label", "Cells"),
           tags$div(class = "stat-value", .fmt_int(s$n_samples %||% 0))),
@@ -1198,7 +1394,7 @@ server <- function(input, output, session) {
           tags$div(class = "stat-label", "Sources / groups"),
           tags$div(class = "stat-value",
                    if (is.na(n_src)) "—" else .fmt_int(n_src))),
-      div(class = "stat-box", style = "grid-column: 1 / span 6;",
+      div(class = "stat-box stat-box-wide",
           tags$div(class = "stat-label", "Available embeddings"),
           tags$div(class = "stat-value-sm",
                    if (length(emb_avail)) paste(emb_avail, collapse = ", ")
@@ -1236,6 +1432,7 @@ server <- function(input, output, session) {
     df$source <- factor(df$source, levels = df$source)
     ggplot(df, aes(x = source, y = n, fill = source)) +
       .geom_rounded_col() +
+      scale_fill_phenomapr_d() +
       labs(x = NULL, y = "Cells", fill = "Source") +
       theme_minimal(base_size = 12) +
       theme(axis.text.x = element_text(angle = 25, hjust = 1),
@@ -1259,6 +1456,7 @@ server <- function(input, output, session) {
     df_count <- df %>% dplyr::count(cell_type, source)
     ggplot(df_count, aes(x = cell_type, y = n, fill = source)) +
       .geom_rounded_stack() +
+      scale_fill_phenomapr_d() +
       labs(x = NULL, y = "Cells", fill = "Source") +
       theme_minimal(base_size = 12) +
       theme(axis.text.x = element_text(angle = 40, hjust = 1))
@@ -1307,13 +1505,6 @@ server <- function(input, output, session) {
     if (input$reference_choice == "_custom") return()
     cts <- get_cancer_types(input$reference_choice)
     updateSelectInput(session, "cancer_type", choices = cts, selected = cts[1L])
-  })
-
-  # Mirror for the "Reference diagnostics" picker at the bottom of the
-  # Phenotype tab (independent of the scoring `cancer_type` above).
-  observeEvent(input$top_genes_ref, {
-    cts <- get_cancer_types(input$top_genes_ref)
-    updateSelectInput(session, "top_genes_cancer", choices = cts, selected = cts[1L])
   })
 
   # Custom: upload file
@@ -1574,7 +1765,15 @@ server <- function(input, output, session) {
       }
       PhenoMapR::plot_reference_signature(state$reference)
     } else {
-      # Built-in: show histogram of |z|
+      # Built-in: gate on `cancer_type` actually being a valid cancer type
+      # for the currently selected reference. When the user switches
+      # reference (e.g. PRECOG -> TCGA) Shiny fires `input$reference_choice`
+      # immediately but `input$cancer_type` only updates asynchronously
+      # via `updateSelectInput()`. Without this guard, the renderer
+      # transiently sees a stale (reference, cancer_type) pair like
+      # ("tcga", "Adrenocortical") and `get_top_prognostic_genes()` throws.
+      valid_cts <- get_cancer_types(state$reference)
+      req(input$cancer_type, input$cancer_type %in% valid_cts)
       tg <- PhenoMapR::get_top_prognostic_genes(
         reference = state$reference, cancer_type = input$cancer_type,
         n = 500L, direction = "both"
@@ -1628,35 +1827,52 @@ server <- function(input, output, session) {
     )
   })
 
-  output$score_summary <- renderUI({
-    if (is.null(state$scores)) return(tags$p(tags$em("Press “Compute” to score the loaded data.")))
-    s <- state$scores
-    cn <- colnames(s)[1L]
-    v <- as.numeric(s[[cn]])
-    quants <- stats::quantile(v, c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
-    tagList(
-      tags$p(tags$strong("Score columns: "), paste(colnames(s), collapse = ", ")),
-      tags$p(tags$strong("N rows: "), .fmt_int(nrow(s))),
-      tags$p(tags$strong("Column shown: "), cn),
-      tags$p(tags$strong("min / Q1 / median / Q3 / max: "),
-             paste(.fmt_num(quants), collapse = " · "))
-    )
-  })
-
+  # Score distribution histogram. The "Score scale" radio in the card
+  # header lets the user flip between the raw weighted-sum PhenoMapR score
+  # and its standardized (mean 0, sd 1) counterpart. Both modes hand the
+  # appropriate vector to `plot_score_distribution()` along with a matching
+  # plot title so the y-axis context is always obvious.
   output$score_dist_plot <- renderPlot({
     req(state$scores)
-    PhenoMapR::plot_score_distribution(
-      state$scores, score_column = colnames(state$scores)[1L]
-    )
+    s <- state$scores
+    cn <- colnames(s)[1L]
+    scale_choice <- input$dist_score_scale %||% "raw"
+    if (identical(scale_choice, "scaled")) {
+      v <- as.numeric(scale(s[[cn]]))
+      df <- data.frame(score = v)
+      ttl <- sprintf("Z-score distribution (%s)", cn)
+    } else {
+      df <- data.frame(score = as.numeric(s[[cn]]))
+      ttl <- sprintf("PhenoMapR score distribution (%s)", cn)
+    }
+    PhenoMapR::plot_score_distribution(df, score_column = "score", main = ttl)
   })
 
+  # Score table. Augments the raw PhenoMapR score column(s) with a
+  # matching `scaled_<col>` column (mean 0, sd 1) for each numeric score
+  # column. The scaled value makes it easy to compare cells across
+  # references that produce different raw magnitudes.
   output$score_table <- renderDT({
     req(state$scores)
     s <- state$scores
     s$cell_id <- rownames(s)
-    s <- s[, c("cell_id", setdiff(colnames(s), "cell_id"))]
-    datatable(s, rownames = FALSE,
-              options = list(pageLength = 15, scrollX = TRUE))
+    score_cols <- setdiff(colnames(s), "cell_id")
+    numeric_cols <- score_cols[vapply(s[score_cols], is.numeric, logical(1))]
+    for (col in numeric_cols) {
+      v <- as.numeric(scale(s[[col]]))
+      s[[paste0("scaled_", col)]] <- v
+    }
+    ordered_cols <- c("cell_id", unlist(lapply(score_cols, function(col) {
+      if (col %in% numeric_cols) c(col, paste0("scaled_", col)) else col
+    }), use.names = FALSE))
+    s <- s[, ordered_cols, drop = FALSE]
+    datatable(
+      s, rownames = FALSE,
+      options = list(pageLength = 15, scrollX = TRUE)
+    ) |>
+      DT::formatRound(intersect(ordered_cols,
+                                c(numeric_cols, paste0("scaled_", numeric_cols))),
+                      digits = 3)
   })
 
   output$download_scores <- downloadHandler(
@@ -1682,6 +1898,15 @@ server <- function(input, output, session) {
     d <- d[order(d$score), ]
     d$rank <- seq_len(nrow(d))
     color_by <- input$rank_color_by %||% "score"
+    # `legend_pt_override` enlarges the small per-cell dots (0.7pt) in the
+    # legend to a comfortable readable size (4pt) without bloating the
+    # plotted points themselves. Cell type and Source legends both get
+    # this treatment so users can identify colors at a glance.
+    legend_pt_override <- ggplot2::guides(
+      color = ggplot2::guide_legend(
+        override.aes = list(size = 4, alpha = 1)
+      )
+    )
     base <- ggplot(d, aes(x = rank, y = score)) +
       labs(x = "Rank by PhenoMapR score", y = "PhenoMapR score") +
       theme_minimal(base_size = 13)
@@ -1692,15 +1917,25 @@ server <- function(input, output, session) {
       )
       p <- base +
         geom_point(aes(color = cell_type), size = 0.7, alpha = 0.85) +
-        labs(color = "Cell type")
+        labs(color = "Cell type") +
+        legend_pt_override
       if (!is.null(pal)) p <- p + scale_color_manual(values = pal)
       return(p)
     }
     if (color_by == "source" && "source" %in% colnames(d)) {
+      # Reuse the PhenoMapR brand palette so the "Source" coloring in this
+      # plot matches the "Cells per source / group" and "Cell type ×
+      # source composition" plots on the Data tab. Sort levels by their
+      # appearance order in the input metadata so the color mapping is
+      # stable across refreshes.
+      d$source <- factor(as.character(d$source),
+                         levels = unique(as.character(d$source)))
       return(
         base +
           geom_point(aes(color = source), size = 0.7, alpha = 0.85) +
-          labs(color = "Source")
+          scale_color_phenomapr_d() +
+          labs(color = "Source") +
+          legend_pt_override
       )
     }
     base +
@@ -1771,11 +2006,14 @@ server <- function(input, output, session) {
     )
 
     if (has_source) {
+      # Source levels are colored with the PhenoMapR brand palette so the
+      # Source coloring on this plot lines up 1:1 with the source-keyed
+      # plots elsewhere ("Cells per source / group", "Cell type × source
+      # composition", score rank plot, UMAP). We freeze the level order
+      # via factor() so the palette → level mapping is stable.
       src_levels <- sort(unique(dl$Source))
-      src_pal <- setNames(
-        grDevices::colorRampPalette(c("#a6a6a6", "#222222"))(length(src_levels)),
-        src_levels
-      )
+      dl$Source <- factor(dl$Source, levels = src_levels)
+      src_pal <- setNames(pm_brand_palette(length(src_levels)), src_levels)
       p <- ggplot(dl, aes(x = Cell_type, y = scale(Score),
                           fill = Cell_type, color = Source)) +
         .geom_rounded_boxplot(
@@ -2029,22 +2267,60 @@ server <- function(input, output, session) {
     df <- dplyr::left_join(df, ct %||% data.frame(cell_id = character(0)), by = "cell_id")
     pt_size <- input$umap_point_size %||% 0.8
     pt_alpha <- input$umap_point_alpha %||% 0.75
+    # Detect spatial-frame embeddings (set by `extract_embedding()` when
+    # the user picks the synthetic "spatial" reduction). Spatial plots
+    # need (a) equal aspect so tissue isn't squashed and (b) a reversed
+    # y-axis since image-space coordinates have origin at top-left.
+    is_spatial <- isTRUE(any(df$is_spatial))
 
     base <- ggplot(df, aes(x = dim1, y = dim2)) +
       labs(x = unique(df$dim1_name)[1L] %||% "dim1",
            y = unique(df$dim2_name)[1L] %||% "dim2") +
       theme_minimal(base_size = 13) +
       theme(panel.grid.minor = element_blank())
+    if (is_spatial) {
+      base <- base +
+        coord_fixed() +
+        scale_y_reverse() +
+        labs(x = NULL, y = NULL) +
+        theme(
+          axis.text  = element_blank(),
+          axis.ticks = element_blank(),
+          panel.grid = element_blank()
+        )
+    }
 
     if (color_by == "score" && "score" %in% colnames(df) && any(is.finite(df$score))) {
-      lim <- max(abs(df$score), na.rm = TRUE)
+      # Honor the sidebar "Score scale" toggle: when "Z-score" is
+      # selected we standardize the raw PhenoMapR score (mean 0, sd 1)
+      # before plotting so cells are colored by their unit-free z-value
+      # instead of the raw weighted-sum magnitude. This mirrors the
+      # behavior of the Score-tab distribution plot toggle.
+      score_scale <- input$umap_score_scale %||% "raw"
+      if (identical(score_scale, "scaled")) {
+        finite_idx <- is.finite(df$score)
+        z <- rep(NA_real_, nrow(df))
+        if (any(finite_idx)) z[finite_idx] <- as.numeric(scale(df$score[finite_idx]))
+        df$score_to_plot <- z
+        legend_name <- "Z-score"
+      } else {
+        df$score_to_plot <- df$score
+        legend_name <- "PhenoMapR\nscore"
+      }
+      lim <- max(abs(df$score_to_plot), na.rm = TRUE)
       if (!is.finite(lim) || lim == 0) lim <- 1
+      # Pass the *updated* df (with `score_to_plot`) explicitly to
+      # geom_point so the layer sees the new column — ggplot2 4.0.0
+      # deprecated `%+%` for swapping plot-level data after-the-fact, so
+      # supplying the data at the layer level keeps things forward-
+      # compatible without rebuilding `base`.
       p <- base +
-        geom_point(aes(color = score), size = pt_size, alpha = pt_alpha) +
+        geom_point(data = df, aes(color = score_to_plot),
+                   size = pt_size, alpha = pt_alpha) +
         scale_color_gradient2(
           low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
           midpoint = 0, limits = c(-lim, lim),
-          oob = scales::squish, name = "Score"
+          oob = scales::squish, name = legend_name
         )
     } else if (color_by == "cell_type" && "cell_type" %in% colnames(df)) {
       pal <- tryCatch(
@@ -2056,9 +2332,17 @@ server <- function(input, output, session) {
         labs(color = "Cell type")
       if (!is.null(pal)) p <- p + scale_color_manual(values = pal)
     } else if (color_by == "source" && "source" %in% colnames(df)) {
+      # Apply the PhenoMapR brand palette so the Source coloring here
+      # matches the Source coloring on the Data tab and Score tab plots.
+      df$source <- factor(as.character(df$source),
+                          levels = unique(as.character(df$source)))
       p <- base +
         geom_point(aes(color = source), size = pt_size, alpha = pt_alpha) +
-        labs(color = "Source")
+        scale_color_phenomapr_d() +
+        labs(color = "Source") +
+        ggplot2::guides(color = ggplot2::guide_legend(
+          override.aes = list(size = 4, alpha = 1)
+        ))
     } else if (color_by == "group" && "group" %in% colnames(df)) {
       p <- base +
         geom_point(aes(color = group), size = pt_size, alpha = pt_alpha) +
@@ -2091,12 +2375,24 @@ server <- function(input, output, session) {
 
   # ------------------------------------------------------------------------
   # Phenotype groups (merged into the Score tab UI)
+  #
+  # Tagging is now fully reactive: any time the user drags the percentile
+  # slider, switches the score column, or re-computes scores, groups are
+  # automatically re-derived. No explicit "Tag phenotype groups" click is
+  # required. We also invalidate `state$markers` whenever groups change so
+  # the Markers tab doesn't surface stale results.
   # ------------------------------------------------------------------------
-  observeEvent(input$run_groups, {
-    req(state$scores)
+  observe({
+    scores <- state$scores
+    if (is.null(scores)) {
+      state$groups  <- NULL
+      state$markers <- NULL
+      return()
+    }
+    req(input$percentile)
     groups <- tryCatch(
       PhenoMapR::define_phenotype_groups(
-        scores = state$scores,
+        scores = scores,
         percentile = input$percentile,
         score_columns = if (nzchar(input$groups_score_col %||% "")) input$groups_score_col else NULL
       ),
@@ -2136,17 +2432,12 @@ server <- function(input, output, session) {
       }
     }
 
-    state$groups <- groups
+    state$groups  <- groups
     state$markers <- NULL
-    showNotification(
-      sprintf("Tagged %s into adverse / favorable / other.",
-              .fmt_n_units(nrow(groups), "row")),
-      type = "message", duration = 5
-    )
   })
 
   output$group_summary <- renderUI({
-    if (is.null(state$groups)) return(tags$p(tags$em("Tag phenotype groups to see counts here.")))
+    if (is.null(state$groups)) return(tags$p(tags$em("Compute scores to see group counts here.")))
     g <- state$groups
     grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]
     if (is.na(grp_col)) return(tags$p(tags$em("No phenotype group column found.")))
@@ -2427,32 +2718,68 @@ server <- function(input, output, session) {
 
   # ------------------------------------------------------------------------
   # Reference diagnostics (rendered at the bottom of the Phenotype tab —
-  # was a standalone "6. Diagnostics" nav panel before).
+  # was a standalone "6. Diagnostics" nav panel before). The reference and
+  # cancer type follow the scoring-signature picker at the top of the
+  # sidebar (`reference_choice` + `cancer_type`); only the diagnostic
+  # knobs (top-N / direction) are local. This way the diagnostics auto-
+  # propagate whenever the user changes the phenotype signature — no
+  # explicit "Show top prognostic genes" button is needed.
   # ------------------------------------------------------------------------
-  observeEvent(input$show_top_genes, {
-    req(input$top_genes_ref, input$top_genes_cancer)
+  output$top_genes_tbl <- renderDT({
+    rc <- input$reference_choice
+    # Custom signatures don't ship with cancer-type-resolved gene tables.
+    # Show a friendly placeholder instead of failing.
+    if (is.null(rc) || identical(rc, "_custom")) {
+      return(datatable(
+        data.frame(
+          note = paste0(
+            "Reference diagnostics are only available for the built-in ",
+            "signatures (PRECOG, TCGA, Pediatric PRECOG, ICI PRECOG). ",
+            "Switch the 'Phenotype signature source' above to view top ",
+            "prognostic genes."
+          )
+        ),
+        rownames = FALSE,
+        options = list(dom = "t", paging = FALSE, ordering = FALSE,
+                       searching = FALSE)
+      ))
+    }
+    # Guard against the same async-update race the signature plot hits:
+    # `input$reference_choice` flips synchronously when the user clicks a
+    # pill, but `input$cancer_type` only catches up after the round-trip
+    # update of its select choices. Skip rendering until the two are in
+    # sync, so we never call `get_top_prognostic_genes(reference="tcga",
+    # cancer_type="Adrenocortical")` and similar.
+    valid_cts <- get_cancer_types(rc)
+    req(input$cancer_type, input$cancer_type %in% valid_cts)
     tg <- tryCatch(
       PhenoMapR::get_top_prognostic_genes(
-        reference = input$top_genes_ref,
-        cancer_type = input$top_genes_cancer,
-        n = input$top_genes_n,
-        direction = input$top_genes_dir
+        reference   = rc,
+        cancer_type = input$cancer_type,
+        n           = input$top_genes_n,
+        direction   = input$top_genes_dir
       ),
       error = function(e) {
-        showNotification(conditionMessage(e), type = "error", duration = 8); NULL
+        showNotification(conditionMessage(e), type = "error", duration = 8)
+        NULL
       }
     )
-    if (is.null(tg)) return()
-    output$top_genes_tbl <- renderDT({
-      datatable(tg, rownames = FALSE,
-                options = list(pageLength = 15, scrollX = TRUE))
-    })
+    req(!is.null(tg))
+    datatable(tg, rownames = FALSE,
+              options = list(pageLength = 15, scrollX = TRUE))
   })
 
   output$cancer_types_list <- renderPrint({
-    cts <- get_cancer_types(input$top_genes_ref)
+    rc <- input$reference_choice
+    if (is.null(rc) || identical(rc, "_custom")) {
+      cat("Custom phenotype signature selected.\n",
+          "Built-in cancer-type lists are not applicable for custom",
+          "signatures.\n", sep = "")
+      return(invisible(NULL))
+    }
+    cts <- get_cancer_types(rc)
     cat(sprintf("Reference: %s\n  %d cancer types available\n\n",
-                input$top_genes_ref, length(cts)))
+                rc, length(cts)))
     print(cts)
   })
 

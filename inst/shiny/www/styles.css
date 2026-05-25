@@ -3,31 +3,176 @@
 /* Banner: large "PhenoMapR" wordmark on the left of the navbar, with the
  * hex logo immediately to its right (between the wordmark and the
  * nav-panel tabs). flex-direction: row + center alignment keeps the logo
- * visually attached to the brand text. */
+ * visually attached to the brand text.
+ *
+ * The brand is also a clickable link (.navbar-brand-link) that navigates
+ * back to the Welcome panel — `inst/shiny/app.R` wires this up through a
+ * Shiny.setInputValue() handler. The link strips link chrome
+ * (underline / blue color) so it reads as a plain brand mark, while
+ * `cursor: pointer` and a subtle hover state signal its clickability. */
 .navbar-brand {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0.55rem;
   line-height: 1;
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+}
+.navbar-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+.navbar-brand-link:hover,
+.navbar-brand-link:focus,
+.navbar-brand-link:active {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.9;
+}
+.navbar-brand-link:focus-visible {
+  outline: 2px solid rgba(42, 157, 143, 0.55);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Hide the "Welcome" nav-link from the navbar tab strip. The nav_panel
+ * itself stays mounted (the brand link above is the only path back to
+ * it), but we suppress the redundant tab pill so the workflow strip
+ * starts cleanly at "1. Data". */
+.navbar .nav-link:has(.nav-welcome-hidden) {
+  display: none !important;
 }
 .brand-title {
   font-weight: 800;
   font-size: 2.4rem;
   letter-spacing: -0.01em;
 }
+/* Hex logo fills most of the navbar height. We grow the navbar a touch
+ * (min-height 5.25rem) so the logo can sit at 4.5rem without clipping
+ * or pushing the wordmark off-baseline. width: auto keeps the hex
+ * proportions (the source PNG is a tall hex tile). */
 .brand-logo {
-  height: 2.6rem;
+  height: 4.5rem;
   width: auto;
   display: inline-block;
   vertical-align: middle;
 }
-/* Bump navbar height to accommodate the larger wordmark and hex logo
- * without clipping. */
 .navbar {
-  min-height: 4rem;
+  min-height: 5.25rem;
+}
+
+/* --- Workflow step pills -------------------------------------------------
+ * The five numbered workflow tabs (1. Data → 5. Markers) render as rounded
+ * pills with subtle "→" separators so the navbar telegraphs the intended
+ * left-to-right flow. The Welcome tab keeps its default nav-link styling.
+ *
+ * Markup (built in app.R):
+ *   <a class="nav-link" ...>
+ *     <span class="nav-step">📤 1. Data</span>
+ *     <span class="nav-step-arrow">→</span>   <!-- steps 1–4 only -->
+ *   </a>
+ *
+ * The pill chrome lives on .nav-step (not .nav-link) so we don't have to
+ * fight Bootstrap's default nav-link padding/color selectors on every
+ * Shiny version. .nav-link itself stays a transparent container.
+ *
+ * IMPORTANT: bslib's `flatly` bootswatch paints the navbar with our
+ * primary color (#264653, dark teal), so idle pill chrome MUST be light
+ * (white-on-dark) — a dark idle background would render invisible until
+ * the user clicked the tab and triggered the active state.
+ */
+/* Zero out the nav-link's horizontal padding so the only horizontal space
+ * inside the link comes from the explicit `gap` between the pill and the
+ * arrow. We balance the right side of the arrow with `margin-right` on
+ * .nav-step-arrow itself, giving equal visible space on both sides of the
+ * arrow regardless of Bootstrap's per-version default nav-link padding. */
+.navbar .nav-link:has(.nav-step) {
+  padding: 0.25rem 0 !important;
+  background-color: transparent !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Suppress the default active underline/border on pill tabs — the solid
+ * teal fill already signals the active state, and the underline competes
+ * visually with the pill chrome. Welcome keeps its underline as its own
+ * active indicator. */
+.navbar .nav-link:has(.nav-step).active,
+.navbar .nav-link:has(.nav-step)[aria-selected="true"],
+.navbar .nav-link:has(.nav-step):focus,
+.navbar .nav-link:has(.nav-step):focus-visible {
+  text-decoration: none !important;
+  border-bottom-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.nav-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.1;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: background-color 0.18s ease, color 0.18s ease,
+              box-shadow 0.18s ease, border-color 0.18s ease,
+              transform 0.18s ease;
+  white-space: nowrap;
+}
+.nav-step .fa,
+.nav-step .fas,
+.nav-step .fa-solid {
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+.navbar .nav-link:hover .nav-step {
+  background-color: rgba(255, 255, 255, 0.20);
+  border-color: rgba(255, 255, 255, 0.34);
+  color: #ffffff;
+}
+/* Active pill: solid brand-secondary teal so it stands out clearly against
+ * the dark teal navbar (the primary color would blend into the navbar). */
+.navbar .nav-link.active .nav-step,
+.navbar .nav-link[aria-selected="true"] .nav-step {
+  background-color: #2A9D8F;
+  color: #ffffff;
+  border-color: #2A9D8F;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.navbar .nav-link.active .nav-step .fa,
+.navbar .nav-link[aria-selected="true"] .nav-step .fa {
+  opacity: 1;
+}
+/* Subtle arrow that sits between consecutive step pills. pointer-events:none
+ * keeps clicks routed to the originating tab even though the arrow lives
+ * inside that tab's nav-link click target. The arrow's left spacing comes
+ * from the parent .nav-link's `gap` (0.5rem); margin-right provides the
+ * matching right-side spacing to the next pill so both sides are equal. */
+.nav-step-arrow {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.5rem 0 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 1.05rem;
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+/* The last step (5. Markers) carries .nav-step-last and never gets an arrow
+ * sibling — but keep an explicit rule in case markup changes upstream. */
+.nav-step-last + .nav-step-arrow,
+.nav-link:has(.nav-step-last) .nav-step-arrow {
+  display: none;
 }
 
 .help-block {
@@ -99,13 +244,40 @@ table.dataTable thead th {
   color: #264653;
 }
 
-/* Dataset overview stat tiles */
+/* Dataset overview stat tiles. Tiles live in a single CSS-grid row so
+ * they share the full overview-card width equally (instead of shrinking
+ * to per-tile content). `repeat(auto-fit, minmax(6.5rem, 1fr))` lets the
+ * grid choose how many columns fit at the current viewport width while
+ * keeping each tile at least 6.5rem wide; remaining space is split
+ * equally via the `1fr` upper bound. `.stat-box-wide` tiles (Input,
+ * Available embeddings) span 2 grid cells so their longer text strings
+ * have room without forcing the numeric tiles to bloat. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  align-items: stretch;
+}
 .stat-box {
   background: #f7f9fb;
   border: 1px solid #e1e7ec;
   border-radius: 6px;
-  padding: 0.65rem 0.75rem;
+  padding: 0.65rem 0.85rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;          /* allow grid item to shrink with `1fr` correctly */
+}
+.stat-box-wide {
+  grid-column: span 2;
+  text-align: center;
+}
+.stat-value-input {
+  font-weight: 700;
+  color: #264653;
+  letter-spacing: -0.005em;
 }
 .stat-label {
   font-size: 0.74rem;
@@ -231,6 +403,20 @@ table.dataTable thead th {
   font-size: 0.92rem;
   color: #264653;
 }
+/* Visualization sidebar — collapsible "About reductions & auto-detection"
+ * block. Mirrors the metadata-upload-details treatment so the two
+ * <details> blocks in the sidebars feel uniform. */
+.embedding-help-details {
+  margin: 0.25rem 0 0.6rem;
+}
+.embedding-help-details > summary {
+  cursor: pointer;
+  list-style: revert;
+  padding: 0.3rem 0;
+  font-size: 0.92rem;
+  color: #264653;
+  font-weight: 600;
+}
 .metadata-upload-details-prompt {
   border-left: 3px solid #e76f51;
   background: #fff5ee;
@@ -280,6 +466,136 @@ table.dataTable thead th {
   color: #486a78;
 }
 
+/* --- Reference signature pills (Phenotype tab sidebar) -------------------
+ * Re-skins the Shiny radioButtons() inside `.reference-pills` as a stack
+ * of colored click-target pill widgets. The underlying <input type=radio>
+ * stays a real form input (just visually hidden) so `input$reference_choice`
+ * on the server side keeps working with no JS bridge required.
+ *
+ * Idle state  : white pill, bold colored text (color encodes the database)
+ * Hover state : slight lift via translateY + box-shadow
+ * Active state: pill fills with the matching color and the text flips white
+ *
+ * Color mapping per database (matches the user-provided screenshot):
+ *   PRECOG            -> brand charcoal (#264653)
+ *   TCGA              -> neutral grey   (#6c757d)
+ *   Pediatric PRECOG  -> burnt sienna   (#C0633A)
+ *   ICI-PRECOG        -> forest green   (#5C9942)
+ *   Custom            -> brand teal     (#2A9D8F)
+ */
+/* Two-column grid so short labels like "TCGA" no longer trail a wide
+ * empty right side, and the sidebar real-estate is used efficiently.
+ * "Custom" carries .nav-step-last-like semantics: it spans both columns
+ * via a :has() selector below since it's the 5th and final option. */
+.reference-pills .shiny-options-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+.reference-pills .radio { margin: 0; }
+.reference-pills .radio input[type="radio"] {
+  /* visually hidden but still focusable / clickable via the label */
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+.reference-pills .radio > label {
+  display: flex;
+  align-items: center;
+  justify-content: center;     /* center text so short labels are balanced */
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background-color: #ffffff;
+  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.18s ease, color 0.18s ease,
+              border-color 0.18s ease, box-shadow 0.18s ease,
+              transform 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  user-select: none;
+}
+/* Make the "Custom" pill span the full sidebar width — it's the 5th /
+ * final option so spanning both grid columns keeps the row balanced. */
+.reference-pills .radio:has(input[value="_custom"]) {
+  grid-column: 1 / -1;
+}
+.reference-pills .radio > label:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.10);
+}
+.reference-pills .radio > label:focus-within {
+  outline: 2px solid rgba(42, 157, 143, 0.45);
+  outline-offset: 2px;
+}
+/* The <span> Shiny emits next to the input carries the visible label text
+ * — strip the default radio-group spacing so the label paints flush. */
+.reference-pills .radio > label > span {
+  margin-left: 0;
+  display: inline;
+}
+
+/* Idle (unchecked) — colored text + matching tinted border. */
+.reference-pills .radio:has(input[value="precog"]) > label {
+  color: #264653;
+  border-color: rgba(38, 70, 83, 0.28);
+}
+.reference-pills .radio:has(input[value="tcga"]) > label {
+  color: #6c757d;
+  border-color: rgba(108, 117, 125, 0.28);
+}
+.reference-pills .radio:has(input[value="pediatric_precog"]) > label {
+  color: #C0633A;
+  border-color: rgba(192, 99, 58, 0.28);
+}
+.reference-pills .radio:has(input[value="ici_precog"]) > label {
+  color: #5C9942;
+  border-color: rgba(92, 153, 66, 0.28);
+}
+.reference-pills .radio:has(input[value="_custom"]) > label {
+  color: #2A9D8F;
+  border-color: rgba(42, 157, 143, 0.28);
+}
+
+/* Active (checked) — solid fill + white text + saturated drop shadow. */
+.reference-pills .radio:has(input[value="precog"]:checked) > label {
+  background-color: #264653;
+  color: #ffffff;
+  border-color: #264653;
+  box-shadow: 0 4px 12px rgba(38, 70, 83, 0.30);
+}
+.reference-pills .radio:has(input[value="tcga"]:checked) > label {
+  background-color: #6c757d;
+  color: #ffffff;
+  border-color: #6c757d;
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.30);
+}
+.reference-pills .radio:has(input[value="pediatric_precog"]:checked) > label {
+  background-color: #C0633A;
+  color: #ffffff;
+  border-color: #C0633A;
+  box-shadow: 0 4px 12px rgba(192, 99, 58, 0.32);
+}
+.reference-pills .radio:has(input[value="ici_precog"]:checked) > label {
+  background-color: #5C9942;
+  color: #ffffff;
+  border-color: #5C9942;
+  box-shadow: 0 4px 12px rgba(92, 153, 66, 0.32);
+}
+.reference-pills .radio:has(input[value="_custom"]:checked) > label {
+  background-color: #2A9D8F;
+  color: #ffffff;
+  border-color: #2A9D8F;
+  box-shadow: 0 4px 12px rgba(42, 157, 143, 0.32);
+}
+
 /* Welcome image */
 .welcome-image {
   display: flex;
@@ -294,4 +610,140 @@ table.dataTable thead th {
   text-align: center;
   max-width: 90%;
   font-style: italic;
+}
+
+/* --- Welcome page sections -----------------------------------------------
+ * Two card-style panels: a "How to use this app" stepper and a
+ * "Server / remote use" companion. Both share the same header/body chrome
+ * so the page reads as a single composed surface rather than a wall of
+ * markdown text. */
+.welcome-section {
+  margin: 1.4rem 0 0.6rem;
+  border-radius: 12px;
+  border: 1px solid rgba(38, 70, 83, 0.10);
+  background-color: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+.welcome-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 1.15rem;
+  background-color: rgba(38, 70, 83, 0.06);
+  border-bottom: 1px solid rgba(38, 70, 83, 0.10);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #264653;
+  letter-spacing: -0.005em;
+}
+.welcome-section-header .fa,
+.welcome-section-header .fas,
+.welcome-section-header .fa-solid {
+  color: #2A9D8F;
+  font-size: 1rem;
+}
+.welcome-section-body {
+  padding: 1rem 1.15rem 1.15rem;
+}
+.welcome-section-body > p:last-child { margin-bottom: 0; }
+
+/* Numbered stepper inside "How to use this app". Each row pairs a teal
+ * circular badge with a bold brand-primary headline (the "main part" of
+ * the step) and a softer description paragraph for visual hierarchy. */
+.welcome-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.welcome-step {
+  display: flex;
+  gap: 0.95rem;
+  align-items: flex-start;
+}
+.welcome-step-num {
+  flex: 0 0 auto;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background-color: #2A9D8F;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(42, 157, 143, 0.35);
+}
+.welcome-step-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.welcome-step-title {
+  font-weight: 800;
+  font-size: 1.12rem;
+  color: #264653;
+  margin-bottom: 0.2rem;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+}
+.welcome-step-desc {
+  color: #4a5b66;
+  line-height: 1.5;
+  font-size: 0.96rem;
+}
+.welcome-step-desc code {
+  background-color: rgba(38, 70, 83, 0.07);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.88em;
+  color: #264653;
+}
+.welcome-step-desc strong { color: #264653; }
+.welcome-step-desc em { color: #4a5b66; }
+
+/* Markers tab — empty-state hint shown before the user has clicked
+ * "Draw heatmap". A subtle muted block keeps the card from looking
+ * broken (or like it's missing content) while still making it clear
+ * that an action is needed. */
+.marker-heatmap-empty {
+  padding: 1.25rem 1rem;
+  color: #6c7a82;
+  font-size: 0.95rem;
+  text-align: center;
+  border: 1px dashed rgba(38, 70, 83, 0.18);
+  border-radius: 6px;
+  background: rgba(38, 70, 83, 0.03);
+}
+.marker-heatmap-empty strong { color: #264653; }
+
+/* Code block inside Server / remote use. Visually called out with a teal
+ * accent rule on the left and a muted code-editor background. */
+.welcome-code {
+  background-color: #f5f7f9;
+  border: 1px solid rgba(38, 70, 83, 0.12);
+  border-left: 3px solid #2A9D8F;
+  border-radius: 6px;
+  padding: 0.7rem 0.95rem;
+  font-size: 0.92rem;
+  overflow-x: auto;
+  margin: 0.7rem 0;
+  white-space: pre;
+}
+.welcome-code code {
+  background: transparent;
+  padding: 0;
+  font-family: 'Fira Code', 'Source Code Pro', Consolas, 'Liberation Mono', monospace;
+  color: #264653;
+}
+.welcome-section-body p code {
+  background-color: rgba(38, 70, 83, 0.07);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.88em;
+  color: #264653;
 }
