@@ -73,6 +73,10 @@ articles:
       - custom-reference
 
 reference:
+- title: Shiny app
+  desc: Launch the interactive PhenoMapR app for guided scoring and exploration.
+  contents:
+  - run_app
 - title: Prognostic scoring
   desc: Score expression data with weighted sum of prognostic gene signatures.
   contents:
