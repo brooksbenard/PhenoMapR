@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>PhenoMapR • PhenoMapR</title>
 <script src="lightswitch.js"></script><script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
 <meta property="og:title" content="PhenoMapR">
@@ -97,7 +97,7 @@
 <span><span class="co"># Score samples in a bulk expression matrix</span></span>
 <span><span class="va">scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
 <span>  expression <span class="op">=</span> <span class="va">bulk_matrix</span>,     <span class="co"># genes (rownames) x samples (colnames)</span></span>
-<span>  reference <span class="op">=</span> <span class="st">"precog"</span>,         <span class="co"># can be one of precog, pediatric_precog, ici_precog, or tcga</span></span>
+<span>  reference <span class="op">=</span> <span class="st">"tcga"</span>,         <span class="co"># can be one of precog, pediatric_precog, ici_precog, or tcga</span></span>
 <span>  cancer_type <span class="op">=</span> <span class="st">"BRCA"</span>          <span class="co"># use list_cancer_types(reference) to see avaliable options</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -109,6 +109,13 @@
 <span>  assay <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Spatial"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat_obj</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="st">"Spatial"</span> <span class="kw">else</span> <span class="st">"RNA"</span>,</span>
 <span>  slot <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Spatial"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat_obj</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="st">"counts"</span> <span class="kw">else</span> <span class="st">"data"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="shiny-application">Shiny Application<a class="anchor" aria-label="anchor" href="#shiny-application"></a>
+</h2>
+<p><strong>PhenoMapR</strong> contains a Shiny App interface to process and analyze results. Launch the Shiny App with the following:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu">run_app</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
@@ -130,6 +137,13 @@
 <h2 data-toc-skip>Citation</h2>
 <ul class="list-unstyled">
 <li><a href="authors.html#citation">Citing PhenoMapR</a></li>
+</ul>
+</div>
+
+<div class="funding">
+<h2 data-toc-skip>Funding</h2>
+<ul class="list-unstyled">
+<li><p>Development of PhenoMapR was supported by the National Institutes of Health (R01CA276828)</p></li>
 </ul>
 </div>
 

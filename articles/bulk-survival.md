@@ -26,6 +26,7 @@ includes metastatic samples, which we can score separately using the
 Primary and Metastatic meta-z scores from PRECOG.
 
 ``` r
+
 suppressPackageStartupMessages({
   library(PhenoMapR)
   library(patchwork)
@@ -85,6 +86,7 @@ well as more favorably prognostic signatures and this should stratify
 outcomes.
 
 ``` r
+
 # To assign a PhenoMap score to each sample, pass the bulk gene expression matrix
 # to the expression argument, select the reference database to score against (can
 # be one of: precog, tcga, pediatric_precog, or ici_precog, and specify the cancer
@@ -105,6 +107,7 @@ scores_primary <- PhenoMap(
     ## Completed scoring for Pancreatic
 
 ``` r
+
 # Score all samples using the Metastatic PAAD signature
 scores_met <- PhenoMap(
   expression = bulk_mat,
@@ -119,6 +122,7 @@ scores_met <- PhenoMap(
     ## Completed scoring for Pancreatic_Metastasis
 
 ``` r
+
 # make a combined dataframe of sample clinical annotations and PhenoMap scores 
 col_pan <- grep("Pancreatic$", colnames(scores_primary), value = TRUE)[1]
 col_met <- grep("Pancreatic_Metastasis", colnames(scores_met), value = TRUE)[1]
@@ -132,6 +136,7 @@ dat <- merge(pheno, scores_df, by = "sample_id")
 ```
 
 ``` r
+
 # Summary histogram: Primary and Metastatic PhenoMapR scores (scaled)
 score_long <- data.frame(
   score = c(dat$score_Pancreatic, dat$score_Pancreatic_Metastasis),
@@ -178,6 +183,7 @@ outcomes. Based on the **`PhenoMapR`** score distributions above, the
 metastatic population might be less adversely prognostic than normal.
 
 ``` r
+
 suppressPackageStartupMessages(library(survival))
 suppressPackageStartupMessages(library(survminer))
 # Unnamed vector: order matches strata (Met first, then Primary). Named palettes trigger scale warnings.
@@ -225,6 +231,7 @@ samples by PhenoMapR score (high vs low median split) and show that the
 **`PhenoMapR`** score stratifies survival.
 
 ``` r
+
 # Unnamed vector: order matches strata (High first, then Low). Named palettes can trigger scale warnings.
 pal_km <- c("#B2182B", "#2166AC")  # High (adverse), Low (favorable)
 dat_primary <- dat[dat$tumor_type == "Primary", ]
@@ -258,6 +265,7 @@ Stratify metastatic samples by **`PhenoMapR`** score (high vs low median
 split) and show that the score stratifies survival in this subset.
 
 ``` r
+
 dat_met <- dat[dat$tumor_type == "Met", ]
 dat_met$score_grp <- ifelse(
   dat_met$score_Pancreatic_Metastasis >= median(dat_met$score_Pancreatic_Metastasis, na.rm = TRUE),
@@ -308,10 +316,11 @@ outcomes in pancreatic cancer. Nat. Cancer 6, 123–144 (2025).
 ## Session Info
 
 ``` r
+
 sessionInfo()
 ```
 
-    ## R version 4.5.3 (2026-03-11)
+    ## R version 4.6.0 (2026-04-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -332,25 +341,25 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] survminer_0.5.2 ggpubr_0.6.3    survival_3.8-6  ggplot2_4.0.2  
+    ## [1] survminer_0.5.2 ggpubr_0.6.3    survival_3.8-6  ggplot2_4.0.3  
     ## [5] patchwork_1.3.2 PhenoMapR_0.1.0
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] gtable_0.3.6       xfun_0.57          bslib_0.10.0       htmlwidgets_1.6.4 
+    ##  [1] gtable_0.3.6       xfun_0.57          bslib_0.11.0       htmlwidgets_1.6.4 
     ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
-    ##  [9] tools_4.5.3        generics_0.1.4     curl_7.0.0         tibble_3.3.1      
-    ## [13] pkgconfig_2.0.3    Matrix_1.7-4       RColorBrewer_1.1-3 S7_0.2.1          
-    ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.5.3    
+    ##  [9] tools_4.6.0        generics_0.1.4     curl_7.1.0         tibble_3.3.1      
+    ## [13] pkgconfig_2.0.3    Matrix_1.7-5       RColorBrewer_1.1-3 S7_0.2.2          
+    ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.6.0    
     ## [21] farver_2.1.2       textshaping_1.0.5  carData_3.0-6      litedown_0.9      
     ## [25] htmltools_0.5.9    sass_0.4.10        yaml_2.3.12        Formula_1.2-5     
     ## [29] pillar_1.11.1      pkgdown_2.2.0      car_3.1-5          jquerylib_0.1.4   
     ## [33] tidyr_1.3.2        cachem_1.1.0       abind_1.4-8        commonmark_2.0.0  
     ## [37] tidyselect_1.2.1   digest_0.6.39      stringi_1.8.7      dplyr_1.2.1       
-    ## [41] purrr_1.2.2        labeling_0.4.3     splines_4.5.3      fastmap_1.2.0     
-    ## [45] grid_4.5.3         cli_3.6.6          magrittr_2.0.5     broom_1.0.12      
+    ## [41] purrr_1.2.2        labeling_0.4.3     splines_4.6.0      fastmap_1.2.0     
+    ## [45] grid_4.6.0         cli_3.6.6          magrittr_2.0.5     broom_1.0.13      
     ## [49] withr_3.0.2        scales_1.4.0       backports_1.5.1    googledrive_2.1.2 
     ## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
     ## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
     ## [61] knitr_1.51         markdown_2.0       rlang_1.2.0        gridtext_0.1.6    
-    ## [65] Rcpp_1.1.1         glue_1.8.0         xml2_1.5.2         jsonlite_2.0.0    
-    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.0.1
+    ## [65] Rcpp_1.1.1-1.1     glue_1.8.1         xml2_1.5.2         jsonlite_2.0.0    
+    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.1.0
