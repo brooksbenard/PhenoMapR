@@ -93,7 +93,7 @@ validate_expression_axes_and_ids <- function(mat, verbose = TRUE) {
   n_samples <- ncol(mat)
 
   # Heuristic: expect orders of magnitude more genes than samples (e.g. 10x or more).
-  # If instead samples >> genes, treat as samples × genes and transpose.
+  # If instead samples >> genes, treat as samples x genes and transpose.
   if (n_genes > 0 && n_samples > 0 && !is.null(rownames(mat)) && !is.null(colnames(mat))) {
     if (n_samples > 10 * n_genes) {
       if (isTRUE(verbose)) {
@@ -373,7 +373,7 @@ process_spatial_experiment <- function(obj, pseudobulk, group_by, assay, genes_t
 
 #' Process AnnData Object
 #'
-#' Convert a Python \pkg{anndata} object into a genes × cells expression matrix
+#' Convert a Python \pkg{anndata} object into a genes x cells expression matrix
 #' that the rest of PhenoMapR understands. Optimized for very large objects:
 #' \itemize{
 #'   \item When \code{genes_to_extract} is supplied (e.g. the reference genes
@@ -384,8 +384,8 @@ process_spatial_experiment <- function(obj, pseudobulk, group_by, assay, genes_t
 #'         the cutoff, so we transfer ~1-3\% of the matrix instead of all of
 #'         it.
 #'   \item scipy-sparse \code{.X} is reinterpreted directly as a
-#'         \code{dgCMatrix} in genes × cells orientation by treating the
-#'         native CSR-of-(cells×genes) storage as CSC-of-(genes×cells); this
+#'         \code{dgCMatrix} in genes x cells orientation by treating the
+#'         native CSR-of-(cellsxgenes) storage as CSC-of-(genesxcells); this
 #'         avoids \code{Matrix::t()} and the doubling of memory it would
 #'         otherwise cause.
 #' }
@@ -431,11 +431,11 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
   )
 }
 
-#' Convert AnnData.X into a genes × cells Matrix
+#' Convert AnnData.X into a genes x cells Matrix
 #'
 #' Returns a \code{dgCMatrix} (sparse) when \code{adata.X} is a scipy sparse
-#' matrix, or a regular dense matrix otherwise. Always genes × cells (i.e.
-#' the transpose of AnnData's native cells × genes layout) with
+#' matrix, or a regular dense matrix otherwise. Always genes x cells (i.e.
+#' the transpose of AnnData's native cells x genes layout) with
 #' \code{rownames = var_names} and \code{colnames = obs_names}.
 #'
 #' Two memory optimisations versus the naive \code{as.matrix(adata$X)} approach:
@@ -447,10 +447,10 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
 #'         AnnData objects: only the genes that actually contribute to the
 #'         score are transferred.
 #'   \item For scipy-sparse \code{.X}, the AnnData native CSR storage of a
-#'         (n_obs × n_vars) matrix is the same as the CSC storage of the
-#'         transposed (n_vars × n_obs) matrix. We reuse \code{indices},
+#'         (n_obs x n_vars) matrix is the same as the CSC storage of the
+#'         transposed (n_vars x n_obs) matrix. We reuse \code{indices},
 #'         \code{indptr} and \code{data} arrays directly to build a
-#'         \code{dgCMatrix} in genes × cells orientation, with no extra
+#'         \code{dgCMatrix} in genes x cells orientation, with no extra
 #'         allocation for a transpose pass.
 #' }
 #'
@@ -470,7 +470,7 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
 
   # rename_to: when set, we replace rownames of the final matrix with these
   # values (used when we matched via a .var symbol column rather than the
-  # raw var_names — see the Ensembl-ID fallback below).
+  # raw var_names -- see the Ensembl-ID fallback below).
   rename_to <- NULL
 
   if (!is.null(gene_subset) && length(gene_subset) > 0L) {
@@ -486,7 +486,7 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
 
     } else if (length(keep_direct) == 0L) {
       # Zero overlap on var_names. This is overwhelmingly because the file
-      # stores Ensembl IDs (ENSG…) as var_names with HUGO symbols hiding in
+      # stores Ensembl IDs (ENSG...) as var_names with HUGO symbols hiding in
       # a column of .var. Try to recover automatically.
       sym <- .anndata_find_symbol_column(obj, gene_subset_c)
       if (!is.null(sym) && length(sym$var_names) > 0L) {
@@ -512,7 +512,7 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
           "Either rename AnnData.var_names to HUGO symbols before saving the .h5ad ",
           "(e.g. with `adata.var_names = adata.var['gene_symbols']`), or add a ",
           "column like 'gene_symbol' / 'feature_name' / 'Symbol' to AnnData.var ",
-          "with HUGO symbols — PhenoMapR will pick it up automatically."
+          "with HUGO symbols -- PhenoMapR will pick it up automatically."
         )
       }
     }
@@ -520,7 +520,7 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
     # (every gene is requested) and fall through to the full conversion.
   }
 
-  # ----- 2. Build the R matrix in genes × cells orientation ---------------
+  # ----- 2. Build the R matrix in genes x cells orientation ---------------
   # Already an R-side object (e.g. user passed convert = TRUE on import)
   if (is.matrix(X) || inherits(X, "Matrix")) {
     m <- if (inherits(X, "Matrix")) Matrix::t(X) else t(X)
@@ -539,12 +539,12 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
   ))
 
   if (is_sparse) {
-    # Convert to CSR (cheap if already CSR — AnnData typically stores CSR).
+    # Convert to CSR (cheap if already CSR -- AnnData typically stores CSR).
     # Then reuse the CSR(n_obs, n_vars) storage as CSC(n_vars, n_obs):
     # CSR.indices (column indices of X) === CSC.i (row indices of t(X))
     # CSR.indptr  (row pointers of X)    === CSC.p (column pointers of t(X))
     # CSR.data    (values)               === CSC.x (values)
-    # Resulting dgCMatrix is genes × cells with no Matrix::t() pass.
+    # Resulting dgCMatrix is genes x cells with no Matrix::t() pass.
     csr <- X$tocsr()
     shape   <- as.integer(reticulate::py_to_r(csr$shape))     # (n_obs, n_vars)
     indices <- as.integer(reticulate::py_to_r(csr$indices))
@@ -554,11 +554,11 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
       i      = indices,
       p      = indptr,
       x      = values,
-      dims   = c(shape[2L], shape[1L]),     # transpose: n_vars × n_obs
+      dims   = c(shape[2L], shape[1L]),     # transpose: n_vars x n_obs
       index1 = FALSE
     )
   } else {
-    # Dense path: pull the (n_obs × n_vars) array and transpose to genes × cells.
+    # Dense path: pull the (n_obs x n_vars) array and transpose to genes x cells.
     dense <- reticulate::py_to_r(X)
     if (!is.matrix(dense) && !inherits(dense, "Matrix")) {
       dense <- as.matrix(dense)
@@ -641,7 +641,7 @@ process_anndata <- function(obj, pseudobulk, group_by, genes_to_extract = NULL) 
   if (!requireNamespace("reticulate", quietly = TRUE)) {
     stop("reticulate required for AnnData subsetting")
   }
-  # py_run_string is idempotent in __main__ — re-defining is cheap so we
+  # py_run_string is idempotent in __main__ -- re-defining is cheap so we
   # don't bother caching the module reference across calls.
   reticulate::py_run_string(
     paste(

@@ -186,7 +186,7 @@ plot_phenotype_markers <- function(markers,
     character(0)
   }
   # In `global` mode, a cell-type column with a single unique value is not
-  # informative — the top annotation strip becomes a uniform colored bar
+  # informative -- the top annotation strip becomes a uniform colored bar
   # and the legend renders as one stray colored swatch (e.g. a teal "1"
   # box if the user mapped a column whose only level is "1"). Skip the
   # cell-type strip and legend in that case. We keep this guard global-only
@@ -232,7 +232,7 @@ plot_phenotype_markers <- function(markers,
     pal_celltype <- character(0)
   }
 
-  # PhenoMapR score bar: diverging blue–white–red with white at 0. Color limits
+  # PhenoMapR score bar: diverging blue-white-red with white at 0. Color limits
   # use scores for heatmap columns only (aligned to cell_order_hm), so the
   # legend matches what is plotted. Coerce meta[[score_col]] to a plain numeric
   # vector first (1-column matrix / scale() columns would otherwise break
@@ -292,7 +292,7 @@ plot_phenotype_markers <- function(markers,
     n_adv <- length(adv_only)
     marker_tail <- c(rep("Most Favorable", n_fav), rep("Most Adverse", n_adv))
 
-    # Top stack (CH: first = nearest heatmap): phenotype → (cell type) → score.
+    # Top stack (CH: first = nearest heatmap): phenotype -> (cell type) -> score.
     # Cell type strip is omitted when the user hasn't mapped a cell-type column.
     top_anno_args <- list(
       `Phenotype group` = ComplexHeatmap::anno_simple(
@@ -346,7 +346,7 @@ plot_phenotype_markers <- function(markers,
     }
 
     # Left (favorable): marks leftmost, strip next to heatmap. Only built when
-    # we actually have favorable rows — `anno_mark(at = integer(0))` triggers
+    # we actually have favorable rows -- `anno_mark(at = integer(0))` triggers
     # a "select less than one element" error inside ComplexHeatmap.
     ha_left <- NULL
     if (n_fav > 0L) {
@@ -696,7 +696,7 @@ plot_phenotype_markers <- function(markers,
     )
     annotation_legend_list <- list(lgd_score, lgd_group)
     # Only include the Cell type legend when there are at least 2 distinct
-    # cell types — a 1-entry legend is just a stray colored swatch with no
+    # cell types -- a 1-entry legend is just a stray colored swatch with no
     # discriminative value.
     if (has_celltype && length(hm_celltype_levels) > 1L) {
       annotation_legend_list <- c(

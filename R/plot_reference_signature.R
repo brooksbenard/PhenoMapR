@@ -1,4 +1,4 @@
-#' Plot reference signature z-scores as a 1×N heatmap
+#' Plot reference signature z-scores as a 1xN heatmap
 #'
 #' Takes the gene z-score data.frame returned by \code{\link{derive_reference_from_bulk}}
 #' and draws a single-row heatmap with genes ordered by z-score, top/bottom gene
@@ -81,7 +81,7 @@ plot_reference_signature <- function(reference,
 
   df_z <- df_z[order(df_z$z), ]
 
-  # 1×N matrix, columns ordered by z
+  # 1xN matrix, columns ordered by z
   mat <- matrix(df_z$z, nrow = 1L)
   colnames(mat) <- df_z$gene
   rownames(mat) <- row_title

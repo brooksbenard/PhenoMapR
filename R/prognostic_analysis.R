@@ -277,7 +277,7 @@ find_phenotype_markers <- function(expression,
     warning("Fewer than 5 Most Favorable cells; marker results may be unreliable")
   }
 
-  # Non-Seurat path: matrix/Matrix/SCE — use internal Wilcoxon (or presto) without requiring Seurat.
+  # Non-Seurat path: matrix/Matrix/SCE -- use internal Wilcoxon (or presto) without requiring Seurat.
   # Also forced for cell-type-specific mode to avoid repeated Seurat metadata/idents reshaping.
   use_matrix_path <- marker_scope == "cell_type_specific" ||
     !inherits(expression, "Seurat") || !requireNamespace("Seurat", quietly = TRUE)
@@ -718,7 +718,7 @@ run_celltype_phenotype_vs_rest <- function(mat,
     (cell_type_vec == cell_type_label) & (group_vec == phenotype_tail)
   in_i <- which(is_in)
   if (contrast == "vs_cohort_rest") {
-    # Original: in-group = (ct ∩ tail); rest = every other cell with a phenotype label
+    # Original: in-group = (ct cap tail); rest = every other cell with a phenotype label
     out_i <- which(!is_in & !is.na(group_vec))
   } else {
     is_out <- !is.na(cell_type_vec) & !is.na(group_vec) &

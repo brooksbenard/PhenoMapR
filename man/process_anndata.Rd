@@ -4,9 +4,24 @@
 \alias{process_anndata}
 \title{Process AnnData Object}
 \usage{
-process_anndata(obj, pseudobulk, group_by)
+process_anndata(obj, pseudobulk, group_by, genes_to_extract = NULL)
 }
 \description{
-Process AnnData Object
+Convert a Python \pkg{anndata} object into a genes × cells expression matrix
+that the rest of PhenoMapR understands. Optimized for very large objects:
+\itemize{
+\item When \code{genes_to_extract} is supplied (e.g. the reference genes
+that pass the z-score cutoff in \code{PhenoMap()}), the AnnData is
+subset \emph{on the Python side} before any data is copied into R.
+This is the single biggest memory win for multi-GB \code{.h5ad}
+files: only a few hundred to a few thousand genes typically pass
+the cutoff, so we transfer ~1-3\\% of the matrix instead of all of
+it.
+\item scipy-sparse \code{.X} is reinterpreted directly as a
+\code{dgCMatrix} in genes × cells orientation by treating the
+native CSR-of-(cells×genes) storage as CSC-of-(genes×cells); this
+avoids \code{Matrix::t()} and the doubling of memory it would
+otherwise cause.
+}
 }
 \keyword{internal}
