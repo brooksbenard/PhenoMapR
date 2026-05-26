@@ -974,3 +974,198 @@ build_cell_table <- function(scores,
 
 # ---- small utility: %||% ----------------------------------------------------
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
+
+# ============================================================================
+# Hybrid file picker: browser upload + server-side browse
+# ============================================================================
+#
+# When PhenoMapR's Shiny app is launched on a remote server (e.g.
+# `PhenoMapR::run_app(host = "0.0.0.0")`), `fileInput()` only shows files on
+# the user's browser machine — not on the server. Large objects (h5ad / Seurat
+# RDS / spatial scenes) often live on the server's disk, so we provide an
+# optional "Browse server filesystem" picker using `shinyFiles` next to every
+# upload widget. Local users can ignore it; remote users get a real picker.
+#
+# Roots are chosen at runtime: the user's home directory, the current working
+# directory, the filesystem root, and any additional paths advertised via the
+# PHENOMAPR_SHINY_ROOTS environment variable (comma-separated). This is
+# overridable via the `roots` argument to `phenomapr_app_server_roots()` if a
+# deployment wants to lock the picker down to a specific data directory.
+
+.has_shinyFiles <- function() {
+  isTRUE(requireNamespace("shinyFiles", quietly = TRUE))
+}
+
+# Resolve the server-side roots that shinyFiles will expose. Returns a named
+# character vector suitable for shinyFiles::shinyFileChoose(roots = ...).
+phenomapr_app_server_roots <- function(extra = NULL) {
+  roots <- c()
+  home <- tryCatch(path.expand("~"), error = function(e) NULL)
+  if (!is.null(home) && dir.exists(home)) roots <- c(roots, home = home)
+  cwd <- tryCatch(normalizePath(getwd(), mustWork = FALSE),
+                  error = function(e) NULL)
+  if (!is.null(cwd) && dir.exists(cwd) && (is.null(home) || cwd != home)) {
+    roots <- c(roots, working_dir = cwd)
+  }
+  env <- Sys.getenv("PHENOMAPR_SHINY_ROOTS", unset = "")
+  if (nzchar(env)) {
+    paths <- trimws(strsplit(env, ",", fixed = TRUE)[[1]])
+    paths <- paths[nzchar(paths) & dir.exists(paths)]
+    if (length(paths)) {
+      names(paths) <- paste0("custom_", seq_along(paths))
+      roots <- c(roots, paths)
+    }
+  }
+  if (!is.null(extra) && length(extra)) {
+    roots <- c(roots, extra)
+  }
+  if (.Platform$OS.type == "unix") {
+    roots <- c(roots, root = "/")
+  } else {
+    drives <- tryCatch(
+      vapply(LETTERS, function(L) paste0(L, ":/"), character(1)),
+      error = function(e) "C:/"
+    )
+    drives <- drives[vapply(drives, dir.exists, logical(1))]
+    if (length(drives)) {
+      names(drives) <- tolower(sub(":/$", "_drive", drives))
+      roots <- c(roots, drives)
+    }
+  }
+  roots[!duplicated(names(roots))]
+}
+
+# UI: returns a tagList holding the standard `fileInput` plus a collapsible
+# "use a file already on the server" details element with a shinyFiles button.
+# The server-side picker is silently omitted if shinyFiles is not installed.
+phenomapr_file_input <- function(id, label, accept = NULL, width = "100%",
+                                 server_button_label = "Browse server filesystem\u2026",
+                                 server_summary = "Use a file already on the server",
+                                 ...) {
+  upload <- shiny::fileInput(id, label, accept = accept, width = width, ...)
+  if (!.has_shinyFiles()) {
+    return(upload)
+  }
+  server_id <- paste0(id, "_server")
+  shiny::tagList(
+    upload,
+    shiny::tags$details(
+      class = "server-file-picker",
+      shiny::tags$summary(
+        shiny::tags$span(class = "sfp-icon", shiny::icon("server")),
+        shiny::tags$span(server_summary)
+      ),
+      shiny::div(
+        class = "sfp-body",
+        shinyFiles::shinyFilesButton(
+          server_id,
+          label = server_button_label,
+          title = "Choose a file on the server's filesystem",
+          multiple = FALSE,
+          icon = shiny::icon("folder-open"),
+          class = "btn btn-outline-secondary btn-sm sfp-btn"
+        ),
+        shiny::uiOutput(paste0(server_id, "_chosen"), inline = FALSE)
+      )
+    )
+  )
+}
+
+# Server: wire a hybrid file input. Call once per file input. Returns a
+# `reactive` whose value is either NULL (nothing picked) or
+# list(datapath = <path>, name = <basename>, source = "upload"|"server").
+# The reactive prefers whichever source was most recently updated.
+phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
+                                accept = NULL) {
+  if (is.null(roots)) roots <- phenomapr_app_server_roots()
+  server_id <- paste0(id, "_server")
+
+  if (.has_shinyFiles()) {
+    file_types <- NULL
+    if (!is.null(accept) && length(accept)) {
+      exts <- sub("^\\.", "", tolower(accept))
+      exts <- unique(exts[nzchar(exts)])
+      if (length(exts)) {
+        file_types <- stats::setNames(list(exts), id)
+      }
+    }
+    shinyFiles::shinyFileChoose(
+      input,
+      server_id,
+      roots = roots,
+      filetypes = if (is.null(file_types)) NULL else unname(file_types[[1]]),
+      session = session
+    )
+
+    output[[paste0(server_id, "_chosen")]] <- shiny::renderUI({
+      sel <- input[[server_id]]
+      if (is.null(sel) || identical(sel, integer(0))) {
+        return(shiny::tags$div(
+          class = "sfp-chosen sfp-chosen-empty",
+          shiny::tags$em("No server file selected")
+        ))
+      }
+      path_df <- tryCatch(
+        shinyFiles::parseFilePaths(roots, sel),
+        error = function(e) NULL
+      )
+      if (is.null(path_df) || nrow(path_df) == 0L) {
+        return(shiny::tags$div(
+          class = "sfp-chosen sfp-chosen-empty",
+          shiny::tags$em("No server file selected")
+        ))
+      }
+      shiny::tags$div(
+        class = "sfp-chosen sfp-chosen-set",
+        shiny::tags$span(class = "sfp-chosen-label", "Selected:"),
+        shiny::tags$code(path_df$datapath[1])
+      )
+    })
+  }
+
+  upload_ts <- shiny::reactiveVal(NULL)
+  server_ts <- shiny::reactiveVal(NULL)
+
+  shiny::observeEvent(input[[id]], {
+    if (!is.null(input[[id]])) upload_ts(Sys.time())
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+  if (.has_shinyFiles()) {
+    shiny::observeEvent(input[[server_id]], {
+      sel <- input[[server_id]]
+      if (is.null(sel) || identical(sel, integer(0))) return()
+      server_ts(Sys.time())
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  }
+
+  shiny::reactive({
+    up <- input[[id]]
+    srv_sel <- if (.has_shinyFiles()) input[[server_id]] else NULL
+
+    up_time <- upload_ts()
+    srv_time <- server_ts()
+
+    use_server <- !is.null(srv_time) && (is.null(up_time) || srv_time >= up_time)
+    if (use_server) {
+      path_df <- tryCatch(
+        shinyFiles::parseFilePaths(roots, srv_sel),
+        error = function(e) NULL
+      )
+      if (!is.null(path_df) && nrow(path_df) > 0L) {
+        return(list(
+          datapath = as.character(path_df$datapath[1]),
+          name = as.character(path_df$name[1] %||% basename(path_df$datapath[1])),
+          source = "server"
+        ))
+      }
+    }
+    if (!is.null(up) && nrow(up) > 0L) {
+      return(list(
+        datapath = as.character(up$datapath[1]),
+        name = as.character(up$name[1]),
+        source = "upload"
+      ))
+    }
+    NULL
+  })
+}

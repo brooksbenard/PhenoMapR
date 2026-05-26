@@ -64,7 +64,8 @@ Suggests:
     DT,
     htmltools,
     ggsignif,
-    ggchicklet2
+    ggchicklet2,
+    shinyFiles
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave,

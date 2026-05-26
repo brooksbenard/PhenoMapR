@@ -740,7 +740,7 @@ p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
                                ymin = y_min, ymax = y_max,
                                xmin = as.numeric(sample) - 0.4,
                                xmax = as.numeric(sample) + 0.4)) +
-  ggchicklet:::geom_rrect(radius = grid::unit(1, "pt")) +
+  ggchicklet2::geom_rrect(radius = grid::unit(1, "pt")) +
   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), 
                     name = "Prognostic group") +
   scale_x_continuous(

@@ -334,7 +334,7 @@ ui <- page_navbar(
           "RDS (Seurat / SingleCellExperiment / matrix), tabular ",
           "(.tsv / .csv with gene IDs in column 1), 10X HDF5 (.h5), or AnnData (.h5ad)."
         ),
-        fileInput(
+        phenomapr_file_input(
           "expr_file",
           label = NULL,
           accept = c(".rds", ".h5", ".h5ad", ".tsv", ".csv", ".txt"),
@@ -474,7 +474,7 @@ ui <- page_navbar(
           ),
           conditionalPanel(
             "input.custom_source == 'upload'",
-            fileInput(
+            phenomapr_file_input(
               "custom_ref_file",
               "Signature file (.rds / .tsv / .csv)",
               accept = c(".rds", ".tsv", ".csv", ".txt"), width = "100%"
@@ -492,11 +492,11 @@ ui <- page_navbar(
               "continuous) that you can immediately use to score your ",
               "single-cell / spatial data."
             ),
-            fileInput("derive_bulk_file", "Bulk expression (genes × samples)",
-                      accept = c(".rds", ".tsv", ".csv", ".txt")),
+            phenomapr_file_input("derive_bulk_file", "Bulk expression (genes × samples)",
+                                 accept = c(".rds", ".tsv", ".csv", ".txt")),
             uiOutput("derive_bulk_summary"),
-            fileInput("derive_phen_file", "Phenotype table (rows = samples)",
-                      accept = c(".rds", ".tsv", ".csv", ".txt")),
+            phenomapr_file_input("derive_phen_file", "Phenotype table (rows = samples)",
+                                 accept = c(".rds", ".tsv", ".csv", ".txt")),
             selectInput("derive_id_col", "Sample ID column", choices = NULL),
             selectInput("derive_pheno_col", "Outcome column", choices = NULL),
             selectInput(
@@ -888,7 +888,7 @@ ui <- page_navbar(
             "TSV / CSV with a cell-ID column and two numeric coordinate ",
             "columns."
           ),
-          fileInput(
+          phenomapr_file_input(
             "umap_upload",
             label = NULL,
             accept = c(".tsv", ".csv", ".txt", ".rds"), width = "100%"
@@ -1102,14 +1102,33 @@ server <- function(input, output, session) {
   )
 
   # ------------------------------------------------------------------------
+  # Hybrid file pickers (browser upload + server filesystem browse).
+  # Each `*_pick` reactive returns NULL or list(datapath, name, source).
+  # See phenomapr_file_input() / phenomapr_file_pick() in helpers.R.
+  # ------------------------------------------------------------------------
+  shiny_file_roots <- phenomapr_app_server_roots()
+  expr_file_pick       <- phenomapr_file_pick("expr_file",       input, output, session, shiny_file_roots,
+                                              accept = c(".rds", ".h5", ".h5ad", ".tsv", ".csv", ".txt"))
+  meta_file_pick       <- phenomapr_file_pick("meta_file",       input, output, session, shiny_file_roots,
+                                              accept = c(".rds", ".tsv", ".csv", ".txt"))
+  custom_ref_file_pick <- phenomapr_file_pick("custom_ref_file", input, output, session, shiny_file_roots,
+                                              accept = c(".rds", ".tsv", ".csv", ".txt"))
+  derive_bulk_file_pick <- phenomapr_file_pick("derive_bulk_file", input, output, session, shiny_file_roots,
+                                               accept = c(".rds", ".tsv", ".csv", ".txt"))
+  derive_phen_file_pick <- phenomapr_file_pick("derive_phen_file", input, output, session, shiny_file_roots,
+                                               accept = c(".rds", ".tsv", ".csv", ".txt"))
+  umap_upload_pick     <- phenomapr_file_pick("umap_upload",     input, output, session, shiny_file_roots,
+                                              accept = c(".tsv", ".csv", ".txt", ".rds"))
+
+  # ------------------------------------------------------------------------
   # 1. Expression upload
   # ------------------------------------------------------------------------
-  observeEvent(input$expr_file, {
-    req(input$expr_file)
+  observeEvent(expr_file_pick(), {
+    pick <- req(expr_file_pick())
     showNotification("Reading expression file…", id = "reading_expr",
                      duration = NULL, type = "message")
     res <- tryCatch(
-      parse_expression_upload(input$expr_file$datapath, input$expr_file$name),
+      parse_expression_upload(pick$datapath, pick$name),
       error = function(e) {
         removeNotification("reading_expr")
         showNotification(paste0("Upload failed: ", conditionMessage(e)),
@@ -1149,10 +1168,10 @@ server <- function(input, output, session) {
   })
 
   # Optional metadata upload
-  observeEvent(input$meta_file, {
-    req(input$meta_file)
+  observeEvent(meta_file_pick(), {
+    pick <- req(meta_file_pick())
     md <- tryCatch(
-      parse_metadata_upload(input$meta_file$datapath, input$meta_file$name),
+      parse_metadata_upload(pick$datapath, pick$name),
       error = function(e) {
         showNotification(conditionMessage(e), type = "error", duration = 8)
         NULL
@@ -1191,7 +1210,7 @@ server <- function(input, output, session) {
         "annotations on top of an object's built-in metadata. A cell-ID ",
         "column must match the expression matrix columns."
       ),
-      fileInput(
+      phenomapr_file_input(
         "meta_file",
         label = NULL,
         accept = c(".rds", ".tsv", ".csv", ".txt"),
@@ -1508,10 +1527,10 @@ server <- function(input, output, session) {
   })
 
   # Custom: upload file
-  observeEvent(input$custom_ref_file, {
-    req(input$custom_ref_file)
+  observeEvent(custom_ref_file_pick(), {
+    pick <- req(custom_ref_file_pick())
     ref <- tryCatch(
-      parse_reference_upload(input$custom_ref_file$datapath, input$custom_ref_file$name),
+      parse_reference_upload(pick$datapath, pick$name),
       error = function(e) {
         showNotification(conditionMessage(e), type = "error", duration = 8)
         NULL
@@ -1519,7 +1538,7 @@ server <- function(input, output, session) {
     )
     if (is.null(ref)) return()
     state$reference <- ref
-    state$reference_label <- paste0("Custom (", input$custom_ref_file$name, ")")
+    state$reference_label <- paste0("Custom (", pick$name, ")")
     showNotification(
       sprintf("Custom reference loaded (%d genes).", nrow(ref)),
       type = "message", duration = 4
@@ -1527,10 +1546,10 @@ server <- function(input, output, session) {
   })
 
   # Custom: derive from bulk + phenotype
-  observeEvent(input$derive_bulk_file, {
-    req(input$derive_bulk_file)
+  observeEvent(derive_bulk_file_pick(), {
+    pick <- req(derive_bulk_file_pick())
     res <- tryCatch(
-      parse_expression_upload(input$derive_bulk_file$datapath, input$derive_bulk_file$name),
+      parse_expression_upload(pick$datapath, pick$name),
       error = function(e) {
         showNotification(conditionMessage(e), type = "error", duration = 8); NULL
       }
@@ -1583,10 +1602,10 @@ server <- function(input, output, session) {
     tags$div(class = "help-block", tbl)
   })
 
-  observeEvent(input$derive_phen_file, {
-    req(input$derive_phen_file)
+  observeEvent(derive_phen_file_pick(), {
+    pick <- req(derive_phen_file_pick())
     df <- tryCatch(
-      parse_metadata_upload(input$derive_phen_file$datapath, input$derive_phen_file$name),
+      parse_metadata_upload(pick$datapath, pick$name),
       error = function(e) {
         showNotification(conditionMessage(e), type = "error", duration = 8); NULL
       }
@@ -2109,17 +2128,17 @@ server <- function(input, output, session) {
   # Custom embedding upload (overrides object-resident reductions).
   uploaded_embedding <- reactiveVal(NULL)
 
-  observeEvent(input$umap_upload, {
-    req(input$umap_upload)
-    ext <- tolower(tools::file_ext(input$umap_upload$name))
+  observeEvent(umap_upload_pick(), {
+    pick <- req(umap_upload_pick())
+    ext <- tolower(tools::file_ext(pick$name))
     obj <- tryCatch({
       if (ext == "rds") {
-        readRDS(input$umap_upload$datapath)
+        readRDS(pick$datapath)
       } else if (ext == "tsv" || ext == "txt") {
-        utils::read.delim(input$umap_upload$datapath, sep = "\t",
+        utils::read.delim(pick$datapath, sep = "\t",
                           stringsAsFactors = FALSE, check.names = FALSE)
       } else if (ext == "csv") {
-        utils::read.csv(input$umap_upload$datapath,
+        utils::read.csv(pick$datapath,
                         stringsAsFactors = FALSE, check.names = FALSE)
       } else {
         stop("Unsupported embedding file type: ", ext)
