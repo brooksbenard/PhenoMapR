@@ -37,7 +37,7 @@ library(PhenoMapR)
 # Score samples in a bulk expression matrix
 scores <- PhenoMap(
   expression = bulk_matrix,     # genes (rownames) x samples (colnames)
-  reference = "precog",         # can be one of precog, pediatric_precog, ici_precog, or tcga
+  reference = "tcga",         # can be one of precog, pediatric_precog, ici_precog, or tcga
   cancer_type = "BRCA"          # use list_cancer_types(reference) to see avaliable options
 )
 
@@ -49,4 +49,10 @@ scores <- PhenoMap(
   assay = if ("Spatial" %in% names(seurat_obj@assays)) "Spatial" else "RNA",
   slot = if ("Spatial" %in% names(seurat_obj@assays)) "counts" else "data"
 )
+```
+
+## Shiny Application
+**PhenoMapR** contains a Shiny App interface to process and analyze results. Launch the Shiny App with the following:
+```r
+PhenoMapR::run_app()
 ```
