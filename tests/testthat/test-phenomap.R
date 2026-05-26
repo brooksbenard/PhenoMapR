@@ -254,3 +254,43 @@ test_that("PhenoMap with ici_precog returns scores when column matches", {
   expect_equal(nrow(scores), 4)
 })
 
+test_that("PhenoMap with ici_precog accepts full column names from list_cancer_types()", {
+  # Regression: extract_ici_column() used to always rebuild a regex from the
+  # cancer_type ("^{abbrev}_.+_Primary_"), which broke when callers passed an
+  # exact column name like "LUAD_PD-L1_Primary_Naive" -- the regex would
+  # become "^LUAD_PD-L1_Primary_Naive_.+_Primary_" and match nothing. The
+  # Shiny app feeds run_app() these full labels via list_cancer_types().
+  data(ici, package = "PhenoMapR", envir = environment())
+  if (ncol(ici) == 0) skip("ICI data has no columns")
+  full_label <- colnames(ici)[1]
+  out <- PhenoMapR:::extract_ici_column(ici, full_label)
+  expect_equal(colnames(out), full_label)
+
+  # The values exposed by list_cancer_types("ici_precog") must round-trip
+  # through PhenoMap() without error for every label, not just metastatic.
+  primary_labels <- colnames(ici)[grepl("_Primary_", colnames(ici))]
+  if (length(primary_labels)) {
+    label <- primary_labels[1]
+    genes <- rownames(ici)[seq_len(min(25, nrow(ici)))]
+    expr <- matrix(
+      pmax(0, rnorm(length(genes) * 3)),
+      nrow = length(genes), ncol = 3,
+      dimnames = list(genes, paste0("S", 1:3))
+    )
+    suppressWarnings(
+      scores <- PhenoMap(expression = expr, reference = "ici_precog",
+                         cancer_type = label, verbose = FALSE)
+    )
+    expect_s3_class(scores, "data.frame")
+    expect_equal(nrow(scores), 3)
+  }
+})
+
+test_that("PhenoMap with ici_precog gives a helpful error when cancer_type is unknown", {
+  data(ici, package = "PhenoMapR", envir = environment())
+  expect_error(
+    PhenoMapR:::extract_ici_column(ici, "DEFINITELY_NOT_A_CANCER_TYPE"),
+    "No ICI columns matched cancer_type"
+  )
+})
+

@@ -214,33 +214,56 @@ get_reference_genes_for_extraction <- function(reference_data, z_score_cutoff) {
 
 #' Extract ICI PRECOG Column
 #'
+#' Resolve a user-supplied \code{cancer_type} to a single ICI-PRECOG column.
+#' The ICI reference's column names are full cohort labels (e.g.
+#' \code{"LUAD_PD-L1_Primary_Naive"}, \code{"KIRC_PD1_Metastatic_Naive"}), and
+#' \code{\link{list_cancer_types}("ici_precog")} returns those labels
+#' verbatim, so most callers pass an exact column name. We accept that
+#' directly. A legacy short-form (e.g. \code{"LUAD"} or
+#' \code{"LUAD_Metastatic"}) is also still supported via a regex fallback,
+#' which picks the first matching column and warns when there are ties.
+#'
 #' @keywords internal
 extract_ici_column <- function(ici_data, cancer_type) {
 
-  if (is.na(cancer_type)) {
+  if (is.null(cancer_type) || (length(cancer_type) == 1L && is.na(cancer_type))) {
     stop("ICI PRECOG label is NA")
   }
+  if (!is.character(cancer_type) || length(cancer_type) != 1L || !nzchar(cancer_type)) {
+    stop("`cancer_type` must be a single non-empty character string for ICI PRECOG.")
+  }
 
+  # Fast path: exact match against an existing column name. This is what the
+  # Shiny app and `list_cancer_types("ici_precog")` always produce.
+  if (cancer_type %in% colnames(ici_data)) {
+    return(ici_data[, cancer_type, drop = FALSE])
+  }
+
+  # Legacy short-form fallback: cancer abbreviation (optionally with
+  # "_Metastatic" suffix), e.g. "LUAD" or "LUAD_Metastatic". Build a regex
+  # against the full column names as before.
   is_metastatic <- grepl("_Metastatic$", cancer_type)
   cancer_abbrev <- sub("_Metastatic$", "", cancer_type)
-
   pattern <- if (is_metastatic) {
     paste0("^", cancer_abbrev, "_.+_Metastatic_")
   } else {
     paste0("^", cancer_abbrev, "_.+_Primary_")
   }
-
   matched_cols <- grep(pattern, colnames(ici_data), value = TRUE)
 
   if (length(matched_cols) == 0) {
-    stop(glue::glue("No ICI columns found for pattern: {pattern}"))
+    stop(glue::glue(
+      "No ICI columns matched cancer_type = '{cancer_type}'. ",
+      "Pick one of: {paste(colnames(ici_data), collapse = ', ')}"
+    ))
   }
-
   if (length(matched_cols) > 1) {
-    warning(glue::glue("Multiple ICI columns found ({length(matched_cols)}), using first: {matched_cols[1]}"))
+    warning(glue::glue(
+      "Multiple ICI columns matched short-form '{cancer_type}' ",
+      "({length(matched_cols)}); using first: {matched_cols[1]}"
+    ))
   }
-
-  return(ici_data[, matched_cols[1], drop = FALSE])
+  ici_data[, matched_cols[1], drop = FALSE]
 }
 
 
