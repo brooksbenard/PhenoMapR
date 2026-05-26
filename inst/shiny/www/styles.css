@@ -823,3 +823,36 @@ table.dataTable thead th {
   font-size: 0.93em;
   color: #264653;
 }
+
+/* ---------------------------------------------------------------------------
+ * "End session" button in the navbar's right rail (next to the GitHub link).
+ *
+ * Sits inside a bslib nav_item, so the standard <a class="nav-link"> hover
+ * styles don't apply. We size it to match the GitHub link's visual weight,
+ * lean on Bootstrap's btn-outline-danger for color, and tighten the
+ * vertical alignment so it doesn't overflow the navbar.
+ * ------------------------------------------------------------------------- */
+.navbar .end-session-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0.6rem 0 0.25rem;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  font-weight: 500;
+  border-width: 1px;
+  border-radius: 999px;
+  transition: background-color 0.15s ease, color 0.15s ease,
+              box-shadow 0.15s ease;
+}
+.navbar .end-session-btn:hover,
+.navbar .end-session-btn:focus-visible {
+  box-shadow: 0 0 0 0.18rem rgba(220, 53, 69, 0.18);
+  outline: none;
+}
+.navbar .end-session-btn .fa,
+.navbar .end-session-btn .fas,
+.navbar .end-session-btn .fa-power-off {
+  font-size: 0.78em;
+}

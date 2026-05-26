@@ -1062,6 +1062,18 @@ ui <- page_navbar(
       target = "_blank",
       tagList(icon("github"), " GitHub")
     )
+  ),
+  # End-session control: opens a confirmation modal that calls stopApp() so
+  # the R process can release memory and return control to the console / shut
+  # down the deployed app cleanly. See the matching observers below.
+  nav_item(
+    tags$button(
+      id = "end_session",
+      type = "button",
+      class = "btn btn-sm btn-outline-danger end-session-btn action-button",
+      title = "End the PhenoMapR session and stop the app",
+      tagList(icon("power-off"), " End session")
+    )
   )
 )
 
@@ -1081,6 +1093,54 @@ server <- function(input, output, session) {
   observeEvent(input$nav_to_welcome, {
     bslib::nav_select(id = "main_nav", selected = "welcome",
                       session = session)
+  })
+
+  # ------------------------------------------------------------------------
+  # End-session control (navbar "End session" button)
+  # ------------------------------------------------------------------------
+  # Two-step shutdown: the navbar button opens a confirmation modal, and
+  # only after the user clicks the modal's "End session" button do we call
+  # shiny::stopApp(). This frees the R process so memory used by the loaded
+  # Seurat / SCE / AnnData object is reclaimed, and on local installs it
+  # returns control to the console.
+  observeEvent(input$end_session, {
+    showModal(modalDialog(
+      title = tagList(icon("power-off"), " End the PhenoMapR session?"),
+      tags$p(
+        "This will stop the Shiny app and release any memory used by the ",
+        "currently loaded expression object, scoring results, and marker ",
+        "outputs."
+      ),
+      tags$p(
+        tags$strong("Anything not yet exported will be lost."),
+        " You can relaunch the app at any time with ",
+        tags$code("PhenoMapR::run_app()"), "."
+      ),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("end_session_confirm", "End session",
+                     icon = icon("power-off"),
+                     class = "btn-danger")
+      ),
+      easyClose = TRUE,
+      size = "s"
+    ))
+  })
+
+  observeEvent(input$end_session_confirm, {
+    removeModal()
+    showNotification(
+      "Ending PhenoMapR session\u2026",
+      type = "message", duration = 2, id = "end_session_msg"
+    )
+    # Close the user's WebSocket connection cleanly first so the browser
+    # gets a "Disconnected from server" overlay instead of a hard error,
+    # then stop the R-side app event loop. stopApp() returns invisible()
+    # to the caller of runApp() (typically the console).
+    session$onSessionEnded(function() {
+      shiny::stopApp(returnValue = invisible(NULL))
+    })
+    session$close()
   })
 
   # ------------------------------------------------------------------------
