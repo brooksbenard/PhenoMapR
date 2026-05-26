@@ -1,5 +1,12 @@
 # Package index
 
+## Shiny app
+
+Launch the interactive PhenoMapR app for guided scoring and exploration.
+
+- [`run_app()`](https://brooksbenard.github.io/PhenoMapR/reference/run_app.md)
+  : Launch the PhenoMapR Shiny app
+
 ## Prognostic scoring
 
 Score expression data with weighted sum of prognostic gene signatures.

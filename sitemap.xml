@@ -19,6 +19,13 @@
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/define_phenotype_groups.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/detect_input_type.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_X_to_genes_cells.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_find_symbol_column.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_obs_df.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_obs_names.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_obsm_array.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_obsm_keys.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_subset_var.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/edgeR_cpm_safe.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/extract_ici_column.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/find_phenotype_markers.html</loc></url>
@@ -51,6 +58,7 @@
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/process_spatial_experiment.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/resolve_group_labels.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/resolve_labels_from_df.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/run_app.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/run_markers_on_matrix.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/run_markers_on_matrix_by_celltype.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/standardize_findmarkers_output.html</loc></url>
