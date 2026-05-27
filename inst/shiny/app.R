@@ -1248,10 +1248,67 @@ server <- function(input, output, session) {
     if (is.null(res)) return()
     state$expression <- res$object
     state$expr_summary <- res
-    state$metadata <- extract_object_metadata(res$object)
-    state$meta_columns <- if (!is.null(state$metadata)) colnames(state$metadata) else character(0)
-    state$metadata_source <- if (!is.null(state$metadata)) "object" else "(none)"
+    md <- extract_object_metadata(res$object)
+    state$metadata <- md
+    state$meta_columns <- if (!is.null(md)) colnames(md) else character(0)
+    state$metadata_source <- if (!is.null(md)) "object" else "(none)"
     showNotification(paste(res$notes, collapse = " "), type = "message", duration = 5)
+
+    # When loading an AnnData (.h5ad), surface a clear message if the
+    # in-object metadata could not be auto-extracted. Some round-trip
+    # paths (e.g., anndataR -> Python anndata) can produce obs columns
+    # with pandas extension dtypes that the standard
+    # reticulate::py_to_r() pipeline can't decode in one pass. Our
+    # extractor tries three layered fallbacks (decategorize, columnwise);
+    # if all of them came back empty we tell the user explicitly so they
+    # can either fix the source object or upload metadata separately.
+    if (identical(res$kind %||% "", "anndata")) {
+      diag_msgs <- if (is.null(md)) {
+        # NULL can't carry attributes; re-query the helper for the same
+        # diagnostic trail it produced on the failure path.
+        tryCatch(
+          phenomapr_anndata_obs_df(res$object)$warnings,
+          error = function(e) character(0)
+        )
+      } else {
+        attr(md, "anndata_obs_warnings", exact = TRUE) %||% character(0)
+      }
+      if (is.null(md)) {
+        diag <- if (length(diag_msgs)) {
+          paste(utils::head(diag_msgs, 3L), collapse = " | ")
+        } else {
+          "AnnData.obs returned an empty data.frame."
+        }
+        showNotification(
+          paste0(
+            "AnnData metadata could not be auto-detected. ",
+            "You can still score the cells, but cell-type-aware steps ",
+            "and groupings need a metadata table. Upload your cell ",
+            "metadata in the next section, or re-export the .h5ad ",
+            "with plain object/string columns. Diagnostic: ", diag
+          ),
+          type = "warning", duration = 12, id = "anndata_meta_warn"
+        )
+      } else if (length(diag_msgs)) {
+        showNotification(
+          sprintf(
+            "AnnData metadata loaded with %d cell%s x %d column%s, but %d non-fatal warning%s during extraction (e.g. %s).",
+            nrow(md), ifelse(nrow(md) == 1L, "", "s"),
+            ncol(md) - 1L, ifelse(ncol(md) - 1L == 1L, "", "s"),
+            length(diag_msgs), ifelse(length(diag_msgs) == 1L, "", "s"),
+            substr(diag_msgs[[1L]], 1L, 140L)
+          ),
+          type = "message", duration = 10, id = "anndata_meta_partial"
+        )
+      } else if (!is.null(md)) {
+        showNotification(
+          sprintf("Detected %d cell%s x %d metadata column%s from AnnData.obs.",
+                  nrow(md), ifelse(nrow(md) == 1L, "", "s"),
+                  ncol(md) - 1L, ifelse(ncol(md) - 1L == 1L, "", "s")),
+          type = "message", duration = 5, id = "anndata_meta_ok"
+        )
+      }
+    }
   })
 
   observeEvent(input$use_demo, {

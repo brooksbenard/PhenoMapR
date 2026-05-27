@@ -288,12 +288,183 @@ extract_object_metadata <- function(obj) {
     return(md)
   }
   if (inherits(obj, "python.builtin.object")) {
-    md <- tryCatch(PhenoMapR:::.anndata_obs_df(obj), error = function(e) NULL)
-    if (is.null(md)) return(NULL)
+    res <- phenomapr_anndata_obs_df(obj)
+    md  <- res$df
+    if (is.null(md) || ncol(md) == 0L) {
+      # Diagnostic warnings are intentionally not attached here (NULL
+      # cannot carry attributes). Callers that need the failure reason
+      # can re-call phenomapr_anndata_obs_df() on the same object.
+      return(NULL)
+    }
     md$.cell_id <- rownames(md)
+    attr(md, "anndata_obs_warnings") <- res$warnings
     return(md)
   }
   NULL
+}
+
+# Resilient extractor for AnnData.obs that handles round-trip dtype
+# pitfalls (categoricals, pandas extension dtypes, anndataR-written h5ad
+# files) via three layered fallbacks. Returns
+# list(df = <data.frame|NULL>, warnings = <character>) so the caller can
+# surface a clear message when extraction degraded or failed.
+phenomapr_anndata_obs_df <- function(obj) {
+  warnings_acc <- character(0)
+  push_w <- function(msg) {
+    warnings_acc[[length(warnings_acc) + 1L]] <<- msg
+  }
+  result <- function(df) list(df = df, warnings = warnings_acc)
+
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    push_w("reticulate is not installed; cannot read AnnData.obs.")
+    return(result(NULL))
+  }
+  if (!reticulate::py_has_attr(obj, "obs")) {
+    push_w("This AnnData object has no `obs` slot.")
+    return(result(NULL))
+  }
+
+  finalize <- function(df) {
+    if (is.null(df)) return(NULL)
+    if (!is.data.frame(df)) {
+      df <- tryCatch(as.data.frame(df, stringsAsFactors = FALSE),
+                     error = function(e) NULL)
+      if (is.null(df)) return(NULL)
+    }
+    rn <- rownames(df)
+    needs_rn <- is.null(rn) ||
+      identical(rn, as.character(seq_len(nrow(df)))) ||
+      anyDuplicated(rn) > 0L
+    if (needs_rn) {
+      ids <- tryCatch(
+        as.character(reticulate::py_to_r(obj$obs_names$tolist())),
+        error = function(e) NULL
+      )
+      if (!is.null(ids) && length(ids) == nrow(df)) {
+        rownames(df) <- make.unique(ids)
+      }
+    }
+    df
+  }
+
+  # Path 1: direct py_to_r() of the entire pandas DataFrame (fast path).
+  df <- tryCatch(reticulate::py_to_r(obj$obs), error = function(e) {
+    push_w(paste0("Direct py_to_r(adata.obs) failed: ", conditionMessage(e)))
+    NULL
+  })
+  if (!is.null(df) && is.data.frame(df) && ncol(df) > 0L) {
+    return(result(finalize(df)))
+  }
+  if (!is.null(df) && is.data.frame(df) && ncol(df) == 0L) {
+    push_w("Direct py_to_r() returned a 0-column data.frame; trying decategorize fallback.")
+  }
+
+  # Path 2: cast every pandas `category` column to `object` (plain str) on
+  # a copy of obs and convert that. Categorical -> R conversion is the
+  # most common failure mode for AnnData files written from R via
+  # anndataR / SCE -> AnnData converters that mark Seurat factor columns
+  # as pandas categoricals.
+  df <- tryCatch(
+    .phenomapr_anndata_obs_decategorize(obj),
+    error = function(e) {
+      push_w(paste0("Decategorize fallback failed: ", conditionMessage(e)))
+      NULL
+    }
+  )
+  if (!is.null(df) && is.data.frame(df) && ncol(df) > 0L) {
+    return(result(finalize(df)))
+  }
+
+  # Path 3: rebuild column-by-column using astype(object).tolist() and
+  # tolerate per-column failures by filling that column with NA. This is
+  # the slowest path but the most resilient one.
+  df <- tryCatch(
+    .phenomapr_anndata_obs_columnwise(obj, push_w),
+    error = function(e) {
+      push_w(paste0("Columnwise fallback failed: ", conditionMessage(e)))
+      NULL
+    }
+  )
+  if (!is.null(df) && is.data.frame(df) && ncol(df) > 0L) {
+    return(result(finalize(df)))
+  }
+
+  push_w("All AnnData.obs extraction paths failed; no metadata recovered.")
+  result(NULL)
+}
+
+.phenomapr_anndata_obs_decategorize <- function(obj) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
+  py_code <- paste(
+    "def _phenomapr_decategorize(df):",
+    "    out = df.copy()",
+    "    for c in out.columns:",
+    "        s = out[c]",
+    "        dt = str(getattr(s, 'dtype', ''))",
+    "        if dt == 'category':",
+    "            out[c] = s.astype(object)",
+    "        elif dt.startswith('Int') or dt.startswith('UInt'):",
+    "            out[c] = s.astype('float').astype(object)",
+    "        elif dt in ('boolean', 'string'):",
+    "            out[c] = s.astype(object)",
+    "    return out",
+    sep = "\n"
+  )
+  py_env <- tryCatch(
+    reticulate::py_run_string(py_code, convert = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(py_env)) return(NULL)
+  fn <- tryCatch(py_env$`_phenomapr_decategorize`, error = function(e) NULL)
+  if (is.null(fn)) return(NULL)
+  plain <- tryCatch(fn(obj$obs), error = function(e) NULL)
+  if (is.null(plain)) return(NULL)
+  reticulate::py_to_r(plain)
+}
+
+.phenomapr_anndata_obs_columnwise <- function(obj, push_w = function(msg) {}) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
+  cols <- tryCatch(
+    as.character(reticulate::py_to_r(obj$obs$columns$tolist())),
+    error = function(e) {
+      push_w(paste0("Could not list obs.columns: ", conditionMessage(e)))
+      character(0)
+    }
+  )
+  if (!length(cols)) return(NULL)
+  n_obs <- tryCatch(
+    as.integer(reticulate::py_to_r(obj$n_obs)),
+    error = function(e) NA_integer_
+  )
+  if (is.na(n_obs)) {
+    push_w("Could not determine adata.n_obs.")
+    return(NULL)
+  }
+  out <- vector("list", length(cols))
+  names(out) <- cols
+  for (col in cols) {
+    val <- tryCatch({
+      series <- reticulate::py_get_item(obj$obs, col)
+      reticulate::py_to_r(series$astype("object")$tolist())
+    }, error = function(e) {
+      push_w(sprintf("obs column '%s' failed: %s", col, conditionMessage(e)))
+      NULL
+    })
+    if (is.null(val)) {
+      val <- rep(NA, n_obs)
+    } else if (is.list(val)) {
+      val <- vapply(val, function(x) {
+        if (is.null(x)) NA_character_ else as.character(x)
+      }, character(1L))
+    }
+    if (length(val) != n_obs) {
+      push_w(sprintf("obs column '%s' had unexpected length %d (n_obs=%d).",
+                     col, length(val), n_obs))
+      val <- rep(NA, n_obs)
+    }
+    out[[col]] <- val
+  }
+  data.frame(out, stringsAsFactors = FALSE, check.names = FALSE)
 }
 
 # ---- safe wrappers around PhenoMapR API -------------------------------------
