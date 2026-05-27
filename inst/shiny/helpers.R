@@ -1356,6 +1356,19 @@ phenomapr_busy_show <- function(message,
                                 delay_seconds = 2,
                                 session = shiny::getDefaultReactiveDomain()) {
   if (is.null(session)) return(invisible(NULL))
+  # Note: the popup's *visibility* is now driven entirely by Shiny's
+  # shiny:busy / shiny:idle duration on the client side. This R-side
+  # call only sets the message that gets displayed if/when the popup
+  # appears (i.e. when the server has been continuously busy for
+  # > delay_seconds). Existing observer-side usage:
+  #
+  #   phenomapr_busy_show("Computing PhenoMap scores...")
+  #   on.exit(phenomapr_busy_hide(), add = TRUE)
+  #
+  # remains correct: the show updates the in-flight message text, the
+  # on.exit hide reverts it back to a neutral default once the work is
+  # done. Fast operations cannot trigger the popup at all because Shiny
+  # goes idle before the 2s show timer fires.
   session$sendCustomMessage("phenomapr-busy-show", list(
     message  = as.character(message %||% ""),
     detail   = if (is.null(detail) || !nzchar(detail))   "" else as.character(detail),
@@ -1403,6 +1416,12 @@ phenomapr_busy_assets <- function() {
     catch (e) {}
   }
 
+  // ---- Tunables ------------------------------------------------------
+  var SHOW_DELAY_MS      = 2000;   // popup only appears once shiny has been continuously busy this long
+  var IDLE_GRACE_MS      = 100;    // brief idle->busy bounces inside one composite op are tolerated
+  var ABS_VISIBLE_MAX_MS = 60000;  // last-resort hard ceiling
+
+  // ---- DOM helpers ---------------------------------------------------
   function ensureOverlay() {
     if (document.getElementById("phenomapr-busy-overlay")) return;
     var overlay = document.createElement("div");
@@ -1413,6 +1432,7 @@ phenomapr_busy_assets <- function() {
     overlay.setAttribute("aria-live", "polite");
     overlay.innerHTML = ""
       + "<div class=\\"phenomapr-busy-card\\">"
+      + "  <button type=\\"button\\" class=\\"phenomapr-busy-close\\" id=\\"phenomapr-busy-close\\" aria-label=\\"Dismiss\\" title=\\"Dismiss\\">&times;</button>"
       + "  <div class=\\"phenomapr-busy-spinner\\"></div>"
       + "  <div class=\\"phenomapr-busy-text\\">"
       + "    <div class=\\"phenomapr-busy-message\\" id=\\"phenomapr-busy-message\\"></div>"
@@ -1433,92 +1453,175 @@ phenomapr_busy_assets <- function() {
       el.style.display = "none";
     }
   }
-  function applyOverlayText(p) {
+  function applyOverlayText() {
     ensureOverlay();
-    setText("phenomapr-busy-message", (p && p.message) || "");
-    setText("phenomapr-busy-detail",  (p && p.detail)  || "");
-    setText("phenomapr-busy-hint",    (p && p.hint)    || "");
+    setText("phenomapr-busy-message", currentMessage.message || "Working...");
+    setText("phenomapr-busy-detail",  currentMessage.detail  || "");
+    setText("phenomapr-busy-hint",    currentMessage.hint    || "This may take a moment...");
   }
-  function renderShow(p) {
-    applyOverlayText(p);
+  function renderShow() {
+    applyOverlayText();
     var ov = document.getElementById("phenomapr-busy-overlay");
     if (ov && !ov.classList.contains("is-visible")) {
       ov.classList.add("is-visible");
-      dbg("overlay shown", { activeOps: activeOps, msg: p && p.message });
+      isVisible = true;
+      shownAt = Date.now();
+      dbg("overlay shown", currentMessage);
     }
   }
   function renderHide() {
     var ov = document.getElementById("phenomapr-busy-overlay");
     if (ov && ov.classList.contains("is-visible")) {
       ov.classList.remove("is-visible");
-      dbg("overlay hidden", { activeOps: activeOps });
+      isVisible = false;
+      shownAt = null;
+      dbg("overlay hidden");
     }
   }
 
-  // Counter of outstanding show() calls that have not been matched by a
-  // hide(). The overlay is only allowed to render when this is > 0.
-  var activeOps = 0;
-  // setTimeout id for the pending "delayed reveal", if any.
-  var pendingTimer = null;
-  // Most recent show payload (refreshed on every show; what we render
-  // when the timer fires).
-  var pendingMsg = null;
+  // ---- State ---------------------------------------------------------
+  var currentMessage   = { message: "Working...", detail: "", hint: "" };
+  var defaultMessage   = { message: "Working...", detail: "", hint: "" };
+  var showTimer        = null;     // setTimeout id while we wait for SHOW_DELAY_MS to elapse
+  var idleHideTimer    = null;     // setTimeout id while we wait for IDLE_GRACE_MS post-idle
+  var isVisible        = false;
+  var shownAt          = null;
+  var isBusy           = false;
+  // True between a user-dismiss and the next idle->busy transition.
+  // While true, we will not re-show the popup for the current busy run
+  // even if SHOW_DELAY_MS elapses again.
+  var dismissedThisRun = false;
 
-  function clearPending() {
-    if (pendingTimer !== null) {
-      clearTimeout(pendingTimer);
-      pendingTimer = null;
+  function clearShowTimer() {
+    if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
+  }
+  function clearIdleHideTimer() {
+    if (idleHideTimer !== null) { clearTimeout(idleHideTimer); idleHideTimer = null; }
+  }
+
+  function maybeShow() {
+    showTimer = null;
+    if (isBusy && !dismissedThisRun && !isVisible) {
+      renderShow();
+    } else {
+      dbg("show timer fired but not eligible",
+          { isBusy: isBusy, dismissed: dismissedThisRun, isVisible: isVisible });
     }
   }
 
+  // ---- Shiny busy/idle handlers --------------------------------------
+  function onShinyBusy() {
+    isBusy = true;
+    clearIdleHideTimer();
+    if (!showTimer && !isVisible && !dismissedThisRun) {
+      showTimer = setTimeout(maybeShow, SHOW_DELAY_MS);
+      dbg("busy: scheduled show in " + SHOW_DELAY_MS + "ms");
+    } else {
+      dbg("busy: show not scheduled",
+          { showTimerPending: showTimer !== null,
+            isVisible: isVisible, dismissed: dismissedThisRun });
+    }
+  }
+  function onShinyIdle() {
+    if (idleHideTimer !== null) return;  // already debouncing
+    idleHideTimer = setTimeout(function () {
+      idleHideTimer = null;
+      isBusy = false;
+      clearShowTimer();
+      renderHide();
+      // Next busy run is conceptually a new operation -> allow re-show.
+      dismissedThisRun = false;
+      // Reset message back to a neutral default so any leftover text
+      // from a prior op does not appear at the start of the next one.
+      currentMessage = {
+        message: defaultMessage.message,
+        detail:  defaultMessage.detail,
+        hint:    defaultMessage.hint
+      };
+      dbg("idle confirmed: hidden + state reset");
+    }, IDLE_GRACE_MS);
+  }
+  function onShinyDisconnected() {
+    clearShowTimer();
+    clearIdleHideTimer();
+    renderHide();
+    dismissedThisRun = false;
+    isBusy = false;
+    dbg("disconnected: forced hide");
+  }
+
+  // ---- User-driven dismiss -------------------------------------------
+  function userDismiss(reason) {
+    dbg("user dismissed", reason);
+    clearShowTimer();
+    renderHide();
+    dismissedThisRun = true;
+  }
+
+  // ---- R-side message API (R only sets the *text*; visibility is now
+  //      controlled exclusively by Shiny busy/idle duration) ----------
   function handleShow(p) {
-    ensureOverlay();
-    activeOps = activeOps + 1;
-    pendingMsg = p;
-    var delay = (p && typeof p.delay_ms === "number") ? p.delay_ms : 2000;
-    dbg("show", { activeOps: activeOps, delay_ms: delay, msg: p && p.message });
-
-    // If the overlay is already visible (replacement message during a
-    // longer-running operation), refresh the text immediately.
-    var ov = document.getElementById("phenomapr-busy-overlay");
-    if (ov && ov.classList.contains("is-visible")) {
-      applyOverlayText(p);
-      return;
-    }
-
-    clearPending();
-    if (delay <= 0) {
-      // Caller asked to show immediately. Still respect activeOps -- if
-      // an out-of-order hide reduces it to 0 in the same tick, we will
-      // still skip the show.
-      if (activeOps > 0) renderShow(p);
-      return;
-    }
-    pendingTimer = setTimeout(function () {
-      pendingTimer = null;
-      if (activeOps > 0) renderShow(pendingMsg);
-      else dbg("timer fired but activeOps == 0; suppressing");
-    }, delay);
+    var msg = (p && p.message) || "Working...";
+    currentMessage = {
+      message: msg,
+      detail:  (p && p.detail)  || "",
+      hint:    (p && p.hint)    || "This may take a moment..."
+    };
+    if (isVisible) applyOverlayText();
+    dbg("R-side show: message updated", currentMessage);
+  }
+  function handleHide() {
+    currentMessage = {
+      message: defaultMessage.message,
+      detail:  defaultMessage.detail,
+      hint:    defaultMessage.hint
+    };
+    if (isVisible) applyOverlayText();
+    dbg("R-side hide: message reset to default");
   }
 
-  function handleHide() {
-    activeOps = activeOps - 1;
-    if (activeOps < 0) activeOps = 0;
-    dbg("hide", { activeOps: activeOps });
-    if (activeOps === 0) {
-      clearPending();
-      pendingMsg = null;
+  // ---- Watchdog: hard ceiling on overlay visibility ------------------
+  setInterval(function () {
+    if (isVisible && shownAt !== null &&
+        (Date.now() - shownAt) > ABS_VISIBLE_MAX_MS) {
+      dbg("watchdog: visible >" + ABS_VISIBLE_MAX_MS + "ms; force-hiding");
+      clearShowTimer();
+      clearIdleHideTimer();
       renderHide();
     }
+  }, 1000);
+
+  // ---- Wire up event listeners ---------------------------------------
+  // Native fallback layer. Shiny normally dispatches via jQuery, and
+  // jquery/jquery#2476 means $(document).trigger() does not reliably
+  // invoke native addEventListener handlers for namespaced custom
+  // events. But many Shiny+browser combos do bubble these events to
+  // document, so we register on the native API too -- whichever layer
+  // works first wins; both firing is harmless because the handlers are
+  // idempotent (clearShowTimer/clearIdleHideTimer guard against double
+  // schedules).
+  if (document && document.addEventListener) {
+    document.addEventListener("shiny:busy",         onShinyBusy,         false);
+    document.addEventListener("shiny:idle",         onShinyIdle,         false);
+    document.addEventListener("shiny:disconnected", onShinyDisconnected, false);
   }
 
-  function forceReset(reason) {
-    if (activeOps === 0 && pendingTimer === null) return;
-    dbg("forceReset", reason, { activeOps: activeOps, hadTimer: pendingTimer !== null });
-    activeOps = 0;
-    pendingMsg = null;
-    clearPending();
-    renderHide();
+  function attachDismissHandlers() {
+    var ov = document.getElementById("phenomapr-busy-overlay");
+    if (ov && !ov._dismissBound) {
+      ov._dismissBound = true;
+      ov.addEventListener("click", function (e) {
+        if (e.target === ov) userDismiss("backdrop-click");
+      }, false);
+    }
+    var btn = document.getElementById("phenomapr-busy-close");
+    if (btn && !btn._dismissBound) {
+      btn._dismissBound = true;
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        userDismiss("close-button");
+      }, false);
+    }
   }
 
   function bind() {
@@ -1526,56 +1629,19 @@ phenomapr_busy_assets <- function() {
       setTimeout(bind, 50);
       return;
     }
-    // jQuery is always loaded by Shiny on the client. We need it
-    // because Shiny dispatches shiny:idle / shiny:busy via
-    // $(document).trigger(), and jQuery does not reliably invoke
-    // native document.addEventListener handlers for namespaced custom
-    // events (see jquery/jquery#2476). The Shiny docs explicitly
-    // recommend $(document).on("shiny:idle", ...) for this reason.
-    if (typeof window.jQuery === "undefined" && typeof window.$ === "undefined") {
-      setTimeout(bind, 50);
-      return;
-    }
-    var $j = window.jQuery || window.$;
-
     ensureOverlay();
+    attachDismissHandlers();
     Shiny.addCustomMessageHandler("phenomapr-busy-show", handleShow);
     Shiny.addCustomMessageHandler("phenomapr-busy-hide", handleHide);
 
-    // ---- Safety nets --------------------------------------------------
-    // (1) shiny:idle: when the server becomes idle, the application is
-    // no longer doing anything that could legitimately need a busy
-    // popup. Defer 250ms to absorb any in-flight show/hide from the
-    // same flush cycle, then forceReset.
-    var idleTimer = null;
-    function scheduleIdleReset() {
-      if (idleTimer !== null) clearTimeout(idleTimer);
-      idleTimer = setTimeout(function () {
-        idleTimer = null;
-        forceReset("shiny:idle");
-      }, 250);
+    var $j = window.jQuery || window.$;
+    if ($j) {
+      $j(document).on("shiny:busy",         onShinyBusy);
+      $j(document).on("shiny:idle",         onShinyIdle);
+      $j(document).on("shiny:disconnected", onShinyDisconnected);
+    } else {
+      dbg("jQuery not available at bind(); relying on native listeners + watchdog");
     }
-    function cancelIdleReset() {
-      if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null; }
-    }
-    $j(document).on("shiny:idle",         scheduleIdleReset);
-    $j(document).on("shiny:busy",         cancelIdleReset);
-    $j(document).on("shiny:disconnected", function () { forceReset("shiny:disconnected"); });
-
-    // (2) Watchdog: every 1 second, audit our state. If the overlay is
-    // visible but activeOps is 0 (and no pending timer), an ordering
-    // quirk has left it stuck -- forceReset() short-circuits in that
-    // case (nothing to reset on the counter side), so we call
-    // renderHide() directly. This is the ultimate guarantee that the
-    // popup cannot persist past the end of the work it represents.
-    setInterval(function () {
-      var ov = document.getElementById("phenomapr-busy-overlay");
-      var visible = ov && ov.classList.contains("is-visible");
-      if (visible && activeOps <= 0 && pendingTimer === null) {
-        dbg("watchdog: visible but activeOps == 0; force-hiding");
-        renderHide();
-      }
-    }, 1000);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bind);

@@ -1007,17 +1007,49 @@ table.dataTable thead th {
 }
 .phenomapr-busy-overlay.is-visible {
   display: flex;
+  /* Backdrop is click-to-dismiss as a manual escape hatch; pointer hint
+     for that. The inner .phenomapr-busy-card resets the cursor so the
+     card area itself does not look interactive. */
+  cursor: pointer;
+}
+.phenomapr-busy-overlay .phenomapr-busy-card {
+  cursor: default;
 }
 .phenomapr-busy-card {
+  position: relative;
   background-color: #ffffff;
   border-radius: 14px;
   box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
-  padding: 1.4rem 1.5rem;
+  padding: 1.4rem 2.2rem 1.4rem 1.5rem;
   max-width: 380px;
   width: calc(100% - 2rem);
   display: flex;
   align-items: center;
   gap: 1.1rem;
+}
+.phenomapr-busy-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.55rem;
+  background: transparent;
+  border: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.phenomapr-busy-close:hover,
+.phenomapr-busy-close:focus {
+  background-color: rgba(15, 23, 42, 0.07);
+  color: #1f2937;
+  outline: none;
 }
 .phenomapr-busy-spinner {
   width: 38px;
