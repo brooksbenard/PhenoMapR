@@ -1492,7 +1492,19 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
     }, ignoreInit = TRUE, ignoreNULL = FALSE)
 
     # Remove-file button -> clear pick_state.
+    #
+    # IMPORTANT: the clear button is rendered dynamically by the
+    # `_chosen` renderUI below -- it only exists in the DOM after a
+    # file has been picked. When Shiny first binds the button it sets
+    # input[[clear_id]] from NULL to 0 (the initial actionButton
+    # value). ignoreInit only suppresses the VERY FIRST evaluation
+    # (when input was NULL before the button existed), so the NULL-to-0
+    # transition still fires the observer. Without this guard, picking
+    # a file would auto-clear it a moment later via that spurious 0
+    # event, and the metadata never stays in the session.
     shiny::observeEvent(input[[clear_id]], {
+      n <- input[[clear_id]] %||% 0L
+      if (!is.numeric(n) || n < 1L) return()
       pick_state(NULL)
     }, ignoreInit = TRUE)
 
@@ -1556,55 +1568,44 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 }
 
 # ============================================================================
-# Centered "busy" overlay with a 2-second activation grace period
+# Centered "busy" overlay (R-driven, instant show/hide)
 # ============================================================================
 #
-# `phenomapr_busy_show()` schedules a centered, foggy-backdrop overlay with a
-# spinner + message. The overlay only appears if the work has been running
-# for at least `delay_seconds` (default 2s), so quick file reads / cheap
-# computations don't flash a popup at the user. `phenomapr_busy_hide()`
-# cancels the pending show OR removes the overlay if it's already visible.
+# Timing model: identical to shiny::showNotification() / removeNotification()
+# in spirit. The popup appears the moment R calls phenomapr_busy_show() and
+# disappears the moment R calls phenomapr_busy_hide() -- there is no
+# client-side delay and no shiny:busy-duration polling, so popup
+# lifetime is bounded *exactly* by R's instrumentation. This guarantees
+# alignment with the bottom-right showNotification() toasts that flank
+# every instrumented observer (which call show on entry and hide on
+# on.exit, sandwiching the actual work).
 #
-# Implementation: the actual setTimeout / overlay toggle lives in the
-# browser. The two custom messages we send here (`phenomapr-busy-show` and
-# `phenomapr-busy-hide`) are handled by JS injected via
-# phenomapr_busy_assets() in the UI head. JS handles the timing because R
-# is single-threaded and won't fire `later::later()` callbacks while a
-# compute-bound observer is still running.
+# Fast ops (where show and hide are flushed in the same reactive
+# cycle) do not cause a perceptible flash: the client processes the
+# two custom messages as back-to-back synchronous DOM updates with no
+# repaint between them, so the browser never paints the brief "shown"
+# state.
 #
-# Usage pattern (mirroring the old shiny::Progress$new() pattern):
+# Usage pattern (unchanged from before):
 #
 #   phenomapr_busy_show("Computing PhenoMap scores...", "Cancer: LUAD")
 #   on.exit(phenomapr_busy_hide(), add = TRUE)
 #   res <- PhenoMap(...)
 #
-# Calling `phenomapr_busy_show()` while a previous show is still pending or
-# visible replaces the message (the JS handler clears its previous timer).
+# The `delay_seconds` parameter is retained for back-compat but is
+# IGNORED -- there is no delay any more. Pass it or omit it freely;
+# nothing reads it.
 
 phenomapr_busy_show <- function(message,
                                 detail = NULL,
                                 hint = "This may take a moment...",
-                                delay_seconds = 2,
+                                delay_seconds = 0,
                                 session = shiny::getDefaultReactiveDomain()) {
   if (is.null(session)) return(invisible(NULL))
-  # Note: the popup's *visibility* is now driven entirely by Shiny's
-  # shiny:busy / shiny:idle duration on the client side. This R-side
-  # call only sets the message that gets displayed if/when the popup
-  # appears (i.e. when the server has been continuously busy for
-  # > delay_seconds). Existing observer-side usage:
-  #
-  #   phenomapr_busy_show("Computing PhenoMap scores...")
-  #   on.exit(phenomapr_busy_hide(), add = TRUE)
-  #
-  # remains correct: the show updates the in-flight message text, the
-  # on.exit hide reverts it back to a neutral default once the work is
-  # done. Fast operations cannot trigger the popup at all because Shiny
-  # goes idle before the 2s show timer fires.
   session$sendCustomMessage("phenomapr-busy-show", list(
-    message  = as.character(message %||% ""),
-    detail   = if (is.null(detail) || !nzchar(detail))   "" else as.character(detail),
-    hint     = if (is.null(hint)   || !nzchar(hint))     "" else as.character(hint),
-    delay_ms = as.integer(round(as.numeric(delay_seconds) * 1000))
+    message = as.character(message %||% ""),
+    detail  = if (is.null(detail) || !nzchar(detail)) "" else as.character(detail),
+    hint    = if (is.null(hint)   || !nzchar(hint))   "" else as.character(hint)
   ))
   invisible(NULL)
 }
@@ -1648,32 +1649,28 @@ phenomapr_busy_assets <- function() {
   }
 
   // ---- Tunables ------------------------------------------------------
-  // The popup can become visible via TWO independent paths -- whichever
-  // criterion is met first wins. Both paths converge on the same hide
-  // logic so there is no way for the popup to get "stuck":
+  // The centered busy popup is purely R-driven, exactly like
+  // showNotification() / removeNotification():
   //
-  //   Path A: shiny:busy duration  (event-driven)
-  //     pollVisibility() reveals the popup the first time Shiny has
-  //     been continuously busy for >= SHOW_DELAY_MS. Robust for any
-  //     long server op that produces normal busy/idle events.
+  //   phenomapr_busy_show(...)  -> popup appears IMMEDIATELY.
+  //   phenomapr_busy_hide()     -> popup disappears IMMEDIATELY.
   //
-  //   Path B: R-side phenomapr_busy_show() timer  (message-driven)
-  //     When R calls phenomapr_busy_show("..."), the client schedules
-  //     a setTimeout(SHOW_DELAY_MS) that reveals the popup if it has
-  //     not been cancelled by then. Catches long ops on environments
-  //     where shiny:busy events are unreliable.
+  // No client-side timers, no shiny:busy-duration polling, no
+  // suppress flags. R alone owns the popup lifetime, so it aligns
+  // exactly with the bottom-right showNotification toasts that flank
+  // each instrumented observer (which call busy_show on entry and
+  // busy_hide on exit, sandwiching their work).
   //
-  // Hides ALWAYS happen (in addition to events) via:
-  //   * shiny:idle after IDLE_GRACE_MS of stable idleness
-  //   * R-side phenomapr_busy_hide() (clears the R timer + hides the
-  //     popup if visible -- this is the critical bug fix for the
-  //     "popup stuck for a minute" regression).
-  //   * User dismiss (close button / backdrop click)
-  var SHOW_DELAY_MS      = 2000;   // both paths use the same threshold
-  var IDLE_GRACE_MS      = 250;    // tolerate brief idle bounces between chained reactives
-  var POLL_INTERVAL_MS   = 100;    // how often the busy-duration polling fires
-  var ABS_VISIBLE_MAX_MS = 30000;  // belt-and-suspenders: popup auto-hides this long after appearing
-                                   // (only meant to cover truly broken sessions; not a normal hide path)
+  // shiny:idle stays as a single safety net (immediate, not delayed):
+  // if the server is fully idle but the popup is still up, that means
+  // a show was emitted without a matching hide. We close it to keep
+  // the model self-healing in that pathological case only.
+  //
+  // The file-input progress affordance (the green sliver under each
+  // Browse button) remains driven by shiny:busy/shiny:inputchanged
+  // because that is per-input visual feedback, not the centered
+  // popup, and benefits from the same lifecycle as a standard
+  // shiny::fileInput upload bar.
   var FILE_INPUT_SUFFIX  = "_server"; // shinyFiles inputs created by phenomapr_file_input
 
   // ---- DOM helpers ---------------------------------------------------
@@ -1720,7 +1717,6 @@ phenomapr_busy_assets <- function() {
     if (ov && !ov.classList.contains("is-visible")) {
       ov.classList.add("is-visible");
       isVisible = true;
-      shownAt = Date.now();
       dbg("overlay shown", currentMessage);
     }
   }
@@ -1729,65 +1725,22 @@ phenomapr_busy_assets <- function() {
     if (ov && ov.classList.contains("is-visible")) {
       ov.classList.remove("is-visible");
       isVisible = false;
-      shownAt = null;
       dbg("overlay hidden");
     }
   }
 
   // ---- State ---------------------------------------------------------
-  // The popup is driven entirely by:
-  //   busyStartedAt    -- timestamp (Date.now()) of the most recent
-  //                       transition from idle to busy, or null when
-  //                       Shiny is (effectively) idle. The polling loop
-  //                       below checks (Date.now() - busyStartedAt) and
-  //                       reveals the popup once that crosses
-  //                       SHOW_DELAY_MS. Short idle bounces inside one
-  //                       composite op tolerate themselves via the
-  //                       grace timer instead of resetting this stamp.
-  //   idleGraceTimer   -- setTimeout pending the IDLE_GRACE_MS debounce
-  //                       on shiny:idle. When it fires we declare
-  //                       Shiny truly idle, clear busyStartedAt, and
-  //                       hide the popup if it was visible.
-  //   isVisible        -- mirrors the .is-visible CSS class so we do
-  //                       not repeatedly call renderShow/renderHide.
-  //   dismissedThisRun -- true between user-dismiss and the next
-  //                       genuine idle->busy transition. Suppresses
-  //                       re-showing the popup for the SAME op after a
-  //                       manual dismiss.
+  // The model is intentionally tiny: the popup is visible iff R has
+  // called phenomapr_busy_show() and has NOT yet called the matching
+  // phenomapr_busy_hide(). dismissedThisRun is the only client-side
+  // bit -- it remembers that the user manually closed the popup so we
+  // do not re-show it for the same R show pair, until R says hide
+  // (which resets the flag, since the next show is a new op).
   var currentMessage    = { message: "Working...", detail: "", hint: "" };
   var defaultMessage    = { message: "Working...", detail: "", hint: "" };
-  var busyStartedAt     = null;     // Path A: when shiny:busy first fired this run
-  var rSideShowTimer    = null;     // Path B: pending setTimeout from R show
-  var idleGraceTimer    = null;
   var isVisible         = false;
-  var shownAt           = null;
-  var dismissedThisRun  = false;       // cleared on next idle confirmation
-  // pathASuppressedUntilNextRShow: when R has explicitly said hide, the
-  // popup is permanently muted (for Path A only) until the next
-  // explicit R show. This is critical because the post-observer
-  // reactive cascade (plot/table rendering) emits a fresh shiny:busy
-  // soon after the originating observer returns via on.exit. A
-  // grace-timer-based suppress (cleared on the FIRST idle) is too
-  // eager: the grace fires between the observer and the cascade, the
-  // cascade re-arms Path A, and the popup re-appears during plot
-  // rendering, lingering for several seconds after the user has
-  // already seen the work complete. By tying the suppress to next-R-show
-  // instead, R alone controls when an instrumented popup may reappear --
-  // the cascade, which makes no R show call, cannot resurrect it.
-  var pathASuppressedUntilNextRShow = false;
+  var dismissedThisRun  = false;
 
-  function clearIdleGraceTimer() {
-    if (idleGraceTimer !== null) {
-      clearTimeout(idleGraceTimer);
-      idleGraceTimer = null;
-    }
-  }
-  function clearRSideShowTimer() {
-    if (rSideShowTimer !== null) {
-      clearTimeout(rSideShowTimer);
-      rSideShowTimer = null;
-    }
-  }
   function resetMessage() {
     currentMessage = {
       message: defaultMessage.message,
@@ -1796,145 +1749,70 @@ phenomapr_busy_assets <- function() {
     };
   }
 
-  // ---- Shiny busy/idle handlers --------------------------------------
-  // shiny:busy fires whenever Shiny starts processing input changes.
-  // We record the transition time but never schedule a setTimeout to
-  // reveal the popup -- the polling loop below does that based on
-  // sustained busy duration.
-  function onShinyBusy() {
-    clearIdleGraceTimer();
-    if (busyStartedAt === null) {
-      busyStartedAt = Date.now();
-      dbg("busy started at " + busyStartedAt);
-    }
-  }
-  // shiny:idle fires when Shiny finishes the current cycle. We do
-  // NOT act immediately -- short bounces are normal in chained reactives.
-  // After IDLE_GRACE_MS of stable idleness we declare the op truly
-  // over: clear busyStartedAt, cancel any pending R-side show, hide
-  // the popup if visible, reset the dismissed flag for the next op.
+  // ---- Shiny idle safety net + disconnect ----------------------------
+  // We do NOT use shiny:busy duration to show the popup at all -- only
+  // R drives visibility. shiny:idle is still useful as a "self-heal"
+  // signal: if the server tells us the whole reactive cycle is over
+  // and the popup is still on screen, R forgot a matching hide and
+  // we close it. shiny:disconnected is treated identically.
   function onShinyIdle() {
-    if (idleGraceTimer !== null) return;
-    idleGraceTimer = setTimeout(function () {
-      idleGraceTimer = null;
-      busyStartedAt = null;
-      clearRSideShowTimer();
-      if (isVisible) renderHide();
-      clearAllFileInputLoading();
-      dismissedThisRun = false;
-      // NOTE: do NOT clear pathASuppressedUntilNextRShow here. That
-      // flag is only cleared by an explicit R-side show call. See its
-      // declaration for the rationale (post-observer reactive cascade
-      // must not be able to re-pop the popup).
+    if (isVisible) {
+      dbg("self-heal: shiny:idle while popup visible (missing R hide)");
+      renderHide();
       resetMessage();
-      dbg("idle confirmed: popup hidden, dismissed-this-run reset");
-    }, IDLE_GRACE_MS);
+    }
+    dismissedThisRun = false;
+    clearAllFileInputLoading();
   }
   function onShinyDisconnected() {
-    clearIdleGraceTimer();
-    clearRSideShowTimer();
-    busyStartedAt = null;
     if (isVisible) renderHide();
+    resetMessage();
     clearAllFileInputLoading();
     dismissedThisRun = false;
-    pathASuppressedUntilNextRShow = false;
-    resetMessage();
     dbg("disconnected: forced hide");
   }
 
-  // ---- Polling loop --------------------------------------------------
-  // Runs every POLL_INTERVAL_MS. The job is purely to flip the popup
-  // ON when shiny:busy has been continuously true for >= SHOW_DELAY_MS.
-  // Hiding is event-driven (idle grace timer) -- the poll also serves
-  // as a watchdog against the popup getting visually stuck longer than
-  // ABS_VISIBLE_MAX_MS for any reason.
-  function pollVisibility() {
-    var now = Date.now();
-    if (busyStartedAt !== null &&
-        !isVisible &&
-        !dismissedThisRun &&
-        !pathASuppressedUntilNextRShow &&
-        (now - busyStartedAt) >= SHOW_DELAY_MS) {
-      renderShow();
-    }
-    if (isVisible && shownAt !== null &&
-        (now - shownAt) > ABS_VISIBLE_MAX_MS) {
-      dbg("watchdog: visible > " + ABS_VISIBLE_MAX_MS + "ms; force-hide");
-      renderHide();
-      busyStartedAt = null;
-    }
-  }
-
   // ---- User-driven dismiss -------------------------------------------
-  // dismissedThisRun blocks any further show (R-driven or Path A) until
-  // the next confirmed idle. It does NOT set pathASuppressedUntilNextRShow
-  // because a clean idle followed by a brand-new long op (with no R show)
-  // should still be allowed to surface a popup. The flag also intentionally
-  // does NOT persist across R show calls -- if R explicitly asks to show
-  // after the user dismissed mid-op, the user can dismiss again.
+  // dismissedThisRun blocks the popup from re-opening until R sends
+  // the next hide (which resets the flag, because the next show after
+  // that is unambiguously a new op).
   function userDismiss(reason) {
     dbg("user dismissed", reason);
-    clearRSideShowTimer();
     if (isVisible) renderHide();
-    busyStartedAt = null;
     dismissedThisRun = true;
   }
 
-  // ---- R-side message API (Path B) -----------------------------------
-  // phenomapr_busy_show("...") updates the popup text AND schedules a
-  // setTimeout(SHOW_DELAY_MS) that reveals the popup if it has not
-  // been cancelled by then. The matching on.exit phenomapr_busy_hide()
-  // unconditionally cancels the timer AND hides the popup if visible.
+  // ---- R-side message API --------------------------------------------
+  // INSTANT show, INSTANT hide. Matches the timing semantics of
+  // showNotification() / removeNotification() on the bottom-right, so
+  // an instrumented observer that calls busy_show() at the top and
+  // busy_hide() (via on.exit) at the bottom has the centered popup
+  // visible for exactly the duration the server was processing -- the
+  // user perceives both indicators appearing and disappearing together.
   //
-  // CRITICAL BUG FIX: handleHide must hide the popup, not just cancel
-  // the timer. Without this, an environment-specific race could let
-  // the R-side setTimeout fire AFTER the work was done -- the popup
-  // would appear, no shiny:idle would be coming to clear it, and it
-  // would sit on screen until ABS_VISIBLE_MAX_MS. Hiding from
-  // handleHide closes that window: even in the worst-case ordering,
-  // R-side hide guarantees the popup goes away promptly.
-  function maybeShowR() {
-    rSideShowTimer = null;
-    if (!dismissedThisRun && !isVisible) {
-      dbg("R-side show timer fired");
-      renderShow();
-    }
-  }
+  // Fast ops (< a few ms server-side) emit show and hide in the same
+  // flush cycle. The client processes them as back-to-back synchronous
+  // DOM updates with no animation frame between them, so the browser
+  // never paints the brief "shown" state -- the popup does not flash.
   function handleShow(p) {
     currentMessage = {
       message: (p && p.message) || "Working...",
       detail:  (p && p.detail)  || "",
       hint:    (p && p.hint)    || "This may take a moment..."
     };
-    // Explicit R show overrides any prior Path A suppression -- R is
-    // signalling a new piece of work and the popup is welcome again.
-    pathASuppressedUntilNextRShow = false;
-    if (isVisible) applyOverlayText();
-    if (rSideShowTimer === null && !dismissedThisRun && !isVisible) {
-      var d = (p && typeof p.delay_ms === "number" && p.delay_ms >= 0)
-        ? p.delay_ms : SHOW_DELAY_MS;
-      rSideShowTimer = setTimeout(maybeShowR, d);
-      dbg("R-side show: timer scheduled in " + d + "ms");
+    if (dismissedThisRun) {
+      dbg("R-side show suppressed (dismissed this run)");
+      return;
     }
+    renderShow();
   }
   function handleHide() {
-    clearRSideShowTimer();
-    // (1) Cancel the pending R-side timer if it has not fired.
-    // (2) Hide the popup immediately if visible -- closes the prior
-    //     "stuck for a minute" bug where a stale timer could fire
-    //     after the work was already done.
-    // (3) Reset busyStartedAt and arm pathASuppressedUntilNextRShow
-    //     so Path A cannot resurrect the popup during the downstream
-    //     reactive cascade. ONLY a fresh R show call clears the
-    //     suppression -- shiny:idle does NOT, because idle reliably
-    //     fires between the originating observer and the cascade and
-    //     would otherwise let Path A re-arm immediately. With this
-    //     model, R alone owns the lifetime of any instrumented popup.
     if (isVisible) renderHide();
-    busyStartedAt = null;
-    pathASuppressedUntilNextRShow = true;
     resetMessage();
-    dbg("R-side hide: timer cleared + popup hidden + Path A muted until next R show");
+    // Hide signals end-of-op. The next show is a fresh op, so a
+    // previous user dismiss must not carry over.
+    dismissedThisRun = false;
+    dbg("R-side hide: popup hidden");
   }
 
   // ---- File-input progress feedback ----------------------------------
@@ -1948,8 +1826,8 @@ phenomapr_busy_assets <- function() {
   // The pipeline:
   //   1. shiny:inputchanged on `<id>_server` (a phenomapr_file_input
   //      picker change) -> add `.is-loading` to that file-input element.
-  //   2. shiny:idle (after IDLE_GRACE_MS) -> swap `.is-loading` for
-  //      `.is-loading-complete` on every still-loading file-input.
+  //   2. shiny:idle -> swap `.is-loading` for `.is-loading-complete`
+  //      on every still-loading file-input.
   //   3. After FILE_INPUT_COMPLETE_FADE_MS -> remove
   //      `.is-loading-complete` so the file-input is back to its
   //      default invisible-bar state.
@@ -2009,13 +1887,6 @@ phenomapr_busy_assets <- function() {
     markFileInputLoading(nm);
   }
 
-  // ---- Polling loop --------------------------------------------------
-  // pollVisibility() (defined above) inspects busyStartedAt every
-  // POLL_INTERVAL_MS and flips the popup ON once the busy duration
-  // crosses SHOW_DELAY_MS. It also force-hides if the popup somehow
-  // stays visible past ABS_VISIBLE_MAX_MS (belt-and-suspenders).
-  setInterval(pollVisibility, POLL_INTERVAL_MS);
-
   // ---- Wire up event listeners ---------------------------------------
   // Native fallback layer. Shiny normally dispatches via jQuery, and
   // jquery/jquery#2476 means $(document).trigger() does not reliably
@@ -2023,9 +1894,9 @@ phenomapr_busy_assets <- function() {
   // events. But many Shiny+browser combos do bubble these events to
   // document, so we register on the native API too -- whichever layer
   // works first wins; both firing is harmless because all handlers are
-  // idempotent.
+  // idempotent. Note: shiny:busy is intentionally NOT listened to --
+  // popup visibility is purely R-driven now.
   if (document && document.addEventListener) {
-    document.addEventListener("shiny:busy",         onShinyBusy,         false);
     document.addEventListener("shiny:idle",         onShinyIdle,         false);
     document.addEventListener("shiny:disconnected", onShinyDisconnected, false);
     document.addEventListener("shiny:inputchanged", onInputChanged,      false);
@@ -2061,12 +1932,11 @@ phenomapr_busy_assets <- function() {
 
     var $j = window.jQuery || window.$;
     if ($j) {
-      $j(document).on("shiny:busy",         onShinyBusy);
       $j(document).on("shiny:idle",         onShinyIdle);
       $j(document).on("shiny:disconnected", onShinyDisconnected);
       $j(document).on("shiny:inputchanged", onInputChanged);
     } else {
-      dbg("jQuery not available at bind(); relying on native listeners + watchdog");
+      dbg("jQuery not available at bind(); relying on native listeners");
     }
   }
   if (document.readyState === "loading") {
