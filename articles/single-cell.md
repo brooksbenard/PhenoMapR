@@ -1105,7 +1105,7 @@ sessionInfo()
     ## [124] labeling_0.4.3         plyr_1.8.9             fs_2.1.0              
     ## [127] stringi_1.8.7          viridisLite_0.4.3      deldir_2.0-4          
     ## [130] lazyeval_0.2.3         spatstat.geom_3.8-1    Matrix_1.7-5          
-    ## [133] RcppHNSW_0.6.0         bit64_4.8.2            future_1.70.0         
+    ## [133] RcppHNSW_0.7.0         bit64_4.8.2            future_1.70.0         
     ## [136] shiny_1.13.0           ROCR_1.0-12            gargle_1.6.1          
     ## [139] igraph_2.3.1           broom_1.0.13           bslib_0.11.0          
     ## [142] bit_4.6.0

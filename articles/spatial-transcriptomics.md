@@ -1172,7 +1172,7 @@ sessionInfo()
     ##  [82] BiocGenerics_0.58.1    spatstat.geom_3.8-1    RcppAnnoy_0.0.23      
     ##  [85] foreach_1.5.2          ggrepel_0.9.8          RANN_2.6.2            
     ##  [88] pillar_1.11.1          stringr_1.6.0          limma_3.68.3          
-    ##  [91] spam_2.11-3            RcppHNSW_0.6.0         later_1.4.8           
+    ##  [91] spam_2.11-3            RcppHNSW_0.7.0         later_1.4.8           
     ##  [94] circlize_0.4.18        splines_4.6.0          moments_0.14.1        
     ##  [97] lattice_0.22-9         survival_3.8-6         deldir_2.0-4          
     ## [100] tidyselect_1.2.1       ComplexHeatmap_2.28.0  miniUI_0.1.2          
