@@ -352,6 +352,40 @@ table.dataTable thead th {
   margin-top: 0.15rem;
 }
 
+/* Score-tab "Detected: ..." status block. Visually mirrors the metadata
+ * status banner on the Data tab so the two sidebars feel like the same
+ * design language. */
+.score-data-status {
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+}
+.score-data-status-empty {
+  background: #fff5ee;
+  border-left: 3px solid #e76f51;
+  color: #5b3a2c;
+}
+.score-data-status-ok {
+  background: #eef7f4;
+  border-left: 3px solid #2A9D8F;
+  color: #1d3b3a;
+}
+.score-data-status .sds-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.score-data-status .sds-badge {
+  color: #2A9D8F;
+}
+.score-data-status .sds-detail {
+  font-size: 0.83rem;
+  color: #486a78;
+  margin-top: 0.15rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
 /* Score-tab inner section divider for the merged Phenotype groups block */
 .score-section-divider,
 .phenotype-section-divider {
@@ -407,15 +441,29 @@ table.dataTable thead th {
  * block. Mirrors the metadata-upload-details treatment so the two
  * <details> blocks in the sidebars feel uniform. */
 .embedding-help-details {
-  margin: 0.25rem 0 0.6rem;
+  margin: 0.25rem 0 0.15rem;
 }
 .embedding-help-details > summary {
   cursor: pointer;
   list-style: revert;
-  padding: 0.3rem 0;
+  padding: 0.2rem 0;
   font-size: 0.92rem;
   color: #264653;
   font-weight: 600;
+}
+/* Second <details> ("Upload a separate embedding file") sits immediately
+ * below the auto-detection block — pull it up so they read as one tight
+ * group instead of two visually disjoint cards. */
+.embedding-upload-details {
+  margin-top: 0;
+}
+/* Trim the helpText() chip's vertical padding inside both <details>
+ * blocks so the gap between summary lines stays compact even when both
+ * are expanded. */
+.embedding-help-details .help-block,
+.embedding-help-details .form-text {
+  margin-top: 0.25rem;
+  margin-bottom: 0.4rem;
 }
 .metadata-upload-details-prompt {
   border-left: 3px solid #e76f51;

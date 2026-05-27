@@ -99,7 +99,25 @@ parse_expression_upload <- function(file_path, file_name) {
 }
 
 # Compute kind / dims / sample / gene ids from a loaded expression object.
+#
+# Also returns:
+#   - assays_avail   : character vector of assay names (Seurat/SCE/SpatialExp);
+#                      length 0 for plain matrices / AnnData (AnnData uses
+#                      `X` + named layers, surfaced via `layers_avail`).
+#   - default_assay  : single string with the natural default assay
+#                      (Seurat::DefaultAssay or assayNames(.)[1]); NA otherwise.
+#   - layers_avail   : character vector of available layer names within the
+#                      default assay (Seurat: "counts" / "data" / "scale.data";
+#                      SCE: same as assays_avail; AnnData: c("X", layers...)).
+# These are used by the Score tab to (a) show a "Detected: ..." status block,
+# (b) pre-fill the assay text input with the detected default, and (c) pick
+# a sensible default for the slot/layer radio (prefer "data" if available,
+# otherwise "counts").
 summarize_expression_object <- function(obj) {
+  assays_avail   <- character(0)
+  default_assay  <- NA_character_
+  layers_avail   <- character(0)
+
   if (inherits(obj, "Seurat")) {
     if ("Spatial" %in% names(obj@assays)) {
       kind <- "spatial"
@@ -110,24 +128,46 @@ summarize_expression_object <- function(obj) {
     n_genes <- nrow(obj)
     sample_ids <- colnames(obj)
     gene_ids <- rownames(obj)
-  } else if (inherits(obj, "SingleCellExperiment")) {
-    kind <- "sce"
+    assays_avail <- tryCatch(names(obj@assays),
+                             error = function(e) character(0))
+    default_assay <- tryCatch(
+      if (requireNamespace("Seurat", quietly = TRUE))
+        Seurat::DefaultAssay(obj)
+      else if (length(assays_avail))
+        assays_avail[1L]
+      else NA_character_,
+      error = function(e) if (length(assays_avail)) assays_avail[1L] else NA_character_
+    )
+    layers_avail <- tryCatch(
+      .seurat_assay_layers(obj, default_assay),
+      error = function(e) character(0)
+    )
+  } else if (inherits(obj, "SingleCellExperiment") ||
+             inherits(obj, "SpatialExperiment")) {
+    kind <- if (inherits(obj, "SpatialExperiment")) "spatial" else "sce"
     n_samples <- ncol(obj)
     n_genes <- nrow(obj)
     sample_ids <- colnames(obj)
     gene_ids <- rownames(obj)
-  } else if (inherits(obj, "SpatialExperiment")) {
-    kind <- "spatial"
-    n_samples <- ncol(obj)
-    n_genes <- nrow(obj)
-    sample_ids <- colnames(obj)
-    gene_ids <- rownames(obj)
+    if (requireNamespace("SummarizedExperiment", quietly = TRUE)) {
+      assays_avail <- tryCatch(
+        SummarizedExperiment::assayNames(obj),
+        error = function(e) character(0)
+      )
+    }
+    if (length(assays_avail)) {
+      default_assay <- assays_avail[1L]
+      # In SCE/SpatialExperiment each entry of `assays_avail` is itself a
+      # full matrix (counts, logcounts, ...) -- they ARE the layers.
+      layers_avail <- assays_avail
+    }
   } else if (is.matrix(obj) || inherits(obj, "Matrix") || is.data.frame(obj)) {
     kind <- "matrix"
     n_samples <- ncol(obj)
     n_genes <- nrow(obj)
     sample_ids <- colnames(obj)
     gene_ids <- rownames(obj)
+    # Plain matrix has no concept of assays / layers.
   } else if (inherits(obj, "python.builtin.object")) {
     kind <- "anndata"
     if (requireNamespace("reticulate", quietly = TRUE)) {
@@ -139,6 +179,11 @@ summarize_expression_object <- function(obj) {
                              error = function(e) NULL)
       gene_ids   <- tryCatch(PhenoMapR:::.anndata_var_names(obj, n = n_genes),
                              error = function(e) NULL)
+      layers_avail <- tryCatch(
+        .anndata_layers_avail(obj),
+        error = function(e) "X"
+      )
+      # AnnData has no "assay" concept; leave default_assay NA.
     } else {
       n_samples <- NA_integer_
       n_genes <- NA_integer_
@@ -156,8 +201,50 @@ summarize_expression_object <- function(obj) {
     n_genes = as.integer(n_genes),
     n_samples = as.integer(n_samples),
     sample_ids = sample_ids,
-    gene_ids = gene_ids
+    gene_ids = gene_ids,
+    assays_avail  = assays_avail,
+    default_assay = default_assay,
+    layers_avail  = layers_avail
   )
+}
+
+# Inspect a Seurat assay and return the subset of {counts, data, scale.data}
+# that are present and non-empty. Supports both Assay (Seurat v4) and Assay5
+# (Seurat v5) storage.
+.seurat_assay_layers <- function(obj, assay_name) {
+  if (is.null(obj) || is.na(assay_name) || !nzchar(assay_name)) return(character(0))
+  if (!(assay_name %in% names(obj@assays))) return(character(0))
+  a <- obj@assays[[assay_name]]
+  candidates <- c("counts", "data", "scale.data")
+  # Assay5 (Seurat v5): layers are named entries in @layers.
+  if (inherits(a, "Assay5")) {
+    have <- tryCatch(
+      if (requireNamespace("SeuratObject", quietly = TRUE))
+        SeuratObject::Layers(a) else names(a@layers),
+      error = function(e) character(0)
+    )
+    return(intersect(candidates, have))
+  }
+  # Classic Assay (Seurat v3/v4): @counts / @data / @scale.data slots.
+  out <- character(0)
+  for (s in candidates) {
+    val <- tryCatch(methods::slot(a, s), error = function(e) NULL)
+    if (is.null(val)) next
+    if (!is.null(dim(val)) && all(dim(val) > 0L)) out <- c(out, s)
+  }
+  out
+}
+
+# List the AnnData layers a user could realistically score from. Always
+# includes the primary X matrix; adds named entries from adata.layers.keys()
+# when present.
+.anndata_layers_avail <- function(obj) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return("X")
+  keys <- tryCatch({
+    builtins <- reticulate::import_builtins(convert = FALSE)
+    as.character(reticulate::py_to_r(builtins$list(obj$layers$keys())))
+  }, error = function(e) character(0))
+  unique(c("X", keys))
 }
 
 .read_tabular_matrix <- function(path, sep) {

@@ -597,26 +597,26 @@ ui <- page_navbar(
           tags$ul(
             class = "phenotype-signature-list",
             tags$li(
-              tags$span(class = "ref-name ref-name-precog", "PRECOG"),
+              tags$strong(class = "ref-name ref-name-precog", "PRECOG"),
               " - ", tags$strong("166 studies"),
               ", ~", tags$strong("18,000 adult patients"),
               " across ", tags$strong("39 cancer histologies"), "."
             ),
             tags$li(
-              tags$span(class = "ref-name ref-name-tcga", "TCGA"),
+              tags$strong(class = "ref-name ref-name-tcga", "TCGA"),
               " - single-cohort prognostic z, ~",
               tags$strong("11,000 patients"),
               " across ", tags$strong("33 adult cancer types"), "."
             ),
             tags$li(
-              tags$span(class = "ref-name ref-name-pediatric",
-                        "Pediatric PRECOG"),
+              tags$strong(class = "ref-name ref-name-pediatric",
+                          "Pediatric PRECOG"),
               " - ", tags$strong("32 studies"),
               ", ~", tags$strong("4,000 pediatric patients"),
               " across ", tags$strong("12 cancers"), "."
             ),
             tags$li(
-              tags$span(class = "ref-name ref-name-ici", "ICI PRECOG"),
+              tags$strong(class = "ref-name ref-name-ici", "ICI PRECOG"),
               " - ", tags$strong("51 studies"),
               ", ~", tags$strong("4,000 immunotherapy-treated patients"),
               " across ", tags$strong("20 cancer subtypes"), "."
@@ -745,11 +745,15 @@ ui <- page_navbar(
       sidebar = sidebar(
         width = 360,
         h4("PhenoMap() parameters"),
+        # "Detected: ..." status block mirrors the metadata-status box on
+        # the Data tab. The two updateRadioButtons() / updateTextInput()
+        # observers further below keep score_slot / score_assay in sync
+        # with what was actually loaded in 1. Data.
+        uiOutput("score_data_status"),
         radioButtons(
           "score_slot", "Seurat / SCE layer",
           choices = c("data (log-normalized)" = "data",
-                      "counts (raw)" = "counts",
-                      "scale.data" = "scale.data"),
+                      "counts (raw)" = "counts"),
           selected = "data"
         ),
         textInput("score_assay", "Assay (Seurat / SCE; blank = auto)", value = ""),
@@ -757,8 +761,14 @@ ui <- page_navbar(
         conditionalPanel(
           "input.pseudobulk == true",
           selectInput("pseudobulk_group_by",
-                      "Group cells by (column in metadata)",
-                      choices = NULL)
+                      "Group cells by (metadata column)",
+                      choices = NULL),
+          helpText(
+            "Pick the column whose values define each pseudobulk sample ",
+            "(e.g. patient / donor / sample / cluster / tissue core / ",
+            "spatial slide). Cells sharing that value are summed into one ",
+            "pseudobulk profile before scoring."
+          )
         ),
         actionButton("run_score", "Compute PhenoMapR scores",
                      icon = icon("play"), class = "btn-primary"),
@@ -930,6 +940,7 @@ ui <- page_navbar(
           )
         ),
         tags$details(
+          class = "embedding-help-details embedding-upload-details",
           tags$summary("Upload a separate embedding file"),
           helpText(
             "Only needed when the metadata table on the Data tab does not ",
@@ -1487,10 +1498,124 @@ server <- function(input, output, session) {
     updateSelectInput(session, "meta_cell_id_col",   choices = cols, selected = cell_default)
     updateSelectInput(session, "meta_cell_type_col", choices = cols, selected = ct_default)
     updateSelectInput(session, "meta_source_col",    choices = cols, selected = src_default)
+
+    # Pseudobulk grouping: prefer patient / donor / sample / orig.ident /
+    # cluster / region / slide / core columns over the first-available
+    # metadata column. Falls back to the first column otherwise so the
+    # input still has a meaningful selection.
+    pb_default <- .pick_default(
+      cols,
+      patterns = c(
+        "^(patient|donor|subject)(_id)?$",
+        "^(sample|sample_id|library|orig\\.ident)$",
+        "^(seurat_clusters|cluster|leiden|louvain)(_id)?$",
+        "^(slide|core|spot|fov|section|capture_area)(_id)?$",
+        "^(tissue|region|condition|treatment)$"
+      )
+    )
+    if (pb_default == "(none)" && length(state$meta_columns)) {
+      pb_default <- state$meta_columns[1L]
+    }
     updateSelectInput(session, "pseudobulk_group_by",
                       choices = setdiff(cols, "(none)"),
-                      selected = state$meta_columns[1L])
+                      selected = pb_default)
   })
+
+  # ------------------------------------------------------------------------
+  # 3. Score sidebar — sync with what was detected in 1. Data
+  # ------------------------------------------------------------------------
+  # `score_data_status` is a small "Detected: ..." block at the top of the
+  # Score sidebar. It mirrors the metadata-status card on the Data tab so
+  # users can see WHAT kind of object PhenoMap() is about to operate on
+  # (and which assay / layers it discovered).
+  output$score_data_status <- renderUI({
+    s <- state$expr_summary
+    if (is.null(s)) {
+      return(tags$div(
+        class = "score-data-status score-data-status-empty",
+        tags$em("Load an expression dataset in 1. Data first.")
+      ))
+    }
+    kind_label <- switch(
+      s$kind %||% "loaded",
+      seurat  = "Seurat object",
+      sce     = "SingleCellExperiment",
+      spatial = "Spatial dataset",
+      matrix  = "Expression matrix",
+      anndata = "AnnData",
+      sprintf("%s object", s$kind %||% "loaded")
+    )
+    bits <- character(0)
+    if (!is.na(s$default_assay %||% NA_character_) &&
+        nzchar(s$default_assay)) {
+      bits <- c(bits, sprintf("assay: %s", s$default_assay))
+    }
+    if (length(s$layers_avail %||% character(0))) {
+      bits <- c(bits, sprintf("layers: %s",
+                              paste(s$layers_avail, collapse = ", ")))
+    }
+    tags$div(
+      class = "score-data-status score-data-status-ok",
+      tags$div(class = "sds-title",
+               tags$span(class = "sds-badge", icon("check-circle")),
+               tags$strong(sprintf("Detected: %s", kind_label))),
+      if (length(bits))
+        tags$div(class = "sds-detail",
+                 paste(bits, collapse = "  ·  "))
+    )
+  })
+
+  # Whenever a fresh object lands in state$expr_summary, refresh:
+  #   * score_slot choices  -> only layers we actually have (drop scale.data
+  #     entirely; if the object lacks a normalized "data" layer, default to
+  #     "counts" so PhenoMap() doesn't error out).
+  #   * score_assay value   -> the detected default assay name (Seurat/SCE).
+  # For plain matrices we leave the defaults alone (data + blank assay) —
+  # PhenoMap() handles matrices without consulting either field.
+  observeEvent(state$expr_summary, {
+    s <- state$expr_summary
+    if (is.null(s)) return()
+
+    nice <- c("data" = "data (log-normalized)",
+              "counts" = "counts (raw)")
+
+    if (identical(s$kind, "seurat") || identical(s$kind, "spatial")) {
+      avail <- intersect(c("data", "counts"), s$layers_avail %||% character(0))
+      if (!length(avail)) {
+        # Couldn't introspect layers (very old Seurat object etc.) -- expose
+        # both options and let the user choose. Default to "data".
+        avail <- c("data", "counts")
+      }
+      choices <- setNames(avail, nice[avail])
+      sel <- if ("data" %in% avail) "data" else "counts"
+      updateRadioButtons(session, "score_slot",
+                         choices = choices, selected = sel)
+    } else if (identical(s$kind, "sce")) {
+      # SCE: layers ARE the assay matrices. Prefer logcounts -> "data" map.
+      la <- s$layers_avail %||% character(0)
+      has_lognorm <- any(grepl("(?i)^(logcounts|normcounts|data|lognorm)$", la))
+      avail <- c(if (has_lognorm) "data", if (any(la == "counts")) "counts")
+      if (!length(avail)) avail <- c("data", "counts")
+      choices <- setNames(avail, nice[avail])
+      sel <- if ("data" %in% avail) "data" else "counts"
+      updateRadioButtons(session, "score_slot",
+                         choices = choices, selected = sel)
+    } else {
+      # AnnData / plain matrix — slot radio is informational only for the
+      # matrix case; show both choices so the AnnData path can pick.
+      avail <- c("data", "counts")
+      choices <- setNames(avail, nice[avail])
+      updateRadioButtons(session, "score_slot",
+                         choices = choices, selected = "data")
+    }
+
+    # Carry over the detected assay name into the text input so users don't
+    # have to retype it (still editable; blank still means "auto").
+    da <- s$default_assay %||% NA_character_
+    if (!is.na(da) && nzchar(da)) {
+      updateTextInput(session, "score_assay", value = da)
+    }
+  }, ignoreInit = TRUE)
 
   # Per-cell unified table (score + group + cell_type + source) shared by
   # multiple downstream tabs (UMAP, score-by-source, marker heatmap, …).
