@@ -2544,9 +2544,18 @@ server <- function(input, output, session) {
 
   # "Tissue section" / "Core" / "Library" switcher for multi-sample
   # spatial objects. Renders ONLY when (a) current embedding is spatial
-  # and (b) the embedding df spans >1 section. The UI offers one entry
-  # per section plus an "All sections" option that disables the per-spot
-  # filter so users can compare slides side-by-side.
+  # and (b) the embedding df spans >1 section.
+  #
+  # Two distinct UX modes share the same selectInput value:
+  #   * "__all__" -> the umap_plot reactive draws every section in one
+  #     facet_wrap, which is the right view for tissue microarrays /
+  #     multi-slide overviews.
+  #   * any specific section name -> the plot zooms to one tissue. The
+  #     adjacent Prev / Next buttons walk through the section list one
+  #     step at a time so users don't have to scroll a long dropdown.
+  #     This is the "click through" mode -- intentionally separate from
+  #     the facet mode so users get the panoramic view AND the focused
+  #     view without one mode hiding the other.
   output$spatial_sample_selector <- renderUI({
     emb <- current_embedding()
     if (is.null(emb)) return(NULL)
@@ -2555,15 +2564,113 @@ server <- function(input, output, session) {
     sections <- sections[!is.na(sections) & nzchar(sections)]
     if (length(sections) < 2L) return(NULL)
     # Stable, alphabetical ordering so the dropdown doesn't reshuffle as
-    # data lands. "All sections" stays at the top.
+    # data lands. "All sections (facet view)" always stays at the top.
     sections <- sort(sections)
-    choices <- c("All sections" = "__all__", setNames(sections, sections))
-    selectInput(
-      "spatial_sample",
-      label = tagList(icon("layer-group"), " Tissue section / core"),
-      choices = choices,
-      selected = sections[1L]
+    choices <- c(
+      "All sections (facet view)" = "__all__",
+      setNames(sections, sections)
     )
+    tagList(
+      selectInput(
+        "spatial_sample",
+        label = tagList(icon("layer-group"), " Tissue section / core"),
+        choices = choices,
+        selected = sections[1L]
+      ),
+      # Prev / Next stepper -- meaningful only when the user has chosen
+      # an individual section. Hidden under "All sections (facet view)"
+      # via conditionalPanel so the arrows aren't misleading in that
+      # mode (there's nothing to step to when every section is shown).
+      conditionalPanel(
+        condition = "input.spatial_sample != '__all__'",
+        tags$div(
+          class = "spatial-sample-stepper",
+          actionButton(
+            "spatial_sample_prev",
+            label = NULL,
+            icon = icon("chevron-left"),
+            title = "Previous section",
+            class = "btn btn-sm btn-outline-secondary spatial-sample-step-btn"
+          ),
+          tags$span(
+            class = "spatial-sample-counter",
+            uiOutput("spatial_sample_counter", inline = TRUE)
+          ),
+          actionButton(
+            "spatial_sample_next",
+            label = NULL,
+            icon = icon("chevron-right"),
+            title = "Next section",
+            class = "btn btn-sm btn-outline-secondary spatial-sample-step-btn"
+          )
+        )
+      )
+    )
+  })
+
+  # "42 / 60" counter shown between the Prev / Next arrows so users
+  # know how far through the section list they are. Returns NULL (which
+  # renders nothing) when we're in facet view or on a single-section
+  # dataset.
+  output$spatial_sample_counter <- renderUI({
+    emb <- current_embedding()
+    if (is.null(emb) || !isTRUE(any(emb$is_spatial))) return(NULL)
+    sections <- sort(unique(as.character(emb$sample)))
+    sections <- sections[!is.na(sections) & nzchar(sections)]
+    if (length(sections) < 2L) return(NULL)
+    cur <- input$spatial_sample %||% sections[1L]
+    if (identical(cur, "__all__")) return(NULL)
+    idx <- match(cur, sections)
+    if (is.na(idx)) return(NULL)
+    sprintf("%d / %d", idx, length(sections))
+  })
+
+  # Helper: re-derive the ordered section list from the current
+  # embedding. Called by both Prev and Next observers so we don't
+  # duplicate the filter / sort logic. Returns character(0) when the
+  # current embedding has fewer than two sections.
+  .current_spatial_sections <- function() {
+    emb <- current_embedding()
+    if (is.null(emb) || !isTRUE(any(emb$is_spatial))) return(character(0))
+    sections <- sort(unique(as.character(emb$sample)))
+    sections <- sections[!is.na(sections) & nzchar(sections)]
+    if (length(sections) < 2L) return(character(0))
+    sections
+  }
+
+  # Step backward through the section list. From "All sections" we
+  # wrap to the last section -- so a user who lands in facet view and
+  # immediately clicks Prev gets shown the final tissue (the visual
+  # opposite of clicking Next, which would show the first).
+  observeEvent(input$spatial_sample_prev, {
+    sections <- .current_spatial_sections()
+    if (!length(sections)) return()
+    cur <- input$spatial_sample %||% sections[1L]
+    new_val <- if (identical(cur, "__all__")) {
+      sections[length(sections)]
+    } else {
+      idx <- match(cur, sections)
+      new_idx <- if (is.na(idx) || idx <= 1L) length(sections) else idx - 1L
+      sections[new_idx]
+    }
+    updateSelectInput(session, "spatial_sample", selected = new_val)
+  })
+
+  # Step forward through the section list. Wraps from the last section
+  # back to the first. From "All sections", clicking Next exits facet
+  # view by selecting the first individual section.
+  observeEvent(input$spatial_sample_next, {
+    sections <- .current_spatial_sections()
+    if (!length(sections)) return()
+    cur <- input$spatial_sample %||% sections[1L]
+    new_val <- if (identical(cur, "__all__")) {
+      sections[1L]
+    } else {
+      idx <- match(cur, sections)
+      new_idx <- if (is.na(idx) || idx >= length(sections)) 1L else idx + 1L
+      sections[new_idx]
+    }
+    updateSelectInput(session, "spatial_sample", selected = new_val)
   })
 
   output$umap_reduction_status <- renderUI({

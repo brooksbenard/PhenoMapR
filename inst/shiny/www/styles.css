@@ -513,6 +513,34 @@ table.dataTable thead th {
   margin-top: 0.35rem;
   margin-bottom: 0.5rem;
 }
+
+/* Tissue section Prev / Next stepper. Sits directly under the
+ * "Tissue section / core" selectInput in the Visualization sidebar so
+ * users can step through TMAs / multi-slide datasets one core at a
+ * time without scrolling a 60-entry dropdown. The buttons hug the left
+ * and right edges with a tabular-numerals counter centred between them
+ * so the row reads as one unified control. */
+.spatial-sample-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: -0.25rem;
+  margin-bottom: 0.6rem;
+}
+.spatial-sample-step-btn {
+  /* Square-ish chevron buttons -- big enough to be easy to click but
+   * not so big that they steal sidebar vertical real estate. */
+  padding: 0.2rem 0.55rem;
+  line-height: 1;
+}
+.spatial-sample-counter {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #486a78;
+  font-variant-numeric: tabular-nums;
+}
 .metadata-upload-details-prompt {
   border-left: 3px solid #e76f51;
   background: #fff5ee;
