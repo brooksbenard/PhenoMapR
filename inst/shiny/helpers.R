@@ -1526,34 +1526,56 @@ phenomapr_busy_assets <- function() {
       setTimeout(bind, 50);
       return;
     }
+    // jQuery is always loaded by Shiny on the client. We need it
+    // because Shiny dispatches shiny:idle / shiny:busy via
+    // $(document).trigger(), and jQuery does not reliably invoke
+    // native document.addEventListener handlers for namespaced custom
+    // events (see jquery/jquery#2476). The Shiny docs explicitly
+    // recommend $(document).on("shiny:idle", ...) for this reason.
+    if (typeof window.jQuery === "undefined" && typeof window.$ === "undefined") {
+      setTimeout(bind, 50);
+      return;
+    }
+    var $j = window.jQuery || window.$;
+
     ensureOverlay();
     Shiny.addCustomMessageHandler("phenomapr-busy-show", handleShow);
     Shiny.addCustomMessageHandler("phenomapr-busy-hide", handleHide);
 
-    // Safety net: when Shiny becomes idle, the server is no longer
-    // running anything that could legitimately need a busy popup. If we
-    // still have active ops outstanding at that point it means a show
-    // was queued without a matching hide -- never a normal flow. Reset
-    // the counter and hide. This guarantees the overlay can never get
-    // stuck on screen even if a future server-side observer forgets its
-    // on.exit hide().
+    // ---- Safety nets --------------------------------------------------
+    // (1) shiny:idle: when the server becomes idle, the application is
+    // no longer doing anything that could legitimately need a busy
+    // popup. Defer 250ms to absorb any in-flight show/hide from the
+    // same flush cycle, then forceReset.
     var idleTimer = null;
-    document.addEventListener("shiny:idle", function () {
-      // Defer slightly so any in-flight show/hide messages from the
-      // same flush cycle have a chance to land before we reset.
+    function scheduleIdleReset() {
       if (idleTimer !== null) clearTimeout(idleTimer);
       idleTimer = setTimeout(function () {
         idleTimer = null;
         forceReset("shiny:idle");
       }, 250);
-    });
-    document.addEventListener("shiny:busy", function () {
+    }
+    function cancelIdleReset() {
       if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null; }
-    });
-    // If the server disconnects entirely, the user can never get a hide.
-    document.addEventListener("shiny:disconnected", function () {
-      forceReset("shiny:disconnected");
-    });
+    }
+    $j(document).on("shiny:idle",         scheduleIdleReset);
+    $j(document).on("shiny:busy",         cancelIdleReset);
+    $j(document).on("shiny:disconnected", function () { forceReset("shiny:disconnected"); });
+
+    // (2) Watchdog: every 1 second, audit our state. If the overlay is
+    // visible but activeOps is 0 (and no pending timer), an ordering
+    // quirk has left it stuck -- forceReset() short-circuits in that
+    // case (nothing to reset on the counter side), so we call
+    // renderHide() directly. This is the ultimate guarantee that the
+    // popup cannot persist past the end of the work it represents.
+    setInterval(function () {
+      var ov = document.getElementById("phenomapr-busy-overlay");
+      var visible = ov && ov.classList.contains("is-visible");
+      if (visible && activeOps <= 0 && pendingTimer === null) {
+        dbg("watchdog: visible but activeOps == 0; force-hiding");
+        renderHide();
+      }
+    }, 1000);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bind);
