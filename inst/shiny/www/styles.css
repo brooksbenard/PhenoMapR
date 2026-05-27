@@ -1069,23 +1069,39 @@ table.dataTable thead th {
   font-weight: 500;
 }
 
-/* Indeterminate progress sliver underneath the Browse row. Mimics the
- * green progress bar shiny::fileInput() shows during a client->server
- * upload, since shinyFiles' server-side path picker (which we use
- * instead) has no equivalent affordance. The bar is invisible by
- * default, then animates whenever the JS in phenomapr_busy_assets() has
- * marked the file-input as `.is-loading` -- which happens between a
- * shiny:inputchanged on `<id>_server` and the next shiny:idle. */
+/* Determinate-looking progress bar underneath the Browse row.
+ *
+ * Background: shiny::fileInput() shows a green bar that grows from 0%
+ * to 100% as a file uploads from browser to server, because the
+ * browser knows exactly how many bytes have been sent.
+ * shinyFiles::shinyFilesButton (which we use for server-side path
+ * picking) has no upload -- the file is already on the server, and R
+ * just reads it. There is no native way to query how many bytes R has
+ * read so far, so we cannot give a perfectly accurate progress bar.
+ *
+ * Instead, we use a CSS keyframe animation that fills the bar from 0%
+ * to 95% over a fixed duration that comfortably exceeds typical read
+ * times. As long as the read finishes inside that window the user
+ * sees the bar growing under the Browse button, just like the
+ * standard fileInput. When the read completes (shiny:idle fires and
+ * JS swaps `.is-loading` for `.is-loading-complete`) the bar leaps to
+ * 100% and fades.
+ *
+ * Caveat: very fast loads make the bar only show a small fraction
+ * before jumping to 100%; very slow loads (> the keyframe duration)
+ * see the bar plateau at 95% until the read returns. Both behaviors
+ * are familiar from GitHub uploads / npm progress meters. */
 .phenomapr-file-input-progress {
   position: relative;
-  height: 4px;
-  margin-top: 4px;
-  border-radius: 2px;
+  height: 5px;
+  margin-top: 5px;
+  border-radius: 3px;
   background: transparent;
   overflow: hidden;
   pointer-events: none;
 }
-.phenomapr-file-input.is-loading .phenomapr-file-input-progress {
+.phenomapr-file-input.is-loading .phenomapr-file-input-progress,
+.phenomapr-file-input.is-loading-complete .phenomapr-file-input-progress {
   background: #e2efed;
 }
 .phenomapr-file-input-progress-bar {
@@ -1093,29 +1109,42 @@ table.dataTable thead th {
   left: 0;
   top: 0;
   height: 100%;
-  width: 30%;
-  background: linear-gradient(90deg,
-              rgba(42, 157, 143, 0.1) 0%,
-              rgba(42, 157, 143, 1) 45%,
-              rgba(42, 157, 143, 1) 55%,
-              rgba(42, 157, 143, 0.1) 100%);
-  border-radius: 2px;
-  transform: translateX(-100%);
-  /* Animation is paused by default and only runs while the parent
-   * file-input has `.is-loading`. This is more efficient than killing
-   * the animation on idle (no recurring style writes when nothing's
-   * happening). */
-  animation: phenomapr-file-input-progress-slide 1.2s linear infinite;
-  animation-play-state: paused;
+  width: 0%;
+  background: linear-gradient(90deg, #2A9D8F 0%, #2A9D8F 70%, #36b3a4 100%);
+  border-radius: 3px;
   opacity: 0;
 }
+/* Filling phase: animate 0% -> 95% over 30s. Ease-out so early progress
+ * is fast (matches the typical "fast at first, slows as it asymptotes"
+ * feeling of a real upload). `forwards` keeps the bar at 95% if the
+ * animation completes before the read does. */
 .phenomapr-file-input.is-loading .phenomapr-file-input-progress-bar {
-  animation-play-state: running;
   opacity: 1;
+  animation: phenomapr-file-input-fill 30s cubic-bezier(0.15, 0.65, 0.25, 1) forwards;
 }
-@keyframes phenomapr-file-input-progress-slide {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(400%); }
+@keyframes phenomapr-file-input-fill {
+  0%   { width: 0%; }
+  10%  { width: 22%; }
+  25%  { width: 50%; }
+  50%  { width: 78%; }
+  100% { width: 95%; }
+}
+/* Completion phase: bar finishes its growth at 100%, holds briefly,
+ * then fades out. Set by JS when shiny:idle fires after a file pick. */
+.phenomapr-file-input.is-loading-complete .phenomapr-file-input-progress-bar {
+  animation: none;
+  width: 100%;
+  opacity: 1;
+  transition: width 0.25s ease, opacity 0.5s ease 0.4s;
+}
+.phenomapr-file-input.is-loading-complete .phenomapr-file-input-progress {
+  transition: background-color 0.5s ease 0.4s;
+}
+.phenomapr-file-input.is-loading-complete .phenomapr-file-input-progress-bar,
+.phenomapr-file-input.is-loading-complete .phenomapr-file-input-progress {
+  /* These rules trigger the fade once is-loading-complete is on; the
+   * JS clears the class entirely after ~1s so the bar is back to its
+   * invisible default state ready for the next pick. */
 }
 
 /* ---------------------------------------------------------------------------

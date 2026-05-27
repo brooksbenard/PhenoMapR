@@ -1605,17 +1605,31 @@ phenomapr_busy_assets <- function() {
   }
 
   // ---- Tunables ------------------------------------------------------
-  // The popup is driven *exclusively* by the duration of Shiny busy/idle
-  // state. There are NO timers triggered by R-side messages -- R only
-  // sets the popup text; visibility is purely a function of "has Shiny
-  // been busy continuously for >= SHOW_DELAY_MS without an idle stretch
-  // longer than IDLE_GRACE_MS". This means quick ops (file loads,
-  // scoring small datasets, etc.) cannot flash the popup at all, and
-  // long ops auto-hide as soon as Shiny truly goes idle.
-  var SHOW_DELAY_MS      = 2000;   // popup appears once shiny has been continuously busy this long
-  var IDLE_GRACE_MS      = 200;    // brief idle->busy bounces (chained reactives) are tolerated
-  var POLL_INTERVAL_MS   = 100;    // how often we check the busy duration
-  var ABS_VISIBLE_MAX_MS = 10000;  // last-resort safety net (popup never sticks longer than this)
+  // The popup can become visible via TWO independent paths -- whichever
+  // criterion is met first wins. Both paths converge on the same hide
+  // logic so there is no way for the popup to get "stuck":
+  //
+  //   Path A: shiny:busy duration  (event-driven)
+  //     pollVisibility() reveals the popup the first time Shiny has
+  //     been continuously busy for >= SHOW_DELAY_MS. Robust for any
+  //     long server op that produces normal busy/idle events.
+  //
+  //   Path B: R-side phenomapr_busy_show() timer  (message-driven)
+  //     When R calls phenomapr_busy_show("..."), the client schedules
+  //     a setTimeout(SHOW_DELAY_MS) that reveals the popup if it has
+  //     not been cancelled by then. Catches long ops on environments
+  //     where shiny:busy events are unreliable.
+  //
+  // Hides ALWAYS happen (in addition to events) via:
+  //   * shiny:idle after IDLE_GRACE_MS of stable idleness
+  //   * R-side phenomapr_busy_hide() (clears the R timer + hides the
+  //     popup if visible -- this is the critical bug fix for the
+  //     "popup stuck for a minute" regression).
+  //   * User dismiss (close button / backdrop click)
+  var SHOW_DELAY_MS      = 2000;   // both paths use the same threshold
+  var IDLE_GRACE_MS      = 250;    // tolerate brief idle bounces between chained reactives
+  var POLL_INTERVAL_MS   = 100;    // how often the busy-duration polling fires
+  var ABS_VISIBLE_MAX_MS = 10000;  // belt-and-suspenders: popup auto-hides this long after appearing
   var FILE_INPUT_SUFFIX  = "_server"; // shinyFiles inputs created by phenomapr_file_input
 
   // ---- DOM helpers ---------------------------------------------------
@@ -1698,7 +1712,8 @@ phenomapr_busy_assets <- function() {
   //                       manual dismiss.
   var currentMessage    = { message: "Working...", detail: "", hint: "" };
   var defaultMessage    = { message: "Working...", detail: "", hint: "" };
-  var busyStartedAt     = null;
+  var busyStartedAt     = null;     // Path A: when shiny:busy first fired this run
+  var rSideShowTimer    = null;     // Path B: pending setTimeout from R show
   var idleGraceTimer    = null;
   var isVisible         = false;
   var shownAt           = null;
@@ -1708,6 +1723,12 @@ phenomapr_busy_assets <- function() {
     if (idleGraceTimer !== null) {
       clearTimeout(idleGraceTimer);
       idleGraceTimer = null;
+    }
+  }
+  function clearRSideShowTimer() {
+    if (rSideShowTimer !== null) {
+      clearTimeout(rSideShowTimer);
+      rSideShowTimer = null;
     }
   }
   function resetMessage() {
@@ -1733,13 +1754,14 @@ phenomapr_busy_assets <- function() {
   // shiny:idle fires when Shiny finishes the current cycle. We do
   // NOT act immediately -- short bounces are normal in chained reactives.
   // After IDLE_GRACE_MS of stable idleness we declare the op truly
-  // over: clear busyStartedAt, hide the popup if visible, reset the
-  // dismissed flag for the next op.
+  // over: clear busyStartedAt, cancel any pending R-side show, hide
+  // the popup if visible, reset the dismissed flag for the next op.
   function onShinyIdle() {
     if (idleGraceTimer !== null) return;
     idleGraceTimer = setTimeout(function () {
       idleGraceTimer = null;
       busyStartedAt = null;
+      clearRSideShowTimer();
       if (isVisible) renderHide();
       clearAllFileInputLoading();
       dismissedThisRun = false;
@@ -1749,6 +1771,7 @@ phenomapr_busy_assets <- function() {
   }
   function onShinyDisconnected() {
     clearIdleGraceTimer();
+    clearRSideShowTimer();
     busyStartedAt = null;
     if (isVisible) renderHide();
     clearAllFileInputLoading();
@@ -1782,17 +1805,31 @@ phenomapr_busy_assets <- function() {
   // ---- User-driven dismiss -------------------------------------------
   function userDismiss(reason) {
     dbg("user dismissed", reason);
+    clearRSideShowTimer();
     if (isVisible) renderHide();
     dismissedThisRun = true;
   }
 
-  // ---- R-side message API (TEXT-ONLY) --------------------------------
-  // Critical: these handlers MUST NOT schedule any timer that could
-  // reveal the popup later. phenomapr_busy_show() is purely advisory
-  // -- it tells us what TEXT to show if the popup ends up appearing
-  // (because work crosses the SHOW_DELAY_MS threshold), and nothing
-  // more. phenomapr_busy_hide() resets the text. Neither affects
-  // visibility; that is owned entirely by shiny:busy/idle.
+  // ---- R-side message API (Path B) -----------------------------------
+  // phenomapr_busy_show("...") updates the popup text AND schedules a
+  // setTimeout(SHOW_DELAY_MS) that reveals the popup if it has not
+  // been cancelled by then. The matching on.exit phenomapr_busy_hide()
+  // unconditionally cancels the timer AND hides the popup if visible.
+  //
+  // CRITICAL BUG FIX: handleHide must hide the popup, not just cancel
+  // the timer. Without this, an environment-specific race could let
+  // the R-side setTimeout fire AFTER the work was done -- the popup
+  // would appear, no shiny:idle would be coming to clear it, and it
+  // would sit on screen until ABS_VISIBLE_MAX_MS. Hiding from
+  // handleHide closes that window: even in the worst-case ordering,
+  // R-side hide guarantees the popup goes away promptly.
+  function maybeShowR() {
+    rSideShowTimer = null;
+    if (!dismissedThisRun && !isVisible) {
+      dbg("R-side show timer fired");
+      renderShow();
+    }
+  }
   function handleShow(p) {
     currentMessage = {
       message: (p && p.message) || "Working...",
@@ -1800,27 +1837,60 @@ phenomapr_busy_assets <- function() {
       hint:    (p && p.hint)    || "This may take a moment..."
     };
     if (isVisible) applyOverlayText();
-    dbg("R-side show (text-only): message updated", currentMessage);
+    if (rSideShowTimer === null && !dismissedThisRun && !isVisible) {
+      var d = (p && typeof p.delay_ms === "number" && p.delay_ms >= 0)
+        ? p.delay_ms : SHOW_DELAY_MS;
+      rSideShowTimer = setTimeout(maybeShowR, d);
+      dbg("R-side show: timer scheduled in " + d + "ms");
+    }
   }
   function handleHide() {
+    clearRSideShowTimer();
+    // *** The fix for the previous "popup stuck for a minute" bug ***
+    // Unconditionally hide the popup. R has signalled the op is done;
+    // even if the show path raced ahead and revealed it a moment ago,
+    // we hide immediately so it does not linger.
+    if (isVisible) renderHide();
     resetMessage();
-    if (isVisible) applyOverlayText();
-    dbg("R-side hide (text-only): message reset");
+    dbg("R-side hide: timer cleared + popup hidden if visible");
   }
 
   // ---- File-input progress feedback ----------------------------------
-  // shiny::fileInput() displays a thin green progress sliver while a
-  // file uploads from client -> server. shinyFiles has no equivalent
-  // affordance because the "file pick" is just a path send-over, not an
-  // upload -- so we synthesize one. Whenever an input value tagged
-  // <id>_server changes (i.e. the user just picked a file in a
-  // phenomapr_file_input picker), we add `.is-loading` to that file
-  // input. The accompanying CSS animates a sliding indeterminate bar
-  // until the shiny:idle event clears it.
+  // Two-phase visual loader under the Browse row:
+  //
+  //   .is-loading           -> CSS fills the bar 0% -> 95% over 30s
+  //                            (see phenomapr-file-input-fill keyframe).
+  //   .is-loading-complete  -> bar leaps to 100% and fades; CSS handles
+  //                            the transition.
+  //
+  // The pipeline:
+  //   1. shiny:inputchanged on `<id>_server` (a phenomapr_file_input
+  //      picker change) -> add `.is-loading` to that file-input element.
+  //   2. shiny:idle (after IDLE_GRACE_MS) -> swap `.is-loading` for
+  //      `.is-loading-complete` on every still-loading file-input.
+  //   3. After FILE_INPUT_COMPLETE_FADE_MS -> remove
+  //      `.is-loading-complete` so the file-input is back to its
+  //      default invisible-bar state.
+  var FILE_INPUT_COMPLETE_FADE_MS = 900;
+
   function clearAllFileInputLoading() {
-    var els = document.querySelectorAll(".phenomapr-file-input.is-loading");
-    for (var i = 0; i < els.length; i++) {
-      els[i].classList.remove("is-loading");
+    // Move every currently-loading file-input into the completing phase
+    // (bar -> 100% + fade). Then schedule a final cleanup that strips
+    // the helper classes entirely so the next file pick starts fresh.
+    var loading = document.querySelectorAll(".phenomapr-file-input.is-loading");
+    for (var i = 0; i < loading.length; i++) {
+      loading[i].classList.remove("is-loading");
+      loading[i].classList.add("is-loading-complete");
+    }
+    if (loading.length > 0) {
+      setTimeout(function () {
+        var completing = document.querySelectorAll(
+          ".phenomapr-file-input.is-loading-complete"
+        );
+        for (var j = 0; j < completing.length; j++) {
+          completing[j].classList.remove("is-loading-complete");
+        }
+      }, FILE_INPUT_COMPLETE_FADE_MS);
     }
   }
   function markFileInputLoading(pickerId) {
@@ -1829,8 +1899,18 @@ phenomapr_busy_assets <- function() {
       ".phenomapr-file-input[data-pfi-picker-id=\\"" + pickerId + "\\"]"
     );
     if (el) {
+      // If a previous load is still in its fade-out phase, strip it so
+      // the new bar starts from 0% rather than 100%.
+      el.classList.remove("is-loading-complete");
+      // Re-trigger the keyframe animation by stripping and re-adding
+      // the loading class. Without the void access browsers may not
+      // restart the animation if .is-loading was already present.
+      el.classList.remove("is-loading");
+      // Force a reflow so the animation restarts on re-add.
+      // (Reading offsetWidth is a well-known reflow trick.)
+      void el.offsetWidth;
       el.classList.add("is-loading");
-      dbg("file-input loading: " + pickerId);
+      dbg("file-input loading start: " + pickerId);
     }
   }
   function onInputChanged(evt) {
