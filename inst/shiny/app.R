@@ -484,6 +484,12 @@ ui <- page_navbar(
           ),
           conditionalPanel(
             "input.custom_source == 'derive'",
+            # The inputs in this block are stacked tightly via the
+            # `phenomapr-compact-stack` class -- ordinary Shiny `.form-group`
+            # bottom-margins push the file pickers, ID / outcome dropdowns,
+            # Phenotype-type and Binary-positive radios way apart, which
+            # buried the actual "Derive" button below the fold on smaller
+            # sidebars. See `phenomapr-compact-stack` in styles.css.
             helpText(
               "Upload bulk expression (genes × samples) and a sample-level ",
               "phenotype table. PhenoMapR will compute per-gene z-scores ",
@@ -491,38 +497,41 @@ ui <- page_navbar(
               "continuous) that you can immediately use to score your ",
               "single-cell / spatial data."
             ),
-            phenomapr_file_input("derive_bulk_file", "Bulk expression (genes × samples)",
-                                 accept = c(".rds", ".tsv", ".csv", ".txt")),
-            uiOutput("derive_bulk_summary"),
-            phenomapr_file_input("derive_phen_file", "Phenotype table (rows = samples)",
-                                 accept = c(".rds", ".tsv", ".csv", ".txt")),
-            selectInput("derive_id_col", "Sample ID column", choices = NULL),
-            selectInput("derive_pheno_col", "Outcome column", choices = NULL),
-            selectInput(
-              "derive_type", "Phenotype type",
-              choices = c("auto", "binary", "continuous", "survival"),
-              selected = "auto"
-            ),
-            uiOutput("derive_pheno_preview"),
-            conditionalPanel(
-              "input.derive_type == 'survival'",
-              selectInput("derive_time_col", "Time column", choices = NULL),
-              selectInput("derive_event_col", "Event column", choices = NULL)
-            ),
-            conditionalPanel(
-              "input.derive_type == 'binary' || input.derive_type == 'auto'",
-              radioButtons(
-                "derive_binary_positive", "Binary positive level",
-                choices = c("Second factor level (default)" = "second",
-                            "First factor level"            = "first"),
-                selected = "second"
+            tags$div(
+              class = "phenomapr-compact-stack",
+              phenomapr_file_input("derive_bulk_file", "Bulk expression (genes × samples)",
+                                   accept = c(".rds", ".tsv", ".csv", ".txt")),
+              uiOutput("derive_bulk_summary"),
+              phenomapr_file_input("derive_phen_file", "Phenotype table (rows = samples)",
+                                   accept = c(".rds", ".tsv", ".csv", ".txt")),
+              selectInput("derive_id_col", "Sample ID column", choices = NULL),
+              selectInput("derive_pheno_col", "Outcome column", choices = NULL),
+              selectInput(
+                "derive_type", "Phenotype type",
+                choices = c("auto", "binary", "continuous", "survival"),
+                selected = "auto"
               ),
-              helpText(
-                "Controls which level of the binary outcome is coded as ",
-                "y = 1 in the logistic regression — i.e. which class ",
-                "positive z-scores point to. Switch to *First* when the ",
-                "first level of your factor (e.g. \"Responder\", ",
-                "\"Mutated\") is the phenotype you care about."
+              uiOutput("derive_pheno_preview"),
+              conditionalPanel(
+                "input.derive_type == 'survival'",
+                selectInput("derive_time_col", "Time column", choices = NULL),
+                selectInput("derive_event_col", "Event column", choices = NULL)
+              ),
+              conditionalPanel(
+                "input.derive_type == 'binary' || input.derive_type == 'auto'",
+                radioButtons(
+                  "derive_binary_positive", "Binary positive level",
+                  choices = c("Second factor level (default)" = "second",
+                              "First factor level"            = "first"),
+                  selected = "second"
+                ),
+                helpText(
+                  "Controls which level of the binary outcome is coded as ",
+                  "y = 1 in the logistic regression — i.e. which class ",
+                  "positive z-scores point to. Switch to *First* when the ",
+                  "first level of your factor (e.g. \"Responder\", ",
+                  "\"Mutated\") is the phenotype you care about."
+                )
               )
             ),
             selectInput(
@@ -922,6 +931,14 @@ ui <- page_navbar(
         # sits right under the section header.
         selectInput("umap_reduction", "Reduction", choices = NULL),
         uiOutput("umap_reduction_status"),
+        # Tissue-section / core / library switcher. Surfaces ONLY when
+        # the currently-selected embedding is spatial AND the loaded
+        # object stamps >1 unique section label on its spots (Seurat
+        # @images named entries, SpatialExperiment colData$sample_id,
+        # AnnData obs[library_id]/etc). Server-side renderUI keeps the
+        # control hidden otherwise so the sidebar isn't cluttered for
+        # single-section datasets.
+        uiOutput("spatial_sample_selector"),
         tags$details(
           class = "embedding-help-details",
           tags$summary("About reductions & auto-detection"),
@@ -2525,6 +2542,30 @@ server <- function(input, output, session) {
     }
   })
 
+  # "Tissue section" / "Core" / "Library" switcher for multi-sample
+  # spatial objects. Renders ONLY when (a) current embedding is spatial
+  # and (b) the embedding df spans >1 section. The UI offers one entry
+  # per section plus an "All sections" option that disables the per-spot
+  # filter so users can compare slides side-by-side.
+  output$spatial_sample_selector <- renderUI({
+    emb <- current_embedding()
+    if (is.null(emb)) return(NULL)
+    if (!isTRUE(any(emb$is_spatial))) return(NULL)
+    sections <- unique(as.character(emb$sample))
+    sections <- sections[!is.na(sections) & nzchar(sections)]
+    if (length(sections) < 2L) return(NULL)
+    # Stable, alphabetical ordering so the dropdown doesn't reshuffle as
+    # data lands. "All sections" stays at the top.
+    sections <- sort(sections)
+    choices <- c("All sections" = "__all__", setNames(sections, sections))
+    selectInput(
+      "spatial_sample",
+      label = tagList(icon("layer-group"), " Tissue section / core"),
+      choices = choices,
+      selected = sections[1L]
+    )
+  })
+
   output$umap_reduction_status <- renderUI({
     obj_avail <- list_available_embeddings(state$expression)
     meta_embs <- detected_meta_embeddings()
@@ -2595,6 +2636,20 @@ server <- function(input, output, session) {
     # need (a) equal aspect so tissue isn't squashed and (b) a reversed
     # y-axis since image-space coordinates have origin at top-left.
     is_spatial <- isTRUE(any(df$is_spatial))
+
+    # Multi-section spatial objects: when the user picks a single
+    # section in the sidebar, restrict the plot to that section so
+    # different tissues don't get drawn on top of each other in the
+    # same coord_fixed() frame. "__all__" (or no selector at all)
+    # keeps every spot -- ggplot's coord_fixed() puts all sections on
+    # the same scale, which is what users want when they're scanning.
+    if (is_spatial && "sample" %in% colnames(df)) {
+      pick <- input$spatial_sample %||% "__all__"
+      if (nzchar(pick) && !identical(pick, "__all__")) {
+        df <- df[!is.na(df$sample) & df$sample == pick, , drop = FALSE]
+        req(nrow(df) > 0L)
+      }
+    }
 
     base <- ggplot(df, aes(x = dim1, y = dim2)) +
       labs(x = unique(df$dim1_name)[1L] %||% "dim1",
@@ -2680,6 +2735,14 @@ server <- function(input, output, session) {
 
     if (isTRUE(input$umap_facet_source) && "source" %in% colnames(df)) {
       p <- p + facet_wrap(~ source)
+    }
+    # Multi-section spatial "All sections" view: each section keeps its
+    # own coord_fixed() frame (free scales) so tissues are drawn
+    # side-by-side instead of getting overlaid in a shared origin.
+    if (is_spatial && "sample" %in% colnames(df) &&
+        identical(input$spatial_sample %||% "__all__", "__all__") &&
+        length(unique(df$sample)) > 1L) {
+      p <- p + facet_wrap(~ sample, scales = "free")
     }
     p
   })

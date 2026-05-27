@@ -638,25 +638,54 @@ list_available_embeddings <- function(obj) {
 }
 
 # Pull a 2D embedding off of obj. Returns a data.frame with columns
-# cell_id, dim1, dim2, dim1_name, dim2_name.
+#   cell_id, dim1, dim2, dim1_name, dim2_name, is_spatial, sample
+# The `sample` column is the per-cell tissue-section / library / core
+# label for spatial objects with multiple slides (Seurat @images named
+# entries, SpatialExperiment::colData()$sample_id, AnnData obs columns
+# named library_id / sample_id / sample / slide_id / section). For
+# non-spatial or single-section spatial inputs every row is tagged with a
+# single section name -- this lets the Visualization tab unconditionally
+# read `unique(emb$sample)` to decide whether to surface a section
+# switcher in the sidebar.
 extract_embedding <- function(obj, name) {
   emb <- NULL
   is_spatial <- identical(name, "spatial")
+  sample_vec <- NULL   # length = nrow(emb), labels each spot's section
   if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
     if (is_spatial) {
-      # Pull tissue coordinates from the first image slot. `imagecol`
-      # holds the x position; `imagerow` holds the y but is image-space
-      # (origin top-left). We negate it later in the plot via
-      # `scale_y_reverse()` rather than mutating values here, so the raw
-      # coordinates stay in their native frame and any axis text is
+      # Visium / Slide-seq Seurat objects store one entry per tissue
+      # section in @images, each carrying its own coords frame. We stack
+      # ALL of them and tag each spot with its image name so the UI can
+      # let the user flip through sections -- previously we silently used
+      # only the first image, which dropped every other slide.
+      #
+      # `imagecol` holds the x position; `imagerow` holds the y but is
+      # image-space (origin top-left). We reverse y later in the plot via
+      # scale_y_reverse() rather than mutating values here, so raw
+      # coordinates stay in their native frame and any axis text remains
       # accurate.
       imgs <- methods::slot(obj, "images") %||% list()
-      first <- imgs[[1L]]
-      coords <- tryCatch(first@coordinates, error = function(e) NULL)
-      if (!is.null(coords) && all(c("imagerow", "imagecol") %in% colnames(coords))) {
-        emb <- as.matrix(coords[, c("imagecol", "imagerow"), drop = FALSE])
-        rownames(emb) <- rownames(coords)
-        colnames(emb) <- c("x", "y")
+      if (length(imgs)) {
+        img_names <- names(imgs)
+        if (is.null(img_names) || any(!nzchar(img_names))) {
+          img_names <- ifelse(nzchar(img_names %||% ""),
+                              img_names,
+                              paste0("image_", seq_along(imgs)))
+        }
+        parts <- lapply(seq_along(imgs), function(i) {
+          coords <- tryCatch(imgs[[i]]@coordinates, error = function(e) NULL)
+          if (is.null(coords)) return(NULL)
+          if (!all(c("imagerow", "imagecol") %in% colnames(coords))) return(NULL)
+          m <- as.matrix(coords[, c("imagecol", "imagerow"), drop = FALSE])
+          colnames(m) <- c("x", "y")
+          rownames(m) <- rownames(coords)
+          list(emb = m, sample = rep(img_names[i], nrow(m)))
+        })
+        parts <- parts[!vapply(parts, is.null, logical(1L))]
+        if (length(parts)) {
+          emb <- do.call(rbind, lapply(parts, `[[`, "emb"))
+          sample_vec <- unlist(lapply(parts, `[[`, "sample"), use.names = FALSE)
+        }
       }
     } else {
       emb <- Seurat::Embeddings(obj, reduction = name)
@@ -673,12 +702,33 @@ extract_embedding <- function(obj, name) {
       if (!is.null(emb) && (is.null(colnames(emb)) || !length(colnames(emb)))) {
         colnames(emb) <- c("x", "y")
       }
+      # SpatialExperiment carries `sample_id` on its colData -- use it
+      # verbatim. Multi-sample objects (joinSamples, mergeSpatial
+      # workflows etc.) all share one spatialCoords frame, so we lean on
+      # the colData column to attach per-spot section labels.
+      sample_vec <- tryCatch({
+        cd <- SummarizedExperiment::colData(obj)
+        if (!is.null(cd) && "sample_id" %in% colnames(cd)) {
+          as.character(cd$sample_id)
+        } else NULL
+      }, error = function(e) NULL)
     } else {
       emb <- SingleCellExperiment::reducedDim(obj, name)
     }
   } else if (inherits(obj, "python.builtin.object")) {
     emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, name),
                     error = function(e) NULL)
+    if (is_spatial) {
+      # AnnData multi-section spatial datasets keep one big obsm["spatial"]
+      # but disambiguate sections via an obs column (Squidpy convention
+      # is `library_id`; Scanpy users sometimes use `sample_id` /
+      # `sample` / `slide_id` / `section`). We sniff for any of those and
+      # ride along on the resulting vector.
+      sample_vec <- tryCatch(
+        .anndata_spatial_sample_vec(obj),
+        error = function(e) NULL
+      )
+    }
   }
   if (is.null(emb)) return(NULL)
   emb <- as.matrix(emb)
@@ -689,11 +739,22 @@ extract_embedding <- function(obj, name) {
   if (is.null(d2_name) || !nzchar(d2_name)) d2_name <- paste0(name, "_2")
   ids <- rownames(emb)
   if (is.null(ids)) {
-    # Fall back to colnames of the parent object
     ids <- tryCatch(colnames(obj), error = function(e) NULL)
     if (is.null(ids) || length(ids) != nrow(emb)) {
       ids <- paste0("Cell_", seq_len(nrow(emb)))
     }
+  }
+  # Normalize / fill the section label so the downstream df always has a
+  # `sample` column of the right length. NULL or wrong-length -> single
+  # synthetic section.
+  if (is.null(sample_vec) || length(sample_vec) != nrow(emb)) {
+    sample_vec <- rep(if (is_spatial) "section_1" else NA_character_,
+                      nrow(emb))
+  } else {
+    # Promote anything non-character (factor / pandas categorical) to
+    # plain character so the select input choices stay clean.
+    sample_vec <- as.character(sample_vec)
+    sample_vec[is.na(sample_vec) | !nzchar(sample_vec)] <- "(unknown)"
   }
   data.frame(
     cell_id = as.character(ids),
@@ -702,8 +763,37 @@ extract_embedding <- function(obj, name) {
     dim1_name = d1_name,
     dim2_name = d2_name,
     is_spatial = is_spatial,
+    sample = sample_vec,
     stringsAsFactors = FALSE
   )
+}
+
+# Probe an AnnData object's `obs` for the column conventionally used to
+# disambiguate tissue sections in a multi-sample spatial dataset.
+# Tries (in order): library_id, sample_id, sample, slide_id, section.
+# Returns a character vector the same length as adata.n_obs, or NULL.
+.anndata_spatial_sample_vec <- function(obj) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
+  candidates <- c("library_id", "sample_id", "sample", "slide_id",
+                  "section", "section_id", "core", "core_id")
+  obs_cols <- tryCatch({
+    builtins <- reticulate::import_builtins(convert = FALSE)
+    as.character(reticulate::py_to_r(builtins$list(obj$obs$columns)))
+  }, error = function(e) character(0))
+  hit <- intersect(candidates, obs_cols)
+  if (!length(hit)) return(NULL)
+  col <- hit[1L]
+  v <- tryCatch({
+    # Decategorize before py_to_r so pandas Categorical doesn't trip
+    # reticulate when the user has fewer categories than reticulate
+    # expects (we saw this with AnnData multi-slide datasets that store
+    # library_id as Categorical with NA codes).
+    builtins <- reticulate::import_builtins(convert = FALSE)
+    series <- obj$obs[col]
+    series <- series$astype("object")
+    as.character(reticulate::py_to_r(builtins$list(series$tolist())))
+  }, error = function(e) NULL)
+  v
 }
 
 # Detect 2D-embedding column pairs in a tabular metadata data.frame so the

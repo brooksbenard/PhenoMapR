@@ -352,6 +352,36 @@ table.dataTable thead th {
   margin-top: 0.15rem;
 }
 
+/* Custom-signature "Derive from bulk" sidebar -- tighten the vertical gap
+ * between the file pickers and the cascading metadata dropdowns so the
+ * whole derivation form fits in the sidebar without burying the
+ * "Derive phenotype signature" button below the fold. Scoped strictly to
+ * `.phenomapr-compact-stack` so we don't accidentally compress other
+ * sidebar groups elsewhere in the app. */
+.phenomapr-compact-stack > .form-group,
+.phenomapr-compact-stack > .shiny-input-container,
+.phenomapr-compact-stack > .phenomapr-file-input {
+  margin-bottom: 0.4rem;
+}
+.phenomapr-compact-stack .control-label,
+.phenomapr-compact-stack label {
+  margin-bottom: 0.15rem;
+}
+/* Nested conditionalPanel children (survival time/event, binary positive
+ * level) inherit the same compact rhythm. */
+.phenomapr-compact-stack .form-group,
+.phenomapr-compact-stack .shiny-input-container {
+  margin-bottom: 0.4rem;
+}
+/* Trim the helpText() chip following Binary-positive radio so the radio
+ * + explanation read as one tight unit. */
+.phenomapr-compact-stack .help-block,
+.phenomapr-compact-stack .form-text {
+  margin-top: 0.1rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.83rem;
+}
+
 /* Score-tab "Detected: ..." status block. Visually mirrors the metadata
  * status banner on the Data tab so the two sidebars feel like the same
  * design language. */
