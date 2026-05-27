@@ -1400,6 +1400,7 @@ phenomapr_file_input <- function(id, label = NULL, accept = NULL,
   shiny::tags$div(
     class = "form-group shiny-input-container phenomapr-file-input",
     style = if (!is.null(width)) sprintf("width: %s;", width) else NULL,
+    `data-pfi-picker-id` = picker_id,
     if (!is.null(label) && length(label) > 0L && !identical(label, "")) {
       shiny::tags$label(class = "control-label", `for` = picker_id, label)
     },
@@ -1420,6 +1421,16 @@ phenomapr_file_input <- function(id, label = NULL, accept = NULL,
         class = "phenomapr-file-input-name",
         shiny::uiOutput(paste0(picker_id, "_chosen"), inline = TRUE)
       )
+    ),
+    # Indeterminate progress bar mimicking the green "uploading" sliver
+    # under shiny::fileInput(). Sliver animates whenever this file-input
+    # is mid-load; toggled by the JS in phenomapr_busy_assets() in
+    # response to shiny:inputchanged on `*_server` -> shiny:idle. The
+    # nested inner div is what actually slides; the outer div is the
+    # track.
+    shiny::tags$div(
+      class = "phenomapr-file-input-progress",
+      shiny::tags$div(class = "phenomapr-file-input-progress-bar")
     )
   )
 }
@@ -1595,8 +1606,9 @@ phenomapr_busy_assets <- function() {
 
   // ---- Tunables ------------------------------------------------------
   var SHOW_DELAY_MS      = 2000;   // popup only appears once shiny has been continuously busy this long
-  var IDLE_GRACE_MS      = 100;    // brief idle->busy bounces inside one composite op are tolerated
+  var IDLE_GRACE_MS      = 300;    // brief idle->busy bounces inside one composite op are tolerated
   var ABS_VISIBLE_MAX_MS = 60000;  // last-resort hard ceiling
+  var FILE_INPUT_SUFFIX  = "_server"; // shinyFiles inputs created by phenomapr_file_input
 
   // ---- DOM helpers ---------------------------------------------------
   function ensureOverlay() {
@@ -1659,7 +1671,8 @@ phenomapr_busy_assets <- function() {
   // ---- State ---------------------------------------------------------
   var currentMessage   = { message: "Working...", detail: "", hint: "" };
   var defaultMessage   = { message: "Working...", detail: "", hint: "" };
-  var showTimer        = null;     // setTimeout id while we wait for SHOW_DELAY_MS to elapse
+  var showTimer        = null;     // shiny:busy-driven setTimeout id (waits SHOW_DELAY_MS while busy)
+  var rSideShowTimer   = null;     // R-driven setTimeout id (set by phenomapr_busy_show)
   var idleHideTimer    = null;     // setTimeout id while we wait for IDLE_GRACE_MS post-idle
   var isVisible        = false;
   var shownAt          = null;
@@ -1671,6 +1684,9 @@ phenomapr_busy_assets <- function() {
 
   function clearShowTimer() {
     if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
+  }
+  function clearRSideShowTimer() {
+    if (rSideShowTimer !== null) { clearTimeout(rSideShowTimer); rSideShowTimer = null; }
   }
   function clearIdleHideTimer() {
     if (idleHideTimer !== null) { clearTimeout(idleHideTimer); idleHideTimer = null; }
@@ -1705,7 +1721,9 @@ phenomapr_busy_assets <- function() {
       idleHideTimer = null;
       isBusy = false;
       clearShowTimer();
+      clearRSideShowTimer();
       renderHide();
+      clearAllFileInputLoading();
       // Next busy run is conceptually a new operation -> allow re-show.
       dismissedThisRun = false;
       // Reset message back to a neutral default so any leftover text
@@ -1720,8 +1738,10 @@ phenomapr_busy_assets <- function() {
   }
   function onShinyDisconnected() {
     clearShowTimer();
+    clearRSideShowTimer();
     clearIdleHideTimer();
     renderHide();
+    clearAllFileInputLoading();
     dismissedThisRun = false;
     isBusy = false;
     dbg("disconnected: forced hide");
@@ -1731,12 +1751,27 @@ phenomapr_busy_assets <- function() {
   function userDismiss(reason) {
     dbg("user dismissed", reason);
     clearShowTimer();
+    clearRSideShowTimer();
     renderHide();
     dismissedThisRun = true;
   }
 
-  // ---- R-side message API (R only sets the *text*; visibility is now
-  //      controlled exclusively by Shiny busy/idle duration) ----------
+  // ---- R-side message API --------------------------------------------
+  // R-side phenomapr_busy_show() updates the popup text *and* schedules
+  // a parallel show timer that fires after `delay_ms` (default
+  // SHOW_DELAY_MS). The popup will appear when EITHER (a) Shiny has
+  // been continuously busy for SHOW_DELAY_MS via the shiny:busy event,
+  // OR (b) this R-driven timer fires while no matching hide has been
+  // received. This double-trigger means a single missed shiny:busy
+  // event (or a busy/idle sequence with bounces > IDLE_GRACE_MS apart)
+  // cannot silently suppress the popup for a long op.
+  function maybeShowR() {
+    rSideShowTimer = null;
+    if (!dismissedThisRun && !isVisible) {
+      dbg("R-driven show timer fired");
+      renderShow();
+    }
+  }
   function handleShow(p) {
     var msg = (p && p.message) || "Working...";
     currentMessage = {
@@ -1745,9 +1780,28 @@ phenomapr_busy_assets <- function() {
       hint:    (p && p.hint)    || "This may take a moment..."
     };
     if (isVisible) applyOverlayText();
-    dbg("R-side show: message updated", currentMessage);
+    // Schedule the R-driven fallback timer. If R-side phenomapr_busy_show()
+    // is called multiple times in quick succession we just keep the
+    // first timer (later calls only update the text).
+    if (rSideShowTimer === null && !dismissedThisRun && !isVisible) {
+      var d = (p && typeof p.delay_ms === "number" && p.delay_ms >= 0)
+        ? p.delay_ms : SHOW_DELAY_MS;
+      rSideShowTimer = setTimeout(maybeShowR, d);
+      dbg("R-side show: message updated + R timer scheduled in " + d + "ms",
+          currentMessage);
+    } else {
+      dbg("R-side show: message updated (no R timer needed)", currentMessage);
+    }
   }
   function handleHide() {
+    // Cancel the R-driven timer when R itself signals completion --
+    // otherwise a quick op (faster than SHOW_DELAY_MS) would still
+    // flash the popup at the end.
+    if (rSideShowTimer !== null) {
+      clearTimeout(rSideShowTimer);
+      rSideShowTimer = null;
+      dbg("R-side hide: cancelled pending R-driven show timer");
+    }
     currentMessage = {
       message: defaultMessage.message,
       detail:  defaultMessage.detail,
@@ -1755,6 +1809,45 @@ phenomapr_busy_assets <- function() {
     };
     if (isVisible) applyOverlayText();
     dbg("R-side hide: message reset to default");
+  }
+
+  // ---- File-input progress feedback ----------------------------------
+  // shiny::fileInput() displays a thin green progress sliver while a
+  // file uploads from client -> server. shinyFiles has no equivalent
+  // affordance because the "file pick" is just a path send-over, not an
+  // upload -- so we synthesize one. Whenever an input value tagged
+  // <id>_server changes (i.e. the user just picked a file in a
+  // phenomapr_file_input picker), we add `.is-loading` to that file
+  // input. The accompanying CSS animates a sliding indeterminate bar
+  // until the shiny:idle event clears it.
+  function clearAllFileInputLoading() {
+    var els = document.querySelectorAll(".phenomapr-file-input.is-loading");
+    for (var i = 0; i < els.length; i++) {
+      els[i].classList.remove("is-loading");
+    }
+  }
+  function markFileInputLoading(pickerId) {
+    if (!pickerId) return;
+    var el = document.querySelector(
+      ".phenomapr-file-input[data-pfi-picker-id=\\"" + pickerId + "\\"]"
+    );
+    if (el) {
+      el.classList.add("is-loading");
+      dbg("file-input loading: " + pickerId);
+    }
+  }
+  function onInputChanged(evt) {
+    // Shiny fires this on every input value update. We only react to
+    // names matching the phenomapr_file_input picker convention
+    // (`<id>_server`) so other input changes do not accidentally flash
+    // the bar.
+    var nm = (evt && evt.detail && evt.detail.name) ||
+             (evt && evt.name);
+    if (!nm) return;
+    if (nm.length <= FILE_INPUT_SUFFIX.length) return;
+    if (nm.lastIndexOf(FILE_INPUT_SUFFIX) !==
+        nm.length - FILE_INPUT_SUFFIX.length) return;
+    markFileInputLoading(nm);
   }
 
   // ---- Watchdog: hard ceiling on overlay visibility ------------------
@@ -1781,6 +1874,7 @@ phenomapr_busy_assets <- function() {
     document.addEventListener("shiny:busy",         onShinyBusy,         false);
     document.addEventListener("shiny:idle",         onShinyIdle,         false);
     document.addEventListener("shiny:disconnected", onShinyDisconnected, false);
+    document.addEventListener("shiny:inputchanged", onInputChanged,      false);
   }
 
   function attachDismissHandlers() {
@@ -1816,6 +1910,7 @@ phenomapr_busy_assets <- function() {
       $j(document).on("shiny:busy",         onShinyBusy);
       $j(document).on("shiny:idle",         onShinyIdle);
       $j(document).on("shiny:disconnected", onShinyDisconnected);
+      $j(document).on("shiny:inputchanged", onInputChanged);
     } else {
       dbg("jQuery not available at bind(); relying on native listeners + watchdog");
     }

@@ -1069,6 +1069,55 @@ table.dataTable thead th {
   font-weight: 500;
 }
 
+/* Indeterminate progress sliver underneath the Browse row. Mimics the
+ * green progress bar shiny::fileInput() shows during a client->server
+ * upload, since shinyFiles' server-side path picker (which we use
+ * instead) has no equivalent affordance. The bar is invisible by
+ * default, then animates whenever the JS in phenomapr_busy_assets() has
+ * marked the file-input as `.is-loading` -- which happens between a
+ * shiny:inputchanged on `<id>_server` and the next shiny:idle. */
+.phenomapr-file-input-progress {
+  position: relative;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: transparent;
+  overflow: hidden;
+  pointer-events: none;
+}
+.phenomapr-file-input.is-loading .phenomapr-file-input-progress {
+  background: #e2efed;
+}
+.phenomapr-file-input-progress-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg,
+              rgba(42, 157, 143, 0.1) 0%,
+              rgba(42, 157, 143, 1) 45%,
+              rgba(42, 157, 143, 1) 55%,
+              rgba(42, 157, 143, 0.1) 100%);
+  border-radius: 2px;
+  transform: translateX(-100%);
+  /* Animation is paused by default and only runs while the parent
+   * file-input has `.is-loading`. This is more efficient than killing
+   * the animation on idle (no recurring style writes when nothing's
+   * happening). */
+  animation: phenomapr-file-input-progress-slide 1.2s linear infinite;
+  animation-play-state: paused;
+  opacity: 0;
+}
+.phenomapr-file-input.is-loading .phenomapr-file-input-progress-bar {
+  animation-play-state: running;
+  opacity: 1;
+}
+@keyframes phenomapr-file-input-progress-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
 /* ---------------------------------------------------------------------------
  * "End session" button in the navbar's right rail (next to the GitHub link).
  *
