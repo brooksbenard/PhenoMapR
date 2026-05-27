@@ -5,7 +5,7 @@
 [![R-CMD-check](https://github.com/brooksbenard/PhenoMapR/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/brooksbenard/PhenoMapR/actions)
 [![codecov](https://codecov.io/gh/brooksbenard/PhenoMapR/graph/badge.svg)](https://codecov.io/gh/brooksbenard/PhenoMapR)
 [![Lifecycle: Experimental](https://img.shields.io/badge/lifecycle-experimental-teal.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![License: Stanford](https://img.shields.io/badge/License-Stanford-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 [![Documentation](https://img.shields.io/badge/docs-pkgdown-blue.svg)](https://brooksbenard.github.io/PhenoMapR)
 
 <!-- badges: end -->

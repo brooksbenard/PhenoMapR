@@ -31,7 +31,7 @@ home:
     components:
       license:
         title: License
-        text: "[Stanford Non-Commercial License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE)"
+        text: "[MIT License](https://github.com/brooksbenard/PhenoMapR/blob/main/LICENSE.md)"
       funding:
         title: Funding
         text: "Development of PhenoMapR was supported by the National Institutes of Health (R01CA276828)"
