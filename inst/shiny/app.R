@@ -128,7 +128,10 @@ ui <- page_navbar(
   header = tags$head(
     tags$link(rel = "stylesheet", href = "styles.css"),
     tags$link(rel = "stylesheet",
-              href = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css")
+              href = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"),
+    # Inject the centered busy-overlay markup + custom-message handlers
+    # used by phenomapr_busy_show()/phenomapr_busy_hide().
+    phenomapr_busy_assets()
   ),
 
   # -------------------------------------------------------------------------
@@ -562,57 +565,61 @@ ui <- page_navbar(
         )
       ),
       card(
+        # The .signature-card-body class lets us position the
+        # "Further reading" box (.phenotype-signature-refs) absolutely in
+        # the upper-right corner of the card body without it stealing
+        # space from the bullet list below. Per-database name labels are
+        # color-coded to match the sidebar's reference-source palette so
+        # the bullet list visually maps onto the picker pills above.
         card_header(icon("circle-info"), " Choosing a phenotype signature"),
         card_body(
-          # Database name labels are color-coded to match the same per-source
-          # palette used by the sidebar's reference-source picker, so users
-          # can visually associate a colored dot in the picker with the
-          # corresponding entry in this explainer card. The palette lives in
-          # styles.css ("Reference-source palette") and is reused here via
-          # the .ref-name-* helpers.
+          class = "signature-card-body",
+          # Compact "Further reading" callout pinned to the upper-right of
+          # the card. Provides the canonical PRECOG paper + website links
+          # without breaking the flow of the explainer text.
+          tags$div(
+            class = "phenotype-signature-refs",
+            tags$div(class = "phenotype-signature-refs-title",
+                     "Further reading"),
+            tags$a(
+              href = "https://academic.oup.com/nar/article/54/D1/D1579/8324954",
+              target = "_blank", rel = "noopener noreferrer",
+              icon("book-open"), " PRECOG paper (NAR 2026)"
+            ),
+            tags$a(
+              href = "https://precog.stanford.edu/",
+              target = "_blank", rel = "noopener noreferrer",
+              icon("link"), " precog.stanford.edu"
+            )
+          ),
           tags$p(tags$strong("Built-in signatures"),
                  " are meta-z-scores across many cohorts:"),
           tags$ul(
             class = "phenotype-signature-list",
             tags$li(
               tags$span(class = "ref-name ref-name-precog", "PRECOG"),
-              " - meta-z over ~166 cohorts spanning ",
-              tags$strong("51 adult cancer / tissue types"), "."
+              " - ", tags$strong("166 studies"),
+              ", ~", tags$strong("18,000 adult patients"),
+              " across ", tags$strong("39 cancer histologies"), "."
             ),
             tags$li(
               tags$span(class = "ref-name ref-name-tcga", "TCGA"),
-              " - single-cohort prognostic z spanning ",
-              tags$strong("33 adult cancer types"),
-              " (plus PRECOG-meta and TCGA-meta tracks)."
+              " - single-cohort prognostic z, ~",
+              tags$strong("11,000 patients"),
+              " across ", tags$strong("33 adult cancer types"), "."
             ),
             tags$li(
               tags$span(class = "ref-name ref-name-pediatric",
                         "Pediatric PRECOG"),
-              " - pediatric tumor cohorts spanning ",
-              tags$strong("13 tumor types"),
-              " (ALL, ATRT, ESFT, GCT, HGG, MB, NB, ...)."
+              " - ", tags$strong("32 studies"),
+              ", ~", tags$strong("4,000 pediatric patients"),
+              " across ", tags$strong("12 cancers"), "."
             ),
             tags$li(
               tags$span(class = "ref-name ref-name-ici", "ICI PRECOG"),
-              " - ",
-              tags$strong("38 immune-checkpoint inhibitor cohorts"),
-              " (anti-PD1 / PD-L1 / CTLA4, primary or metastatic, naive ",
-              "or post-treatment)."
-            )
-          ),
-          tags$p(
-            class = "phenotype-signature-refs",
-            "Further reading: ",
-            tags$a(
-              href = "https://academic.oup.com/nar/article/54/D1/D1579/8324954",
-              target = "_blank", rel = "noopener noreferrer",
-              "PRECOG paper (NAR 2026)"
-            ),
-            " | ",
-            tags$a(
-              href = "https://precog.stanford.edu/",
-              target = "_blank", rel = "noopener noreferrer",
-              "precog.stanford.edu"
+              " - ", tags$strong("51 studies"),
+              ", ~", tags$strong("4,000 immunotherapy-treated patients"),
+              " across ", tags$strong("20 cancer subtypes"), "."
             )
           ),
           tags$p(
@@ -761,9 +768,9 @@ ui <- page_navbar(
         h4("Phenotype groups"),
         helpText(
           "After scoring, the top / bottom percentile of cells are ",
-          "automatically tagged as Most Adverse and Most Favorable as you ",
-          "drag the slider. These labels feed the marker-finding step and ",
-          "downstream visualizations."
+          "automatically tagged as Most Phenotype + and Most Phenotype - ",
+          "as you drag the slider. These labels feed the marker-finding ",
+          "step and downstream visualizations."
         ),
         sliderInput("percentile", "Tail percentile (top and bottom)",
                     min = 0.01, max = 0.40, value = 0.05, step = 0.01),

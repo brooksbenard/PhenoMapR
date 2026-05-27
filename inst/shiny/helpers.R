@@ -1154,14 +1154,21 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 }
 
 # ============================================================================
-# Centered "busy" modal (replaces shiny::Progress$new bottom-right toasts)
+# Centered "busy" overlay with a 2-second activation grace period
 # ============================================================================
 #
-# `phenomapr_busy_show()` opens a centered modal with a spinner, a primary
-# message, and an optional detail line + reassurance hint. The accompanying
-# CSS in www/styles.css adds a foggy/blurred backdrop so the user sees the
-# app is busy and not stuck, even on long-running operations like scoring
-# or marker discovery.
+# `phenomapr_busy_show()` schedules a centered, foggy-backdrop overlay with a
+# spinner + message. The overlay only appears if the work has been running
+# for at least `delay_seconds` (default 2s), so quick file reads / cheap
+# computations don't flash a popup at the user. `phenomapr_busy_hide()`
+# cancels the pending show OR removes the overlay if it's already visible.
+#
+# Implementation: the actual setTimeout / overlay toggle lives in the
+# browser. The two custom messages we send here (`phenomapr-busy-show` and
+# `phenomapr-busy-hide`) are handled by JS injected via
+# phenomapr_busy_assets() in the UI head. JS handles the timing because R
+# is single-threaded and won't fire `later::later()` callbacks while a
+# compute-bound observer is still running.
 #
 # Usage pattern (mirroring the old shiny::Progress$new() pattern):
 #
@@ -1169,44 +1176,125 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 #   on.exit(phenomapr_busy_hide(), add = TRUE)
 #   res <- PhenoMap(...)
 #
-# Calling `phenomapr_busy_show()` again while the modal is open replaces
-# the message in place (we explicitly remove + re-show), so multi-step
-# pipelines can update the user as they progress without flicker.
+# Calling `phenomapr_busy_show()` while a previous show is still pending or
+# visible replaces the message (the JS handler clears its previous timer).
 
 phenomapr_busy_show <- function(message,
                                 detail = NULL,
                                 hint = "This may take a moment...",
+                                delay_seconds = 2,
                                 session = shiny::getDefaultReactiveDomain()) {
   if (is.null(session)) return(invisible(NULL))
-  body <- shiny::tagList(
-    shiny::tags$div(class = "phenomapr-busy-spinner"),
-    shiny::tags$div(
-      class = "phenomapr-busy-text",
-      shiny::tags$div(class = "phenomapr-busy-message", message),
-      if (!is.null(detail) && nzchar(detail))
-        shiny::tags$div(class = "phenomapr-busy-detail", detail),
-      if (!is.null(hint) && nzchar(hint))
-        shiny::tags$div(class = "phenomapr-busy-hint", hint)
-    )
-  )
-  shiny::removeModal(session = session)
-  shiny::showModal(
-    shiny::modalDialog(
-      title = NULL,
-      footer = NULL,
-      easyClose = FALSE,
-      fade = FALSE,
-      size = "s",
-      class = "phenomapr-busy-modal",
-      body
-    ),
-    session = session
-  )
-  invisible(NULL)
+  token <- paste0("busy-",
+                  format(Sys.time(), "%H%M%OS3"), "-",
+                  sample.int(.Machine$integer.max, 1L))
+  session$sendCustomMessage("phenomapr-busy-show", list(
+    message  = as.character(message %||% ""),
+    detail   = if (is.null(detail) || !nzchar(detail))   "" else as.character(detail),
+    hint     = if (is.null(hint)   || !nzchar(hint))     "" else as.character(hint),
+    delay_ms = as.integer(round(as.numeric(delay_seconds) * 1000)),
+    token    = token
+  ))
+  invisible(token)
 }
 
 phenomapr_busy_hide <- function(session = shiny::getDefaultReactiveDomain()) {
   if (is.null(session)) return(invisible(NULL))
-  shiny::removeModal(session = session)
+  session$sendCustomMessage("phenomapr-busy-hide", list())
   invisible(NULL)
+}
+
+# Inject the busy-overlay markup, custom-message handlers, and DOM bootstrap
+# into the page <head>. Call from page_navbar()'s `header = tags$head(...)`.
+phenomapr_busy_assets <- function() {
+  shiny::tags$script(shiny::HTML(
+'
+(function () {
+  function ensureOverlay() {
+    if (document.getElementById("phenomapr-busy-overlay")) return;
+    var overlay = document.createElement("div");
+    overlay.id = "phenomapr-busy-overlay";
+    overlay.className = "phenomapr-busy-overlay";
+    overlay.setAttribute("role", "alertdialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.innerHTML = ""
+      + "<div class=\\"phenomapr-busy-card\\">"
+      + "  <div class=\\"phenomapr-busy-spinner\\"></div>"
+      + "  <div class=\\"phenomapr-busy-text\\">"
+      + "    <div class=\\"phenomapr-busy-message\\" id=\\"phenomapr-busy-message\\"></div>"
+      + "    <div class=\\"phenomapr-busy-detail\\" id=\\"phenomapr-busy-detail\\"></div>"
+      + "    <div class=\\"phenomapr-busy-hint\\" id=\\"phenomapr-busy-hint\\"></div>"
+      + "  </div>"
+      + "</div>";
+    document.body.appendChild(overlay);
+  }
+  function setText(id, val) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (val && String(val).length) {
+      el.textContent = val;
+      el.style.display = "block";
+    } else {
+      el.textContent = "";
+      el.style.display = "none";
+    }
+  }
+  function showOverlay(p) {
+    ensureOverlay();
+    setText("phenomapr-busy-message", p.message || "");
+    setText("phenomapr-busy-detail",  p.detail  || "");
+    setText("phenomapr-busy-hint",    p.hint    || "");
+    var ov = document.getElementById("phenomapr-busy-overlay");
+    if (ov) ov.classList.add("is-visible");
+  }
+  function hideOverlay() {
+    var ov = document.getElementById("phenomapr-busy-overlay");
+    if (ov) ov.classList.remove("is-visible");
+  }
+
+  var pending = null;       // setTimeout id of the pending show
+  var pendingToken = null;  // token of the most recent show request
+
+  function bind() {
+    if (typeof Shiny === "undefined" || !Shiny.addCustomMessageHandler) {
+      // Shiny not ready yet -- try again after a tick.
+      setTimeout(bind, 50);
+      return;
+    }
+    ensureOverlay();
+    Shiny.addCustomMessageHandler("phenomapr-busy-show", function (p) {
+      ensureOverlay();
+      if (pending !== null) {
+        clearTimeout(pending);
+        pending = null;
+      }
+      pendingToken = p.token;
+      var delay = (typeof p.delay_ms === "number") ? p.delay_ms : 2000;
+      // If the overlay is already visible (replacement message), update
+      // text immediately so users see fresh status without a 2s gap.
+      var ov = document.getElementById("phenomapr-busy-overlay");
+      if (ov && ov.classList.contains("is-visible")) {
+        showOverlay(p);
+        return;
+      }
+      pending = setTimeout(function () {
+        pending = null;
+        if (pendingToken === p.token) showOverlay(p);
+      }, delay);
+    });
+    Shiny.addCustomMessageHandler("phenomapr-busy-hide", function () {
+      if (pending !== null) { clearTimeout(pending); pending = null; }
+      pendingToken = null;
+      hideOverlay();
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bind);
+  } else {
+    bind();
+  }
+})();
+'
+  ))
 }

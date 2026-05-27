@@ -620,22 +620,89 @@ table.dataTable thead th {
 .ref-name-pediatric { color: #C0633A; }
 .ref-name-ici       { color: #5C9942; }
 .ref-name-custom    { color: #2A9D8F; }
+/* "Further reading" callout pinned to the upper-right of the
+ * "Choosing a phenotype signature" card body. Floats out-of-flow so the
+ * bullet list below keeps its full width on narrow viewports. */
+.signature-card-body {
+  position: relative;
+}
 .phenotype-signature-refs {
-  font-size: 0.88rem;
-  color: #5c7280;
-  margin: 0.25rem 0 0.85rem 0;
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.55rem 0.75rem 0.5rem 0.75rem;
+  background-color: #f7f9fb;
+  border: 1px solid rgba(38, 70, 83, 0.10);
+  border-left: 3px solid #2A9D8F;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(38, 70, 83, 0.06);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  z-index: 2;
+  max-width: 250px;
+}
+.phenotype-signature-refs-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #2A9D8F;
+  margin-bottom: 0.15rem;
 }
 .phenotype-signature-refs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   color: #264653;
   font-weight: 500;
   text-decoration: none;
-  border-bottom: 1px dotted rgba(38, 70, 83, 0.45);
+  white-space: nowrap;
+}
+.phenotype-signature-refs a .fa,
+.phenotype-signature-refs a .fas {
+  font-size: 0.78em;
+  color: #6b7d8c;
 }
 .phenotype-signature-refs a:hover,
 .phenotype-signature-refs a:focus-visible {
   color: #2A9D8F;
-  border-bottom-color: #2A9D8F;
   outline: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.phenotype-signature-refs a:hover .fa,
+.phenotype-signature-refs a:focus-visible .fa,
+.phenotype-signature-refs a:hover .fas,
+.phenotype-signature-refs a:focus-visible .fas {
+  color: #2A9D8F;
+}
+/* On narrow sidebar layouts the upper-right callout would sit on top of
+ * the heading text -- collapse to a normal-flow row at <=720px. */
+@media (max-width: 720px) {
+  .phenotype-signature-refs {
+    position: static;
+    max-width: none;
+    margin: 0 0 0.85rem 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+}
+/* Reserve space at the right edge so the bullet list and "Built-in
+ * signatures" lead-in don't collide with the floating callout on wider
+ * viewports. The "Custom phenotype signature" paragraph sits below the
+ * bullet list, by which point the callout's vertical extent is past, so
+ * the standard `~250px` reserve is only applied to elements that share
+ * vertical space with the callout. */
+@media (min-width: 721px) {
+  .signature-card-body > p:first-of-type,
+  .signature-card-body > .phenotype-signature-list {
+    padding-right: 270px;
+  }
 }
 
 /* Welcome image */
@@ -912,41 +979,45 @@ table.dataTable thead th {
 }
 
 /* ---------------------------------------------------------------------------
- * Centered "busy" modal used while long-running analyses or data loads run.
+ * Centered "busy" overlay used while long-running analyses or data loads run.
  *
  * Replaces the small bottom-right shiny::Progress$new() / showNotification
- * indicators with a more obvious centered card backed by a foggy backdrop,
- * so the user clearly sees the app is doing work and is not stuck.
+ * indicators with a centered card on a foggy, blurred backdrop so the user
+ * clearly sees the app is doing work and is not stuck.
  *
- * Implementation note: shiny::modalDialog(..., class = ...) attaches the
- * supplied class to the inner <div class="modal-body">, NOT the outer
- * .modal-dialog. We use :has() to walk back up to the dialog/content so
- * the entire modal chrome can be re-skinned for the busy variant. :has()
- * is supported in all current evergreen browsers (Chrome 105+, Edge 105+,
- * Safari 15.4+, Firefox 121+).
+ * The overlay only activates after a short grace period (default 2s,
+ * controlled by phenomapr_busy_show(delay_seconds = ...) on the R side and
+ * the matching setTimeout in the JS handler), so quick file reads don't
+ * flash a popup at the user.
+ *
+ * The overlay <div> is built and managed by JS injected via
+ * phenomapr_busy_assets() in helpers.R; this stylesheet only describes
+ * its presentation.
  * ------------------------------------------------------------------------- */
-.modal-dialog:has(> .modal-content > .phenomapr-busy-modal) {
-  display: flex;
+.phenomapr-busy-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 1rem);
-  margin: 0.5rem auto;
-  pointer-events: none;
 }
-.modal-dialog:has(> .modal-content > .phenomapr-busy-modal) > .modal-content {
-  pointer-events: auto;
-  border: none;
-  border-radius: 14px;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
-  width: 100%;
-  max-width: 380px;
+.phenomapr-busy-overlay.is-visible {
+  display: flex;
+}
+.phenomapr-busy-card {
   background-color: #ffffff;
-}
-.phenomapr-busy-modal {
+  border-radius: 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+  padding: 1.4rem 1.5rem;
+  max-width: 380px;
+  width: calc(100% - 2rem);
   display: flex;
   align-items: center;
   gap: 1.1rem;
-  padding: 1.4rem 1.5rem;
 }
 .phenomapr-busy-spinner {
   width: 38px;
@@ -981,14 +1052,4 @@ table.dataTable thead th {
   color: #94a3b8;
   margin-top: 0.5rem;
   font-style: italic;
-}
-
-/* Foggy, slightly-blurred backdrop used by every modal in the app
- * (busy modal, end-session confirmation, etc.) so the underlying surface
- * dims gracefully and the centered card reads as the focal point. */
-.modal-backdrop.show {
-  background-color: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  opacity: 1;
 }
