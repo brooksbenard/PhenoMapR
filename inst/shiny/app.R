@@ -395,22 +395,34 @@ ui <- page_navbar(
             col_widths = c(6, 6),
             card(
               card_header(tags$strong("Cells per cell type")),
-              card_body(plotOutput("celltype_count_plot", height = "260px"))
+              card_body(phenomapr_with_download(
+                plotOutput("celltype_count_plot", height = "260px"),
+                "celltype_count_plot_download"
+              ))
             ),
             card(
               card_header(tags$strong("Cells per source / group")),
-              card_body(plotOutput("source_count_plot", height = "260px"))
+              card_body(phenomapr_with_download(
+                plotOutput("source_count_plot", height = "260px"),
+                "source_count_plot_download"
+              ))
             )
           ),
           layout_columns(
             col_widths = c(6, 6),
             card(
               card_header(tags$strong("Cell type × source composition")),
-              card_body(plotOutput("celltype_source_plot", height = "260px"))
+              card_body(phenomapr_with_download(
+                plotOutput("celltype_source_plot", height = "260px"),
+                "celltype_source_plot_download"
+              ))
             ),
             card(
               card_header(tags$strong("Metadata columns")),
-              card_body(DTOutput("metadata_columns_tbl"))
+              card_body(phenomapr_with_download(
+                DTOutput("metadata_columns_tbl"),
+                "metadata_columns_tbl_download"
+              ))
             )
           )
         )
@@ -663,7 +675,10 @@ ui <- page_navbar(
             helpText(
               "Fraction of your expression genes that overlap the chosen signature."
             ),
-            DTOutput("gene_coverage_tbl")
+            phenomapr_with_download(
+              DTOutput("gene_coverage_tbl"),
+              "gene_coverage_tbl_download"
+            )
           )
         )
       ),
@@ -671,7 +686,10 @@ ui <- page_navbar(
         card_header(tags$strong("Phenotype signature")),
         card_body(
           helpText("Top / bottom z-score genes for the selected signature column."),
-          plotOutput("reference_signature_plot", height = "260px")
+          phenomapr_with_download(
+            plotOutput("reference_signature_plot", height = "260px"),
+            "reference_signature_plot_download"
+          )
         )
       ),
       # ---- Derived signature detail panel ------------------------------------
@@ -691,11 +709,17 @@ ui <- page_navbar(
               col_widths = c(6, 6),
               card(
                 card_header(tags$strong("Top positive (adverse-direction) genes")),
-                card_body(DTOutput("derived_top_pos_tbl"))
+                card_body(phenomapr_with_download(
+                  DTOutput("derived_top_pos_tbl"),
+                  "derived_top_pos_tbl_download"
+                ))
               ),
               card(
                 card_header(tags$strong("Top negative (favorable-direction) genes")),
-                card_body(DTOutput("derived_top_neg_tbl"))
+                card_body(phenomapr_with_download(
+                  DTOutput("derived_top_neg_tbl"),
+                  "derived_top_neg_tbl_download"
+                ))
               )
             )
           )
@@ -730,7 +754,10 @@ ui <- page_navbar(
               "Auto-updates from the phenotype signature selected above. ",
               "Adjust top-N and direction in the sidebar."
             ),
-            DTOutput("top_genes_tbl")
+            phenomapr_with_download(
+              DTOutput("top_genes_tbl"),
+              "top_genes_tbl_download"
+            )
           )
         ),
         card(
@@ -829,7 +856,10 @@ ui <- page_navbar(
               selected = "raw",
               inline = TRUE
             ),
-            plotOutput("score_dist_plot", height = "300px")
+            phenomapr_with_download(
+              plotOutput("score_dist_plot", height = "300px"),
+              "score_dist_plot_download"
+            )
           )
         ),
         card(
@@ -847,7 +877,10 @@ ui <- page_navbar(
                           "Source"    = "source"),
               inline = TRUE, selected = "score"
             ),
-            plotOutput("score_rank_plot", height = "320px")
+            phenomapr_with_download(
+              plotOutput("score_rank_plot", height = "320px"),
+              "score_rank_plot_download"
+            )
           )
         )
       ),
@@ -864,12 +897,18 @@ ui <- page_navbar(
             "pairwise Wilcoxon tests between cell types. Only significant ",
             "(p < 0.05) brackets are drawn — brackets stacked by p-value."
           ),
-          plotOutput("score_box_source_plot", height = "440px")
+          phenomapr_with_download(
+            plotOutput("score_box_source_plot", height = "440px"),
+            "score_box_source_plot_download"
+          )
         )
       ),
       card(
         card_header(tags$strong("Score table")),
-        card_body(DTOutput("score_table"))
+        card_body(phenomapr_with_download(
+          DTOutput("score_table"),
+          "score_table_download"
+        ))
       ),
 
       # ---- Phenotype groups (merged from the old standalone tab) ----------
@@ -900,7 +939,10 @@ ui <- page_navbar(
         card_header(tags$strong("Per-cell-type group enrichment")),
         card_body(
           helpText("Only shown when a cell-type column has been selected above."),
-          plotOutput("group_by_celltype_plot", height = "320px")
+          phenomapr_with_download(
+            plotOutput("group_by_celltype_plot", height = "320px"),
+            "group_by_celltype_plot_download"
+          )
         )
       )
     )
@@ -1007,7 +1049,10 @@ ui <- page_navbar(
       ),
       card(
         card_header(tags$strong("Embedding")),
-        card_body(plotOutput("umap_plot", height = "560px"))
+        card_body(phenomapr_with_download(
+          plotOutput("umap_plot", height = "560px"),
+          "umap_plot_download"
+        ))
       )
     )
   ),
@@ -1079,11 +1124,17 @@ ui <- page_navbar(
       navset_tab(
         nav_panel(
           "Adverse markers",
-          card_body(DTOutput("adverse_markers_tbl"))
+          card_body(phenomapr_with_download(
+            DTOutput("adverse_markers_tbl"),
+            "adverse_markers_tbl_download"
+          ))
         ),
         nav_panel(
           "Favorable markers",
-          card_body(DTOutput("favorable_markers_tbl"))
+          card_body(phenomapr_with_download(
+            DTOutput("favorable_markers_tbl"),
+            "favorable_markers_tbl_download"
+          ))
         )
       ),
       card(
@@ -1113,7 +1164,10 @@ ui <- page_navbar(
           # we draw once at a fixed DPI, which keeps gene labels intact.
           conditionalPanel(
             "input.draw_marker_heatmap > 0",
-            imageOutput("marker_heatmap", height = "640px")
+            phenomapr_with_download(
+              imageOutput("marker_heatmap", height = "640px"),
+              "marker_heatmap_download"
+            )
           ),
           conditionalPanel(
             "!input.draw_marker_heatmap",
@@ -1237,6 +1291,13 @@ server <- function(input, output, session) {
     groups = NULL,
     markers = NULL
   )
+
+  # Captured plot / table objects for the panel download buttons.
+  # Each render function below populates its slot at draw time
+  # (panel_objects$<output_id> <- p or df); the matching
+  # downloadHandler reads back from this store on click. See
+  # phenomapr_register_plot_download() / *_table_download() in helpers.R.
+  panel_objects <- reactiveValues()
 
   # ------------------------------------------------------------------------
   # Hybrid file pickers (browser upload + server filesystem browse).
@@ -1788,8 +1849,12 @@ server <- function(input, output, session) {
       theme(axis.text.x = element_text(angle = 40, hjust = 1),
             legend.position = "none")
     if (!is.null(pal)) p <- p + scale_fill_manual(values = pal)
+    panel_objects$celltype_count_plot <- p
     p
   })
+  phenomapr_register_plot_download(output, "celltype_count_plot",
+    function() isolate(panel_objects$celltype_count_plot),
+    width = 8, height = 5)
 
   output$source_count_plot <- renderPlot({
     md <- state$metadata
@@ -1799,14 +1864,19 @@ server <- function(input, output, session) {
     colnames(df) <- c("source", "n")
     df <- df[order(-df$n), ]
     df$source <- factor(df$source, levels = df$source)
-    ggplot(df, aes(x = source, y = n, fill = source)) +
+    p <- ggplot(df, aes(x = source, y = n, fill = source)) +
       .geom_rounded_col() +
       scale_fill_phenomapr_d() +
       labs(x = NULL, y = "Cells", fill = "Source") +
       theme_minimal(base_size = 12) +
       theme(axis.text.x = element_text(angle = 25, hjust = 1),
             legend.position = "none")
+    panel_objects$source_count_plot <- p
+    p
   })
+  phenomapr_register_plot_download(output, "source_count_plot",
+    function() isolate(panel_objects$source_count_plot),
+    width = 8, height = 5)
 
   output$celltype_source_plot <- renderPlot({
     md <- state$metadata
@@ -1821,15 +1891,23 @@ server <- function(input, output, session) {
       stringsAsFactors = FALSE
     )
     df <- df[!is.na(df$cell_type) & !is.na(df$source), ]
-    if (!nrow(df)) return(NULL)
+    if (!nrow(df)) {
+      panel_objects$celltype_source_plot <- NULL
+      return(NULL)
+    }
     df_count <- df %>% dplyr::count(cell_type, source)
-    ggplot(df_count, aes(x = cell_type, y = n, fill = source)) +
+    p <- ggplot(df_count, aes(x = cell_type, y = n, fill = source)) +
       .geom_rounded_stack() +
       scale_fill_phenomapr_d() +
       labs(x = NULL, y = "Cells", fill = "Source") +
       theme_minimal(base_size = 12) +
       theme(axis.text.x = element_text(angle = 40, hjust = 1))
+    panel_objects$celltype_source_plot <- p
+    p
   })
+  phenomapr_register_plot_download(output, "celltype_source_plot",
+    function() isolate(panel_objects$celltype_source_plot),
+    width = 9, height = 5)
 
   output$metadata_columns_tbl <- renderDT({
     md <- state$metadata
@@ -1841,9 +1919,12 @@ server <- function(input, output, session) {
       n_na   = vapply(md, function(x) sum(is.na(x)), integer(1L)),
       stringsAsFactors = FALSE
     )
+    panel_objects$metadata_columns_tbl <- df
     datatable(df, rownames = FALSE,
               options = list(pageLength = 8, dom = "tip"))
   })
+  phenomapr_register_table_download(output, "metadata_columns_tbl",
+    function() isolate(panel_objects$metadata_columns_tbl))
 
   output$expr_axes_warning <- renderUI({
     s <- state$expr_summary
@@ -2075,9 +2156,12 @@ server <- function(input, output, session) {
     df <- df[order(-df$z_score), , drop = FALSE]
     df <- head(df, 50L)
     df$z_score <- round(df$z_score, 3)
+    panel_objects$derived_top_pos_tbl <- df
     datatable(df, rownames = FALSE,
               options = list(pageLength = 10, dom = "tip", scrollX = TRUE))
   })
+  phenomapr_register_table_download(output, "derived_top_pos_tbl",
+    function() isolate(panel_objects$derived_top_pos_tbl))
 
   output$derived_top_neg_tbl <- renderDT({
     ref <- state$reference
@@ -2091,9 +2175,12 @@ server <- function(input, output, session) {
     df <- df[order(df$z_score), , drop = FALSE]
     df <- head(df, 50L)
     df$z_score <- round(df$z_score, 3)
+    panel_objects$derived_top_neg_tbl <- df
     datatable(df, rownames = FALSE,
               options = list(pageLength = 10, dom = "tip", scrollX = TRUE))
   })
+  phenomapr_register_table_download(output, "derived_top_neg_tbl",
+    function() isolate(panel_objects$derived_top_neg_tbl))
 
   output$download_derived_reference <- downloadHandler(
     filename = function() {
@@ -2151,8 +2238,11 @@ server <- function(input, output, session) {
                                max(1L, length(genes)), 2)
       )
     }
+    panel_objects$gene_coverage_tbl <- cov
     datatable(cov, rownames = FALSE, options = list(dom = "t", paging = FALSE))
   })
+  phenomapr_register_table_download(output, "gene_coverage_tbl",
+    function() isolate(panel_objects$gene_coverage_tbl))
 
   output$reference_signature_plot <- renderPlot({
     req(state$reference)
@@ -2160,9 +2250,12 @@ server <- function(input, output, session) {
       if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
         showNotification("Install ComplexHeatmap for the signature heatmap.",
                          type = "warning", duration = 5)
+        panel_objects$reference_signature_plot <- NULL
         return(NULL)
       }
-      PhenoMapR::plot_reference_signature(state$reference)
+      p <- PhenoMapR::plot_reference_signature(state$reference)
+      panel_objects$reference_signature_plot <- p
+      p
     } else {
       # Built-in: gate on `cancer_type` actually being a valid cancer type
       # for the currently selected reference. When the user switches
@@ -2177,14 +2270,19 @@ server <- function(input, output, session) {
         reference = state$reference, cancer_type = input$cancer_type,
         n = 500L, direction = "both"
       )
-      ggplot(tg, aes(x = z_score)) +
+      p <- ggplot(tg, aes(x = z_score)) +
         .geom_rounded_histogram(bins = 40, fill = "#2A9D8F", color = "white") +
         labs(x = "Reference z-score", y = "Count",
              title = sprintf("Top %d genes by |z| (%s · %s)",
                              nrow(tg), state$reference, input$cancer_type %||% "")) +
         theme_minimal(base_size = 13)
+      panel_objects$reference_signature_plot <- p
+      p
     }
   })
+  phenomapr_register_plot_download(output, "reference_signature_plot",
+    function() isolate(panel_objects$reference_signature_plot),
+    width = 9, height = 5)
 
   # ------------------------------------------------------------------------
   # 3. Score
@@ -2247,8 +2345,13 @@ server <- function(input, output, session) {
       df <- data.frame(score = as.numeric(s[[cn]]))
       ttl <- sprintf("PhenoMapR score distribution (%s)", cn)
     }
-    PhenoMapR::plot_score_distribution(df, score_column = "score", main = ttl)
+    p <- PhenoMapR::plot_score_distribution(df, score_column = "score", main = ttl)
+    panel_objects$score_dist_plot <- p
+    p
   })
+  phenomapr_register_plot_download(output, "score_dist_plot",
+    function() isolate(panel_objects$score_dist_plot),
+    width = 8, height = 5)
 
   # Score table. Augments the raw PhenoMapR score column(s) with a
   # matching `scaled_<col>` column (mean 0, sd 1) for each numeric score
@@ -2268,6 +2371,7 @@ server <- function(input, output, session) {
       if (col %in% numeric_cols) c(col, paste0("scaled_", col)) else col
     }), use.names = FALSE))
     s <- s[, ordered_cols, drop = FALSE]
+    panel_objects$score_table <- s
     datatable(
       s, rownames = FALSE,
       options = list(pageLength = 15, scrollX = TRUE)
@@ -2276,6 +2380,8 @@ server <- function(input, output, session) {
                                 c(numeric_cols, paste0("scaled_", numeric_cols))),
                       digits = 3)
   })
+  phenomapr_register_table_download(output, "score_table",
+    function() isolate(panel_objects$score_table))
 
   output$download_scores <- downloadHandler(
     filename = function() {
@@ -2296,7 +2402,10 @@ server <- function(input, output, session) {
     df <- cell_table()
     req(df, "score" %in% colnames(df))
     d <- df[is.finite(df$score), ]
-    if (!nrow(d)) return(NULL)
+    if (!nrow(d)) {
+      panel_objects$score_rank_plot <- NULL
+      return(NULL)
+    }
     d <- d[order(d$score), ]
     d$rank <- seq_len(nrow(d))
     color_by <- input$rank_color_by %||% "score"
@@ -2322,6 +2431,7 @@ server <- function(input, output, session) {
         labs(color = "Cell type") +
         legend_pt_override
       if (!is.null(pal)) p <- p + scale_color_manual(values = pal)
+      panel_objects$score_rank_plot <- p
       return(p)
     }
     if (color_by == "source" && "source" %in% colnames(d)) {
@@ -2332,22 +2442,27 @@ server <- function(input, output, session) {
       # stable across refreshes.
       d$source <- factor(as.character(d$source),
                          levels = unique(as.character(d$source)))
-      return(
-        base +
-          geom_point(aes(color = source), size = 0.7, alpha = 0.85) +
-          scale_color_phenomapr_d() +
-          labs(color = "Source") +
-          legend_pt_override
-      )
+      p <- base +
+        geom_point(aes(color = source), size = 0.7, alpha = 0.85) +
+        scale_color_phenomapr_d() +
+        labs(color = "Source") +
+        legend_pt_override
+      panel_objects$score_rank_plot <- p
+      return(p)
     }
-    base +
+    p <- base +
       geom_point(aes(color = score), size = 0.7, alpha = 0.85) +
       scale_color_gradient2(
         low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
         midpoint = 0,
         name = "Score"
       )
+    panel_objects$score_rank_plot <- p
+    p
   })
+  phenomapr_register_plot_download(output, "score_rank_plot",
+    function() isolate(panel_objects$score_rank_plot),
+    width = 9, height = 5)
 
   # ------------------------------------------------------------------------
   # Per-cell-type × source boxplot with Wilcoxon brackets
@@ -2363,7 +2478,10 @@ server <- function(input, output, session) {
     keep <- is.finite(df$score) & !is.na(df$cell_type)
     if (has_source) keep <- keep & !is.na(df$source)
     d <- df[keep, , drop = FALSE]
-    if (!nrow(d)) return(NULL)
+    if (!nrow(d)) {
+      panel_objects$score_box_source_plot <- NULL
+      return(NULL)
+    }
 
     dl <- data.frame(
       Score     = d$score,
@@ -2502,8 +2620,12 @@ server <- function(input, output, session) {
       }
     }
 
+    panel_objects$score_box_source_plot <- p
     p
   })
+  phenomapr_register_plot_download(output, "score_box_source_plot",
+    function() isolate(panel_objects$score_box_source_plot),
+    width = 11, height = 6)
 
   # ------------------------------------------------------------------------
   # UMAP / embedding tab
@@ -2917,8 +3039,12 @@ server <- function(input, output, session) {
         length(unique(df$sample)) > 1L) {
       p <- p + facet_wrap(~ sample, scales = "free")
     }
+    panel_objects$umap_plot <- p
     p
   })
+  phenomapr_register_plot_download(output, "umap_plot",
+    function() isolate(panel_objects$umap_plot),
+    width = 10, height = 8)
 
   output$download_umap_table <- downloadHandler(
     filename = function() {
@@ -3013,9 +3139,13 @@ server <- function(input, output, session) {
     req(state$groups)
     g <- state$groups
     grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]
-    if (is.na(grp_col)) return(NULL)
+    if (is.na(grp_col)) {
+      panel_objects$group_by_celltype_plot <- NULL
+      return(NULL)
+    }
     ct_col <- input$meta_cell_type_col
     if (is.null(ct_col) || ct_col == "(none)" || !ct_col %in% colnames(g)) {
+      panel_objects$group_by_celltype_plot <- NULL
       return(NULL)
     }
     df <- g[, c(grp_col, ct_col)]
@@ -3026,7 +3156,7 @@ server <- function(input, output, session) {
       dplyr::group_by(cell_type) %>%
       dplyr::mutate(frac = n / sum(n)) %>%
       dplyr::ungroup()
-    ggplot(df_count, aes(x = cell_type, y = frac, fill = group)) +
+    p <- ggplot(df_count, aes(x = cell_type, y = frac, fill = group)) +
       .geom_rounded_stack(color = NA) +
       scale_y_continuous(labels = scales::percent_format()) +
       scale_fill_manual(values = c(
@@ -3037,7 +3167,12 @@ server <- function(input, output, session) {
       labs(x = "Cell type", y = "Fraction of cells", fill = "Group") +
       theme_minimal(base_size = 13) +
       theme(axis.text.x = element_text(angle = 35, hjust = 1))
+    panel_objects$group_by_celltype_plot <- p
+    p
   })
+  phenomapr_register_plot_download(output, "group_by_celltype_plot",
+    function() isolate(panel_objects$group_by_celltype_plot),
+    width = 9, height = 5)
 
   output$download_groups <- downloadHandler(
     filename = function() {
@@ -3102,15 +3237,21 @@ server <- function(input, output, session) {
   output$adverse_markers_tbl <- renderDT({
     req(state$markers)
     df <- state$markers$adverse_markers
+    panel_objects$adverse_markers_tbl <- df
     if (!nrow(df)) return(datatable(df, options = list(dom = "t")))
     datatable(df, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
   })
+  phenomapr_register_table_download(output, "adverse_markers_tbl",
+    function() isolate(panel_objects$adverse_markers_tbl))
   output$favorable_markers_tbl <- renderDT({
     req(state$markers)
     df <- state$markers$favorable_markers
+    panel_objects$favorable_markers_tbl <- df
     if (!nrow(df)) return(datatable(df, options = list(dom = "t")))
     datatable(df, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
   })
+  phenomapr_register_table_download(output, "favorable_markers_tbl",
+    function() isolate(panel_objects$favorable_markers_tbl))
 
   output$download_markers <- downloadHandler(
     filename = function() sprintf("phenomapr_markers_%s.rds", format(Sys.time(), "%Y%m%d_%H%M%S")),
@@ -3269,6 +3410,7 @@ server <- function(input, output, session) {
                     width = width, height = height,
                     alt = "Marker heatmap unavailable."))
       }
+      panel_objects$marker_heatmap <- list(width = width, height = height)
       list(
         src         = tmp,
         contentType = "image/png",
@@ -3278,6 +3420,46 @@ server <- function(input, output, session) {
       )
     },
     deleteFile = TRUE
+  )
+
+  # Heatmap download: re-render to a PNG at the current panel size from
+  # the cached `marker_heatmap_args`. Going through plot_phenotype_markers()
+  # again (rather than reusing the live renderImage tempfile) is the
+  # only reliable path -- the imageOutput is mounted with
+  # deleteFile = TRUE, so the temp PNG is removed as soon as the
+  # browser fetches it.
+  output$marker_heatmap_download <- downloadHandler(
+    filename = function() phenomapr_dl_filename("marker_heatmap", "png"),
+    content = function(file) {
+      args <- isolate(marker_heatmap_args())
+      dims <- isolate(panel_objects$marker_heatmap)
+      width  <- (dims$width  %||% 1400)
+      height <- (dims$height %||% 640)
+      if (is.null(args)) {
+        .phenomapr_write_placeholder_png(
+          file, "Draw the heatmap first, then re-try the download."
+        )
+        return(invisible(NULL))
+      }
+      ok <- tryCatch({
+        grDevices::png(file, width = width, height = height, res = 110)
+        on.exit(if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(),
+                                                   silent = TRUE),
+                add = TRUE)
+        do.call(PhenoMapR::plot_phenotype_markers,
+                c(args, list(draw = TRUE)))
+        TRUE
+      }, error = function(e) {
+        if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(), silent = TRUE)
+        FALSE
+      })
+      if (!isTRUE(ok)) {
+        .phenomapr_write_placeholder_png(
+          file, "plot_phenotype_markers() failed for this download."
+        )
+      }
+      invisible(NULL)
+    }
   )
 
   # ------------------------------------------------------------------------
@@ -3294,15 +3476,17 @@ server <- function(input, output, session) {
     # Custom signatures don't ship with cancer-type-resolved gene tables.
     # Show a friendly placeholder instead of failing.
     if (is.null(rc) || identical(rc, "_custom")) {
+      placeholder <- data.frame(
+        note = paste0(
+          "Reference diagnostics are only available for the built-in ",
+          "signatures (PRECOG, TCGA, Pediatric PRECOG, ICI PRECOG). ",
+          "Switch the 'Phenotype signature source' above to view top ",
+          "prognostic genes."
+        )
+      )
+      panel_objects$top_genes_tbl <- placeholder
       return(datatable(
-        data.frame(
-          note = paste0(
-            "Reference diagnostics are only available for the built-in ",
-            "signatures (PRECOG, TCGA, Pediatric PRECOG, ICI PRECOG). ",
-            "Switch the 'Phenotype signature source' above to view top ",
-            "prognostic genes."
-          )
-        ),
+        placeholder,
         rownames = FALSE,
         options = list(dom = "t", paging = FALSE, ordering = FALSE,
                        searching = FALSE)
@@ -3329,9 +3513,12 @@ server <- function(input, output, session) {
       }
     )
     req(!is.null(tg))
+    panel_objects$top_genes_tbl <- tg
     datatable(tg, rownames = FALSE,
               options = list(pageLength = 15, scrollX = TRUE))
   })
+  phenomapr_register_table_download(output, "top_genes_tbl",
+    function() isolate(panel_objects$top_genes_tbl))
 
   output$cancer_types_list <- renderPrint({
     rc <- input$reference_choice

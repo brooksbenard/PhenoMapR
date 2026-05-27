@@ -1568,6 +1568,124 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 }
 
 # ============================================================================
+# Panel download affordance (plots + tables)
+# ============================================================================
+#
+# Every plot and table panel in the app surfaces a small download button
+# in its top-right corner. Three pieces wire that up:
+#
+#   phenomapr_with_download(content, download_id, tooltip)
+#     UI helper. Wraps an output widget (plotOutput, DTOutput, ...) in a
+#     position-relative div and overlays an absolutely-positioned
+#     downloadButton in the top-right. The button is styled small and
+#     low-chrome via the .phenomapr-panel-download CSS rules in
+#     inst/shiny/www/styles.css.
+#
+#   phenomapr_register_plot_download(output, id, plot_fn,
+#                                    width, height, dpi)
+#     Server helper. Registers `output[[paste0(id, "_download")]]` as a
+#     downloadHandler that calls `plot_fn()` for the current ggplot
+#     object and saves it via ggplot2::ggsave(). plot_fn is typically a
+#     reactiveVal getter that the renderPlot body has been instrumented
+#     to populate (see "capture pattern" below).
+#
+#   phenomapr_register_table_download(output, id, data_fn)
+#     Server helper. Registers `output[[paste0(id, "_download")]]` as a
+#     downloadHandler that calls `data_fn()` for the current data.frame
+#     and writes it as TSV.
+#
+# Capture pattern in renderPlot / renderDT bodies:
+#   render*({ ...; p <- ggplot(...) + ...; rv(p); p })
+# i.e., the body builds the plot/table, *captures* it via the
+# reactiveVal `rv`, and returns it as usual. Downstream
+# downloadHandler reads rv() at click time. Capture-on-render works
+# because the user can only click the download button after the panel
+# has rendered.
+
+phenomapr_with_download <- function(content, download_id, tooltip = "Download") {
+  shiny::tags$div(
+    class = "phenomapr-panel-wrap",
+    shiny::tags$div(
+      class = "phenomapr-panel-download",
+      shiny::downloadButton(
+        download_id,
+        label = NULL,
+        icon  = shiny::icon("download"),
+        class = "phenomapr-panel-download-btn",
+        title = tooltip
+      )
+    ),
+    content
+  )
+}
+
+phenomapr_dl_filename <- function(stem, ext) {
+  sprintf("phenomapr_%s_%s.%s",
+          stem,
+          format(Sys.time(), "%Y%m%d_%H%M%S"),
+          ext)
+}
+
+# Write a small placeholder PNG when there is no plot to download.
+.phenomapr_write_placeholder_png <- function(file, msg = "No plot to download") {
+  grDevices::png(file, width = 480, height = 240, res = 110)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  graphics::par(mar = c(0, 0, 0, 0))
+  graphics::plot.new()
+  graphics::text(0.5, 0.5, msg, cex = 1.2)
+}
+
+phenomapr_register_plot_download <- function(output, id, plot_fn,
+                                             width = 8, height = 6, dpi = 150) {
+  output[[paste0(id, "_download")]] <- shiny::downloadHandler(
+    filename = function() phenomapr_dl_filename(id, "png"),
+    content = function(file) {
+      p <- tryCatch(plot_fn(), error = function(e) NULL)
+      if (is.null(p)) {
+        .phenomapr_write_placeholder_png(file)
+        return(invisible(NULL))
+      }
+      # ggplot2::ggsave handles ggplot objects natively. For other
+      # plot-like objects (e.g. lattice, base R), fall back to a
+      # direct PNG render via grDevices::png().
+      if (inherits(p, c("ggplot", "ggplot2::ggplot", "patchwork"))) {
+        ggplot2::ggsave(file, plot = p,
+                        width = width, height = height, dpi = dpi,
+                        units = "in", limitsize = FALSE)
+      } else {
+        grDevices::png(file,
+                       width = width * dpi, height = height * dpi,
+                       res = dpi)
+        on.exit(grDevices::dev.off(), add = TRUE)
+        print(p)
+      }
+      invisible(NULL)
+    }
+  )
+}
+
+phenomapr_register_table_download <- function(output, id, data_fn,
+                                              filename = NULL) {
+  output[[paste0(id, "_download")]] <- shiny::downloadHandler(
+    filename = function() {
+      if (!is.null(filename)) return(filename())
+      phenomapr_dl_filename(id, "tsv")
+    },
+    content = function(file) {
+      df <- tryCatch(data_fn(), error = function(e) NULL)
+      if (is.null(df) || (is.data.frame(df) && nrow(df) == 0L)) {
+        writeLines("# No rows to download", file)
+        return(invisible(NULL))
+      }
+      utils::write.table(df, file, sep = "\t",
+                         row.names = FALSE, quote = FALSE,
+                         na = "")
+      invisible(NULL)
+    }
+  )
+}
+
+# ============================================================================
 # Centered "busy" overlay (R-driven, instant show/hide)
 # ============================================================================
 #
