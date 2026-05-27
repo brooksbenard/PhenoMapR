@@ -330,10 +330,6 @@ ui <- page_navbar(
       sidebar = sidebar(
         width = 360,
         h4("Expression input"),
-        helpText(
-          "RDS (Seurat / SingleCellExperiment / matrix), tabular ",
-          "(.tsv / .csv with gene IDs in column 1), 10X HDF5 (.h5), or AnnData (.h5ad)."
-        ),
         phenomapr_file_input(
           "expr_file",
           label = NULL,
@@ -566,7 +562,7 @@ ui <- page_navbar(
         )
       ),
       card(
-        card_header(icon("info"), " Choosing a phenotype signature"),
+        card_header(icon("circle-info"), " Choosing a phenotype signature"),
         card_body(
           markdown(
             "**Built-in signatures** are meta-z-scores across many cohorts:
@@ -652,7 +648,7 @@ ui <- page_navbar(
         tags$h3(tagList(icon("stethoscope"), " Reference diagnostics"))
       ),
       card(
-        card_header(icon("info"), " About reference diagnostics"),
+        card_header(icon("circle-info"), " About reference diagnostics"),
         card_body(
           markdown(
             "These tables follow the **Phenotype signature source** and
@@ -810,7 +806,7 @@ ui <- page_navbar(
         tags$h3(tagList(icon("layer-group"), " Phenotype groups"))
       ),
       card(
-        card_header(icon("info"), " About phenotype tails"),
+        card_header(icon("circle-info"), " About phenotype tails"),
         card_body(
           markdown(
             "PhenoMapR partitions cells into **Most Adverse** (top *N* %),
@@ -985,7 +981,7 @@ ui <- page_navbar(
         # layout. Without it, bslib's default flex behavior leaves a
         # large empty band beneath the markdown blurb.
         fill = FALSE,
-        card_header(icon("info"), " About markers"),
+        card_header(icon("circle-info"), " About markers"),
         card_body(
           markdown(
             "Wilcoxon-based differential expression between the adverse /
