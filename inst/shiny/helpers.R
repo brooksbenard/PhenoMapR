@@ -1605,9 +1605,17 @@ phenomapr_busy_assets <- function() {
   }
 
   // ---- Tunables ------------------------------------------------------
-  var SHOW_DELAY_MS      = 2000;   // popup only appears once shiny has been continuously busy this long
-  var IDLE_GRACE_MS      = 300;    // brief idle->busy bounces inside one composite op are tolerated
-  var ABS_VISIBLE_MAX_MS = 60000;  // last-resort hard ceiling
+  // The popup is driven *exclusively* by the duration of Shiny busy/idle
+  // state. There are NO timers triggered by R-side messages -- R only
+  // sets the popup text; visibility is purely a function of "has Shiny
+  // been busy continuously for >= SHOW_DELAY_MS without an idle stretch
+  // longer than IDLE_GRACE_MS". This means quick ops (file loads,
+  // scoring small datasets, etc.) cannot flash the popup at all, and
+  // long ops auto-hide as soon as Shiny truly goes idle.
+  var SHOW_DELAY_MS      = 2000;   // popup appears once shiny has been continuously busy this long
+  var IDLE_GRACE_MS      = 200;    // brief idle->busy bounces (chained reactives) are tolerated
+  var POLL_INTERVAL_MS   = 100;    // how often we check the busy duration
+  var ABS_VISIBLE_MAX_MS = 10000;  // last-resort safety net (popup never sticks longer than this)
   var FILE_INPUT_SUFFIX  = "_server"; // shinyFiles inputs created by phenomapr_file_input
 
   // ---- DOM helpers ---------------------------------------------------
@@ -1669,146 +1677,135 @@ phenomapr_busy_assets <- function() {
   }
 
   // ---- State ---------------------------------------------------------
-  var currentMessage   = { message: "Working...", detail: "", hint: "" };
-  var defaultMessage   = { message: "Working...", detail: "", hint: "" };
-  var showTimer        = null;     // shiny:busy-driven setTimeout id (waits SHOW_DELAY_MS while busy)
-  var rSideShowTimer   = null;     // R-driven setTimeout id (set by phenomapr_busy_show)
-  var idleHideTimer    = null;     // setTimeout id while we wait for IDLE_GRACE_MS post-idle
-  var isVisible        = false;
-  var shownAt          = null;
-  var isBusy           = false;
-  // True between a user-dismiss and the next idle->busy transition.
-  // While true, we will not re-show the popup for the current busy run
-  // even if SHOW_DELAY_MS elapses again.
-  var dismissedThisRun = false;
+  // The popup is driven entirely by:
+  //   busyStartedAt    -- timestamp (Date.now()) of the most recent
+  //                       transition from idle to busy, or null when
+  //                       Shiny is (effectively) idle. The polling loop
+  //                       below checks (Date.now() - busyStartedAt) and
+  //                       reveals the popup once that crosses
+  //                       SHOW_DELAY_MS. Short idle bounces inside one
+  //                       composite op tolerate themselves via the
+  //                       grace timer instead of resetting this stamp.
+  //   idleGraceTimer   -- setTimeout pending the IDLE_GRACE_MS debounce
+  //                       on shiny:idle. When it fires we declare
+  //                       Shiny truly idle, clear busyStartedAt, and
+  //                       hide the popup if it was visible.
+  //   isVisible        -- mirrors the .is-visible CSS class so we do
+  //                       not repeatedly call renderShow/renderHide.
+  //   dismissedThisRun -- true between user-dismiss and the next
+  //                       genuine idle->busy transition. Suppresses
+  //                       re-showing the popup for the SAME op after a
+  //                       manual dismiss.
+  var currentMessage    = { message: "Working...", detail: "", hint: "" };
+  var defaultMessage    = { message: "Working...", detail: "", hint: "" };
+  var busyStartedAt     = null;
+  var idleGraceTimer    = null;
+  var isVisible         = false;
+  var shownAt           = null;
+  var dismissedThisRun  = false;
 
-  function clearShowTimer() {
-    if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
-  }
-  function clearRSideShowTimer() {
-    if (rSideShowTimer !== null) { clearTimeout(rSideShowTimer); rSideShowTimer = null; }
-  }
-  function clearIdleHideTimer() {
-    if (idleHideTimer !== null) { clearTimeout(idleHideTimer); idleHideTimer = null; }
-  }
-
-  function maybeShow() {
-    showTimer = null;
-    if (isBusy && !dismissedThisRun && !isVisible) {
-      renderShow();
-    } else {
-      dbg("show timer fired but not eligible",
-          { isBusy: isBusy, dismissed: dismissedThisRun, isVisible: isVisible });
+  function clearIdleGraceTimer() {
+    if (idleGraceTimer !== null) {
+      clearTimeout(idleGraceTimer);
+      idleGraceTimer = null;
     }
   }
-
-  // ---- Shiny busy/idle handlers --------------------------------------
-  function onShinyBusy() {
-    isBusy = true;
-    clearIdleHideTimer();
-    if (!showTimer && !isVisible && !dismissedThisRun) {
-      showTimer = setTimeout(maybeShow, SHOW_DELAY_MS);
-      dbg("busy: scheduled show in " + SHOW_DELAY_MS + "ms");
-    } else {
-      dbg("busy: show not scheduled",
-          { showTimerPending: showTimer !== null,
-            isVisible: isVisible, dismissed: dismissedThisRun });
-    }
-  }
-  function onShinyIdle() {
-    if (idleHideTimer !== null) return;  // already debouncing
-    idleHideTimer = setTimeout(function () {
-      idleHideTimer = null;
-      isBusy = false;
-      clearShowTimer();
-      clearRSideShowTimer();
-      renderHide();
-      clearAllFileInputLoading();
-      // Next busy run is conceptually a new operation -> allow re-show.
-      dismissedThisRun = false;
-      // Reset message back to a neutral default so any leftover text
-      // from a prior op does not appear at the start of the next one.
-      currentMessage = {
-        message: defaultMessage.message,
-        detail:  defaultMessage.detail,
-        hint:    defaultMessage.hint
-      };
-      dbg("idle confirmed: hidden + state reset");
-    }, IDLE_GRACE_MS);
-  }
-  function onShinyDisconnected() {
-    clearShowTimer();
-    clearRSideShowTimer();
-    clearIdleHideTimer();
-    renderHide();
-    clearAllFileInputLoading();
-    dismissedThisRun = false;
-    isBusy = false;
-    dbg("disconnected: forced hide");
-  }
-
-  // ---- User-driven dismiss -------------------------------------------
-  function userDismiss(reason) {
-    dbg("user dismissed", reason);
-    clearShowTimer();
-    clearRSideShowTimer();
-    renderHide();
-    dismissedThisRun = true;
-  }
-
-  // ---- R-side message API --------------------------------------------
-  // R-side phenomapr_busy_show() updates the popup text *and* schedules
-  // a parallel show timer that fires after `delay_ms` (default
-  // SHOW_DELAY_MS). The popup will appear when EITHER (a) Shiny has
-  // been continuously busy for SHOW_DELAY_MS via the shiny:busy event,
-  // OR (b) this R-driven timer fires while no matching hide has been
-  // received. This double-trigger means a single missed shiny:busy
-  // event (or a busy/idle sequence with bounces > IDLE_GRACE_MS apart)
-  // cannot silently suppress the popup for a long op.
-  function maybeShowR() {
-    rSideShowTimer = null;
-    if (!dismissedThisRun && !isVisible) {
-      dbg("R-driven show timer fired");
-      renderShow();
-    }
-  }
-  function handleShow(p) {
-    var msg = (p && p.message) || "Working...";
-    currentMessage = {
-      message: msg,
-      detail:  (p && p.detail)  || "",
-      hint:    (p && p.hint)    || "This may take a moment..."
-    };
-    if (isVisible) applyOverlayText();
-    // Schedule the R-driven fallback timer. If R-side phenomapr_busy_show()
-    // is called multiple times in quick succession we just keep the
-    // first timer (later calls only update the text).
-    if (rSideShowTimer === null && !dismissedThisRun && !isVisible) {
-      var d = (p && typeof p.delay_ms === "number" && p.delay_ms >= 0)
-        ? p.delay_ms : SHOW_DELAY_MS;
-      rSideShowTimer = setTimeout(maybeShowR, d);
-      dbg("R-side show: message updated + R timer scheduled in " + d + "ms",
-          currentMessage);
-    } else {
-      dbg("R-side show: message updated (no R timer needed)", currentMessage);
-    }
-  }
-  function handleHide() {
-    // Cancel the R-driven timer when R itself signals completion --
-    // otherwise a quick op (faster than SHOW_DELAY_MS) would still
-    // flash the popup at the end.
-    if (rSideShowTimer !== null) {
-      clearTimeout(rSideShowTimer);
-      rSideShowTimer = null;
-      dbg("R-side hide: cancelled pending R-driven show timer");
-    }
+  function resetMessage() {
     currentMessage = {
       message: defaultMessage.message,
       detail:  defaultMessage.detail,
       hint:    defaultMessage.hint
     };
+  }
+
+  // ---- Shiny busy/idle handlers --------------------------------------
+  // shiny:busy fires whenever Shiny starts processing input changes.
+  // We record the transition time but never schedule a setTimeout to
+  // reveal the popup -- the polling loop below does that based on
+  // sustained busy duration.
+  function onShinyBusy() {
+    clearIdleGraceTimer();
+    if (busyStartedAt === null) {
+      busyStartedAt = Date.now();
+      dbg("busy started at " + busyStartedAt);
+    }
+  }
+  // shiny:idle fires when Shiny finishes the current cycle. We do
+  // NOT act immediately -- short bounces are normal in chained reactives.
+  // After IDLE_GRACE_MS of stable idleness we declare the op truly
+  // over: clear busyStartedAt, hide the popup if visible, reset the
+  // dismissed flag for the next op.
+  function onShinyIdle() {
+    if (idleGraceTimer !== null) return;
+    idleGraceTimer = setTimeout(function () {
+      idleGraceTimer = null;
+      busyStartedAt = null;
+      if (isVisible) renderHide();
+      clearAllFileInputLoading();
+      dismissedThisRun = false;
+      resetMessage();
+      dbg("idle confirmed: popup hidden, state reset");
+    }, IDLE_GRACE_MS);
+  }
+  function onShinyDisconnected() {
+    clearIdleGraceTimer();
+    busyStartedAt = null;
+    if (isVisible) renderHide();
+    clearAllFileInputLoading();
+    dismissedThisRun = false;
+    resetMessage();
+    dbg("disconnected: forced hide");
+  }
+
+  // ---- Polling loop --------------------------------------------------
+  // Runs every POLL_INTERVAL_MS. The job is purely to flip the popup
+  // ON when shiny:busy has been continuously true for >= SHOW_DELAY_MS.
+  // Hiding is event-driven (idle grace timer) -- the poll also serves
+  // as a watchdog against the popup getting visually stuck longer than
+  // ABS_VISIBLE_MAX_MS for any reason.
+  function pollVisibility() {
+    var now = Date.now();
+    if (busyStartedAt !== null &&
+        !isVisible &&
+        !dismissedThisRun &&
+        (now - busyStartedAt) >= SHOW_DELAY_MS) {
+      renderShow();
+    }
+    if (isVisible && shownAt !== null &&
+        (now - shownAt) > ABS_VISIBLE_MAX_MS) {
+      dbg("watchdog: visible > " + ABS_VISIBLE_MAX_MS + "ms; force-hide");
+      renderHide();
+      busyStartedAt = null;
+    }
+  }
+
+  // ---- User-driven dismiss -------------------------------------------
+  function userDismiss(reason) {
+    dbg("user dismissed", reason);
+    if (isVisible) renderHide();
+    dismissedThisRun = true;
+  }
+
+  // ---- R-side message API (TEXT-ONLY) --------------------------------
+  // Critical: these handlers MUST NOT schedule any timer that could
+  // reveal the popup later. phenomapr_busy_show() is purely advisory
+  // -- it tells us what TEXT to show if the popup ends up appearing
+  // (because work crosses the SHOW_DELAY_MS threshold), and nothing
+  // more. phenomapr_busy_hide() resets the text. Neither affects
+  // visibility; that is owned entirely by shiny:busy/idle.
+  function handleShow(p) {
+    currentMessage = {
+      message: (p && p.message) || "Working...",
+      detail:  (p && p.detail)  || "",
+      hint:    (p && p.hint)    || "This may take a moment..."
+    };
     if (isVisible) applyOverlayText();
-    dbg("R-side hide: message reset to default");
+    dbg("R-side show (text-only): message updated", currentMessage);
+  }
+  function handleHide() {
+    resetMessage();
+    if (isVisible) applyOverlayText();
+    dbg("R-side hide (text-only): message reset");
   }
 
   // ---- File-input progress feedback ----------------------------------
@@ -1850,16 +1847,12 @@ phenomapr_busy_assets <- function() {
     markFileInputLoading(nm);
   }
 
-  // ---- Watchdog: hard ceiling on overlay visibility ------------------
-  setInterval(function () {
-    if (isVisible && shownAt !== null &&
-        (Date.now() - shownAt) > ABS_VISIBLE_MAX_MS) {
-      dbg("watchdog: visible >" + ABS_VISIBLE_MAX_MS + "ms; force-hiding");
-      clearShowTimer();
-      clearIdleHideTimer();
-      renderHide();
-    }
-  }, 1000);
+  // ---- Polling loop --------------------------------------------------
+  // pollVisibility() (defined above) inspects busyStartedAt every
+  // POLL_INTERVAL_MS and flips the popup ON once the busy duration
+  // crosses SHOW_DELAY_MS. It also force-hides if the popup somehow
+  // stays visible past ABS_VISIBLE_MAX_MS (belt-and-suspenders).
+  setInterval(pollVisibility, POLL_INTERVAL_MS);
 
   // ---- Wire up event listeners ---------------------------------------
   // Native fallback layer. Shiny normally dispatches via jQuery, and
@@ -1867,9 +1860,8 @@ phenomapr_busy_assets <- function() {
   // invoke native addEventListener handlers for namespaced custom
   // events. But many Shiny+browser combos do bubble these events to
   // document, so we register on the native API too -- whichever layer
-  // works first wins; both firing is harmless because the handlers are
-  // idempotent (clearShowTimer/clearIdleHideTimer guard against double
-  // schedules).
+  // works first wins; both firing is harmless because all handlers are
+  // idempotent.
   if (document && document.addEventListener) {
     document.addEventListener("shiny:busy",         onShinyBusy,         false);
     document.addEventListener("shiny:idle",         onShinyIdle,         false);
