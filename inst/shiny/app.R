@@ -1261,7 +1261,24 @@ server <- function(input, output, session) {
   # 1. Expression upload
   # ------------------------------------------------------------------------
   observeEvent(expr_file_pick(), {
-    pick <- req(expr_file_pick())
+    pick <- expr_file_pick()
+    # NULL transition: the user clicked the "remove" affordance on the
+    # file picker. Treat this as a full data reset so the rest of the
+    # app reflects the cleared state. The metadata reset is gated on
+    # the source: only data that came WITH the expression object (or
+    # was synthesized from it) is dropped -- a separately uploaded
+    # metadata file (`source = "upload"`) is preserved so it does not
+    # silently disappear with the expression.
+    if (is.null(pick)) {
+      state$expression <- NULL
+      state$expr_summary <- NULL
+      if (!identical(state$metadata_source %||% "", "upload")) {
+        state$metadata <- NULL
+        state$meta_columns <- character(0)
+        state$metadata_source <- "(none)"
+      }
+      return()
+    }
     phenomapr_busy_show("Reading expression file...", pick$name)
     on.exit(phenomapr_busy_hide(), add = TRUE)
     res <- tryCatch(
@@ -1337,7 +1354,7 @@ server <- function(input, output, session) {
         )
       }
     }
-  })
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   observeEvent(input$use_demo, {
     set.seed(7)
@@ -1362,7 +1379,31 @@ server <- function(input, output, session) {
 
   # Optional metadata upload
   observeEvent(meta_file_pick(), {
-    pick <- req(meta_file_pick())
+    pick <- meta_file_pick()
+    # Cleared by the user via the remove affordance. Drop any
+    # uploaded metadata, falling back to whatever the expression
+    # object carried (if anything). We deliberately do NOT touch
+    # state$metadata when the source was "object" -- removing the
+    # metadata upload should not also strip metadata that came with
+    # the loaded Seurat/SCE/AnnData.
+    if (is.null(pick)) {
+      if (identical(state$metadata_source %||% "", "upload")) {
+        state$metadata <- NULL
+        state$meta_columns <- character(0)
+        state$metadata_source <- "(none)"
+        # If the expression object still has in-object metadata, restore it.
+        if (!is.null(state$expression)) {
+          md_obj <- tryCatch(extract_object_metadata(state$expression),
+                             error = function(e) NULL)
+          if (!is.null(md_obj)) {
+            state$metadata <- md_obj
+            state$meta_columns <- colnames(md_obj)
+            state$metadata_source <- "object"
+          }
+        }
+      }
+      return()
+    }
     phenomapr_busy_show("Loading cell metadata...", pick$name)
     on.exit(phenomapr_busy_hide(), add = TRUE)
     md <- tryCatch(
@@ -1377,7 +1418,7 @@ server <- function(input, output, session) {
     state$meta_columns <- colnames(md)
     state$metadata_source <- "upload"
     showNotification("Metadata loaded.", type = "message", duration = 4)
-  })
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   output$meta_columns_available <- reactive({ length(state$meta_columns) > 0 })
   outputOptions(output, "meta_columns_available", suspendWhenHidden = FALSE)
@@ -1837,7 +1878,16 @@ server <- function(input, output, session) {
 
   # Custom: upload file
   observeEvent(custom_ref_file_pick(), {
-    pick <- req(custom_ref_file_pick())
+    pick <- custom_ref_file_pick()
+    if (is.null(pick)) {
+      # Only clear custom-signature state; leave PRECOG/TCGA selections alone.
+      if (identical(state$reference_source %||% "", "custom") ||
+          grepl("^Custom \\(", state$reference_label %||% "")) {
+        state$reference <- NULL
+        state$reference_label <- ""
+      }
+      return()
+    }
     phenomapr_busy_show("Loading custom signature...", pick$name)
     on.exit(phenomapr_busy_hide(), add = TRUE)
     ref <- tryCatch(
@@ -1854,11 +1904,15 @@ server <- function(input, output, session) {
       sprintf("Custom reference loaded (%d genes).", nrow(ref)),
       type = "message", duration = 4
     )
-  })
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   # Custom: derive from bulk + phenotype
   observeEvent(derive_bulk_file_pick(), {
-    pick <- req(derive_bulk_file_pick())
+    pick <- derive_bulk_file_pick()
+    if (is.null(pick)) {
+      state$derive_bulk <- NULL
+      return()
+    }
     phenomapr_busy_show("Loading bulk expression...", pick$name)
     on.exit(phenomapr_busy_hide(), add = TRUE)
     res <- tryCatch(
@@ -1875,7 +1929,7 @@ server <- function(input, output, session) {
         type = "message", duration = 5
       )
     }
-  })
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   output$derive_bulk_summary <- renderUI({
     obj <- state$derive_bulk
@@ -1916,7 +1970,15 @@ server <- function(input, output, session) {
   })
 
   observeEvent(derive_phen_file_pick(), {
-    pick <- req(derive_phen_file_pick())
+    pick <- derive_phen_file_pick()
+    if (is.null(pick)) {
+      state$derive_phen <- NULL
+      updateSelectInput(session, "derive_id_col", choices = character(0))
+      updateSelectInput(session, "derive_pheno_col", choices = character(0))
+      updateSelectInput(session, "derive_time_col", choices = character(0))
+      updateSelectInput(session, "derive_event_col", choices = character(0))
+      return()
+    }
     phenomapr_busy_show("Loading phenotype table...", pick$name)
     on.exit(phenomapr_busy_hide(), add = TRUE)
     df <- tryCatch(
@@ -1933,7 +1995,7 @@ server <- function(input, output, session) {
                       selected = if (length(cols) > 1L) cols[2L] else cols[1L])
     updateSelectInput(session, "derive_time_col", choices = cols)
     updateSelectInput(session, "derive_event_col", choices = cols)
-  })
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   observeEvent(input$derive_run, {
     req(state$derive_bulk, state$derive_phen)
@@ -2450,7 +2512,11 @@ server <- function(input, output, session) {
   uploaded_embedding <- reactiveVal(NULL)
 
   observeEvent(umap_upload_pick(), {
-    pick <- req(umap_upload_pick())
+    pick <- umap_upload_pick()
+    if (is.null(pick)) {
+      uploaded_embedding(NULL)
+      return()
+    }
     ext <- tolower(tools::file_ext(pick$name))
     obj <- tryCatch({
       if (ext == "rds") {
@@ -2498,7 +2564,7 @@ server <- function(input, output, session) {
       sprintf("Custom embedding loaded (%s cells).", .fmt_int(nrow(emb_df))),
       type = "message", duration = 4
     )
-  })
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   # Populate the reduction selector with:
   #  1. embeddings stored on the loaded object (Seurat / SCE / AnnData),

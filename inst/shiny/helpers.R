@@ -1442,6 +1442,17 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
                                 accept = NULL) {
   if (is.null(roots)) roots <- phenomapr_app_server_roots()
   picker_id <- paste0(id, "_server")
+  clear_id  <- paste0(picker_id, "_clear")
+
+  # pick_state is the *effective* pick exposed to the rest of the app:
+  # NULL means "no file selected", otherwise a list with datapath/name.
+  # Two write paths into it:
+  #   1. The shinyFiles picker emits a new selection -> pick_state set.
+  #   2. The user clicks the small "x" remove button next to the
+  #      displayed filename -> pick_state set to NULL.
+  # Downstream observers depend on pick_state via the returned reactive,
+  # so clearing here propagates everywhere just like a fresh pick would.
+  pick_state <- shiny::reactiveVal(NULL)
 
   if (.has_shinyFiles()) {
     filetypes <- if (!is.null(accept) && length(accept)) {
@@ -1458,19 +1469,36 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
       session = session
     )
 
-    output[[paste0(picker_id, "_chosen")]] <- shiny::renderUI({
+    # shinyFiles selection -> pick_state.
+    shiny::observeEvent(input[[picker_id]], {
       sel <- input[[picker_id]]
       if (is.null(sel) || identical(sel, integer(0))) {
-        return(shiny::tags$span(
-          class = "phenomapr-file-input-name-empty",
-          "No file selected"
-        ))
+        pick_state(NULL)
+        return()
       }
       path_df <- tryCatch(
         shinyFiles::parseFilePaths(roots, sel),
         error = function(e) NULL
       )
       if (is.null(path_df) || nrow(path_df) == 0L) {
+        pick_state(NULL)
+        return()
+      }
+      pick_state(list(
+        datapath = as.character(path_df$datapath[1]),
+        name = as.character(path_df$name[1] %||% basename(path_df$datapath[1])),
+        source = "server"
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = FALSE)
+
+    # Remove-file button -> clear pick_state.
+    shiny::observeEvent(input[[clear_id]], {
+      pick_state(NULL)
+    }, ignoreInit = TRUE)
+
+    output[[paste0(picker_id, "_chosen")]] <- shiny::renderUI({
+      cur <- pick_state()
+      if (is.null(cur)) {
         return(shiny::tags$span(
           class = "phenomapr-file-input-name-empty",
           "No file selected"
@@ -1478,38 +1506,53 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
       }
       shiny::tags$span(
         class = "phenomapr-file-input-name-set",
-        title = path_df$datapath[1],
-        basename(path_df$datapath[1])
+        title = cur$datapath,
+        shiny::tags$span(
+          class = "phenomapr-file-input-name-text",
+          basename(cur$datapath)
+        ),
+        # The "remove" affordance: a tiny x button that resets the
+        # picker back to "No file selected" and propagates NULL through
+        # the pick reactive (which downstream observers depend on).
+        # We use a hand-rolled <button> instead of actionButton() so it
+        # inherits the surrounding flex layout cleanly. The trailing
+        # ".btn" class lets Bootstrap style it consistently if present.
+        shiny::tags$button(
+          id = clear_id,
+          type = "button",
+          class = "btn action-button phenomapr-file-input-clear",
+          title = "Remove loaded file",
+          `aria-label` = "Remove loaded file",
+          shiny::HTML("&times;")
+        )
       )
     })
 
     return(shiny::reactive({
-      sel <- input[[picker_id]]
-      if (is.null(sel) || identical(sel, integer(0))) return(NULL)
-      path_df <- tryCatch(
-        shinyFiles::parseFilePaths(roots, sel),
-        error = function(e) NULL
-      )
-      if (is.null(path_df) || nrow(path_df) == 0L) return(NULL)
-      list(
-        datapath = as.character(path_df$datapath[1]),
-        name = as.character(path_df$name[1] %||% basename(path_df$datapath[1])),
-        source = "server"
-      )
+      pick_state()
     }))
   }
 
-  # Fallback: shinyFiles not installed -> the UI rendered a plain fileInput
-  # under `id`, so the picker reactive simply forwards that.
-  shiny::reactive({
+  # Fallback: shinyFiles not installed -> a plain fileInput was rendered
+  # under `id`. Still surface a remove affordance and clear semantics.
+  shiny::observeEvent(input[[id]], {
     up <- input[[id]]
-    if (is.null(up) || nrow(up) == 0L) return(NULL)
-    list(
+    if (is.null(up) || nrow(up) == 0L) {
+      pick_state(NULL)
+      return()
+    }
+    pick_state(list(
       datapath = as.character(up$datapath[1]),
       name = as.character(up$name[1]),
       source = "upload"
-    )
-  })
+    ))
+  }, ignoreInit = TRUE, ignoreNULL = FALSE)
+
+  shiny::observeEvent(input[[clear_id]], {
+    pick_state(NULL)
+  }, ignoreInit = TRUE)
+
+  shiny::reactive({ pick_state() })
 }
 
 # ============================================================================
@@ -1718,15 +1761,20 @@ phenomapr_busy_assets <- function() {
   var idleGraceTimer    = null;
   var isVisible         = false;
   var shownAt           = null;
-  var dismissedThisRun  = false;
-  // suppressUntilIdle: when R has explicitly said hide (or the user
-  // dismissed), block Path A (shiny:busy-duration) from re-revealing
-  // the popup until the next confirmed idle. Without this, downstream
-  // reactives that fire shiny:busy after R hide (e.g. plot/table
-  // rendering after a long observer returns) would re-show the popup
-  // because busyStartedAt has not yet been cleared by an idle grace.
-  // Cleared on idle grace, disconnect, or an explicit R show.
-  var suppressUntilIdle = false;
+  var dismissedThisRun  = false;       // cleared on next idle confirmation
+  // pathASuppressedUntilNextRShow: when R has explicitly said hide, the
+  // popup is permanently muted (for Path A only) until the next
+  // explicit R show. This is critical because the post-observer
+  // reactive cascade (plot/table rendering) emits a fresh shiny:busy
+  // soon after the originating observer returns via on.exit. A
+  // grace-timer-based suppress (cleared on the FIRST idle) is too
+  // eager: the grace fires between the observer and the cascade, the
+  // cascade re-arms Path A, and the popup re-appears during plot
+  // rendering, lingering for several seconds after the user has
+  // already seen the work complete. By tying the suppress to next-R-show
+  // instead, R alone controls when an instrumented popup may reappear --
+  // the cascade, which makes no R show call, cannot resurrect it.
+  var pathASuppressedUntilNextRShow = false;
 
   function clearIdleGraceTimer() {
     if (idleGraceTimer !== null) {
@@ -1774,9 +1822,12 @@ phenomapr_busy_assets <- function() {
       if (isVisible) renderHide();
       clearAllFileInputLoading();
       dismissedThisRun = false;
-      suppressUntilIdle = false;
+      // NOTE: do NOT clear pathASuppressedUntilNextRShow here. That
+      // flag is only cleared by an explicit R-side show call. See its
+      // declaration for the rationale (post-observer reactive cascade
+      // must not be able to re-pop the popup).
       resetMessage();
-      dbg("idle confirmed: popup hidden, state reset");
+      dbg("idle confirmed: popup hidden, dismissed-this-run reset");
     }, IDLE_GRACE_MS);
   }
   function onShinyDisconnected() {
@@ -1786,7 +1837,7 @@ phenomapr_busy_assets <- function() {
     if (isVisible) renderHide();
     clearAllFileInputLoading();
     dismissedThisRun = false;
-    suppressUntilIdle = false;
+    pathASuppressedUntilNextRShow = false;
     resetMessage();
     dbg("disconnected: forced hide");
   }
@@ -1802,7 +1853,7 @@ phenomapr_busy_assets <- function() {
     if (busyStartedAt !== null &&
         !isVisible &&
         !dismissedThisRun &&
-        !suppressUntilIdle &&
+        !pathASuppressedUntilNextRShow &&
         (now - busyStartedAt) >= SHOW_DELAY_MS) {
       renderShow();
     }
@@ -1815,13 +1866,18 @@ phenomapr_busy_assets <- function() {
   }
 
   // ---- User-driven dismiss -------------------------------------------
+  // dismissedThisRun blocks any further show (R-driven or Path A) until
+  // the next confirmed idle. It does NOT set pathASuppressedUntilNextRShow
+  // because a clean idle followed by a brand-new long op (with no R show)
+  // should still be allowed to surface a popup. The flag also intentionally
+  // does NOT persist across R show calls -- if R explicitly asks to show
+  // after the user dismissed mid-op, the user can dismiss again.
   function userDismiss(reason) {
     dbg("user dismissed", reason);
     clearRSideShowTimer();
     if (isVisible) renderHide();
     busyStartedAt = null;
     dismissedThisRun = true;
-    suppressUntilIdle = true;
   }
 
   // ---- R-side message API (Path B) -----------------------------------
@@ -1850,10 +1906,9 @@ phenomapr_busy_assets <- function() {
       detail:  (p && p.detail)  || "",
       hint:    (p && p.hint)    || "This may take a moment..."
     };
-    // An explicit R show overrides any previous suppress -- the
-    // server has just begun a new piece of work and the popup is
-    // welcome again.
-    suppressUntilIdle = false;
+    // Explicit R show overrides any prior Path A suppression -- R is
+    // signalling a new piece of work and the popup is welcome again.
+    pathASuppressedUntilNextRShow = false;
     if (isVisible) applyOverlayText();
     if (rSideShowTimer === null && !dismissedThisRun && !isVisible) {
       var d = (p && typeof p.delay_ms === "number" && p.delay_ms >= 0)
@@ -1868,18 +1923,18 @@ phenomapr_busy_assets <- function() {
     // (2) Hide the popup immediately if visible -- closes the prior
     //     "stuck for a minute" bug where a stale timer could fire
     //     after the work was already done.
-    // (3) Reset busyStartedAt and arm suppressUntilIdle so Path A
-    //     does NOT immediately re-show the popup when downstream
-    //     reactives (plot/table rendering after the originating
-    //     observer returns) trigger more shiny:busy events. Without
-    //     this, the popup would re-flash within ~100ms and stay
-    //     until the next clean idle, which the user perceives as
-    //     "the popup lingers several seconds after the work is done".
+    // (3) Reset busyStartedAt and arm pathASuppressedUntilNextRShow
+    //     so Path A cannot resurrect the popup during the downstream
+    //     reactive cascade. ONLY a fresh R show call clears the
+    //     suppression -- shiny:idle does NOT, because idle reliably
+    //     fires between the originating observer and the cascade and
+    //     would otherwise let Path A re-arm immediately. With this
+    //     model, R alone owns the lifetime of any instrumented popup.
     if (isVisible) renderHide();
     busyStartedAt = null;
-    suppressUntilIdle = true;
+    pathASuppressedUntilNextRShow = true;
     resetMessage();
-    dbg("R-side hide: timer cleared + popup hidden + Path A suppressed until next idle");
+    dbg("R-side hide: timer cleared + popup hidden + Path A muted until next R show");
   }
 
   // ---- File-input progress feedback ----------------------------------
