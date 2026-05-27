@@ -1356,17 +1356,13 @@ phenomapr_busy_show <- function(message,
                                 delay_seconds = 2,
                                 session = shiny::getDefaultReactiveDomain()) {
   if (is.null(session)) return(invisible(NULL))
-  token <- paste0("busy-",
-                  format(Sys.time(), "%H%M%OS3"), "-",
-                  sample.int(.Machine$integer.max, 1L))
   session$sendCustomMessage("phenomapr-busy-show", list(
     message  = as.character(message %||% ""),
     detail   = if (is.null(detail) || !nzchar(detail))   "" else as.character(detail),
     hint     = if (is.null(hint)   || !nzchar(hint))     "" else as.character(hint),
-    delay_ms = as.integer(round(as.numeric(delay_seconds) * 1000)),
-    token    = token
+    delay_ms = as.integer(round(as.numeric(delay_seconds) * 1000))
   ))
-  invisible(token)
+  invisible(NULL)
 }
 
 phenomapr_busy_hide <- function(session = shiny::getDefaultReactiveDomain()) {
@@ -1377,10 +1373,36 @@ phenomapr_busy_hide <- function(session = shiny::getDefaultReactiveDomain()) {
 
 # Inject the busy-overlay markup, custom-message handlers, and DOM bootstrap
 # into the page <head>. Call from page_navbar()'s `header = tags$head(...)`.
+#
+# Implementation notes:
+#   - Counter-based instead of token-based: every "show" increments an
+#     activeOps counter, every "hide" decrements it. The overlay is
+#     allowed to render only while activeOps > 0; the moment it drops to
+#     zero we cancel any pending timer AND hide synchronously. This is
+#     immune to message ordering issues (e.g. messages arriving with
+#     >2s of latency between them) because the counter, not a timer
+#     race, gates rendering.
+#   - shiny:idle safety net: if Shiny tells us it's idle but our counter
+#     is still positive (meaning some show was queued without a matching
+#     hide -- a server-side bug, never a normal flow), we forcibly reset
+#     the counter and hide. This guarantees the overlay can never get
+#     stuck on screen.
+#   - Append `?busyDebug=1` to the URL to enable console.debug logging
+#     of every show/hide message and every state transition. Useful when
+#     diagnosing future timing reports without touching the code.
 phenomapr_busy_assets <- function() {
   shiny::tags$script(shiny::HTML(
 '
 (function () {
+  var DEBUG = false;
+  try { DEBUG = window.location.search.indexOf("busyDebug=1") !== -1; }
+  catch (e) { DEBUG = false; }
+  function dbg() {
+    if (!DEBUG) return;
+    try { console.debug.apply(console, ["[phenomapr-busy]"].concat([].slice.call(arguments))); }
+    catch (e) {}
+  }
+
   function ensureOverlay() {
     if (document.getElementById("phenomapr-busy-overlay")) return;
     var overlay = document.createElement("div");
@@ -1411,53 +1433,126 @@ phenomapr_busy_assets <- function() {
       el.style.display = "none";
     }
   }
-  function showOverlay(p) {
+  function applyOverlayText(p) {
     ensureOverlay();
-    setText("phenomapr-busy-message", p.message || "");
-    setText("phenomapr-busy-detail",  p.detail  || "");
-    setText("phenomapr-busy-hint",    p.hint    || "");
-    var ov = document.getElementById("phenomapr-busy-overlay");
-    if (ov) ov.classList.add("is-visible");
+    setText("phenomapr-busy-message", (p && p.message) || "");
+    setText("phenomapr-busy-detail",  (p && p.detail)  || "");
+    setText("phenomapr-busy-hint",    (p && p.hint)    || "");
   }
-  function hideOverlay() {
+  function renderShow(p) {
+    applyOverlayText(p);
     var ov = document.getElementById("phenomapr-busy-overlay");
-    if (ov) ov.classList.remove("is-visible");
+    if (ov && !ov.classList.contains("is-visible")) {
+      ov.classList.add("is-visible");
+      dbg("overlay shown", { activeOps: activeOps, msg: p && p.message });
+    }
+  }
+  function renderHide() {
+    var ov = document.getElementById("phenomapr-busy-overlay");
+    if (ov && ov.classList.contains("is-visible")) {
+      ov.classList.remove("is-visible");
+      dbg("overlay hidden", { activeOps: activeOps });
+    }
   }
 
-  var pending = null;       // setTimeout id of the pending show
-  var pendingToken = null;  // token of the most recent show request
+  // Counter of outstanding show() calls that have not been matched by a
+  // hide(). The overlay is only allowed to render when this is > 0.
+  var activeOps = 0;
+  // setTimeout id for the pending "delayed reveal", if any.
+  var pendingTimer = null;
+  // Most recent show payload (refreshed on every show; what we render
+  // when the timer fires).
+  var pendingMsg = null;
+
+  function clearPending() {
+    if (pendingTimer !== null) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+  }
+
+  function handleShow(p) {
+    ensureOverlay();
+    activeOps = activeOps + 1;
+    pendingMsg = p;
+    var delay = (p && typeof p.delay_ms === "number") ? p.delay_ms : 2000;
+    dbg("show", { activeOps: activeOps, delay_ms: delay, msg: p && p.message });
+
+    // If the overlay is already visible (replacement message during a
+    // longer-running operation), refresh the text immediately.
+    var ov = document.getElementById("phenomapr-busy-overlay");
+    if (ov && ov.classList.contains("is-visible")) {
+      applyOverlayText(p);
+      return;
+    }
+
+    clearPending();
+    if (delay <= 0) {
+      // Caller asked to show immediately. Still respect activeOps -- if
+      // an out-of-order hide reduces it to 0 in the same tick, we will
+      // still skip the show.
+      if (activeOps > 0) renderShow(p);
+      return;
+    }
+    pendingTimer = setTimeout(function () {
+      pendingTimer = null;
+      if (activeOps > 0) renderShow(pendingMsg);
+      else dbg("timer fired but activeOps == 0; suppressing");
+    }, delay);
+  }
+
+  function handleHide() {
+    activeOps = activeOps - 1;
+    if (activeOps < 0) activeOps = 0;
+    dbg("hide", { activeOps: activeOps });
+    if (activeOps === 0) {
+      clearPending();
+      pendingMsg = null;
+      renderHide();
+    }
+  }
+
+  function forceReset(reason) {
+    if (activeOps === 0 && pendingTimer === null) return;
+    dbg("forceReset", reason, { activeOps: activeOps, hadTimer: pendingTimer !== null });
+    activeOps = 0;
+    pendingMsg = null;
+    clearPending();
+    renderHide();
+  }
 
   function bind() {
     if (typeof Shiny === "undefined" || !Shiny.addCustomMessageHandler) {
-      // Shiny not ready yet -- try again after a tick.
       setTimeout(bind, 50);
       return;
     }
     ensureOverlay();
-    Shiny.addCustomMessageHandler("phenomapr-busy-show", function (p) {
-      ensureOverlay();
-      if (pending !== null) {
-        clearTimeout(pending);
-        pending = null;
-      }
-      pendingToken = p.token;
-      var delay = (typeof p.delay_ms === "number") ? p.delay_ms : 2000;
-      // If the overlay is already visible (replacement message), update
-      // text immediately so users see fresh status without a 2s gap.
-      var ov = document.getElementById("phenomapr-busy-overlay");
-      if (ov && ov.classList.contains("is-visible")) {
-        showOverlay(p);
-        return;
-      }
-      pending = setTimeout(function () {
-        pending = null;
-        if (pendingToken === p.token) showOverlay(p);
-      }, delay);
+    Shiny.addCustomMessageHandler("phenomapr-busy-show", handleShow);
+    Shiny.addCustomMessageHandler("phenomapr-busy-hide", handleHide);
+
+    // Safety net: when Shiny becomes idle, the server is no longer
+    // running anything that could legitimately need a busy popup. If we
+    // still have active ops outstanding at that point it means a show
+    // was queued without a matching hide -- never a normal flow. Reset
+    // the counter and hide. This guarantees the overlay can never get
+    // stuck on screen even if a future server-side observer forgets its
+    // on.exit hide().
+    var idleTimer = null;
+    document.addEventListener("shiny:idle", function () {
+      // Defer slightly so any in-flight show/hide messages from the
+      // same flush cycle have a chance to land before we reset.
+      if (idleTimer !== null) clearTimeout(idleTimer);
+      idleTimer = setTimeout(function () {
+        idleTimer = null;
+        forceReset("shiny:idle");
+      }, 250);
     });
-    Shiny.addCustomMessageHandler("phenomapr-busy-hide", function () {
-      if (pending !== null) { clearTimeout(pending); pending = null; }
-      pendingToken = null;
-      hideOverlay();
+    document.addEventListener("shiny:busy", function () {
+      if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null; }
+    });
+    // If the server disconnects entirely, the user can never get a hide.
+    document.addEventListener("shiny:disconnected", function () {
+      forceReset("shiny:disconnected");
     });
   }
   if (document.readyState === "loading") {
