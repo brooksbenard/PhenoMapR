@@ -471,12 +471,12 @@ table.dataTable thead th {
  * block. Mirrors the metadata-upload-details treatment so the two
  * <details> blocks in the sidebars feel uniform. */
 .embedding-help-details {
-  margin: 0.25rem 0 0.15rem;
+  margin: 0.15rem 0 0;
 }
 .embedding-help-details > summary {
   cursor: pointer;
   list-style: revert;
-  padding: 0.2rem 0;
+  padding: 0.15rem 0;
   font-size: 0.92rem;
   color: #264653;
   font-weight: 600;
@@ -486,14 +486,32 @@ table.dataTable thead th {
  * group instead of two visually disjoint cards. */
 .embedding-upload-details {
   margin-top: 0;
+  margin-bottom: 0;
 }
 /* Trim the helpText() chip's vertical padding inside both <details>
  * blocks so the gap between summary lines stays compact even when both
  * are expanded. */
 .embedding-help-details .help-block,
 .embedding-help-details .form-text {
-  margin-top: 0.25rem;
-  margin-bottom: 0.4rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0.3rem;
+}
+/* The phenomapr_file_input() inside the upload <details> brings its own
+ * `.form-group` margin -- zero it out so the chosen-file row hugs the
+ * helpText above and the <hr> below. */
+.embedding-upload-details .phenomapr-file-input,
+.embedding-upload-details .form-group,
+.embedding-upload-details .shiny-input-container {
+  margin-bottom: 0;
+}
+/* Pull the sidebar's <hr> separator up against the upload-details
+ * block, and shrink its own vertical breathing room so the three rows
+ * (auto-detect summary, upload summary, separator) read as one tight
+ * unit instead of three loosely floated cards. Scoped via the adjacent
+ * sibling combinator so other <hr>s in other sidebars are untouched. */
+.embedding-upload-details + hr {
+  margin-top: 0.35rem;
+  margin-bottom: 0.5rem;
 }
 .metadata-upload-details-prompt {
   border-left: 3px solid #e76f51;
