@@ -1629,7 +1629,8 @@ phenomapr_busy_assets <- function() {
   var SHOW_DELAY_MS      = 2000;   // both paths use the same threshold
   var IDLE_GRACE_MS      = 250;    // tolerate brief idle bounces between chained reactives
   var POLL_INTERVAL_MS   = 100;    // how often the busy-duration polling fires
-  var ABS_VISIBLE_MAX_MS = 10000;  // belt-and-suspenders: popup auto-hides this long after appearing
+  var ABS_VISIBLE_MAX_MS = 30000;  // belt-and-suspenders: popup auto-hides this long after appearing
+                                   // (only meant to cover truly broken sessions; not a normal hide path)
   var FILE_INPUT_SUFFIX  = "_server"; // shinyFiles inputs created by phenomapr_file_input
 
   // ---- DOM helpers ---------------------------------------------------
@@ -1718,6 +1719,14 @@ phenomapr_busy_assets <- function() {
   var isVisible         = false;
   var shownAt           = null;
   var dismissedThisRun  = false;
+  // suppressUntilIdle: when R has explicitly said hide (or the user
+  // dismissed), block Path A (shiny:busy-duration) from re-revealing
+  // the popup until the next confirmed idle. Without this, downstream
+  // reactives that fire shiny:busy after R hide (e.g. plot/table
+  // rendering after a long observer returns) would re-show the popup
+  // because busyStartedAt has not yet been cleared by an idle grace.
+  // Cleared on idle grace, disconnect, or an explicit R show.
+  var suppressUntilIdle = false;
 
   function clearIdleGraceTimer() {
     if (idleGraceTimer !== null) {
@@ -1765,6 +1774,7 @@ phenomapr_busy_assets <- function() {
       if (isVisible) renderHide();
       clearAllFileInputLoading();
       dismissedThisRun = false;
+      suppressUntilIdle = false;
       resetMessage();
       dbg("idle confirmed: popup hidden, state reset");
     }, IDLE_GRACE_MS);
@@ -1776,6 +1786,7 @@ phenomapr_busy_assets <- function() {
     if (isVisible) renderHide();
     clearAllFileInputLoading();
     dismissedThisRun = false;
+    suppressUntilIdle = false;
     resetMessage();
     dbg("disconnected: forced hide");
   }
@@ -1791,6 +1802,7 @@ phenomapr_busy_assets <- function() {
     if (busyStartedAt !== null &&
         !isVisible &&
         !dismissedThisRun &&
+        !suppressUntilIdle &&
         (now - busyStartedAt) >= SHOW_DELAY_MS) {
       renderShow();
     }
@@ -1807,7 +1819,9 @@ phenomapr_busy_assets <- function() {
     dbg("user dismissed", reason);
     clearRSideShowTimer();
     if (isVisible) renderHide();
+    busyStartedAt = null;
     dismissedThisRun = true;
+    suppressUntilIdle = true;
   }
 
   // ---- R-side message API (Path B) -----------------------------------
@@ -1836,6 +1850,10 @@ phenomapr_busy_assets <- function() {
       detail:  (p && p.detail)  || "",
       hint:    (p && p.hint)    || "This may take a moment..."
     };
+    // An explicit R show overrides any previous suppress -- the
+    // server has just begun a new piece of work and the popup is
+    // welcome again.
+    suppressUntilIdle = false;
     if (isVisible) applyOverlayText();
     if (rSideShowTimer === null && !dismissedThisRun && !isVisible) {
       var d = (p && typeof p.delay_ms === "number" && p.delay_ms >= 0)
@@ -1846,13 +1864,22 @@ phenomapr_busy_assets <- function() {
   }
   function handleHide() {
     clearRSideShowTimer();
-    // *** The fix for the previous "popup stuck for a minute" bug ***
-    // Unconditionally hide the popup. R has signalled the op is done;
-    // even if the show path raced ahead and revealed it a moment ago,
-    // we hide immediately so it does not linger.
+    // (1) Cancel the pending R-side timer if it has not fired.
+    // (2) Hide the popup immediately if visible -- closes the prior
+    //     "stuck for a minute" bug where a stale timer could fire
+    //     after the work was already done.
+    // (3) Reset busyStartedAt and arm suppressUntilIdle so Path A
+    //     does NOT immediately re-show the popup when downstream
+    //     reactives (plot/table rendering after the originating
+    //     observer returns) trigger more shiny:busy events. Without
+    //     this, the popup would re-flash within ~100ms and stay
+    //     until the next clean idle, which the user perceives as
+    //     "the popup lingers several seconds after the work is done".
     if (isVisible) renderHide();
+    busyStartedAt = null;
+    suppressUntilIdle = true;
     resetMessage();
-    dbg("R-side hide: timer cleared + popup hidden if visible");
+    dbg("R-side hide: timer cleared + popup hidden + Path A suppressed until next idle");
   }
 
   // ---- File-input progress feedback ----------------------------------
