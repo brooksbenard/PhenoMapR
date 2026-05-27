@@ -596,6 +596,48 @@ table.dataTable thead th {
   box-shadow: 0 4px 12px rgba(42, 157, 143, 0.32);
 }
 
+/* ---------------------------------------------------------------------------
+ * "Choosing a phenotype signature" explainer card.
+ *
+ * Per-database name labels (.ref-name-*) reuse the sidebar's reference-source
+ * palette so the colored database name in the bullet list visually maps onto
+ * the colored pill in the sidebar.
+ * ------------------------------------------------------------------------- */
+.phenotype-signature-list {
+  margin: 0 0 0.6rem 0;
+  padding-left: 1.25rem;
+}
+.phenotype-signature-list > li {
+  margin-bottom: 0.35rem;
+  line-height: 1.45;
+}
+.ref-name {
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+.ref-name-precog    { color: #264653; }
+.ref-name-tcga      { color: #6c757d; }
+.ref-name-pediatric { color: #C0633A; }
+.ref-name-ici       { color: #5C9942; }
+.ref-name-custom    { color: #2A9D8F; }
+.phenotype-signature-refs {
+  font-size: 0.88rem;
+  color: #5c7280;
+  margin: 0.25rem 0 0.85rem 0;
+}
+.phenotype-signature-refs a {
+  color: #264653;
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(38, 70, 83, 0.45);
+}
+.phenotype-signature-refs a:hover,
+.phenotype-signature-refs a:focus-visible {
+  color: #2A9D8F;
+  border-bottom-color: #2A9D8F;
+  outline: none;
+}
+
 /* Welcome image */
 .welcome-image {
   display: flex;
@@ -765,51 +807,71 @@ table.dataTable thead th {
   font-weight: 500;
   color: #264653;
 }
+/* Two-segment layout that mimics the standard shiny::fileInput look:
+ * a brand-teal "Browse..." button (with a folder icon) on the left butted
+ * up against a whiteish, input-style filename box on the right. The two
+ * pieces share a border so they read as a single control (input-group). */
 .phenomapr-file-input-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-wrap: nowrap;
-  gap: 0.6rem;
   min-width: 0;
 }
 .phenomapr-file-input-btn {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.32rem 0.85rem;
+  gap: 0.4rem;
+  padding: 0.34rem 0.85rem;
   font-size: 0.88rem;
-  background-color: #fff;
-  border: 1px solid #ced4da;
-  color: #264653;
-  border-radius: 0.25rem;
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-              color 0.15s ease;
+  font-weight: 500;
+  background-color: #2A9D8F;
+  border: 1px solid #2A9D8F;
+  color: #fff;
+  border-top-left-radius: 0.25rem;
+  border-bottom-left-radius: 0.25rem;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .phenomapr-file-input-btn:hover,
 .phenomapr-file-input-btn:focus-visible {
-  background-color: rgba(38, 70, 83, 0.06);
-  border-color: rgba(38, 70, 83, 0.4);
-  color: #264653;
+  background-color: #228377;
+  border-color: #228377;
+  color: #fff;
   outline: none;
+}
+.phenomapr-file-input-btn:focus-visible {
+  box-shadow: 0 0 0 0.2rem rgba(42, 157, 143, 0.25);
 }
 .phenomapr-file-input-btn .fa,
 .phenomapr-file-input-btn .fas,
 .phenomapr-file-input-btn .fa-folder-open {
   font-size: 0.92em;
-  color: #6b7d8c;
+  color: #fff;
 }
 .phenomapr-file-input-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.34rem 0.7rem;
+  background-color: #fff;
+  border: 1px solid #ced4da;
+  border-left: none;
+  border-top-right-radius: 0.25rem;
+  border-bottom-right-radius: 0.25rem;
   font-size: 0.85rem;
   line-height: 1.2;
   word-break: break-all;
   overflow-wrap: anywhere;
+  color: #495057;
 }
 .phenomapr-file-input-name-empty {
-  color: #94a3b8;
-  font-style: italic;
+  color: #adb5bd;
+  font-style: normal;
 }
 .phenomapr-file-input-name-set {
   color: #264653;
@@ -847,4 +909,86 @@ table.dataTable thead th {
 .navbar .end-session-btn .fas,
 .navbar .end-session-btn .fa-power-off {
   font-size: 0.78em;
+}
+
+/* ---------------------------------------------------------------------------
+ * Centered "busy" modal used while long-running analyses or data loads run.
+ *
+ * Replaces the small bottom-right shiny::Progress$new() / showNotification
+ * indicators with a more obvious centered card backed by a foggy backdrop,
+ * so the user clearly sees the app is doing work and is not stuck.
+ *
+ * Implementation note: shiny::modalDialog(..., class = ...) attaches the
+ * supplied class to the inner <div class="modal-body">, NOT the outer
+ * .modal-dialog. We use :has() to walk back up to the dialog/content so
+ * the entire modal chrome can be re-skinned for the busy variant. :has()
+ * is supported in all current evergreen browsers (Chrome 105+, Edge 105+,
+ * Safari 15.4+, Firefox 121+).
+ * ------------------------------------------------------------------------- */
+.modal-dialog:has(> .modal-content > .phenomapr-busy-modal) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 1rem);
+  margin: 0.5rem auto;
+  pointer-events: none;
+}
+.modal-dialog:has(> .modal-content > .phenomapr-busy-modal) > .modal-content {
+  pointer-events: auto;
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+  width: 100%;
+  max-width: 380px;
+  background-color: #ffffff;
+}
+.phenomapr-busy-modal {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1.4rem 1.5rem;
+}
+.phenomapr-busy-spinner {
+  width: 38px;
+  height: 38px;
+  border: 3px solid rgba(38, 70, 83, 0.15);
+  border-top-color: #2A9D8F;
+  border-radius: 50%;
+  animation: phenomapr-busy-spin 0.85s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes phenomapr-busy-spin {
+  to { transform: rotate(360deg); }
+}
+.phenomapr-busy-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.phenomapr-busy-message {
+  font-weight: 600;
+  color: #264653;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+.phenomapr-busy-detail {
+  font-size: 0.86rem;
+  color: #5c7280;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+.phenomapr-busy-hint {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* Foggy, slightly-blurred backdrop used by every modal in the app
+ * (busy modal, end-session confirmation, etc.) so the underlying surface
+ * dims gracefully and the centered card reads as the focal point. */
+.modal-backdrop.show {
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 1;
 }

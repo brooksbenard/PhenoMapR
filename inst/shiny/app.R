@@ -420,7 +420,7 @@ ui <- page_navbar(
   # -------------------------------------------------------------------------
   nav_panel(
     title = tagList(
-      tags$span(class = "nav-step", icon("book"), " 2. Phenotype"),
+      tags$span(class = "nav-step", icon("pen-nib"), " 2. Phenotype"),
       tags$span(class = "nav-step-arrow", "\u2192")
     ),
     value = "reference",  # internal value preserved for stability
@@ -564,21 +564,67 @@ ui <- page_navbar(
       card(
         card_header(icon("circle-info"), " Choosing a phenotype signature"),
         card_body(
-          markdown(
-            "**Built-in signatures** are meta-z-scores across many cohorts:
-
-            * **PRECOG** — 39 adult cancer types, ~166 cohorts.
-            * **TCGA** — single-cohort prognostic z per cancer.
-            * **Pediatric PRECOG** — pediatric tumors.
-            * **ICI PRECOG** — immune-checkpoint inhibitor cohorts (primary
-              vs. metastatic suffix, e.g. `MELANOMA_Metastatic`).
-
-            **Custom phenotype signature** is a `data.frame` with gene
-            rownames and a single z-score column. Generate one *inside this
-            app* from your own bulk expression + phenotype data via
-            *Derive a phenotype signature*, or upload a precomputed file
-            you've built elsewhere with `derive_reference_from_bulk()`
-            (binary, continuous, or survival outcomes)."
+          # Database name labels are color-coded to match the same per-source
+          # palette used by the sidebar's reference-source picker, so users
+          # can visually associate a colored dot in the picker with the
+          # corresponding entry in this explainer card. The palette lives in
+          # styles.css ("Reference-source palette") and is reused here via
+          # the .ref-name-* helpers.
+          tags$p(tags$strong("Built-in signatures"),
+                 " are meta-z-scores across many cohorts:"),
+          tags$ul(
+            class = "phenotype-signature-list",
+            tags$li(
+              tags$span(class = "ref-name ref-name-precog", "PRECOG"),
+              " - meta-z over ~166 cohorts spanning ",
+              tags$strong("51 adult cancer / tissue types"), "."
+            ),
+            tags$li(
+              tags$span(class = "ref-name ref-name-tcga", "TCGA"),
+              " - single-cohort prognostic z spanning ",
+              tags$strong("33 adult cancer types"),
+              " (plus PRECOG-meta and TCGA-meta tracks)."
+            ),
+            tags$li(
+              tags$span(class = "ref-name ref-name-pediatric",
+                        "Pediatric PRECOG"),
+              " - pediatric tumor cohorts spanning ",
+              tags$strong("13 tumor types"),
+              " (ALL, ATRT, ESFT, GCT, HGG, MB, NB, ...)."
+            ),
+            tags$li(
+              tags$span(class = "ref-name ref-name-ici", "ICI PRECOG"),
+              " - ",
+              tags$strong("38 immune-checkpoint inhibitor cohorts"),
+              " (anti-PD1 / PD-L1 / CTLA4, primary or metastatic, naive ",
+              "or post-treatment)."
+            )
+          ),
+          tags$p(
+            class = "phenotype-signature-refs",
+            "Further reading: ",
+            tags$a(
+              href = "https://academic.oup.com/nar/article/54/D1/D1579/8324954",
+              target = "_blank", rel = "noopener noreferrer",
+              "PRECOG paper (NAR 2026)"
+            ),
+            " | ",
+            tags$a(
+              href = "https://precog.stanford.edu/",
+              target = "_blank", rel = "noopener noreferrer",
+              "precog.stanford.edu"
+            )
+          ),
+          tags$p(
+            tags$strong("Custom phenotype signature"),
+            " is a ", tags$code("data.frame"),
+            " with gene rownames and a single z-score column. Generate one ",
+            tags$em("inside this app"),
+            " from your own bulk expression + phenotype data via ",
+            tags$em("Derive a phenotype signature"),
+            ", or upload a precomputed file you've built elsewhere with ",
+            tags$code("derive_reference_from_bulk()"),
+            " (binary, continuous, or survival outcomes)."
           )
         )
       ),
@@ -1181,18 +1227,17 @@ server <- function(input, output, session) {
   # ------------------------------------------------------------------------
   observeEvent(expr_file_pick(), {
     pick <- req(expr_file_pick())
-    showNotification("Reading expression file…", id = "reading_expr",
-                     duration = NULL, type = "message")
+    phenomapr_busy_show("Reading expression file...", pick$name)
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     res <- tryCatch(
       parse_expression_upload(pick$datapath, pick$name),
       error = function(e) {
-        removeNotification("reading_expr")
+        phenomapr_busy_hide()
         showNotification(paste0("Upload failed: ", conditionMessage(e)),
                          type = "error", duration = 8)
         NULL
       }
     )
-    removeNotification("reading_expr")
     if (is.null(res)) return()
     state$expression <- res$object
     state$expr_summary <- res
@@ -1226,6 +1271,8 @@ server <- function(input, output, session) {
   # Optional metadata upload
   observeEvent(meta_file_pick(), {
     pick <- req(meta_file_pick())
+    phenomapr_busy_show("Loading cell metadata...", pick$name)
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     md <- tryCatch(
       parse_metadata_upload(pick$datapath, pick$name),
       error = function(e) {
@@ -1585,6 +1632,8 @@ server <- function(input, output, session) {
   # Custom: upload file
   observeEvent(custom_ref_file_pick(), {
     pick <- req(custom_ref_file_pick())
+    phenomapr_busy_show("Loading custom signature...", pick$name)
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     ref <- tryCatch(
       parse_reference_upload(pick$datapath, pick$name),
       error = function(e) {
@@ -1604,6 +1653,8 @@ server <- function(input, output, session) {
   # Custom: derive from bulk + phenotype
   observeEvent(derive_bulk_file_pick(), {
     pick <- req(derive_bulk_file_pick())
+    phenomapr_busy_show("Loading bulk expression...", pick$name)
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     res <- tryCatch(
       parse_expression_upload(pick$datapath, pick$name),
       error = function(e) {
@@ -1660,6 +1711,8 @@ server <- function(input, output, session) {
 
   observeEvent(derive_phen_file_pick(), {
     pick <- req(derive_phen_file_pick())
+    phenomapr_busy_show("Loading phenotype table...", pick$name)
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     df <- tryCatch(
       parse_metadata_upload(pick$datapath, pick$name),
       error = function(e) {
@@ -1678,8 +1731,11 @@ server <- function(input, output, session) {
 
   observeEvent(input$derive_run, {
     req(state$derive_bulk, state$derive_phen)
-    progress <- shiny::Progress$new(); on.exit(progress$close())
-    progress$set(message = "Computing per-gene z-scores…", value = 0.4)
+    phenomapr_busy_show(
+      "Deriving phenotype signature...",
+      sprintf("Bulk + phenotype | %s outcome", input$derive_type %||% "binary")
+    )
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     bin_pos <- if (input$derive_binary_positive %in% c("first", "second")) {
       input$derive_binary_positive
     } else "second"
@@ -1867,8 +1923,12 @@ server <- function(input, output, session) {
   # ------------------------------------------------------------------------
   observeEvent(input$run_score, {
     req(state$expression, state$reference)
-    progress <- shiny::Progress$new(); on.exit(progress$close())
-    progress$set(value = 0.1, message = "Setting up scoring…")
+    ref_label <- if (is.character(state$reference)) {
+      sprintf("%s | %s", toupper(state$reference),
+              input$cancer_type %||% "")
+    } else "custom signature"
+    phenomapr_busy_show("Computing PhenoMap scores...", ref_label)
+    on.exit(phenomapr_busy_hide(), add = TRUE)
     sign <- tryCatch(as.integer(input$reference_sign), error = function(e) 1L)
     scores <- tryCatch(
       run_phenomap_with_progress(
@@ -1880,8 +1940,7 @@ server <- function(input, output, session) {
         group_by = input$pseudobulk_group_by,
         assay = input$score_assay,
         slot = input$score_slot,
-        reference_sign = sign,
-        progress = progress
+        reference_sign = sign
       ),
       error = function(e) {
         showNotification(paste0("PhenoMap failed: ", conditionMessage(e)),
@@ -2570,8 +2629,11 @@ server <- function(input, output, session) {
   # ------------------------------------------------------------------------
   observeEvent(input$run_markers, {
     req(state$expression, state$groups)
-    progress <- shiny::Progress$new(); on.exit(progress$close())
-    progress$set(value = 0.2, message = "Finding marker genes…")
+    phenomapr_busy_show(
+      "Finding marker genes...",
+      sprintf("Scope: %s", input$marker_scope %||% "across-all-cells")
+    )
+    on.exit(phenomapr_busy_hide(), add = TRUE)
 
     grp_col <- grep("^phenotype_group_", colnames(state$groups), value = TRUE)[1L]
     if (is.na(grp_col)) {
@@ -2653,8 +2715,11 @@ server <- function(input, output, session) {
         type = "warning", duration = 8
       ); return()
     }
-    progress <- shiny::Progress$new(); on.exit(progress$close())
-    progress$set(value = 0.2, message = "Assembling matrix and metadata…")
+    phenomapr_busy_show(
+      "Building marker heatmap...",
+      "Assembling expression matrix and per-cell metadata"
+    )
+    on.exit(phenomapr_busy_hide(), add = TRUE)
 
     # For AnnData inputs, the marker heatmap only needs the marker genes —
     # we pass that list straight to extract_expression_matrix() so that
@@ -2738,8 +2803,7 @@ server <- function(input, output, session) {
       n_mark_labels = input$hm_n_labels %||% 5L,
       use_raster = FALSE
     ))
-    progress$set(value = 1.0, message = "Heatmap ready.")
-    showNotification("Heatmap ready — drawing…", type = "message", duration = 3)
+    showNotification("Heatmap ready -- drawing...", type = "message", duration = 3)
   })
 
   output$marker_heatmap <- renderImage(

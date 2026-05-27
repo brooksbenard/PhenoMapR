@@ -313,14 +313,13 @@ safe_list_cancer_types <- function(reference) {
   )
 }
 
-# Wrap the long-running PhenoMap() call inside a progress notification. The
-# heavy lifting itself doesn't expose a per-step hook, so we just show a busy
-# spinner and an elapsed-time counter.
+# Wrap the long-running PhenoMap() call so the caller sees an elapsed-time
+# attribute. The visible "we are working" indicator is now driven by the
+# centered busy modal in the calling observer (see phenomapr_busy_show()),
+# so this helper has no further UI side-effects.
 run_phenomap_with_progress <- function(expression, reference, cancer_type,
                                        z_score_cutoff, pseudobulk, group_by,
-                                       assay, slot, reference_sign,
-                                       progress = NULL) {
-  if (!is.null(progress)) progress$set(message = "Scoring expression…", value = 0.3)
+                                       assay, slot, reference_sign) {
   t0 <- Sys.time()
   scores <- PhenoMapR::PhenoMap(
     expression = expression,
@@ -334,7 +333,6 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
     reference_sign = reference_sign,
     verbose = TRUE
   )
-  if (!is.null(progress)) progress$set(value = 1.0, message = "Done")
   attr(scores, "elapsed_s") <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
   scores
 }
@@ -1067,10 +1065,12 @@ phenomapr_file_input <- function(id, label = NULL, accept = NULL,
         icon = shiny::icon("folder-open"),
         class = "btn btn-default btn-file phenomapr-file-input-btn"
       ),
-      shiny::uiOutput(
-        paste0(picker_id, "_chosen"),
-        inline = TRUE,
-        class = "phenomapr-file-input-name"
+      # Wrap the uiOutput in an explicit span so the flexbox child rules
+      # land on a stable element regardless of how shiny::uiOutput()
+      # versions render the container's class attribute.
+      shiny::tags$span(
+        class = "phenomapr-file-input-name",
+        shiny::uiOutput(paste0(picker_id, "_chosen"), inline = TRUE)
       )
     )
   )
@@ -1151,4 +1151,62 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
       source = "upload"
     )
   })
+}
+
+# ============================================================================
+# Centered "busy" modal (replaces shiny::Progress$new bottom-right toasts)
+# ============================================================================
+#
+# `phenomapr_busy_show()` opens a centered modal with a spinner, a primary
+# message, and an optional detail line + reassurance hint. The accompanying
+# CSS in www/styles.css adds a foggy/blurred backdrop so the user sees the
+# app is busy and not stuck, even on long-running operations like scoring
+# or marker discovery.
+#
+# Usage pattern (mirroring the old shiny::Progress$new() pattern):
+#
+#   phenomapr_busy_show("Computing PhenoMap scores...", "Cancer: LUAD")
+#   on.exit(phenomapr_busy_hide(), add = TRUE)
+#   res <- PhenoMap(...)
+#
+# Calling `phenomapr_busy_show()` again while the modal is open replaces
+# the message in place (we explicitly remove + re-show), so multi-step
+# pipelines can update the user as they progress without flicker.
+
+phenomapr_busy_show <- function(message,
+                                detail = NULL,
+                                hint = "This may take a moment...",
+                                session = shiny::getDefaultReactiveDomain()) {
+  if (is.null(session)) return(invisible(NULL))
+  body <- shiny::tagList(
+    shiny::tags$div(class = "phenomapr-busy-spinner"),
+    shiny::tags$div(
+      class = "phenomapr-busy-text",
+      shiny::tags$div(class = "phenomapr-busy-message", message),
+      if (!is.null(detail) && nzchar(detail))
+        shiny::tags$div(class = "phenomapr-busy-detail", detail),
+      if (!is.null(hint) && nzchar(hint))
+        shiny::tags$div(class = "phenomapr-busy-hint", hint)
+    )
+  )
+  shiny::removeModal(session = session)
+  shiny::showModal(
+    shiny::modalDialog(
+      title = NULL,
+      footer = NULL,
+      easyClose = FALSE,
+      fade = FALSE,
+      size = "s",
+      class = "phenomapr-busy-modal",
+      body
+    ),
+    session = session
+  )
+  invisible(NULL)
+}
+
+phenomapr_busy_hide <- function(session = shiny::getDefaultReactiveDomain()) {
+  if (is.null(session)) return(invisible(NULL))
+  shiny::removeModal(session = session)
+  invisible(NULL)
 }
