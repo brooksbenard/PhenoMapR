@@ -289,13 +289,20 @@ ui <- page_navbar(
 
             # "Server / remote use" — companion card matching the stepper
             # chrome, with the code block visually called out so users can
-            # spot the remote-launch command at a glance.
-            tags$div(
-              class = "welcome-section welcome-server",
-              tags$div(
-                class = "welcome-section-header",
+            # spot the remote-launch command at a glance. Rendered as a
+            # native HTML5 <details>/<summary> so the section is collapsed
+            # by default (most users are running locally and do not need
+            # to see the remote-launch command on every visit) but stays
+            # one click away. No JS / Shiny round-trip is needed -- the
+            # browser handles the toggle and accessibility for free.
+            tags$details(
+              class = "welcome-section welcome-server welcome-collapsible",
+              tags$summary(
+                class = "welcome-section-header welcome-section-summary",
                 icon("server"),
-                tags$span("Server / remote use")
+                tags$span("Server / remote use"),
+                # Right-pinned chevron that flips on open/close via CSS.
+                tags$span(class = "welcome-section-caret", icon("chevron-down"))
               ),
               tags$div(
                 class = "welcome-section-body",

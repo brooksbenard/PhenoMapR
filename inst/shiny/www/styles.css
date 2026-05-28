@@ -881,6 +881,57 @@ table.dataTable thead th {
 }
 .welcome-section-body > p:last-child { margin-bottom: 0; }
 
+/* Collapsible variant: a <details>/<summary> drop-down rendered with
+ * the same header chrome as .welcome-section-header. The native
+ * disclosure triangle is suppressed and replaced with a right-pinned
+ * Font Awesome chevron that flips when the section is open, so the
+ * affordance reads the same way as a typical Bootstrap accordion
+ * without needing JS or a Shiny round-trip. */
+.welcome-collapsible {
+  padding: 0;
+}
+/* Hide the default disclosure triangle in WebKit / Blink / Firefox.
+ * `list-style: none` and `display: list-item` belt-and-suspenders
+ * cover ancient browsers that ignore ::-webkit-details-marker. */
+.welcome-section-summary {
+  cursor: pointer;
+  display: flex;
+  list-style: none;
+  position: relative;
+  user-select: none;
+  /* Keep summary alignment identical to .welcome-section-header so
+   * the open-state visual is indistinguishable from the static
+   * sections above. */
+  margin: 0;
+}
+.welcome-section-summary::-webkit-details-marker { display: none; }
+.welcome-section-summary::marker { content: ""; }
+.welcome-section-summary:hover {
+  background-color: rgba(38, 70, 83, 0.10);
+}
+.welcome-section-summary:focus-visible {
+  outline: 2px solid rgba(42, 157, 143, 0.55);
+  outline-offset: -2px;
+}
+.welcome-section-caret {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  color: rgba(38, 70, 83, 0.55);
+  transition: transform 0.18s ease;
+}
+.welcome-collapsible[open] > .welcome-section-summary .welcome-section-caret {
+  transform: rotate(180deg);
+}
+/* When the <details> is open, restore the bottom border on the
+ * summary (which acts as the divider between header and body). When
+ * closed, drop it so the card looks like a single solid pill. */
+.welcome-collapsible:not([open]) > .welcome-section-summary {
+  border-bottom: none;
+}
+
 /* Numbered stepper inside "How to use this app". Each row pairs a teal
  * circular badge with a bold brand-primary headline (the "main part" of
  * the step) and a softer description paragraph for visual hierarchy. */
