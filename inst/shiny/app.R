@@ -1204,36 +1204,12 @@ ui <- page_navbar(
   ),
 
   nav_spacer(),
-  # Plot appearance popover. Surfaces global cosmetic controls that
-  # affect every chicklet-rounded plot in the app (bars, stacks,
-  # histograms, boxplots). The slider's value is mirrored into the
-  # `phenomapr.plot_radius_pt` R option from the server, and the
-  # `.geom_rounded_*()` wrappers in helpers.R read that option as
-  # their default radius -- so dragging the slider updates corner
-  # sharpness everywhere without having to plumb the value through
-  # to each render*() body manually.
-  nav_item(
-    bslib::popover(
-      title = "Plot appearance",
-      placement = "bottom",
-      tags$button(
-        type = "button",
-        class = "btn btn-sm btn-outline-secondary",
-        title = "Adjust plot appearance",
-        tagList(icon("sliders"), " Plot appearance")
-      ),
-      sliderInput(
-        "plot_radius_pt",
-        tagList(
-          "Bar / box corner sharpness (pt)",
-          tags$small(class = "text-muted", style = "display:block;",
-                     "Applies to ggchicklet2-rounded bars, stacks, ",
-                     "histograms, and boxplots.")
-        ),
-        min = 0, max = 12, value = 3, step = 0.5
-      )
-    )
-  ),
+  # NOTE: the former "Plot appearance" navbar popover (corner radius
+  # slider) has been folded into the plot-download modal alongside
+  # the other export-time aesthetic controls (base font size, width,
+  # height, DPI, file format). On-screen plots use the default
+  # radius; per-export tweaks happen in the modal so users can iterate
+  # against the live preview without juggling two UI surfaces.
   nav_item(
     tags$a(
       href = "https://github.com/brooksbenard/PhenoMapR",
@@ -1346,15 +1322,11 @@ server <- function(input, output, session) {
   # phenomapr_register_plot_download() / *_table_download() in helpers.R.
   panel_objects <- reactiveValues()
 
-  # Mirror the navbar "Plot appearance" slider into the global option
-  # the .geom_rounded_*() helpers read for their default radius. This
-  # gives us a single source of truth (R option) without threading the
-  # input through every render*() body. The observe() runs once on
-  # session start with the slider's default and on every drag.
-  observe({
-    r <- input$plot_radius_pt %||% 3
-    options(phenomapr.plot_radius_pt = r)
-  })
+  # On-screen plots use the default ggchicklet2 radius (3 pt). The
+  # per-export radius lives in the plot-download modal and is applied
+  # at preview / save time via .apply_chicklet_radius(), so no global
+  # option observe() is needed any more.
+  options(phenomapr.plot_radius_pt = 3)
 
   # Base font size for ggplot theme_minimal() across every panel.
   # Bumped from the previous mix of 12 / 13 to a single 14 for
@@ -1405,6 +1377,17 @@ server <- function(input, output, session) {
 
   active_plot_dl <- reactiveVal(NULL)
 
+  # Persistent per-session "appearance" preferences (base font size +
+  # corner radius). showModal() rebuilds the modal UI every time, so
+  # without these we would snap back to the factory defaults on every
+  # open. Width / height / DPI / format are NOT persisted because they
+  # are panel-specific (e.g. UMAP defaults to 10x8, count plots default
+  # to 8x5) -- each panel's own defaults win on first open.
+  user_appearance_prefs <- reactiveValues(
+    base_size = NULL,
+    radius_pt = NULL
+  )
+
   # Spin up one observer per plot panel. Each one watches its own
   # *_modal_btn input and opens the shared modal with that panel's
   # label + default dimensions. `local()` captures the loop variable
@@ -1415,13 +1398,34 @@ server <- function(input, output, session) {
       meta     <- plot_panels[[panel_id]]
       observeEvent(input[[paste0(panel_id, "_modal_btn")]], {
         active_plot_dl(panel_id)
+        # Seed the modal with this panel's per-panel defaults, then
+        # overlay the user's persisted appearance tweaks (if any) so
+        # they carry from one modal open to the next.
+        defs <- meta$defaults
+        prev_base   <- isolate(user_appearance_prefs$base_size)
+        prev_radius <- isolate(user_appearance_prefs$radius_pt)
+        if (!is.null(prev_base))   defs$base_size  <- prev_base
+        if (!is.null(prev_radius)) defs$radius_pt  <- prev_radius
         showModal(phenomapr_plot_download_modal(
           panel_label = meta$label,
-          defaults    = meta$defaults
+          defaults    = defs
         ))
       }, ignoreInit = TRUE)
     })
   }
+
+  # Capture the user's appearance tweaks as they change so they
+  # persist across modal opens (and across panels). We only track the
+  # appearance knobs here -- width / height / dpi / format are
+  # intentionally not persisted (see comment above).
+  observe({
+    v <- input$plot_dl_base_size
+    if (!is.null(v) && is.finite(v)) user_appearance_prefs$base_size <- v
+  })
+  observe({
+    v <- input$plot_dl_radius_pt
+    if (!is.null(v) && is.finite(v)) user_appearance_prefs$radius_pt <- v
+  })
 
   # ----------------------------------------------------------------------
   # Live preview inside the download modal. Mirrors what the saved
@@ -1479,8 +1483,10 @@ server <- function(input, output, session) {
     if (is.null(pid)) {
       return(.plot_dl_placeholder("Open a plot's download icon to see a preview."))
     }
-    bsize <- suppressWarnings(as.numeric(input$plot_dl_base_size))
-    if (!is.finite(bsize) || bsize <= 0) bsize <- 14
+    bsize  <- suppressWarnings(as.numeric(input$plot_dl_base_size))
+    radius <- suppressWarnings(as.numeric(input$plot_dl_radius_pt))
+    if (!is.finite(bsize)  || bsize  <= 0) bsize  <- 14
+    if (!is.finite(radius) || radius <  0) radius <- 3
 
     if (identical(pid, "marker_heatmap")) {
       return(.plot_dl_placeholder(
@@ -1502,6 +1508,7 @@ server <- function(input, output, session) {
 
     if (inherits(p, c("ggplot", "patchwork"))) {
       p <- p + ggplot2::theme(text = ggplot2::element_text(size = bsize))
+      p <- .apply_chicklet_radius(p, radius)
       return(p)
     }
     # Non-ggplot fallback (e.g. ComplexHeatmap, recordedplot). We have
@@ -1535,16 +1542,18 @@ server <- function(input, output, session) {
         removeModal()
         return(invisible(NULL))
       }
-      fmt   <- isolate(input$plot_dl_format)   %||% "png"
-      w     <- as.numeric(isolate(input$plot_dl_width)  %||% 8)
-      h     <- as.numeric(isolate(input$plot_dl_height) %||% 6)
-      dpi   <- as.numeric(isolate(input$plot_dl_dpi)    %||% 300)
-      bsize <- as.numeric(isolate(input$plot_dl_base_size) %||% 14)
+      fmt    <- isolate(input$plot_dl_format)   %||% "png"
+      w      <- as.numeric(isolate(input$plot_dl_width)  %||% 8)
+      h      <- as.numeric(isolate(input$plot_dl_height) %||% 6)
+      dpi    <- as.numeric(isolate(input$plot_dl_dpi)    %||% 300)
+      bsize  <- as.numeric(isolate(input$plot_dl_base_size) %||% 14)
+      radius <- as.numeric(isolate(input$plot_dl_radius_pt) %||% 3)
 
       # Validate numeric inputs; fall back to defaults if NA / <= 0.
-      if (!is.finite(w)   || w   <= 0) w   <- 8
-      if (!is.finite(h)   || h   <= 0) h   <- 6
-      if (!is.finite(dpi) || dpi <= 0) dpi <- 300
+      if (!is.finite(w)      || w      <= 0) w      <- 8
+      if (!is.finite(h)      || h      <= 0) h      <- 6
+      if (!is.finite(dpi)    || dpi    <= 0) dpi    <- 300
+      if (!is.finite(radius) || radius < 0)  radius <- 3
 
       if (identical(pid, "marker_heatmap")) {
         # Heatmap path: re-render via plot_phenotype_markers() into a
@@ -1605,7 +1614,8 @@ server <- function(input, output, session) {
           width     = w,
           height    = h,
           dpi       = dpi,
-          base_size = bsize
+          base_size = bsize,
+          radius_pt = radius
         )
         TRUE
       }, error = function(e) {
@@ -2157,13 +2167,6 @@ server <- function(input, output, session) {
   })
 
   output$celltype_count_plot <- renderPlot({
-    # Take a reactive dependency on the radius slider and replay the
-    # value into the option that .geom_rounded_*() reads at draw time.
-    # Setting it here (in addition to the global observe()) guarantees
-    # the option is up to date when the chicklet helpers run -- the
-    # observe() and this output share a flush cycle but observer
-    # ordering against outputs is not strictly guaranteed by Shiny.
-    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     md <- state$metadata
     ct_col <- input$meta_cell_type_col
     req(!is.null(md), nzchar(ct_col), ct_col != "(none)", ct_col %in% colnames(md))
@@ -2188,7 +2191,6 @@ server <- function(input, output, session) {
     width = 8, height = 5)
 
   output$source_count_plot <- renderPlot({
-    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     md <- state$metadata
     src_col <- input$meta_source_col
     req(!is.null(md), nzchar(src_col), src_col != "(none)", src_col %in% colnames(md))
@@ -2211,7 +2213,6 @@ server <- function(input, output, session) {
     width = 8, height = 5)
 
   output$celltype_source_plot <- renderPlot({
-    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     md <- state$metadata
     ct_col <- input$meta_cell_type_col
     src_col <- input$meta_source_col
@@ -2578,7 +2579,6 @@ server <- function(input, output, session) {
     function() isolate(panel_objects$gene_coverage_tbl))
 
   output$reference_signature_plot <- renderPlot({
-    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     req(state$reference)
     if (is.data.frame(state$reference) || is.matrix(state$reference)) {
       if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
@@ -2804,7 +2804,6 @@ server <- function(input, output, session) {
   # Per-cell-type × source boxplot with Wilcoxon brackets
   # ------------------------------------------------------------------------
   output$score_box_source_plot <- renderPlot({
-    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     df <- cell_table()
     req(df,
         "score" %in% colnames(df),
@@ -3510,7 +3509,6 @@ server <- function(input, output, session) {
   })
 
   output$group_by_celltype_plot <- renderPlot({
-    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     req(state$groups)
     g <- state$groups
     grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]

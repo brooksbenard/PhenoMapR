@@ -1002,13 +1002,63 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
 
 # Default radius (in points) for the bar / stack / boxplot wrappers.
 # Falls back to 3 pt when nothing has set the option (e.g., in unit
-# tests sourcing helpers.R in isolation).
+# tests sourcing helpers.R in isolation). On-screen plots are built
+# once at the default radius; per-export tweaks are layered on at
+# preview / save time via .apply_chicklet_radius() below.
 .plot_radius_unit <- function(fallback_pt = 3) {
   r <- getOption("phenomapr.plot_radius_pt", default = fallback_pt)
   if (is.null(r) || !is.numeric(r) || !is.finite(r) || r < 0) {
     r <- fallback_pt
   }
   grid::unit(r, "pt")
+}
+
+# Walk a ggplot's layers and replace the `radius` parameter on every
+# ggchicklet2 geom in-place (these store it in `geom_params$radius`
+# as a `grid::unit`). Used by the plot-download modal so users can
+# tweak the corner sharpness per export without re-running the
+# underlying renderPlot. Returns the (possibly modified) plot.
+#
+# Safe to call on any ggplot:
+#   - Non-ggplot inputs are returned unchanged.
+#   - Plots without ggchicklet2 layers are no-ops.
+#   - Invalid radii (negative, NA, non-numeric) are ignored.
+.apply_chicklet_radius <- function(p, radius_pt) {
+  if (!inherits(p, c("ggplot", "patchwork"))) return(p)
+  if (!is.numeric(radius_pt) || length(radius_pt) != 1L ||
+      !is.finite(radius_pt) || radius_pt < 0) {
+    return(p)
+  }
+  new_unit <- grid::unit(radius_pt, "pt")
+
+  apply_to_one <- function(gg) {
+    if (!inherits(gg, "ggplot")) return(gg)
+    if (!length(gg$layers)) return(gg)
+    for (i in seq_along(gg$layers)) {
+      layer <- gg$layers[[i]]
+      if (!is.null(layer$geom_params) &&
+          "radius" %in% names(layer$geom_params)) {
+        layer$geom_params$radius <- new_unit
+      }
+      if (!is.null(layer$stat_params) &&
+          "radius" %in% names(layer$stat_params)) {
+        layer$stat_params$radius <- new_unit
+      }
+    }
+    gg
+  }
+
+  if (inherits(p, "patchwork")) {
+    # patchwork stores child plots in p$patches$plots and the
+    # top-level plot itself on p; walk both.
+    p <- apply_to_one(p)
+    plots <- tryCatch(p$patches$plots, error = function(e) NULL)
+    if (length(plots)) {
+      p$patches$plots <- lapply(plots, apply_to_one)
+    }
+    return(p)
+  }
+  apply_to_one(p)
 }
 
 # Rounded `geom_col()` — pre-aggregated heights (stat = "identity").
@@ -1850,7 +1900,7 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
                                           defaults = list()) {
   d <- utils::modifyList(
     list(width = 8, height = 6, dpi = 300,
-         format = "png", base_size = 14),
+         format = "png", base_size = 14, radius_pt = 3),
     defaults
   )
   shiny::modalDialog(
@@ -1909,15 +1959,26 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
           shiny::numericInput("plot_dl_dpi", "DPI (raster only)",
                               value = d$dpi, min = 72, max = 600, step = 10))
       ),
-      shiny::sliderInput("plot_dl_base_size",
-                         "Plot base font size",
-                         min = 8, max = 24, value = d$base_size, step = 1),
+      shiny::fluidRow(
+        shiny::column(6,
+          shiny::sliderInput("plot_dl_base_size",
+                             "Plot base font size",
+                             min = 8, max = 24,
+                             value = d$base_size, step = 1)),
+        shiny::column(6,
+          shiny::sliderInput("plot_dl_radius_pt",
+                             "Bar / box corner sharpness (pt)",
+                             min = 0, max = 12,
+                             value = d$radius_pt, step = 0.5))
+      ),
       shiny::helpText(
         "Width / height are in inches. DPI only affects raster ",
         "formats (PNG / JPEG / TIFF); PDF and SVG are vector ",
-        "formats and render at any zoom. Base font size overrides ",
-        "the default plot text size at export time only -- the ",
-        "on-screen plot is unchanged."
+        "formats and render at any zoom. Base font size and corner ",
+        "sharpness affect this export only (the on-screen plot is ",
+        "unchanged). Corner sharpness applies to ggchicklet2-rounded ",
+        "bars, stacks, histograms and boxplots; non-chicklet plots ",
+        "ignore it gracefully."
       )
     ),
     footer = shiny::tagList(
@@ -1936,7 +1997,9 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
 # a theme override at export time only so the on-screen plot is
 # unchanged.
 .phenomapr_save_plot <- function(file, plot_obj, format,
-                                 width, height, dpi, base_size = NULL) {
+                                 width, height, dpi,
+                                 base_size = NULL,
+                                 radius_pt = NULL) {
   format <- tolower(format)
   is_gg  <- inherits(plot_obj, c("ggplot", "patchwork"))
 
@@ -1944,6 +2007,9 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
       is.finite(base_size) && base_size > 0) {
     plot_obj <- plot_obj +
       ggplot2::theme(text = ggplot2::element_text(size = base_size))
+  }
+  if (is_gg && !is.null(radius_pt)) {
+    plot_obj <- .apply_chicklet_radius(plot_obj, radius_pt)
   }
 
   if (is_gg) {

@@ -392,6 +392,86 @@ test_that("phenomapr_plot_download_modal includes the live preview pane", {
   expect_match(html, "modal-lg", fixed = TRUE)
 })
 
+test_that("phenomapr_plot_download_modal has the corner-sharpness slider", {
+  e <- source_shiny_helpers()
+  html <- as.character(htmltools::renderTags(
+    e$phenomapr_plot_download_modal(
+      panel_label = "Score distribution",
+      defaults    = list(radius_pt = 5)
+    )
+  )$html)
+  expect_match(html, 'id="plot_dl_radius_pt"', fixed = TRUE)
+  expect_match(html, "corner sharpness",       ignore.case = TRUE)
+  expect_match(html, 'data-from="5"',          fixed = TRUE)
+})
+
+test_that(".apply_chicklet_radius mutates ggchicklet2 radius in place", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggchicklet2")
+  e <- source_shiny_helpers()
+  df <- data.frame(x = c("a", "b", "c"), y = c(1, 2, 3))
+  make_p <- function() {
+    ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = x)) +
+      ggchicklet2::geom_chicklet_bar(
+        stat = "identity",
+        radius = grid::unit(3, "pt")
+      )
+  }
+  p <- make_p()
+  expect_equal(format(p$layers[[1]]$geom_params$radius), "3points")
+  e$.apply_chicklet_radius(p, 7)
+  expect_equal(format(p$layers[[1]]$geom_params$radius), "7points")
+})
+
+test_that(".apply_chicklet_radius is a no-op on invalid inputs", {
+  e <- source_shiny_helpers()
+  # Non-ggplot input returned unchanged.
+  expect_identical(e$.apply_chicklet_radius(list(a = 1), 5), list(a = 1))
+  expect_identical(e$.apply_chicklet_radius(NULL, 5), NULL)
+
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggchicklet2")
+  df <- data.frame(x = c("a", "b"), y = c(1, 2))
+  for (bad in list(-1, NA_real_, "ten", c(2, 3), NaN, Inf)) {
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = x)) +
+      ggchicklet2::geom_chicklet_bar(
+        stat = "identity", radius = grid::unit(3, "pt")
+      )
+    e$.apply_chicklet_radius(p, bad)
+    expect_equal(format(p$layers[[1]]$geom_params$radius), "3points")
+  }
+})
+
+test_that(".phenomapr_save_plot honours radius_pt arg for ggchicklet2 plots", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not_installed("ggchicklet2")
+  e <- source_shiny_helpers()
+  df <- data.frame(x = c("a", "b", "c"), y = c(1, 2, 3))
+  gg_factory <- function() {
+    ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = x)) +
+      ggchicklet2::geom_chicklet_bar(
+        stat = "identity", radius = grid::unit(3, "pt")
+      )
+  }
+  tmp_low  <- tempfile(fileext = ".png")
+  tmp_high <- tempfile(fileext = ".png")
+  on.exit({
+    if (file.exists(tmp_low))  file.remove(tmp_low)
+    if (file.exists(tmp_high)) file.remove(tmp_high)
+  }, add = TRUE)
+  e$.phenomapr_save_plot(tmp_low,  gg_factory(), format = "png",
+                          width = 4, height = 3, dpi = 100, radius_pt = 0)
+  e$.phenomapr_save_plot(tmp_high, gg_factory(), format = "png",
+                          width = 4, height = 3, dpi = 100, radius_pt = 12)
+  expect_true(file.exists(tmp_low)  && file.info(tmp_low)$size  > 0L)
+  expect_true(file.exists(tmp_high) && file.info(tmp_high)$size > 0L)
+  # Different radius should produce different PNG bytes.
+  expect_false(identical(
+    readBin(tmp_low,  what = "raw", n = file.info(tmp_low)$size),
+    readBin(tmp_high, what = "raw", n = file.info(tmp_high)$size)
+  ))
+})
+
 test_that(".phenomapr_save_plot writes ggplot output for png + pdf + svg", {
   e <- source_shiny_helpers()
   skip_if_not_installed("ggplot2")
