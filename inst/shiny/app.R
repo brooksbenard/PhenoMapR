@@ -244,9 +244,9 @@ ui <- page_navbar(
                              "score-rank plots, and per-cell-type &times; ",
                              "source Wilcoxon comparisons, then immediately ",
                              "tag the top / bottom <em>N</em>&nbsp;% of cells ",
-                             "as <strong>Most Adverse</strong> / ",
-                             "<strong>Most Favorable</strong> phenotype ",
-                             "groups.")
+                             "as <strong>Most Phenotype +</strong> / ",
+                             "<strong>Most Phenotype &minus;</strong> ",
+                             "phenotype groups.")
                       )
                     )
                   ),
@@ -383,11 +383,6 @@ ui <- page_navbar(
 
         hr(),
         h4("Cell metadata"),
-        helpText(
-          "Metadata is read automatically from Seurat / SingleCellExperiment / ",
-          "AnnData objects. PhenoMapR guesses sensible defaults for the cell-ID, ",
-          "cell-type, and source columns — adjust them if needed."
-        ),
         uiOutput("metadata_status"),
         # Metadata upload section. Architecturally split in two so the
         # shinyFiles `<button id="meta_file_server">` DOM identity stays
@@ -923,10 +918,13 @@ ui <- page_navbar(
         hr(),
         h4("Phenotype groups"),
         helpText(
-          "After scoring, the top / bottom percentile of cells are ",
-          "automatically tagged as Most Phenotype + and Most Phenotype - ",
-          "as you drag the slider. These labels feed the marker-finding ",
-          "step and downstream visualizations."
+          HTML(paste0(
+            "After scoring, the top / bottom percentile of cells are ",
+            "automatically tagged as <strong>Most Phenotype +</strong> ",
+            "and <strong>Most Phenotype &minus;</strong> as you drag the ",
+            "slider. These labels feed the marker-finding step and ",
+            "downstream visualizations."
+          ))
         ),
         sliderInput("percentile", "Tail percentile (top and bottom)",
                     min = 0.01, max = 0.40, value = 0.05, step = 0.01),
@@ -990,9 +988,21 @@ ui <- page_navbar(
         )
       ),
       card(
+        # "Score by cell type and source" gets BOTH a "Download plot"
+        # (modal) button AND a "Download plot data" button. The
+        # data button exposes the same per-cell score table that the
+        # standalone "Score table" panel used to surface -- we removed
+        # the panel itself (it duplicated the sidebar "Download score
+        # table (TSV)" button and pushed the more useful boxplot down
+        # below the fold), but kept the underlying data download
+        # accessible from the boxplot header so users can grab the
+        # rows the plot was built from without bouncing back to the
+        # sidebar.
         phenomapr_card_header_modal_dl(
           tags$strong("Score by cell type and source"),
-          panel_id = "score_box_source_plot"
+          panel_id = "score_box_source_plot",
+          data_download_id = "score_table_download",
+          data_tooltip = "Download plot data (TSV)"
         ),
         card_body(
           helpText(
@@ -1007,37 +1017,37 @@ ui <- page_navbar(
           plotOutput("score_box_source_plot", height = "440px")
         )
       ),
-      card(
-        phenomapr_card_header_dl(
-          tags$strong("Score table"),
-          download_id = "score_table_download"
-        ),
-        card_body(DTOutput("score_table"))
-      ),
 
       # ---- Phenotype groups (merged from the old standalone tab) ----------
       tags$div(
         class = "score-section-divider",
         tags$h3(tagList(icon("layer-group"), " Phenotype groups"))
       ),
-      card(
-        card_header(icon("circle-info"), " About phenotype tails"),
-        card_body(
-          markdown(
-            "PhenoMapR partitions cells into **Most Adverse** (top *N* %),
-            **Most Favorable** (bottom *N* %), and **Other** based on the
-            chosen score column. These labels feed the marker-finding step
-            and any downstream visualizations.
+      # About-tails + Group-sizes share a single row at 50/50 width so
+      # the conceptual explanation and the live group counts sit next
+      # to each other rather than stacking. Per-cell-type group
+      # enrichment continues on its own full-width row below.
+      layout_columns(
+        col_widths = c(6, 6),
+        card(
+          card_header(icon("circle-info"), " About phenotype tails"),
+          card_body(
+            markdown(
+              "PhenoMapR partitions cells into **Most Phenotype +** (top *N* %),
+              **Most Phenotype \u2212** (bottom *N* %), and **Other** based on the
+              chosen score column. These labels feed the marker-finding step
+              and any downstream visualizations.
 
-            Lower the percentile to make the tails tighter (more
-            discriminative but fewer cells); raise it to include more cells
-            (statistically more robust but biologically fuzzier)."
+              Lower the percentile to make the tails tighter (more
+              discriminative but fewer cells); raise it to include more cells
+              (statistically more robust but biologically fuzzier)."
+            )
           )
+        ),
+        card(
+          card_header(tags$strong("Group sizes")),
+          card_body(uiOutput("group_summary"))
         )
-      ),
-      card(
-        card_header(tags$strong("Group sizes")),
-        card_body(uiOutput("group_summary"))
       ),
       card(
         phenomapr_card_header_modal_dl(
@@ -3195,11 +3205,21 @@ server <- function(input, output, session) {
     function() isolate(panel_objects$score_dist_plot),
     width = 8, height = 5)
 
-  # Score table. Augments the raw PhenoMapR score column(s) with a
-  # matching `scaled_<col>` column (mean 0, sd 1) for each numeric score
-  # column. The scaled value makes it easy to compare cells across
-  # references that produce different raw magnitudes.
-  output$score_table <- renderDT({
+  # Score table data. Used to be a DT::datatable panel that lived in
+  # its own card right below the "Score by cell type and source"
+  # boxplot, but the visual panel was redundant with the sidebar's
+  # "Download score table (TSV)" affordance and just pushed the more
+  # useful Phenotype-groups section below the fold. We removed the
+  # panel and reduced this to a plain reactive: the boxplot card
+  # header now hosts a "Download plot data (TSV)" button whose
+  # downloadHandler reads this reactive directly, so users still get
+  # the per-cell score table without needing it rendered as a table.
+  #
+  # Schema: starts from state$scores (rownames = cell IDs), promotes
+  # the row names to a `cell_id` column, then adds a matching
+  # `scaled_<col>` (mean 0, sd 1) for every numeric score column so
+  # the export contains both raw and scaled values inline.
+  score_table_data <- reactive({
     req(state$scores)
     s <- state$scores
     s$cell_id <- rownames(s)
@@ -3212,18 +3232,10 @@ server <- function(input, output, session) {
     ordered_cols <- c("cell_id", unlist(lapply(score_cols, function(col) {
       if (col %in% numeric_cols) c(col, paste0("scaled_", col)) else col
     }), use.names = FALSE))
-    s <- s[, ordered_cols, drop = FALSE]
-    panel_objects$score_table <- s
-    datatable(
-      s, rownames = FALSE,
-      options = list(pageLength = 15, scrollX = TRUE)
-    ) |>
-      DT::formatRound(intersect(ordered_cols,
-                                c(numeric_cols, paste0("scaled_", numeric_cols))),
-                      digits = 3)
+    s[, ordered_cols, drop = FALSE]
   })
   phenomapr_register_table_download(output, "score_table",
-    function() isolate(panel_objects$score_table))
+                                    function() score_table_data())
 
   output$download_scores <- downloadHandler(
     filename = function() {
@@ -3896,13 +3908,27 @@ server <- function(input, output, session) {
           override.aes = list(size = 4, alpha = 1)
         ))
     } else if (color_by == "group" && "group" %in% colnames(df)) {
+      # Display-only legend remap: the underlying group factor levels
+      # stay "Most Adverse" / "Most Favorable" / "Other" (those strings
+      # are the canonical output of define_phenotype_groups() and are
+      # consumed verbatim by find_phenotype_markers() and friends), but
+      # the LEGEND shows the user-facing "Most Phenotype +/-" labels.
       p <- base +
         geom_point(aes(color = group), size = pt_size, alpha = pt_alpha) +
-        scale_color_manual(values = c(
-          "Most Adverse"   = "#B2182B",
-          "Most Favorable" = "#2166AC",
-          "Other"          = "#BBBBBB"
-        ), na.value = "#E0E0E0", name = "Group")
+        scale_color_manual(
+          values = c(
+            "Most Adverse"   = "#B2182B",
+            "Most Favorable" = "#2166AC",
+            "Other"          = "#BBBBBB"
+          ),
+          labels = c(
+            "Most Adverse"   = "Most Phenotype +",
+            "Most Favorable" = "Most Phenotype \u2212",
+            "Other"          = "Other"
+          ),
+          na.value = "#E0E0E0",
+          name = "Group"
+        )
     } else {
       p <- base + geom_point(size = pt_size, alpha = pt_alpha, color = "#555555")
     }
@@ -4005,9 +4031,30 @@ server <- function(input, output, session) {
     g <- state$groups
     grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]
     if (is.na(grp_col)) return(tags$p(tags$em("No phenotype group column found.")))
-    tbl <- as.data.frame(table(g[[grp_col]], useNA = "ifany"))
+    tbl <- as.data.frame(table(g[[grp_col]], useNA = "ifany"),
+                         stringsAsFactors = FALSE)
     colnames(tbl) <- c("Phenotype group", "Cells")
     tbl$Cells <- .fmt_int(tbl$Cells)
+    # Display remap: the underlying R data layer ALWAYS uses the
+    # canonical strings emitted by define_phenotype_groups()
+    # ("Most Adverse" / "Most Favorable" / "Other") -- we must NOT
+    # rewrite state$groups itself or we break downstream marker
+    # finders, vignettes, and tests that rely on those literals.
+    # Here we substitute the user-facing labels at render time only,
+    # using HTML so we can bold the +/- markers without bringing in
+    # a renderer (tag_table emits a plain <table>).
+    display_map <- c(
+      "Most Adverse"   = "<strong>Most Phenotype +</strong>",
+      "Most Favorable" = "<strong>Most Phenotype &minus;</strong>",
+      "Other"          = "Other"
+    )
+    raw_vals <- as.character(tbl[["Phenotype group"]])
+    mapped <- display_map[raw_vals]
+    mapped[is.na(mapped)] <- raw_vals[is.na(mapped)]
+    # tag_table() expects a data.frame with character cells; lapply
+    # HTML(...) below tells Shiny to render the cell contents
+    # verbatim (so <strong> and &minus; survive).
+    tbl[["Phenotype group"]] <- lapply(mapped, HTML)
     tagList(
       tags$p(tags$strong("Group column: "), grp_col),
       tag_table(tbl)
@@ -4038,11 +4085,22 @@ server <- function(input, output, session) {
     p <- ggplot(df_count, aes(x = cell_type, y = frac, fill = group)) +
       .geom_rounded_stack(color = NA) +
       scale_y_continuous(labels = scales::percent_format()) +
-      scale_fill_manual(values = c(
-        "Most Adverse"    = "#B2182B",
-        "Most Favorable" = "#2166AC",
-        "Other"           = "#BBBBBB"
-      )) +
+      # See score_rank_plot for rationale: data values stay as the
+      # canonical "Most Adverse" / "Most Favorable" strings; only the
+      # legend labels surface the user-facing "Most Phenotype +/-"
+      # variants.
+      scale_fill_manual(
+        values = c(
+          "Most Adverse"   = "#B2182B",
+          "Most Favorable" = "#2166AC",
+          "Other"          = "#BBBBBB"
+        ),
+        labels = c(
+          "Most Adverse"   = "Most Phenotype +",
+          "Most Favorable" = "Most Phenotype \u2212",
+          "Other"          = "Other"
+        )
+      ) +
       labs(x = "Cell type", y = "Fraction of cells", fill = "Group") +
       theme_minimal(base_size = .theme_base_size()) +
       theme(axis.text.x = element_text(angle = 35, hjust = 1))

@@ -1504,6 +1504,33 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
   margin-left: auto !important;
 }
 
+/* Multi-action variant: when a panel header exposes both a "Download
+ * plot data" button AND a "Download plot" (modal) button, both live
+ * inside a `.phenomapr-card-header-dl-actions` flex wrapper so they
+ * cluster together on the right (single 0.35rem gap between them)
+ * instead of being spread apart by the parent's space-between. The
+ * wrapper itself carries the `margin-left: auto` that pins both
+ * buttons to the right edge. */
+.card-header.phenomapr-card-header-dl > .phenomapr-card-header-dl-actions {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  margin-left: auto !important;
+}
+.card-header.phenomapr-card-header-dl > .phenomapr-card-header-dl-actions
+  > .btn.phenomapr-panel-download-btn,
+.card-header.phenomapr-card-header-dl > .phenomapr-card-header-dl-actions
+  > a.btn.phenomapr-panel-download-btn,
+.card-header.phenomapr-card-header-dl > .phenomapr-card-header-dl-actions
+  > button.btn.phenomapr-panel-download-btn {
+  /* Inside the actions wrapper, individual buttons must NOT pin
+   * themselves to the right -- the wrapper already handles that.
+   * Override the single-button rule above so the gap stays at the
+   * intended 0.35rem rather than ballooning to whatever is left. */
+  margin-left: 0 !important;
+}
+
 /* Slim banner used when a panel does not have a card_header to attach
  * the download button to (e.g. nav_panel children inside a navset_tab).
  * Renders as a thin right-aligned row directly above the panel

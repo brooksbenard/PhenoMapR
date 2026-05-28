@@ -24,6 +24,22 @@ tag_table <- function(df, class = "table table-sm table-bordered tag-table") {
   if (!is.data.frame(df) || nrow(df) == 0L) {
     return(shiny::tags$p(shiny::tags$em("(no rows)")))
   }
+  # Cell-content rendering rule:
+  #   * If the cell is already a Shiny tag / tagList / HTML object,
+  #     embed it verbatim (so callers can pass shiny::HTML("<strong>..."),
+  #     icon(), tagList(...), etc. without it being escaped into text).
+  #   * Otherwise stringify with as.character() -- Shiny escapes the
+  #     result as a plain text node, which is the safe default.
+  render_cell <- function(val) {
+    if (inherits(val, c("shiny.tag", "shiny.tag.list", "html"))) val
+    else as.character(val)
+  }
+  # df[[cn]] returns the underlying vector OR list for the named
+  # column; `[[i]]` then yields a scalar character (regular column)
+  # or the original object (list-column). Using this two-step
+  # accessor instead of `df[i, cn]` avoids the data.frame's
+  # row-indexing path, which wraps list-column results in another
+  # list and breaks the inherits() check above.
   shiny::tags$table(
     class = class,
     shiny::tags$thead(
@@ -35,7 +51,7 @@ tag_table <- function(df, class = "table table-sm table-bordered tag-table") {
       lapply(seq_len(nrow(df)), function(i) {
         shiny::tags$tr(
           lapply(colnames(df), function(cn) {
-            shiny::tags$td(as.character(df[i, cn]))
+            shiny::tags$td(render_cell(df[[cn]][[i]]))
           })
         )
       })
@@ -1877,12 +1893,39 @@ phenomapr_modal_dl_btn <- function(panel_id,
 }
 
 phenomapr_card_header_modal_dl <- function(..., panel_id,
-                                           tooltip = "Download (with options)") {
-  bslib::card_header(
-    class = "phenomapr-card-header-dl",
-    shiny::tags$div(class = "phenomapr-card-header-dl-title", ...),
-    phenomapr_modal_dl_btn(panel_id, tooltip)
-  )
+                                           tooltip = "Download (with options)",
+                                           data_download_id = NULL,
+                                           data_tooltip = "Download plot data (TSV)") {
+  # If a panel exposes both its rendered plot AND its underlying
+  # tabular data for download (e.g. "Score by cell type and source",
+  # whose data is the per-cell score table), we render TWO download
+  # affordances clustered at the right end of the header: a plain
+  # downloadButton for the data (`data_download_id`) followed by the
+  # modal-trigger button for the plot (`panel_id`). They live inside
+  # a `.phenomapr-card-header-dl-actions` flex wrapper so the
+  # existing `margin-left: auto` styling that pins a single button to
+  # the right still works without leaving a wide gap between the two
+  # buttons (which the default `justify-content: space-between` would
+  # otherwise insert).
+  modal_btn <- phenomapr_modal_dl_btn(panel_id, tooltip)
+  title_div <- shiny::tags$div(class = "phenomapr-card-header-dl-title", ...)
+  if (is.null(data_download_id)) {
+    bslib::card_header(
+      class = "phenomapr-card-header-dl",
+      title_div,
+      modal_btn
+    )
+  } else {
+    bslib::card_header(
+      class = "phenomapr-card-header-dl",
+      title_div,
+      shiny::tags$div(
+        class = "phenomapr-card-header-dl-actions",
+        phenomapr_dl_btn(data_download_id, data_tooltip),
+        modal_btn
+      )
+    )
+  }
 }
 
 phenomapr_panel_banner_modal_dl <- function(panel_id,
