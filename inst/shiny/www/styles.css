@@ -382,38 +382,75 @@ table.dataTable thead th {
   font-size: 0.83rem;
 }
 
-/* Score-tab "Detected: ..." status block. Visually mirrors the metadata
- * status banner on the Data tab so the two sidebars feel like the same
- * design language. */
+/* Score-tab "Scoring summary" block. Three row-style entries (input
+ * data, phenotype source, cancer / tissue type) sit at the top of the
+ * Score sidebar so users can confirm the (data, signature, cancer)
+ * triple at a glance before clicking "Compute PhenoMapR scores". */
 .score-data-status {
-  border-radius: 4px;
-  padding: 0.5rem 0.75rem;
   margin-bottom: 0.6rem;
-  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
-.score-data-status-empty {
-  background: #fff5ee;
-  border-left: 3px solid #e76f51;
-  color: #5b3a2c;
+.score-data-status .sds-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.25;
 }
-.score-data-status-ok {
+.score-data-status .sds-row-ok {
   background: #eef7f4;
   border-left: 3px solid #2A9D8F;
   color: #1d3b3a;
 }
-.score-data-status .sds-title {
+.score-data-status .sds-row-empty {
+  background: #fff5ee;
+  border-left: 3px solid #e76f51;
+  color: #5b3a2c;
+}
+.score-data-status .sds-row-na {
+  background: #f3f4f6;
+  border-left: 3px solid #9ca3af;
+  color: #4b5563;
+}
+.score-data-status .sds-icon {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-}
-.score-data-status .sds-badge {
+  justify-content: center;
+  width: 1.1rem;
+  margin-top: 0.1rem;
   color: #2A9D8F;
 }
+.score-data-status .sds-row-empty .sds-icon { color: #e76f51; }
+.score-data-status .sds-row-na    .sds-icon { color: #9ca3af; }
+.score-data-status .sds-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.score-data-status .sds-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: #486a78;
+  margin-bottom: 0.05rem;
+}
+.score-data-status .sds-row-empty .sds-label { color: #8a4a36; }
+.score-data-status .sds-row-na    .sds-label { color: #6b7280; }
+.score-data-status .sds-value {
+  font-weight: 600;
+  word-break: break-word;
+}
 .score-data-status .sds-detail {
-  font-size: 0.83rem;
+  font-size: 0.78rem;
   color: #486a78;
   margin-top: 0.15rem;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  word-break: break-word;
 }
 
 /* Score-tab inner section divider for the merged Phenotype groups block */

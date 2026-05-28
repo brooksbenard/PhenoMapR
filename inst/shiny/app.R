@@ -168,7 +168,7 @@ ui <- page_navbar(
                               icon("house"), " Welcome")),
     value = "welcome",
     card(
-      card_header("Overview of PhenoMapR Shiny App"),
+      card_header(tags$strong("Overview of PhenoMapR Shiny App")),
       card_body(
         layout_columns(
           col_widths = c(7, 5),
@@ -816,19 +816,41 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 360,
-        h4("PhenoMap() parameters"),
-        # "Detected: ..." status block mirrors the metadata-status box on
-        # the Data tab. The two updateRadioButtons() / updateTextInput()
-        # observers further below keep score_slot / score_assay in sync
-        # with what was actually loaded in 1. Data.
+        # ---- Scoring summary -------------------------------------------------
+        # Top-of-sidebar three-line context block: what kind of data the
+        # user uploaded in step 1, which phenotype signature was picked in
+        # step 2, and which cancer / tissue type that signature is being
+        # interpreted against. Lets users confirm they are about to score
+        # the right (data, signature, cancer-type) triple without having
+        # to bounce back to earlier tabs.
+        h4(tagList(icon("compass"), " Scoring summary")),
         uiOutput("score_data_status"),
+        hr(),
+        h4("PhenoMap() parameters"),
+        # Slot / assay controls. The helpText above the radio explains
+        # what PhenoMapR expects so users know which choice fits their
+        # data; the existing observer (further below) refines the radio
+        # choices + the assay default whenever the detected object's
+        # available layers / default assay change.
+        helpText(
+          icon("info-circle"),
+          " PhenoMapR computes a weighted sum of expression x reference ",
+          "z-score across signature genes. It expects ",
+          tags$strong("log-normalized expression"),
+          " (the 'data' / log-counts layer); choose 'counts (raw)' only ",
+          "if your object lacks a normalized layer. Plain matrices are ",
+          "scored directly -- normalize them before uploading if your ",
+          "matrix is raw counts."
+        ),
         radioButtons(
-          "score_slot", "Seurat / SCE layer",
+          "score_slot", "Layer / slot to score against",
           choices = c("data (log-normalized)" = "data",
-                      "counts (raw)" = "counts"),
+                      "counts (raw)"          = "counts"),
           selected = "data"
         ),
-        textInput("score_assay", "Assay (Seurat / SCE; blank = auto)", value = ""),
+        textInput("score_assay",
+                  "Assay (Seurat / SCE; blank = auto)",
+                  value = ""),
         checkboxInput("pseudobulk", "Aggregate to pseudobulk", value = FALSE),
         conditionalPanel(
           "input.pseudobulk == true",
@@ -1990,45 +2012,121 @@ server <- function(input, output, session) {
   # ------------------------------------------------------------------------
   # 3. Score sidebar — sync with what was detected in 1. Data
   # ------------------------------------------------------------------------
-  # `score_data_status` is a small "Detected: ..." block at the top of the
-  # Score sidebar. It mirrors the metadata-status card on the Data tab so
-  # users can see WHAT kind of object PhenoMap() is about to operate on
-  # (and which assay / layers it discovered).
+  # `score_data_status` is the top-of-sidebar "Scoring summary" block.
+  # It surfaces the three pieces of context users need to confirm before
+  # clicking "Compute PhenoMapR scores":
+  #
+  #   1. Input data type detected in 1. Data (Seurat / SCE / AnnData /
+  #      Spatial / Matrix), plus the assay name and available layers.
+  #   2. Phenotype signature source chosen in 2. Phenotype (PRECOG /
+  #      TCGA / Pediatric PRECOG / ICI PRECOG / custom).
+  #   3. Cancer / tissue type the signature is being interpreted
+  #      against (only applies to built-in signatures).
+  #
+  # Each row uses a small teal icon + label/value pair so the user can
+  # scan the (data, signature, cancer-type) triple at a glance.
   output$score_data_status <- renderUI({
     s <- state$expr_summary
+
+    # ---- Row 1: input data type ------------------------------------------
     if (is.null(s)) {
-      return(tags$div(
-        class = "score-data-status score-data-status-empty",
-        tags$em("Load an expression dataset in 1. Data first.")
-      ))
+      data_row <- tags$div(
+        class = "sds-row sds-row-empty",
+        tags$div(class = "sds-icon", icon("circle-info")),
+        tags$div(class = "sds-content",
+                 tags$div(class = "sds-label", "Input data"),
+                 tags$em("Load an expression dataset in 1. Data first."))
+      )
+    } else {
+      kind_label <- switch(
+        s$kind %||% "loaded",
+        seurat  = "Seurat object",
+        sce     = "SingleCellExperiment",
+        spatial = "Spatial dataset",
+        matrix  = "Expression matrix",
+        anndata = "AnnData",
+        sprintf("%s object", s$kind %||% "loaded")
+      )
+      bits <- character(0)
+      if (!is.na(s$default_assay %||% NA_character_) &&
+          nzchar(s$default_assay)) {
+        bits <- c(bits, sprintf("assay: %s", s$default_assay))
+      }
+      if (length(s$layers_avail %||% character(0))) {
+        bits <- c(bits, sprintf("layers: %s",
+                                paste(s$layers_avail, collapse = ", ")))
+      }
+      data_row <- tags$div(
+        class = "sds-row sds-row-ok",
+        tags$div(class = "sds-icon", icon("check-circle")),
+        tags$div(class = "sds-content",
+                 tags$div(class = "sds-label", "Input data"),
+                 tags$div(class = "sds-value", kind_label),
+                 if (length(bits))
+                   tags$div(class = "sds-detail",
+                            paste(bits, collapse = "  \u00B7  ")))
+      )
     }
-    kind_label <- switch(
-      s$kind %||% "loaded",
-      seurat  = "Seurat object",
-      sce     = "SingleCellExperiment",
-      spatial = "Spatial dataset",
-      matrix  = "Expression matrix",
-      anndata = "AnnData",
-      sprintf("%s object", s$kind %||% "loaded")
+
+    # ---- Row 2: phenotype signature source --------------------------------
+    rc <- input$reference_choice %||% "(none)"
+    phen_label <- switch(
+      rc,
+      "precog"           = "PRECOG (built-in)",
+      "tcga"             = "TCGA (built-in)",
+      "pediatric_precog" = "Pediatric PRECOG (built-in)",
+      "pediatric"        = "Pediatric PRECOG (built-in)",
+      "ici_precog"       = "ICI PRECOG (built-in)",
+      "ici"              = "ICI PRECOG (built-in)",
+      "_custom"          = {
+        cs <- input$custom_source %||% "upload"
+        if (identical(cs, "derive"))
+          "Custom signature (derived from your bulk + phenotype)"
+        else
+          "Custom signature (uploaded)"
+      },
+      sprintf("%s", rc)
     )
-    bits <- character(0)
-    if (!is.na(s$default_assay %||% NA_character_) &&
-        nzchar(s$default_assay)) {
-      bits <- c(bits, sprintf("assay: %s", s$default_assay))
-    }
-    if (length(s$layers_avail %||% character(0))) {
-      bits <- c(bits, sprintf("layers: %s",
-                              paste(s$layers_avail, collapse = ", ")))
-    }
-    tags$div(
-      class = "score-data-status score-data-status-ok",
-      tags$div(class = "sds-title",
-               tags$span(class = "sds-badge", icon("check-circle")),
-               tags$strong(sprintf("Detected: %s", kind_label))),
-      if (length(bits))
-        tags$div(class = "sds-detail",
-                 paste(bits, collapse = "  ·  "))
+    phen_icon <- if (identical(rc, "_custom")) "flask" else "dna"
+    phen_row <- tags$div(
+      class = "sds-row sds-row-ok",
+      tags$div(class = "sds-icon", icon(phen_icon)),
+      tags$div(class = "sds-content",
+               tags$div(class = "sds-label", "Phenotype source"),
+               tags$div(class = "sds-value", phen_label))
     )
+
+    # ---- Row 3: cancer / tissue type --------------------------------------
+    if (identical(rc, "_custom")) {
+      ct_row <- tags$div(
+        class = "sds-row sds-row-na",
+        tags$div(class = "sds-icon", icon("minus")),
+        tags$div(class = "sds-content",
+                 tags$div(class = "sds-label", "Cancer / tissue type"),
+                 tags$em("Not applicable for custom signatures"))
+      )
+    } else {
+      ct <- input$cancer_type
+      if (is.null(ct) || !nzchar(ct)) {
+        ct_row <- tags$div(
+          class = "sds-row sds-row-empty",
+          tags$div(class = "sds-icon", icon("circle-question")),
+          tags$div(class = "sds-content",
+                   tags$div(class = "sds-label", "Cancer / tissue type"),
+                   tags$em("Select one in 2. Phenotype."))
+        )
+      } else {
+        ct_row <- tags$div(
+          class = "sds-row sds-row-ok",
+          tags$div(class = "sds-icon", icon("ribbon")),
+          tags$div(class = "sds-content",
+                   tags$div(class = "sds-label", "Cancer / tissue type"),
+                   tags$div(class = "sds-value", ct))
+        )
+      }
+    }
+
+    tags$div(class = "score-data-status", data_row, phen_row, ct_row)
   })
 
   # Whenever a fresh object lands in state$expr_summary, refresh:
@@ -2692,12 +2790,43 @@ server <- function(input, output, session) {
       df <- data.frame(score = v)
       ttl <- sprintf("Z-score distribution (%s)", cn)
     } else {
-      df <- data.frame(score = as.numeric(s[[cn]]))
+      v <- as.numeric(s[[cn]])
+      df <- data.frame(score = v)
       ttl <- sprintf("PhenoMapR score distribution (%s)", cn)
     }
     p <- PhenoMapR::plot_score_distribution(df, score_column = "score",
                                             main = ttl,
                                             base_size = .theme_base_size())
+
+    # Overlay the current Phenotype-groups tail thresholds as dashed
+    # vertical lines on the histogram so users can see, in real time,
+    # exactly where the slider is splitting the distribution. The
+    # cutoffs are recomputed from the same vector that drives the
+    # histogram (`v`) so they line up with the bars regardless of the
+    # PhenoMapR / Z-score scale toggle above.
+    pct <- input$percentile %||% 0.05
+    pct <- max(min(pct, 0.49), 0.001)
+    vf  <- v[is.finite(v)]
+    if (length(vf) >= 2L) {
+      q_lo <- stats::quantile(vf, pct,       na.rm = TRUE, names = FALSE)
+      q_hi <- stats::quantile(vf, 1 - pct,   na.rm = TRUE, names = FALSE)
+      tail_label <- sprintf("Tail = %.0f%%", pct * 100)
+      p <- p +
+        ggplot2::geom_vline(
+          xintercept = c(q_lo, q_hi),
+          linetype   = "dashed",
+          colour     = "#264653",
+          linewidth  = 0.7
+        ) +
+        ggplot2::annotate(
+          "text", x = q_lo, y = Inf, label = tail_label,
+          hjust = 1.05, vjust = 1.3, size = 3.2, colour = "#264653"
+        ) +
+        ggplot2::annotate(
+          "text", x = q_hi, y = Inf, label = tail_label,
+          hjust = -0.05, vjust = 1.3, size = 3.2, colour = "#264653"
+        )
+    }
     panel_objects$score_dist_plot <- p
     p
   })
