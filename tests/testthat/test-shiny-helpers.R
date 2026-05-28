@@ -378,6 +378,20 @@ test_that("phenomapr_plot_download_modal contains all the customisation inputs",
   expect_match(html, 'value="200"', fixed = TRUE)
 })
 
+test_that("phenomapr_plot_download_modal includes the live preview pane", {
+  e <- source_shiny_helpers()
+  html <- as.character(htmltools::renderTags(
+    e$phenomapr_plot_download_modal(panel_label = "Score distribution")
+  )$html)
+  expect_match(html, 'id="plot_dl_preview"',           fixed = TRUE)
+  expect_match(html, "phenomapr-plot-dl-preview",      fixed = TRUE)
+  expect_match(html, "phenomapr-plot-dl-preview-title", fixed = TRUE)
+  expect_match(html, "phenomapr-plot-dl-preview-frame", fixed = TRUE)
+  expect_match(html, "Updates live as you change",     fixed = TRUE)
+  # The modal is now size = "l" to give the preview pane breathing room.
+  expect_match(html, "modal-lg", fixed = TRUE)
+})
+
 test_that(".phenomapr_save_plot writes ggplot output for png + pdf + svg", {
   e <- source_shiny_helpers()
   skip_if_not_installed("ggplot2")

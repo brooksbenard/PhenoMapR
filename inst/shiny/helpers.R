@@ -1855,10 +1855,37 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
   )
   shiny::modalDialog(
     title = paste0("Download plot: ", panel_label),
-    size  = "m",
+    size  = "l",
     easyClose = TRUE,
     shiny::div(
       class = "phenomapr-plot-dl-modal",
+      # ---- Live preview ---------------------------------------------------
+      # Mirrors what the saved file will look like at the chosen width /
+      # height / base font size. DPI and file format do not affect the
+      # on-screen preview (vector / raster + DPI are file-only) -- that
+      # caveat is called out in the helpText below. The renderPlot in
+      # app.R reads `active_plot_dl()` + the modal inputs and re-runs
+      # whenever they change, so users can dial in their layout before
+      # ever clicking Download.
+      shiny::div(
+        class = "phenomapr-plot-dl-preview",
+        shiny::tags$div(
+          class = "phenomapr-plot-dl-preview-title",
+          shiny::icon("eye"), " Preview"
+        ),
+        shiny::div(
+          class = "phenomapr-plot-dl-preview-frame",
+          shiny::plotOutput("plot_dl_preview",
+                            width = "100%", height = "320px")
+        ),
+        shiny::tags$small(
+          class = "text-muted",
+          "Updates live as you change width / height / base font size. ",
+          "DPI and file format affect the saved file only -- not the preview."
+        )
+      ),
+      shiny::tags$hr(class = "phenomapr-plot-dl-divider"),
+      # ---- Sizing & format controls ---------------------------------------
       shiny::fluidRow(
         shiny::column(6,
           shiny::numericInput("plot_dl_width", "Width (inches)",

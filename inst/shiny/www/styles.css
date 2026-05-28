@@ -1217,6 +1217,67 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
   padding: 4px 4px 6px 0;
 }
 
+/* Plot-download modal: live preview pane.
+ *
+ * The preview sits at the top of the modal body and updates in
+ * real-time as the user drags the base font size slider or changes
+ * width / height. The bordered frame visually separates the preview
+ * from the controls below it, and the title row uses a small icon +
+ * uppercase letter-spacing treatment so it reads as a sub-section
+ * header without competing with the modal title above.
+ *
+ * The flex centering inside the frame ensures that when the
+ * user's chosen aspect ratio is narrower than the frame's max
+ * width (e.g. tall portrait plots), the plot is centered rather
+ * than left-aligned, which feels more like a print preview. */
+.phenomapr-plot-dl-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.phenomapr-plot-dl-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+.phenomapr-plot-dl-preview-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.phenomapr-plot-dl-preview-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  background: repeating-linear-gradient(
+    45deg,
+    #fbfbfb,
+    #fbfbfb 8px,
+    #f4f4f4 8px,
+    #f4f4f4 16px
+  );
+}
+.phenomapr-plot-dl-preview-frame .shiny-plot-output {
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  max-width: 100%;
+}
+.phenomapr-plot-dl-divider {
+  margin: 0.4rem 0 0.6rem;
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
 /* Determinate-looking progress bar underneath the Browse row.
  *
  * Background: shiny::fileInput() shows a green bar that grows from 0%
