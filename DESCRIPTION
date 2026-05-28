@@ -56,7 +56,6 @@ Suggests:
     survminer,
     ggpubr,
     readxl,
-    spatialCooccur,
     profmem,
     peakRAM,
     shiny,
@@ -69,7 +68,6 @@ Suggests:
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave,
-    juninamo/spatialCooccur,
     brooksbenard/ggchicklet2
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
