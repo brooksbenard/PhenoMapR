@@ -3913,14 +3913,20 @@ server <- function(input, output, session) {
     datatable(
       tg,
       rownames = FALSE,
-      # Compact pagination keeps the row short (the entire signature
-      # has 10k+ genes -- users page or search rather than scroll).
-      # `searching = TRUE` (the default) surfaces DT's built-in
-      # search box at the top of the table so the full signature
-      # is filterable in place.
+      # No pagination -- show every gene in the signature as one
+      # scrollable list contained inside the card body. dom = "ft"
+      # drops the length menu ("Show N entries"), the info row
+      # ("Showing N of N entries"), and the pagination buttons; only
+      # the search box at the top and the table itself are rendered.
+      # The fixed scrollY keeps the scroll affordance inside the
+      # card so the row layout stays exactly 320 px tall and the
+      # rest of the page does not move when the user scrolls the
+      # gene list.
       options = list(
-        pageLength      = 6,
-        lengthMenu      = c(6, 15, 50, 100),
+        paging          = FALSE,
+        dom             = "ft",
+        scrollY         = "210px",
+        scrollCollapse  = TRUE,
         scrollX         = TRUE,
         searching       = TRUE,
         searchHighlight = TRUE
