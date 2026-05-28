@@ -1968,8 +1968,9 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
         shiny::column(6,
           shiny::sliderInput("plot_dl_radius_pt",
                              "Bar / box corner sharpness (pt)",
-                             min = 0, max = 12,
-                             value = d$radius_pt, step = 0.5))
+                             min = 0, max = 5,
+                             value = min(d$radius_pt, 5),
+                             step = 0.5))
       ),
       shiny::helpText(
         "Width / height are in inches. DPI only affects raster ",
