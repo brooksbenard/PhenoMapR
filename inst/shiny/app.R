@@ -393,7 +393,29 @@ ui <- page_navbar(
         # been loaded but no metadata could be extracted from it, so the user
         # is prompted to attach a tabular metadata file before picking the
         # cell-ID / cell-type / source columns below.
+        #
+        # The collapsible wrapper (summary label + helpText) lives in a
+        # `renderUI` because the open state and summary text depend on
+        # whether the user has metadata yet; the file_input itself is
+        # rendered STATICALLY here and merely positioned via CSS into
+        # the dynamic block. Hoisting the file_input out of the renderUI
+        # prevents a self-inflicted reactive feedback loop -- otherwise,
+        # when a metadata upload sets state$metadata, the renderUI would
+        # tear down + recreate the shinyFiles button, Shiny would emit
+        # `input$meta_file_server = NULL`, the picker observer would
+        # treat that as a "user cleared the file" event, and state$metadata
+        # would be silently wiped a heartbeat after the upload.
         uiOutput("metadata_upload_panel"),
+        tags$div(
+          id = "metadata-upload-file-host",
+          class = "metadata-upload-file-host",
+          phenomapr_file_input(
+            "meta_file",
+            label = NULL,
+            accept = c(".rds", ".tsv", ".csv", ".txt"),
+            width = "100%"
+          )
+        ),
         selectInput("meta_cell_id_col", "Cell ID column", choices = NULL),
         selectInput("meta_cell_type_col", "Cell type column (optional)",
                     choices = NULL),
@@ -1866,47 +1888,63 @@ server <- function(input, output, session) {
   # prompted to attach a tabular metadata file. Once metadata is available
   # — from the object, a demo, or an uploaded file — the panel collapses to
   # keep the sidebar tidy. The user can still toggle it manually.
+  # The summary label + open state of the collapsible <details> block
+  # depends on whether expression has loaded yet and whether any
+  # metadata is attached; the file_input itself is rendered statically
+  # outside this renderUI (see the sidebar UI definition above) so its
+  # DOM identity is stable across state$metadata transitions. The
+  # body of the <details> holds a `metadata-upload-file-anchor` div
+  # which acts as a relocation marker: the small JS block below moves
+  # the file_input host node into the anchor whenever the panel
+  # re-renders, so the user still sees the picker inside the
+  # collapsible block visually.
   output$metadata_upload_panel <- renderUI({
     has_expr <- !is.null(state$expression)
     no_meta  <- is.null(state$metadata) || !length(state$meta_columns)
     auto_open <- has_expr && no_meta
 
     summary_label <- if (auto_open) {
-      "No metadata detected — upload a tabular metadata file"
+      "No metadata detected \u2014 upload a tabular metadata file"
     } else {
       "Override / supplement with a tabular metadata file"
     }
 
     body <- tagList(
       helpText(
-        "Optional — only needed for matrix uploads, or to attach extra ",
+        "Optional \u2014 only needed for matrix uploads, or to attach extra ",
         "annotations on top of an object's built-in metadata. A cell-ID ",
         "column must match the expression matrix columns."
       ),
-      phenomapr_file_input(
-        "meta_file",
-        label = NULL,
-        accept = c(".rds", ".tsv", ".csv", ".txt"),
-        width = "100%"
-      )
+      tags$div(class = "metadata-upload-file-anchor"),
+      tags$script(HTML(paste0(
+        "(function() {\n",
+        "  var host = document.getElementById('metadata-upload-file-host');\n",
+        "  var anchor = document.querySelector('.metadata-upload-file-anchor');\n",
+        "  if (host && anchor && host.parentNode !== anchor) {\n",
+        "    anchor.appendChild(host);\n",
+        "  }\n",
+        "})();"
+      )))
     )
 
-    if (auto_open) {
-      tags$details(
-        class = "metadata-upload-details metadata-upload-details-prompt",
-        open = "open",
-        tags$summary(
-          tags$span(class = "mu-badge", icon("upload")),
-          tags$strong(summary_label)
-        ),
-        body
+    details_class <- if (auto_open)
+      "metadata-upload-details metadata-upload-details-prompt"
+    else
+      "metadata-upload-details"
+    summary_node <- if (auto_open) {
+      tags$summary(
+        tags$span(class = "mu-badge", icon("upload")),
+        tags$strong(summary_label)
       )
     } else {
-      tags$details(
-        class = "metadata-upload-details",
-        tags$summary(summary_label),
-        body
-      )
+      tags$summary(summary_label)
+    }
+
+    if (auto_open) {
+      tags$details(class = details_class, open = "open",
+                   summary_node, body)
+    } else {
+      tags$details(class = details_class, summary_node, body)
     }
   })
 
