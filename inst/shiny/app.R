@@ -389,25 +389,26 @@ ui <- page_navbar(
           "cell-type, and source columns — adjust them if needed."
         ),
         uiOutput("metadata_status"),
-        # The metadata-upload panel auto-expands when an expression file has
-        # been loaded but no metadata could be extracted from it, so the user
-        # is prompted to attach a tabular metadata file before picking the
-        # cell-ID / cell-type / source columns below.
+        # Metadata upload section. Architecturally split in two so the
+        # shinyFiles `<button id="meta_file_server">` DOM identity stays
+        # stable across state$metadata transitions:
         #
-        # The collapsible wrapper (summary label + helpText) lives in a
-        # `renderUI` because the open state and summary text depend on
-        # whether the user has metadata yet; the file_input itself is
-        # rendered STATICALLY here and merely positioned via CSS into
-        # the dynamic block. Hoisting the file_input out of the renderUI
-        # prevents a self-inflicted reactive feedback loop -- otherwise,
-        # when a metadata upload sets state$metadata, the renderUI would
-        # tear down + recreate the shinyFiles button, Shiny would emit
-        # `input$meta_file_server = NULL`, the picker observer would
-        # treat that as a "user cleared the file" event, and state$metadata
-        # would be silently wiped a heartbeat after the upload.
+        #   * `metadata_upload_panel` (renderUI): collapsible <details>
+        #     wrapper holding only a summary label + a short helpText.
+        #     The summary label / open-state depend on whether the
+        #     user has metadata yet, so the renderUI MUST re-fire on
+        #     state$metadata changes -- but it no longer contains the
+        #     file picker, so re-renders cannot tear down the picker.
+        #
+        #   * Static `phenomapr_file_input("meta_file", ...)` directly
+        #     below the renderUI. Its DOM identity is therefore
+        #     guaranteed never to change. This eliminates the reactive
+        #     feedback loop where a renderUI re-fire would destroy the
+        #     picker, emit input$meta_file_server = NULL, and trigger
+        #     the picker observer's "user cleared the file" branch,
+        #     wiping state$metadata a heartbeat after the upload.
         uiOutput("metadata_upload_panel"),
         tags$div(
-          id = "metadata-upload-file-host",
           class = "metadata-upload-file-host",
           phenomapr_file_input(
             "meta_file",
@@ -1888,16 +1889,12 @@ server <- function(input, output, session) {
   # prompted to attach a tabular metadata file. Once metadata is available
   # — from the object, a demo, or an uploaded file — the panel collapses to
   # keep the sidebar tidy. The user can still toggle it manually.
-  # The summary label + open state of the collapsible <details> block
-  # depends on whether expression has loaded yet and whether any
-  # metadata is attached; the file_input itself is rendered statically
-  # outside this renderUI (see the sidebar UI definition above) so its
-  # DOM identity is stable across state$metadata transitions. The
-  # body of the <details> holds a `metadata-upload-file-anchor` div
-  # which acts as a relocation marker: the small JS block below moves
-  # the file_input host node into the anchor whenever the panel
-  # re-renders, so the user still sees the picker inside the
-  # collapsible block visually.
+  # Collapsible <details> wrapper that sits above the static
+  # phenomapr_file_input("meta_file", ...) in the sidebar. The renderUI
+  # owns ONLY the summary label + a short helpText; the file picker
+  # itself is rendered statically below the renderUI so its DOM
+  # identity is stable across state$metadata transitions (see the
+  # sidebar UI comment for the full rationale).
   output$metadata_upload_panel <- renderUI({
     has_expr <- !is.null(state$expression)
     no_meta  <- is.null(state$metadata) || !length(state$meta_columns)
@@ -1909,22 +1906,10 @@ server <- function(input, output, session) {
       "Override / supplement with a tabular metadata file"
     }
 
-    body <- tagList(
-      helpText(
-        "Optional \u2014 only needed for matrix uploads, or to attach extra ",
-        "annotations on top of an object's built-in metadata. A cell-ID ",
-        "column must match the expression matrix columns."
-      ),
-      tags$div(class = "metadata-upload-file-anchor"),
-      tags$script(HTML(paste0(
-        "(function() {\n",
-        "  var host = document.getElementById('metadata-upload-file-host');\n",
-        "  var anchor = document.querySelector('.metadata-upload-file-anchor');\n",
-        "  if (host && anchor && host.parentNode !== anchor) {\n",
-        "    anchor.appendChild(host);\n",
-        "  }\n",
-        "})();"
-      )))
+    body <- helpText(
+      "Optional \u2014 only needed for matrix uploads, or to attach extra ",
+      "annotations on top of an object's built-in metadata. A cell-ID ",
+      "column must match the expression matrix columns."
     )
 
     details_class <- if (auto_open)

@@ -715,23 +715,19 @@ table.dataTable thead th {
   color: #5b3a2c;
 }
 
-/* The metadata file picker lives in a static host element outside of
- * `output$metadata_upload_panel`'s renderUI (so its DOM identity is
- * stable across state$metadata transitions), and a tiny inline JS
- * snippet relocates the host into the .metadata-upload-file-anchor
- * inside the dynamic <details> block on every re-render. Until the JS
- * runs (or in the off-chance it can't find the anchor), the host
- * stays put right under the metadata-status banner. Both positions
- * use the same spacing so the user can't tell. */
+/* The metadata file picker is rendered statically directly below the
+ * collapsible `metadata_upload_panel` <details> block; this keeps the
+ * shinyFiles button DOM identity stable across state$metadata
+ * transitions (see the comment block in inst/shiny/app.R near the
+ * sidebar UI definition for the full rationale). The negative top
+ * margin pulls the picker up so it visually hugs the details block
+ * even when the block is collapsed. */
 .metadata-upload-file-host {
+  margin-top: -0.1rem;
+  padding-left: 0.05rem;
+}
+.metadata-upload-details + .metadata-upload-file-host {
   margin-top: 0.25rem;
-}
-.metadata-upload-file-anchor {
-  /* Empty placeholder; the JS appends the file-host node here. */
-  min-height: 0;
-}
-.metadata-upload-details .metadata-upload-file-host {
-  margin-top: 0.4rem;
 }
 
 /* UMAP / embedding tab — small status banner above the reduction picker. */
