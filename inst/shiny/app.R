@@ -703,11 +703,14 @@ ui <- page_navbar(
       # card body (no more sidebar round-trip).
       layout_columns(
         col_widths = c(8, 4),
+        # Both cards share an explicit height so the row reads as a
+        # matched pair regardless of how DT lays out its pagination
+        # chrome at runtime. The plot is fixed at 200 px and the DT
+        # paginates to ~6 rows, both of which fit comfortably in the
+        # 320 px envelope. The plot card gets fill = TRUE so its body
+        # stretches to fill the card.
         card(
-          # `fill = FALSE` keeps the plot card from stretching to the
-          # height of its taller table sibling; the plot is fixed at
-          # 200 px so the row stays compact.
-          fill = FALSE,
+          height = "320px",
           phenomapr_card_header_modal_dl(
             tags$strong("Phenotype signature"),
             panel_id = "reference_signature_plot"
@@ -719,28 +722,17 @@ ui <- page_navbar(
           )
         ),
         card(
-          fill = FALSE,
+          height = "320px",
           phenomapr_card_header_dl(
             tags$strong("Top prognostic genes"),
             download_id = "top_genes_tbl_download"
           ),
           card_body(
             class = "top-prognostic-genes-body",
-            # Direction-only control (the "Top N genes" numeric input
-            # has been removed -- the table now shows the entire
-            # signature and users find genes via DT's built-in
-            # search box).
-            tags$div(
-              class = "top-prognostic-genes-controls",
-              radioButtons(
-                "top_genes_dir", "Direction",
-                choices = c("both" = "both",
-                            "positive" = "positive",
-                            "negative" = "negative"),
-                selected = "both",
-                inline = TRUE
-              )
-            ),
+            # Direction-only filtering was removed at the user's
+            # request -- the DT shows the entire signature ordered by
+            # |z| (direction = "both") and the user filters via the
+            # built-in search box.
             DTOutput("top_genes_tbl")
           )
         )
@@ -3888,7 +3880,11 @@ server <- function(input, output, session) {
         # box (enabled below) is the new way users find specific genes,
         # so we no longer cap with a sidebar top-N input.
         n           = Inf,
-        direction   = input$top_genes_dir
+        # Direction radio was removed at the user's request; show all
+        # genes (both positive and negative z-scores) ordered by |z|.
+        # Users filter by sign in DT via the z_score column header
+        # sort + search.
+        direction   = "both"
       ),
       error = function(e) {
         showNotification(conditionMessage(e), type = "error", duration = 8)

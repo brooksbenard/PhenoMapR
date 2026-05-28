@@ -883,43 +883,10 @@ table.dataTable thead th {
 
 /* "Top prognostic genes" card: lives in the right 1/3 column of the
  * Phenotype tab next to the (2/3-width) Phenotype signature plot.
- * The direction radio is embedded in the card body and the DT
- * shows the full signature with pagination + search. CSS keeps the
- * card body tight so the row matches the (200px) signature-plot
- * card height. */
+ * The card has an explicit height (320 px) that matches its plot
+ * sibling so the row reads as a matched pair. DT chrome is tightened
+ * below so the search / pagination / row content fit cleanly. */
 .top-prognostic-genes-body { padding-top: 0.6rem; }
-.top-prognostic-genes-body .form-group { margin-bottom: 0; }
-.top-prognostic-genes-body .help-block { margin-bottom: 0.35rem; }
-/* Direction control row: label inline with the radio buttons so
- * the entire control occupies one line at the narrow 1/3 column
- * width instead of stacking the label on top. */
-.top-prognostic-genes-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.9rem;
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.4rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-.top-prognostic-genes-controls .form-group { margin: 0; }
-.top-prognostic-genes-controls .control-label {
-  margin: 0 0.35rem 0 0;
-  font-weight: 600;
-}
-.top-prognostic-genes-controls .shiny-options-group {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin: 0;
-}
-.top-prognostic-genes-controls .radio-inline {
-  margin: 0;
-}
-/* Compact DT row + chrome so the table card stays close to the
- * 280px-ish height of the sibling signature-plot card. Cell
- * padding is tightened, font size dropped a touch, and the
- * pagination row is reduced. */
 .top-prognostic-genes-body table.dataTable td,
 .top-prognostic-genes-body table.dataTable th {
   padding: 4px 8px !important;
@@ -933,9 +900,9 @@ table.dataTable thead th {
   padding-top: 0.25rem;
 }
 
-/* Phenotype signature card: tighten body padding so the (200px)
- * plot + small helpText row reads as roughly the same height as
- * the Top prognostic genes table card next to it. */
+/* Phenotype signature card: matches the 320 px envelope of its
+ * "Top prognostic genes" sibling. Body padding is tightened so the
+ * helpText + 200 px plot read flush against the card header. */
 .phenotype-signature-body { padding-top: 0.55rem; }
 .phenotype-signature-body .help-block { margin-bottom: 0.4rem; }
 
