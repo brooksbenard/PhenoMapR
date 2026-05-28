@@ -140,7 +140,20 @@ detect_expression_format <- function(x, sample_cap = 10000L,
   mu   <- mean(vals)
   frac_int <- mean(abs(vals - round(vals)) < 1e-6)
   frac_neg <- mean(vals < 0)
-  frac_zero <- mean(vals == 0)
+  frac_zero_sample <- mean(vals == 0)
+
+  # Sparse matrices know their exact sparsity from nnzero; trust that
+  # over the subsample estimate. Falls back to the sample-based count
+  # for dense matrices.
+  frac_zero <- if (inherits(x, "sparseMatrix")) {
+    n_nz_exact <- tryCatch(as.numeric(Matrix::nnzero(x)),
+                           error = function(e) NA_real_)
+    if (is.finite(n_nz_exact)) {
+      1 - n_nz_exact / (as.numeric(n_genes) * as.numeric(n_samples))
+    } else frac_zero_sample
+  } else {
+    frac_zero_sample
+  }
 
   out$stats <- c(
     min = mn, max = mx, mean = mu, median = med,
@@ -149,10 +162,13 @@ detect_expression_format <- function(x, sample_cap = 10000L,
   )
   out$sparsity <- frac_zero
 
-  # Column-sum heuristic for CPM/TPM. Cheap for both dense and sparse.
+  # Column-sum heuristic for CPM/TPM. Cheap for both dense and sparse;
+  # Matrix::colSums + base::mean keeps the code numerics-only (the
+  # methods-package "mean" method on dgeMatrix has produced spurious
+  # warnings for some users).
   cs_mean <- tryCatch({
     if (inherits(x, "Matrix")) {
-      Matrix::mean(Matrix::colSums(x, na.rm = TRUE))
+      mean(as.numeric(Matrix::colSums(x, na.rm = TRUE)))
     } else {
       mean(colSums(x, na.rm = TRUE))
     }
@@ -282,17 +298,57 @@ detect_expression_format <- function(x, sample_cap = 10000L,
   if (n_total == 0) return(numeric(0))
 
   if (inherits(x, "sparseMatrix")) {
-    # Cap densification by sampling random (row, col) coordinates.
+    # Avoid per-element S4 dispatch on a large dgCMatrix (a 30k x 50k
+    # 10X matrix with sample_cap=10000 used to spend most of the call
+    # inside is(fdef, "genericFunction") because of element-wise [ ).
+    # Pull non-zero values straight from the @x slot (or from the
+    # generic-friendly Matrix::nnzero accessor) and reconstruct the
+    # zero half of the sample via the known total - nnz count.
+    nz_vals <- tryCatch({
+      if (methods::.hasSlot(x, "x")) {
+        as.numeric(x@x)
+      } else {
+        # Pattern matrices (lgCMatrix etc.) have no @x slot; treat the
+        # non-zero cells as 1s for the purposes of subsampling stats.
+        rep(1, tryCatch(Matrix::nnzero(x), error = function(e) 0L))
+      }
+    }, error = function(e) numeric(0))
+    n_nz   <- as.numeric(length(nz_vals))
+    n_zero <- max(n_total - n_nz, 0)
+
+    # Allocate the cap proportionally between observed non-zero values
+    # and implied zeros, so the resulting sample preserves the matrix
+    # sparsity without densifying anything. All arithmetic is forced
+    # to double so a 30k x 50k 10X matrix (n_total ~ 1.5e9) does not
+    # overflow R's 32-bit integer range when multiplied by sample_cap.
+    sample_cap <- as.numeric(sample_cap)
     if (n_total <= sample_cap) {
-      return(as.numeric(as.matrix(x)))
+      nz_take   <- n_nz
+      zero_take <- n_zero
+    } else {
+      nz_take   <- min(n_nz,   round(sample_cap * n_nz   / n_total))
+      zero_take <- min(n_zero, sample_cap - nz_take)
+      # Numerical drift can leave us 1 short; top up from whichever
+      # bucket still has values.
+      short <- sample_cap - (nz_take + zero_take)
+      if (is.finite(short) && short > 0) {
+        if (n_nz   - nz_take   >= short) nz_take   <- nz_take   + short
+        else                              zero_take <- zero_take + short
+      }
     }
-    idx <- sample.int(n_total, size = sample_cap)
-    rows <- ((idx - 1L) %% nrow(x)) + 1L
-    cols <- ((idx - 1L) %/% nrow(x)) + 1L
-    vals <- vapply(seq_along(idx),
-                   function(k) x[rows[k], cols[k]],
-                   numeric(1))
-    return(vals)
+    nz_take   <- as.integer(nz_take)
+    zero_take <- as.integer(zero_take)
+
+    out <- numeric(0)
+    if (nz_take > 0L && n_nz > 0) {
+      out <- c(out,
+               if (nz_take >= n_nz) nz_vals
+               else sample(nz_vals, size = nz_take, replace = FALSE))
+    }
+    if (zero_take > 0L) {
+      out <- c(out, rep(0, zero_take))
+    }
+    return(out)
   }
 
   if (n_total <= sample_cap) {

@@ -2392,8 +2392,32 @@ server <- function(input, output, session) {
     if (is.null(s) || !identical(s$kind, "matrix")) return(NULL)
     expr <- state$expression
     if (is.null(expr)) return(NULL)
-    tryCatch(detect_expression_format(expr, verbose = FALSE),
-             error = function(e) NULL)
+    # Suppress the "NAs introduced by coercion" warning that some
+    # S4 .Internal( ) paths emit when vapply()-coercing 1x1 sparse
+    # returns to numeric(1). The detector itself does the right
+    # thing now (samples @x directly for sparseMatrix inputs); the
+    # withCallingHandlers wrapper is belt-and-braces so a stray
+    # warning never bubbles into the Shiny log.
+    out <- tryCatch(
+      withCallingHandlers(
+        detect_expression_format(expr, verbose = FALSE),
+        warning = function(w) {
+          if (grepl("NAs introduced by coercion",
+                    conditionMessage(w), fixed = TRUE)) {
+            invokeRestart("muffleWarning")
+          }
+        }
+      ),
+      error = function(e) {
+        showNotification(
+          paste0("Could not auto-detect expression format: ",
+                 conditionMessage(e)),
+          type = "warning", duration = 8
+        )
+        NULL
+      }
+    )
+    out
   })
 
   output$expr_matrix_diagnostics <- renderUI({

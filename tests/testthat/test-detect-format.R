@@ -131,3 +131,37 @@ test_that("clean_matrix_input errors on rownameless input", {
   m <- matrix(rpois(100, 3), 10, 10)
   expect_error(clean_matrix_input(m), "rownames")
 })
+
+
+test_that("detect_expression_format handles 10X-scale dgCMatrix without warning or slowness", {
+  skip_if_not_installed("Matrix")
+  set.seed(7)
+  n_genes <- 5000L; n_cells <- 8000L  # smaller than 30k x 50k for speed
+  target_nnz <- as.integer(0.08 * n_genes * n_cells)
+  i <- sample.int(n_genes, target_nnz, replace = TRUE)
+  j <- sample.int(n_cells, target_nnz, replace = TRUE)
+  vals <- as.integer(rpois(target_nnz, lambda = 3) + 1L)
+  m <- Matrix::sparseMatrix(i = i, j = j, x = vals,
+    dims = c(n_genes, n_cells),
+    dimnames = list(c("TP53", "MYC", paste0("Gene", 1:(n_genes - 2))),
+                    paste0("Cell_", 1:n_cells)),
+    check = FALSE)
+
+  warns <- character(0)
+  t0 <- Sys.time()
+  d <- withCallingHandlers(
+    detect_expression_format(m),
+    warning = function(w) {
+      warns <<- c(warns, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+  expect_lt(elapsed, 5)                # must be sub-second-ish even on CI
+  expect_length(warns, 0)               # no NAs-introduced-by-coercion noise
+  expect_equal(d$format, "raw_counts")
+  expect_equal(d$sc_or_bulk, "single_cell")
+  exact <- 1 - length(m@x) / (as.numeric(nrow(m)) * as.numeric(ncol(m)))
+  expect_lt(abs(d$sparsity - exact), 0.001)
+})
