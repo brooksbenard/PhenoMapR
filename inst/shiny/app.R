@@ -592,28 +592,12 @@ ui <- page_navbar(
                            "Download phenotype signature (RDS)",
                            class = "btn-outline-primary")
           )
-        ),
-        # ---- Reference diagnostics inputs (moved from the old "6. Diagnostics"
-        # tab so all reference-signature info lives in one place). The
-        # reference + cancer type are NOT re-asked here — the diagnostics
-        # below automatically follow the "Phenotype signature source" /
-        # "Cancer / tissue type" selection at the top of this sidebar. Only
-        # the diagnostic-specific knobs (top-N and direction) live here.
-        hr(),
-        h4(tagList(icon("stethoscope"), " Reference diagnostics")),
-        helpText(
-          "Top prognostic genes for the phenotype signature selected ",
-          "above. Adjust how many genes to list and the direction filter."
-        ),
-        numericInput("top_genes_n", "Top N genes",
-                     value = 50, min = 5, max = 1000),
-        radioButtons(
-          "top_genes_dir", "Direction",
-          choices = c("both" = "both", "positive" = "positive",
-                      "negative" = "negative"),
-          selected = "both",
-          inline = TRUE
         )
+        # NOTE: the former "Reference diagnostics" sidebar block (top-N
+        # + direction inputs) has been moved into the "Top prognostic
+        # genes" card body in the main area, so all reference-related
+        # controls live with the table they affect instead of being
+        # split between the sidebar and the body.
       ),
       card(
         # The .signature-card-body class lets us position the
@@ -712,15 +696,71 @@ ui <- page_navbar(
           )
         )
       ),
-      card(
-        phenomapr_card_header_modal_dl(
-          tags$strong("Phenotype signature"),
-          panel_id = "reference_signature_plot"
+      # ---- Phenotype signature (2/3) + Top prognostic genes (1/3) ----------
+      # The signature plot sits on the left at 2/3 width; the top
+      # prognostic genes table is the right-hand companion at 1/3
+      # width with its own top-N + direction controls embedded in the
+      # card body (no more sidebar round-trip).
+      layout_columns(
+        col_widths = c(8, 4),
+        card(
+          phenomapr_card_header_modal_dl(
+            tags$strong("Phenotype signature"),
+            panel_id = "reference_signature_plot"
+          ),
+          card_body(
+            helpText("Top / bottom z-score genes for the selected signature column."),
+            plotOutput("reference_signature_plot", height = "260px")
+          )
         ),
-        card_body(
-          helpText("Top / bottom z-score genes for the selected signature column."),
-          plotOutput("reference_signature_plot", height = "260px")
+        card(
+          phenomapr_card_header_dl(
+            tags$strong("Top prognostic genes"),
+            download_id = "top_genes_tbl_download"
+          ),
+          card_body(
+            class = "top-prognostic-genes-body",
+            # Local controls (formerly in the sidebar's "Reference
+            # diagnostics" block). Direction is inlined as a radio
+            # group so the entire control row stays compact even at
+            # the narrow 1/3 column width.
+            tags$div(
+              class = "top-prognostic-genes-controls",
+              numericInput("top_genes_n", "Top N genes",
+                           value = 50, min = 5, max = 1000),
+              radioButtons(
+                "top_genes_dir", "Direction",
+                choices = c("both" = "both",
+                            "positive" = "positive",
+                            "negative" = "negative"),
+                selected = "both",
+                inline = TRUE
+              )
+            ),
+            helpText(
+              "Auto-updates from the phenotype signature selected ",
+              "above."
+            ),
+            DTOutput("top_genes_tbl")
+          )
         )
+      ),
+      # ---- Available cancer types (full-width row beneath) -----------------
+      # Lists the cancer / tissue types that ship with the currently-
+      # selected built-in signature; populated server-side from
+      # output$cancer_types_list. Full-width so long lists (PRECOG has
+      # 39 cancers) wrap naturally instead of forcing horizontal scroll.
+      card(
+        card_header(
+          icon("clipboard-list"),
+          tags$strong(" Available cancer types"),
+          tags$small(
+            class = "text-muted",
+            style = "margin-left: 0.5rem; font-weight: 400;",
+            "Cancer / tissue types shipped with the selected built-in signature."
+          )
+        ),
+        card_body(verbatimTextOutput("cancer_types_list"))
       ),
       # ---- Derived signature detail panel ------------------------------------
       conditionalPanel(
@@ -753,46 +793,6 @@ ui <- page_navbar(
               )
             )
           )
-        )
-      ),
-      # ---- Reference diagnostics (folded in from the old "6. Diagnostics") -
-      # Lets users inspect any built-in reference's top prognostic genes /
-      # cancer-type list right next to the signature they're using to score,
-      # without bouncing to a separate tab.
-      tags$div(
-        class = "phenotype-section-divider",
-        tags$h3(tagList(icon("stethoscope"), " Reference diagnostics"))
-      ),
-      card(
-        card_header(icon("circle-info"), " About reference diagnostics"),
-        card_body(
-          markdown(
-            "These tables follow the **Phenotype signature source** and
-            **Cancer / tissue type** you picked at the top of the sidebar
-            — they update automatically whenever you change the signature.
-            Use the *Top N genes* and *Direction* knobs in the sidebar to
-            tune the listing."
-          )
-        )
-      ),
-      layout_columns(
-        col_widths = c(7, 5),
-        card(
-          phenomapr_card_header_dl(
-            tags$strong("Top prognostic genes"),
-            download_id = "top_genes_tbl_download"
-          ),
-          card_body(
-            helpText(
-              "Auto-updates from the phenotype signature selected above. ",
-              "Adjust top-N and direction in the sidebar."
-            ),
-            DTOutput("top_genes_tbl")
-          )
-        ),
-        card(
-          card_header(tags$strong("Available cancer types")),
-          card_body(verbatimTextOutput("cancer_types_list"))
         )
       )
     )
