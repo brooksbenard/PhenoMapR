@@ -857,30 +857,52 @@ ui <- page_navbar(
         uiOutput("score_data_status"),
         hr(),
         h4("PhenoMap() parameters"),
-        # Slot / assay controls. The helpText above the radio explains
-        # what PhenoMapR expects so users know which choice fits their
-        # data; the existing observer (further below) refines the radio
-        # choices + the assay default whenever the detected object's
-        # available layers / default assay change.
-        helpText(
-          icon("info-circle"),
-          " PhenoMapR computes a weighted sum of expression x reference ",
-          "z-score across signature genes. It expects ",
-          tags$strong("log-normalized expression"),
-          " (the 'data' / log-counts layer); choose 'counts (raw)' only ",
-          "if your object lacks a normalized layer. Plain matrices are ",
-          "scored directly -- normalize them before uploading if your ",
-          "matrix is raw counts."
+        # Slot / assay controls. Only rendered for object-typed inputs
+        # (Seurat / SCE / SpatialExperiment / AnnData), since plain
+        # matrices and data.frames have no concept of an assay or a
+        # named layer -- their values are scored directly. The
+        # `score_show_slot_block` flag is driven by state$expr_summary
+        # below (TRUE iff kind != "matrix"); using a conditionalPanel
+        # rather than a uiOutput keeps the inputs in the DOM with
+        # stable IDs so the observer further down can still call
+        # updateRadioButtons / updateTextInput on them when an object
+        # is loaded next.
+        conditionalPanel(
+          condition = "output.score_show_slot_block",
+          helpText(
+            icon("info-circle"),
+            " PhenoMapR computes a weighted sum of expression x reference ",
+            "z-score across signature genes. It expects ",
+            tags$strong("log-normalized expression"),
+            " (the 'data' / log-counts layer); choose 'counts (raw)' only ",
+            "if your object lacks a normalized layer."
+          ),
+          radioButtons(
+            "score_slot", "Layer / slot to score against",
+            choices = c("data (log-normalized)" = "data",
+                        "counts (raw)"          = "counts"),
+            selected = "data"
+          ),
+          textInput("score_assay",
+                    "Assay (Seurat / SCE; blank = auto)",
+                    value = "")
         ),
-        radioButtons(
-          "score_slot", "Layer / slot to score against",
-          choices = c("data (log-normalized)" = "data",
-                      "counts (raw)"          = "counts"),
-          selected = "data"
+        # For matrix / data.frame inputs we still want a one-line note
+        # so users know why the slot/assay controls aren't shown. (We
+        # use a conditionalPanel with the opposite condition so this
+        # text only appears for matrix-class inputs, never alongside
+        # the radio block above.)
+        conditionalPanel(
+          condition = "!output.score_show_slot_block && output.score_have_matrix",
+          helpText(
+            icon("info-circle"),
+            " Plain matrices are scored directly -- PhenoMapR expects ",
+            tags$strong("log-normalized expression"),
+            " (e.g. Seurat-style log-counts, log2(CPM+1), or log2(TPM+1)). ",
+            "Use the diagnostics block in 1. Data to normalize raw counts ",
+            "before scoring."
+          )
         ),
-        textInput("score_assay",
-                  "Assay (Seurat / SCE; blank = auto)",
-                  value = ""),
         checkboxInput("pseudobulk", "Aggregate to pseudobulk", value = FALSE),
         conditionalPanel(
           "input.pseudobulk == true",
@@ -1740,80 +1762,115 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Reading expression file...", pick$name)
-    on.exit(phenomapr_busy_hide(), add = TRUE)
     res <- tryCatch(
       parse_expression_upload(pick$datapath, pick$name),
       error = function(e) {
-        phenomapr_busy_hide()
         showNotification(paste0("Upload failed: ", conditionMessage(e)),
                          type = "error", duration = 8)
         NULL
       }
     )
+    # CRITICAL: hide the popup AS SOON AS the heavy file read is done,
+    # BEFORE we touch state$. Reason: in Shiny, every reactiveValues
+    # assignment inside an observer invalidates downstream reactives;
+    # all of those downstream renderUI/renderPlot outputs are queued in
+    # the SAME flushOutput batch as the busy-hide custom message, so
+    # the client receives a long stream of DOM updates (dataset
+    # overview cards, count plots, metadata table, score-tab UI, ...)
+    # AHEAD of the busy-hide message. The browser processes them
+    # serially on the main thread, so the popup stays on screen for
+    # the entire DOM-update wave even though R said "hide" right
+    # after the read completed.
+    #
+    # Calling busy_hide() here lets that message join the flush before
+    # any state-change-driven reactives invalidate; deferring the
+    # state propagation via later::later() then runs it in a fresh
+    # tick, so it lands as a separate flushOutput batch where it can
+    # no longer "delay" the popup hide. The result: popup disappears
+    # the instant the read is done, and the rest of the UI populates a
+    # heartbeat later.
+    phenomapr_busy_hide()
     if (is.null(res)) return()
-    state$expression <- res$object
-    state$expr_summary <- res
-    md <- extract_object_metadata(res$object)
-    state$metadata <- md
-    state$meta_columns <- if (!is.null(md)) colnames(md) else character(0)
-    state$metadata_source <- if (!is.null(md)) "object" else "(none)"
-    showNotification(paste(res$notes, collapse = " "), type = "message", duration = 5)
 
-    # When loading an AnnData (.h5ad), surface a clear message if the
-    # in-object metadata could not be auto-extracted. Some round-trip
-    # paths (e.g., anndataR -> Python anndata) can produce obs columns
-    # with pandas extension dtypes that the standard
-    # reticulate::py_to_r() pipeline can't decode in one pass. Our
-    # extractor tries three layered fallbacks (decategorize, columnwise);
-    # if all of them came back empty we tell the user explicitly so they
-    # can either fix the source object or upload metadata separately.
-    if (identical(res$kind %||% "", "anndata")) {
-      diag_msgs <- if (is.null(md)) {
-        # NULL can't carry attributes; re-query the helper for the same
-        # diagnostic trail it produced on the failure path.
-        tryCatch(
-          phenomapr_anndata_obs_df(res$object)$warnings,
-          error = function(e) character(0)
+    res_obj <- res
+    sess <- session
+    later::later(function() {
+      tryCatch({
+        state$expression <- res_obj$object
+        state$expr_summary <- res_obj
+        md <- extract_object_metadata(res_obj$object)
+        state$metadata <- md
+        state$meta_columns <- if (!is.null(md)) colnames(md) else character(0)
+        state$metadata_source <- if (!is.null(md)) "object" else "(none)"
+        shiny::showNotification(
+          paste(res_obj$notes, collapse = " "),
+          type = "message", duration = 5,
+          session = sess
         )
-      } else {
-        attr(md, "anndata_obs_warnings", exact = TRUE) %||% character(0)
-      }
-      if (is.null(md)) {
-        diag <- if (length(diag_msgs)) {
-          paste(utils::head(diag_msgs, 3L), collapse = " | ")
-        } else {
-          "AnnData.obs returned an empty data.frame."
+
+        # When loading an AnnData (.h5ad), surface a clear message if the
+        # in-object metadata could not be auto-extracted. Some round-trip
+        # paths (e.g., anndataR -> Python anndata) can produce obs columns
+        # with pandas extension dtypes that the standard
+        # reticulate::py_to_r() pipeline can't decode in one pass. Our
+        # extractor tries three layered fallbacks (decategorize, columnwise);
+        # if all of them came back empty we tell the user explicitly so they
+        # can either fix the source object or upload metadata separately.
+        if (identical(res_obj$kind %||% "", "anndata")) {
+          diag_msgs <- if (is.null(md)) {
+            tryCatch(
+              phenomapr_anndata_obs_df(res_obj$object)$warnings,
+              error = function(e) character(0)
+            )
+          } else {
+            attr(md, "anndata_obs_warnings", exact = TRUE) %||% character(0)
+          }
+          if (is.null(md)) {
+            diag <- if (length(diag_msgs)) {
+              paste(utils::head(diag_msgs, 3L), collapse = " | ")
+            } else {
+              "AnnData.obs returned an empty data.frame."
+            }
+            shiny::showNotification(
+              paste0(
+                "AnnData metadata could not be auto-detected. ",
+                "You can still score the cells, but cell-type-aware steps ",
+                "and groupings need a metadata table. Upload your cell ",
+                "metadata in the next section, or re-export the .h5ad ",
+                "with plain object/string columns. Diagnostic: ", diag
+              ),
+              type = "warning", duration = 12, id = "anndata_meta_warn",
+              session = sess
+            )
+          } else if (length(diag_msgs)) {
+            shiny::showNotification(
+              sprintf(
+                "AnnData metadata loaded with %d cell%s x %d column%s, but %d non-fatal warning%s during extraction (e.g. %s).",
+                nrow(md), ifelse(nrow(md) == 1L, "", "s"),
+                ncol(md) - 1L, ifelse(ncol(md) - 1L == 1L, "", "s"),
+                length(diag_msgs), ifelse(length(diag_msgs) == 1L, "", "s"),
+                substr(diag_msgs[[1L]], 1L, 140L)
+              ),
+              type = "message", duration = 10, id = "anndata_meta_partial",
+              session = sess
+            )
+          } else if (!is.null(md)) {
+            shiny::showNotification(
+              sprintf("Detected %d cell%s x %d metadata column%s from AnnData.obs.",
+                      nrow(md), ifelse(nrow(md) == 1L, "", "s"),
+                      ncol(md) - 1L, ifelse(ncol(md) - 1L == 1L, "", "s")),
+              type = "message", duration = 5, id = "anndata_meta_ok",
+              session = sess
+            )
+          }
         }
-        showNotification(
-          paste0(
-            "AnnData metadata could not be auto-detected. ",
-            "You can still score the cells, but cell-type-aware steps ",
-            "and groupings need a metadata table. Upload your cell ",
-            "metadata in the next section, or re-export the .h5ad ",
-            "with plain object/string columns. Diagnostic: ", diag
-          ),
-          type = "warning", duration = 12, id = "anndata_meta_warn"
+      }, error = function(e) {
+        shiny::showNotification(
+          paste0("Internal error while applying upload: ", conditionMessage(e)),
+          type = "error", duration = 10, session = sess
         )
-      } else if (length(diag_msgs)) {
-        showNotification(
-          sprintf(
-            "AnnData metadata loaded with %d cell%s x %d column%s, but %d non-fatal warning%s during extraction (e.g. %s).",
-            nrow(md), ifelse(nrow(md) == 1L, "", "s"),
-            ncol(md) - 1L, ifelse(ncol(md) - 1L == 1L, "", "s"),
-            length(diag_msgs), ifelse(length(diag_msgs) == 1L, "", "s"),
-            substr(diag_msgs[[1L]], 1L, 140L)
-          ),
-          type = "message", duration = 10, id = "anndata_meta_partial"
-        )
-      } else if (!is.null(md)) {
-        showNotification(
-          sprintf("Detected %d cell%s x %d metadata column%s from AnnData.obs.",
-                  nrow(md), ifelse(nrow(md) == 1L, "", "s"),
-                  ncol(md) - 1L, ifelse(ncol(md) - 1L == 1L, "", "s")),
-          type = "message", duration = 5, id = "anndata_meta_ok"
-        )
-      }
-    }
+      })
+    }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   observeEvent(input$use_demo, {
@@ -1865,7 +1922,6 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Loading cell metadata...", pick$name)
-    on.exit(phenomapr_busy_hide(), add = TRUE)
     md <- tryCatch(
       parse_metadata_upload(pick$datapath, pick$name),
       error = function(e) {
@@ -1873,11 +1929,32 @@ server <- function(input, output, session) {
         NULL
       }
     )
+    # See the comment in the expression-upload observer above for the
+    # rationale: hide the popup BEFORE assigning to state$metadata so
+    # the renderUI/renderPlot cascade triggered by the metadata change
+    # does not pile up ahead of the busy-hide message in the same
+    # flushOutput batch.
+    phenomapr_busy_hide()
     if (is.null(md)) return()
-    state$metadata <- md
-    state$meta_columns <- colnames(md)
-    state$metadata_source <- "upload"
-    showNotification("Metadata loaded.", type = "message", duration = 4)
+
+    md_local <- md
+    sess <- session
+    later::later(function() {
+      tryCatch({
+        state$metadata <- md_local
+        state$meta_columns <- colnames(md_local)
+        state$metadata_source <- "upload"
+        shiny::showNotification("Metadata loaded.",
+                                type = "message", duration = 4,
+                                session = sess)
+      }, error = function(e) {
+        shiny::showNotification(
+          paste0("Internal error while applying metadata: ",
+                 conditionMessage(e)),
+          type = "error", duration = 10, session = sess
+        )
+      })
+    }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   output$meta_columns_available <- reactive({ length(state$meta_columns) > 0 })
@@ -2087,6 +2164,26 @@ server <- function(input, output, session) {
         bits <- c(bits, sprintf("layers: %s",
                                 paste(s$layers_avail, collapse = ", ")))
       }
+      # For plain matrix / data.frame inputs there is no "assay" or
+      # "layer" concept to report, so we instead surface the heuristic
+      # single-cell vs bulk classification from
+      # detect_expression_format() (cached in expr_diagnostics()). This
+      # gives users a one-glance confirmation that the file they
+      # uploaded is being interpreted the way they expect before
+      # clicking "Compute PhenoMapR scores".
+      if (identical(s$kind %||% "", "matrix")) {
+        diag <- tryCatch(expr_diagnostics(), error = function(e) NULL)
+        if (!is.null(diag) && length(diag$sc_or_bulk %||% "")) {
+          sb_label <- switch(
+            diag$sc_or_bulk,
+            single_cell = "predicted single-cell",
+            bulk        = "predicted bulk",
+            unclear     = "single-cell vs bulk unclear",
+            diag$sc_or_bulk
+          )
+          if (nzchar(sb_label)) bits <- c(bits, sb_label)
+        }
+      }
       data_row <- tags$div(
         class = "sds-row sds-row-ok",
         tags$div(class = "sds-icon", icon("check-circle")),
@@ -2159,6 +2256,37 @@ server <- function(input, output, session) {
 
     tags$div(class = "score-data-status", data_row, phen_row, ct_row)
   })
+
+  # JS-readable flags that gate the slot/assay UI in the 3. Score
+  # sidebar. Computed here (not inline in renderUI) so they update
+  # the moment state$expr_summary changes and stay live even while
+  # the user is on a different tab.
+  #
+  #   * score_show_slot_block = TRUE iff the loaded expression input
+  #     has a meaningful concept of an assay / layer (Seurat / SCE /
+  #     SpatialExperiment / AnnData). Plain matrices and data.frames
+  #     return FALSE -- the slot radio + assay textInput are then
+  #     hidden because they have no effect on PhenoMap()'s matrix
+  #     path. NULL state$expr_summary (no upload yet) also returns
+  #     FALSE so the empty-state row in score_data_status is the
+  #     ONLY message users see before they load anything.
+  #
+  #   * score_have_matrix is the dual flag, TRUE iff something IS
+  #     loaded AND it's matrix-class. Used by the small "matrices
+  #     scored directly" note that sits in place of the hidden slot
+  #     block, so the message only appears for matrix uploads -- not
+  #     in the pre-upload empty state.
+  output$score_show_slot_block <- reactive({
+    s <- state$expr_summary
+    !is.null(s) && !identical(s$kind %||% "", "matrix")
+  })
+  outputOptions(output, "score_show_slot_block", suspendWhenHidden = FALSE)
+
+  output$score_have_matrix <- reactive({
+    s <- state$expr_summary
+    !is.null(s) && identical(s$kind %||% "", "matrix")
+  })
+  outputOptions(output, "score_have_matrix", suspendWhenHidden = FALSE)
 
   # Whenever a fresh object lands in state$expr_summary, refresh:
   #   * score_slot choices  -> only layers we actually have (drop scale.data

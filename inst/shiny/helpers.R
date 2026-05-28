@@ -2332,15 +2332,19 @@ phenomapr_busy_assets <- function() {
   // DOM updates with no animation frame between them, so the browser
   // never paints the brief "shown" state -- the popup does not flash.
   function handleShow(p) {
+    // Every R-driven show is the START of a brand-new op (R only
+    // calls phenomapr_busy_show once per observer body), so any
+    // prior user-dismiss state must be cleared here. Without this
+    // reset a popup that the user clicked-to-dismiss during a
+    // previous, lingering op would silently suppress the popup on
+    // every subsequent upload / scoring / cleanup -- the popup
+    // would "never reappear" until full page reload.
+    dismissedThisRun = false;
     currentMessage = {
       message: (p && p.message) || "Working...",
       detail:  (p && p.detail)  || "",
       hint:    (p && p.hint)    || "This may take a moment..."
     };
-    if (dismissedThisRun) {
-      dbg("R-side show suppressed (dismissed this run)");
-      return;
-    }
     renderShow();
   }
   function handleHide() {
