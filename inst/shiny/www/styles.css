@@ -352,6 +352,115 @@ table.dataTable thead th {
   margin-top: 0.15rem;
 }
 
+/* Matrix-only diagnostics panel in the 1. Data sidebar. Shown only when
+ * a plain matrix / data.frame has been uploaded (kind == "matrix").
+ * Surfaces gene-ID style, expression format, and the single-cell vs
+ * bulk guess as colour-coded rows; the cleanup block below (HUGO + log
+ * normalization) appears only when at least one row needs action. */
+.expr-matrix-diag {
+  border: 1px solid #e3e8eb;
+  border-radius: 6px;
+  background: #fbfdfd;
+  padding: 0.55rem 0.7rem 0.65rem 0.7rem;
+  margin: 0.6rem 0 0.4rem 0;
+  font-size: 0.85rem;
+}
+.expr-matrix-diag .diag-title {
+  font-size: 0.92rem;
+  margin-bottom: 0.4rem;
+  color: #1d3b3a;
+}
+.expr-matrix-diag .diag-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.35rem 0.55rem;
+  margin-bottom: 0.3rem;
+  border-radius: 4px;
+  border-left: 3px solid #9ca3af;
+  background: #f3f4f6;
+  color: #374151;
+}
+.expr-matrix-diag .diag-row.diag-ok {
+  background: #eef7f4;
+  border-left-color: #2A9D8F;
+  color: #1d3b3a;
+}
+.expr-matrix-diag .diag-row.diag-warn {
+  background: #fff5ee;
+  border-left-color: #e76f51;
+  color: #5b3a2c;
+}
+.expr-matrix-diag .diag-row.diag-info {
+  background: #eef3fb;
+  border-left-color: #4a78b8;
+  color: #1f2c3d;
+}
+.expr-matrix-diag .diag-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: #486a78;
+}
+.expr-matrix-diag .diag-row.diag-warn .diag-label { color: #8a4a36; }
+.expr-matrix-diag .diag-row.diag-info .diag-label { color: #3d5a82; }
+.expr-matrix-diag .diag-value {
+  font-weight: 600;
+  word-break: break-word;
+}
+.expr-matrix-diag .diag-detail {
+  font-size: 0.78rem;
+  color: #486a78;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  margin-top: 0.1rem;
+  word-break: break-word;
+}
+.expr-matrix-diag .diag-recs {
+  margin: 0.4rem 0 0 1rem;
+  padding: 0;
+  font-size: 0.8rem;
+  color: #5b3a2c;
+}
+.expr-matrix-diag .diag-recs li {
+  margin-bottom: 0.2rem;
+}
+.expr-matrix-diag .diag-cleanup {
+  border-top: 1px dashed #cfd6da;
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+}
+.expr-matrix-diag .diag-cleanup-title {
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+  color: #1d3b3a;
+}
+.expr-matrix-diag .diag-cleanup .form-group,
+.expr-matrix-diag .diag-cleanup .shiny-input-container {
+  margin-bottom: 0.3rem;
+}
+.expr-matrix-diag .diag-cleanup .control-label,
+.expr-matrix-diag .diag-cleanup label {
+  font-size: 0.82rem;
+  margin-bottom: 0.1rem;
+}
+.expr-matrix-diag .diag-cleanup .radio label {
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+.expr-matrix-diag .diag-cleanup-clean {
+  color: #1d3b3a;
+  font-size: 0.85rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed #cfd6da;
+  margin-top: 0.5rem;
+}
+.expr-matrix-diag .diag-cleanup-clean .fa,
+.expr-matrix-diag .diag-cleanup-clean .fas {
+  color: #2A9D8F;
+  margin-right: 0.25rem;
+}
+
 /* Custom-signature "Derive from bulk" sidebar -- tighten the vertical gap
  * between the file pickers and the cascading metadata dropdowns so the
  * whole derivation form fits in the sidebar without burying the

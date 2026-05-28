@@ -371,6 +371,15 @@ ui <- page_navbar(
         ),
         actionLink("use_demo", "Use a tiny demo matrix instead",
                    icon = icon("flask")),
+        # Matrix-only diagnostics panel: gene-ID style (HUGO / ENSG /
+        # mixed), expression format (raw counts / CPM/TPM / log-norm /
+        # z-scaled), and a single-cell vs bulk guess via sparsity. The
+        # `uiOutput` is rendered only when state$expr_summary$kind is
+        # "matrix" (see the server-side renderUI further below). When
+        # cleanup is recommended the same panel also exposes
+        # checkboxes + a "Clean & normalize" button that runs
+        # clean_matrix_input() in place on state$expression.
+        uiOutput("expr_matrix_diagnostics"),
 
         hr(),
         h4("Cell metadata"),
@@ -414,8 +423,6 @@ ui <- page_navbar(
           )
         )
       ),
-      uiOutput("expr_axes_warning"),
-
       # ---- Dataset overview --------------------------------------------------
       card(
         card_header(icon("table-list"), " Dataset overview"),
@@ -1904,14 +1911,15 @@ server <- function(input, output, session) {
   })
 
   # Status banner above the metadata dropdowns: explains where the metadata
-  # currently in use came from (object / upload / demo / nothing yet).
+  # currently in use came from (object / upload / demo). When no metadata
+  # has been loaded yet we render NOTHING here -- the collapsible
+  # "No metadata detected -- upload a tabular metadata file" header on the
+  # details/summary block immediately below already conveys the empty
+  # state, so the previous "No metadata loaded yet ..." em-paragraph was
+  # redundant.
   output$metadata_status <- renderUI({
     if (is.null(state$metadata) || !length(state$meta_columns)) {
-      return(tags$div(
-        class = "metadata-status metadata-status-empty",
-        tags$em("No metadata loaded yet — load a Seurat / SCE / AnnData object, ",
-                "or upload a tabular metadata file below.")
-      ))
+      return(NULL)
     }
     src <- state$metadata_source %||% "(unknown)"
     kind <- state$expr_summary$kind %||% "loaded"
@@ -2371,25 +2379,203 @@ server <- function(input, output, session) {
   phenomapr_register_table_download(output, "metadata_columns_tbl",
     function() isolate(panel_objects$metadata_columns_tbl))
 
-  output$expr_axes_warning <- renderUI({
+  # ----- Matrix diagnostics + cleanup ----------------------------------------
+  # When the uploaded expression is a plain matrix / data.frame (i.e.
+  # kind == "matrix"), run detect_expression_format() to surface gene-ID
+  # style (HUGO / ENSG / mixed), expression scale (raw counts / CPM/TPM
+  # / log-normalized / z-scaled), and a single-cell vs bulk guess driven
+  # by sparsity. The result is cached in expr_diagnostics() so the
+  # downstream UI and the "Clean & normalize" observer share one
+  # detection pass.
+  expr_diagnostics <- reactive({
     s <- state$expr_summary
-    if (is.null(s) || s$kind != "matrix") return(NULL)
-    msgs <- character(0)
-    if (!is.null(s$gene_ids) && length(s$gene_ids)) {
-      if (mean(grepl("^ENSG\\d", s$gene_ids)) > 0.5) {
-        msgs <- c(msgs, paste(
-          "Gene names look like ENSG IDs; convert to HUGO symbols before scoring."
-        ))
+    if (is.null(s) || !identical(s$kind, "matrix")) return(NULL)
+    expr <- state$expression
+    if (is.null(expr)) return(NULL)
+    tryCatch(detect_expression_format(expr, verbose = FALSE),
+             error = function(e) NULL)
+  })
+
+  output$expr_matrix_diagnostics <- renderUI({
+    d <- expr_diagnostics()
+    if (is.null(d)) return(NULL)
+
+    fmt_class <- switch(
+      d$format,
+      raw_counts = "diag-warn",
+      cpm_or_tpm = "diag-warn",
+      z_scaled   = "diag-warn",
+      log_normalized = "diag-ok",
+      "diag-info"
+    )
+    id_class <- switch(
+      d$gene_id_kind,
+      hugo = "diag-ok",
+      ensembl = "diag-warn",
+      mixed = "diag-warn",
+      "diag-info"
+    )
+    id_label <- switch(
+      d$gene_id_kind,
+      hugo = sprintf("HUGO symbols (%d/%d)",
+                     d$n_hugo_like, d$n_genes),
+      ensembl = sprintf("Ensembl IDs (%d/%d ENSG-prefixed)",
+                        d$n_ensembl, d$n_genes),
+      mixed = sprintf("Mixed (%d ENSG + %d HUGO-like)",
+                      d$n_ensembl, d$n_hugo_like),
+      "Unknown gene-ID style"
+    )
+    sc_class <- switch(
+      d$sc_or_bulk,
+      single_cell = "diag-info",
+      bulk        = "diag-info",
+      "diag-info"
+    )
+
+    diag_row <- function(class_, label, value, detail = NULL) {
+      tags$div(
+        class = paste("diag-row", class_),
+        tags$div(class = "diag-label", label),
+        tags$div(class = "diag-value", value),
+        if (!is.null(detail))
+          tags$div(class = "diag-detail", detail)
+      )
+    }
+
+    stats_line <- if (all(is.finite(d$stats[c("min", "max", "mean")]))) {
+      sprintf(
+        "min %.2f - max %.2f - mean %.2f - %.0f%% integer - %.0f%% zeros",
+        d$stats[["min"]], d$stats[["max"]], d$stats[["mean"]],
+        d$stats[["frac_integer"]] * 100, d$stats[["frac_zero"]] * 100
+      )
+    } else NULL
+
+    cleanup_block <- NULL
+    needs_cleanup <- d$gene_id_kind %in% c("ensembl", "mixed") ||
+      d$n_dup > 0L ||
+      d$format %in% c("raw_counts", "cpm_or_tpm")
+    if (needs_cleanup) {
+      default_mode <- if (identical(d$sc_or_bulk, "single_cell"))
+        "single_cell" else "bulk"
+      cleanup_block <- tags$div(
+        class = "diag-cleanup",
+        tags$div(class = "diag-cleanup-title",
+                 icon("wand-magic-sparkles"),
+                 tags$strong(" Cleanup options")),
+        checkboxInput(
+          "diag_do_hugo",
+          "Clean gene IDs to approved HUGO symbols (HGNChelper)",
+          value = d$gene_id_kind %in% c("ensembl", "mixed") ||
+            d$n_dup > 0L
+        ),
+        checkboxInput(
+          "diag_do_collapse",
+          "Collapse duplicate gene rows by mean",
+          value = d$n_dup > 0L
+        ),
+        checkboxInput(
+          "diag_do_normalize",
+          "Log-normalize expression",
+          value = d$format %in% c("raw_counts", "cpm_or_tpm")
+        ),
+        radioButtons(
+          "diag_norm_mode",
+          "Normalization mode",
+          choices = c("Auto-detect (recommended)" = "auto",
+                      "Single cell (Seurat log1p of library-size-scaled counts)" = "single_cell",
+                      "Bulk (log2(CPM + 1))" = "bulk"),
+          selected = if (identical(d$sc_or_bulk, "unclear"))
+            "auto" else default_mode,
+          inline = FALSE
+        ),
+        actionButton(
+          "diag_run_clean",
+          tagList(icon("broom"), " Clean & normalize"),
+          class = "btn-primary btn-sm",
+          width = "100%"
+        )
+      )
+    } else {
+      cleanup_block <- tags$div(
+        class = "diag-cleanup diag-cleanup-clean",
+        icon("check-circle"),
+        tags$span(" Matrix looks ready -- no cleanup recommended.")
+      )
+    }
+
+    tags$div(
+      class = "expr-matrix-diag",
+      tags$div(class = "diag-title",
+               icon("microscope"),
+               tags$strong(" Matrix diagnostics")),
+      diag_row(id_class, "Gene IDs",
+               id_label,
+               detail = if (d$n_dup > 0L)
+                 sprintf("%d duplicate gene ID(s)%s",
+                         d$n_dup,
+                         if (length(d$dup_examples))
+                           paste0(" (e.g. ",
+                                  paste(d$dup_examples, collapse = ", "), ")")
+                         else "")),
+      diag_row(fmt_class, "Expression format",
+               sprintf("%s (%s confidence)",
+                       d$format_label, d$format_confidence),
+               detail = stats_line),
+      diag_row(sc_class, "Data type",
+               d$sc_or_bulk_label),
+      cleanup_block,
+      if (length(d$recommendations))
+        tags$ul(class = "diag-recs",
+                lapply(d$recommendations, tags$li))
+    )
+  })
+
+  # When the user clicks "Clean & normalize", run clean_matrix_input() on
+  # state$expression with the chosen options and update state in place.
+  # Recomputes state$expr_summary so the rest of the UI (Score-tab
+  # status, embedding, gene-coverage) sees the cleaned object.
+  observeEvent(input$diag_run_clean, {
+    req(state$expression)
+    if (!identical(state$expr_summary$kind %||% "", "matrix")) {
+      showNotification("Cleanup only applies to matrix / data.frame uploads.",
+                       type = "warning", duration = 5)
+      return()
+    }
+    phenomapr_busy_show("Cleaning matrix...",
+                        "Running HUGO cleanup and / or normalization")
+    on.exit(phenomapr_busy_hide(), add = TRUE)
+    res <- tryCatch(
+      clean_matrix_input(
+        state$expression,
+        do_hugo          = isTRUE(input$diag_do_hugo),
+        do_collapse_dups = isTRUE(input$diag_do_collapse),
+        do_normalize     = isTRUE(input$diag_do_normalize),
+        mode             = input$diag_norm_mode %||% "auto",
+        hugo_species     = "human",
+        verbose          = FALSE
+      ),
+      error = function(e) {
+        showNotification(paste0("Cleanup failed: ",
+                                conditionMessage(e)),
+                         type = "error", duration = 8)
+        NULL
       }
-    }
-    if (!is.na(s$n_samples) && !is.na(s$n_genes) && s$n_samples > 10 * s$n_genes) {
-      msgs <- c(msgs, paste(
-        "Matrix has many more columns than rows — the loader will transpose to genes × samples."
-      ))
-    }
-    if (!length(msgs)) return(NULL)
-    div(class = "alert alert-warning",
-        tags$strong("Heads up:"), tags$ul(lapply(msgs, tags$li)))
+    )
+    if (is.null(res)) return()
+    state$expression <- res$matrix
+    state$expr_summary <- summarize_expression_object(res$matrix)
+    state$expr_summary$notes <- paste(
+      "Matrix cleaned via clean_matrix_input():",
+      paste(res$steps, collapse = "; ")
+    )
+    showNotification(
+      paste0(
+        "Cleanup complete -- ",
+        if (length(res$steps)) paste(res$steps, collapse = "; ")
+        else "no changes were necessary."
+      ),
+      type = "message", duration = 8
+    )
   })
 
   # ------------------------------------------------------------------------
