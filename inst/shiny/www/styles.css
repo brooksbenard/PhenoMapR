@@ -1114,62 +1114,95 @@ table.dataTable thead th {
 
 /* Small download affordance pinned to the right side of each panel's
  * card header (or, for nav_panel children, a slim banner row directly
- * above the table). The button is icon-only, 20x20 px, with a low-
- * chrome neutral background and the PhenoMapR teal hover state — small
- * enough to sit unobtrusively in the header banner but large enough
- * to be a comfortable hit target. */
-.phenomapr-panel-download-btn.shiny-download-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border-radius: 4px;
-  font-size: 0.7em;
-  line-height: 1;
-  background-color: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(0, 0, 0, 0.10);
-  color: #495057;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
-  text-decoration: none;
+ * above the table). The button is icon-only, 22x22 px, with a low-
+ * chrome neutral background and the PhenoMapR teal hover state.
+ *
+ * Specificity note: we combine `.btn` (Bootstrap base) with the custom
+ * class so we win the cascade against Bootstrap / flatly's themed
+ * `.btn.btn-default` rules (which would otherwise paint the button
+ * teal-on-white at full Bootstrap button size). The `!important`
+ * marks on size + color are deliberate -- the alternative is
+ * chaining four or five class selectors per rule, which is harder
+ * to maintain. */
+.btn.phenomapr-panel-download-btn,
+a.btn.phenomapr-panel-download-btn.shiny-download-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+  font-size: 0.72em !important;
+  line-height: 1 !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  background-image: none !important;
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+  color: #495057 !important;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04) !important;
+  text-decoration: none !important;
   transition: background-color 0.15s ease, color 0.15s ease,
-              border-color 0.15s ease, box-shadow 0.15s ease;
-  flex-shrink: 0;
+              border-color 0.15s ease, box-shadow 0.15s ease !important;
+  flex: 0 0 auto !important;
+  margin: 0 !important;
 }
-.phenomapr-panel-download-btn.shiny-download-link .fa,
-.phenomapr-panel-download-btn.shiny-download-link .fas {
-  margin: 0;
+.btn.phenomapr-panel-download-btn .fa,
+.btn.phenomapr-panel-download-btn .fas,
+.btn.phenomapr-panel-download-btn .fab,
+.btn.phenomapr-panel-download-btn .far,
+.btn.phenomapr-panel-download-btn i {
+  margin: 0 !important;
+  font-size: inherit !important;
 }
-.phenomapr-panel-download-btn.shiny-download-link:hover,
-.phenomapr-panel-download-btn.shiny-download-link:focus {
-  background-color: rgba(42, 157, 143, 0.12);
-  color: #2A9D8F;
-  border-color: rgba(42, 157, 143, 0.45);
-  text-decoration: none;
-  outline: none;
+.btn.phenomapr-panel-download-btn:hover,
+.btn.phenomapr-panel-download-btn:focus,
+a.btn.phenomapr-panel-download-btn.shiny-download-link:hover,
+a.btn.phenomapr-panel-download-btn.shiny-download-link:focus {
+  background-color: rgba(42, 157, 143, 0.12) !important;
+  color: #2A9D8F !important;
+  border-color: rgba(42, 157, 143, 0.45) !important;
+  text-decoration: none !important;
+  outline: none !important;
 }
-.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
-  box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.35);
+.btn.phenomapr-panel-download-btn:focus-visible,
+a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
+  box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.35) !important;
 }
 
 /* card_header() with a download button on the right.
- * The header itself becomes a flex row; the title content sits in a
- * single growing div on the left and the download button pins to the
- * far right via flex-shrink: 0.
  *
- * bslib renders card_header() as a <div class="card-header"> and we
- * add our `.phenomapr-card-header-dl` class on top of that, so we
- * style by combining the two selectors to override bslib's default
- * block layout. */
+ * bslib already sets `.bslib-card .card-header` to `display: flex;
+ * flex-direction: row; align-items: center; gap: 0.25rem;` so we keep
+ * that and just guarantee the title grows + button pins right.
+ *
+ * Layout strategy (belt + suspenders):
+ *   - `.phenomapr-card-header-dl-title` is `flex: 1 1 auto` so it
+ *     expands to fill any remaining space in the row.
+ *   - The button gets `margin-left: auto` in addition, so even if
+ *     something steals the title's flex-grow it still pins right.
+ *   - `justify-content: space-between` on the header is a final
+ *     fallback for ancient browsers.
+ *
+ * Specificity: `.card-header.phenomapr-card-header-dl` matches the
+ * full bslib selector at the same specificity (0,2,0) but ours
+ * loads after bslib, so it wins cascade ties. */
 .card-header.phenomapr-card-header-dl {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
 }
-.phenomapr-card-header-dl-title {
-  flex: 1 1 auto;
+.card-header.phenomapr-card-header-dl > .phenomapr-card-header-dl-title {
+  flex: 1 1 auto !important;
   min-width: 0;
+}
+.card-header.phenomapr-card-header-dl > .btn.phenomapr-panel-download-btn,
+.card-header.phenomapr-card-header-dl > a.btn.phenomapr-panel-download-btn {
+  margin-left: auto !important;
 }
 
 /* Slim banner used when a panel does not have a card_header to attach
@@ -1177,8 +1210,8 @@ table.dataTable thead th {
  * Renders as a thin right-aligned row directly above the panel
  * content. */
 .phenomapr-panel-banner {
-  display: flex;
-  justify-content: flex-end;
+  display: flex !important;
+  justify-content: flex-end !important;
   align-items: center;
   padding: 4px 4px 6px 0;
 }

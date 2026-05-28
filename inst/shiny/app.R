@@ -126,7 +126,30 @@ ui <- page_navbar(
     heading_font = font_google("Source Sans Pro")
   ),
   header = tags$head(
-    tags$link(rel = "stylesheet", href = "styles.css"),
+    # Cache-bust styles.css on every app boot so users don't have to
+    # hard-refresh after we ship CSS-only tweaks (button positioning,
+    # colors, etc). The query string is the file's mtime in ms --
+    # changes whenever styles.css does, so the browser fetches a
+    # fresh copy after each edit but caches normally between sessions
+    # when the file is unchanged.
+    tags$link(rel = "stylesheet",
+              href = local({
+                css_path <- file.path(
+                  if (nzchar(Sys.getenv("PHENOMAPR_SHINY_DIR"))) {
+                    Sys.getenv("PHENOMAPR_SHINY_DIR")
+                  } else if (file.exists("www/styles.css")) {
+                    getwd()
+                  } else {
+                    system.file("shiny", package = "PhenoMapR")
+                  },
+                  "www", "styles.css")
+                v <- tryCatch(
+                  as.integer(file.info(css_path)$mtime),
+                  error = function(e) as.integer(Sys.time())
+                )
+                if (is.na(v)) v <- as.integer(Sys.time())
+                sprintf("styles.css?v=%d", v)
+              })),
     tags$link(rel = "stylesheet",
               href = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"),
     # Inject the centered busy-overlay markup + custom-message handlers
