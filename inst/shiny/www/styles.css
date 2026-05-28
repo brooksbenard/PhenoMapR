@@ -1201,7 +1201,8 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
   min-width: 0;
 }
 .card-header.phenomapr-card-header-dl > .btn.phenomapr-panel-download-btn,
-.card-header.phenomapr-card-header-dl > a.btn.phenomapr-panel-download-btn {
+.card-header.phenomapr-card-header-dl > a.btn.phenomapr-panel-download-btn,
+.card-header.phenomapr-card-header-dl > button.btn.phenomapr-panel-download-btn {
   margin-left: auto !important;
 }
 

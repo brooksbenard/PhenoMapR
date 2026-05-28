@@ -417,16 +417,16 @@ ui <- page_navbar(
           layout_columns(
             col_widths = c(6, 6),
             card(
-              phenomapr_card_header_dl(
+              phenomapr_card_header_modal_dl(
                 tags$strong("Cells per cell type"),
-                download_id = "celltype_count_plot_download"
+                panel_id = "celltype_count_plot"
               ),
               card_body(plotOutput("celltype_count_plot", height = "260px"))
             ),
             card(
-              phenomapr_card_header_dl(
+              phenomapr_card_header_modal_dl(
                 tags$strong("Cells per source / group"),
-                download_id = "source_count_plot_download"
+                panel_id = "source_count_plot"
               ),
               card_body(plotOutput("source_count_plot", height = "260px"))
             )
@@ -434,9 +434,9 @@ ui <- page_navbar(
           layout_columns(
             col_widths = c(6, 6),
             card(
-              phenomapr_card_header_dl(
+              phenomapr_card_header_modal_dl(
                 tags$strong("Cell type × source composition"),
-                download_id = "celltype_source_plot_download"
+                panel_id = "celltype_source_plot"
               ),
               card_body(plotOutput("celltype_source_plot", height = "260px"))
             ),
@@ -706,9 +706,9 @@ ui <- page_navbar(
         )
       ),
       card(
-        phenomapr_card_header_dl(
+        phenomapr_card_header_modal_dl(
           tags$strong("Phenotype signature"),
-          download_id = "reference_signature_plot_download"
+          panel_id = "reference_signature_plot"
         ),
         card_body(
           helpText("Top / bottom z-score genes for the selected signature column."),
@@ -865,9 +865,9 @@ ui <- page_navbar(
       layout_columns(
         col_widths = c(6, 6),
         card(
-          phenomapr_card_header_dl(
+          phenomapr_card_header_modal_dl(
             tags$strong("Score distribution"),
-            download_id = "score_dist_plot_download"
+            panel_id = "score_dist_plot"
           ),
           card_body(
             # Score scale toggle drives both the histogram data and its
@@ -886,9 +886,9 @@ ui <- page_navbar(
           )
         ),
         card(
-          phenomapr_card_header_dl(
+          phenomapr_card_header_modal_dl(
             tags$strong("Cells ordered by PhenoMapR score"),
-            download_id = "score_rank_plot_download"
+            panel_id = "score_rank_plot"
           ),
           card_body(
             radioButtons(
@@ -903,9 +903,9 @@ ui <- page_navbar(
         )
       ),
       card(
-        phenomapr_card_header_dl(
+        phenomapr_card_header_modal_dl(
           tags$strong("Score by cell type and source"),
-          download_id = "score_box_source_plot_download"
+          panel_id = "score_box_source_plot"
         ),
         card_body(
           helpText(
@@ -953,9 +953,9 @@ ui <- page_navbar(
         card_body(uiOutput("group_summary"))
       ),
       card(
-        phenomapr_card_header_dl(
+        phenomapr_card_header_modal_dl(
           tags$strong("Per-cell-type group enrichment"),
-          download_id = "group_by_celltype_plot_download"
+          panel_id = "group_by_celltype_plot"
         ),
         card_body(
           helpText("Only shown when a cell-type column has been selected above."),
@@ -1065,9 +1065,9 @@ ui <- page_navbar(
                        class = "btn-outline-primary")
       ),
       card(
-        phenomapr_card_header_dl(
+        phenomapr_card_header_modal_dl(
           tags$strong("Embedding"),
-          download_id = "umap_plot_download"
+          panel_id = "umap_plot"
         ),
         card_body(plotOutput("umap_plot", height = "560px"))
       )
@@ -1155,9 +1155,9 @@ ui <- page_navbar(
         )
       ),
       card(
-        phenomapr_card_header_dl(
+        phenomapr_card_header_modal_dl(
           tags$strong("Marker-gene heatmap"),
-          download_id = "marker_heatmap_download"
+          panel_id = "marker_heatmap"
         ),
         card_body(
           helpText(
@@ -1361,6 +1361,175 @@ server <- function(input, output, session) {
   # easier readability at default plot sizes; downstream renderers
   # read this through `.theme_base_size()`.
   .theme_base_size <- function() 14L
+
+  # -----------------------------------------------------------------------
+  # Plot-download modal: per-panel observers + shared downloadHandler.
+  #
+  # Every plot panel's card header carries an actionButton whose
+  # inputId is paste0(<panel_id>, "_modal_btn"). When clicked, we
+  # stash the panel id in `active_plot_dl()` and pop up the
+  # `phenomapr_plot_download_modal()` dialog. The dialog contains a
+  # real downloadButton wired to `output$plot_dl_action`, which
+  # reads the stashed id and the modal inputs (width / height / DPI /
+  # format / base font size) to produce the file.
+  #
+  # Tables keep the direct downloadButton flow registered above via
+  # `phenomapr_register_table_download()`.
+  # -----------------------------------------------------------------------
+
+  # Display labels + sensible default export dimensions per plot
+  # panel. Defaults are seeded into the modal so users get a
+  # reasonable starting point per panel.
+  plot_panels <- list(
+    celltype_count_plot      = list(label = "Cells per cell type",
+                                     defaults = list(width = 8,  height = 5)),
+    source_count_plot        = list(label = "Cells per source / group",
+                                     defaults = list(width = 8,  height = 5)),
+    celltype_source_plot     = list(label = "Cell type x source composition",
+                                     defaults = list(width = 9,  height = 5)),
+    reference_signature_plot = list(label = "Phenotype signature",
+                                     defaults = list(width = 9,  height = 5)),
+    score_dist_plot          = list(label = "Score distribution",
+                                     defaults = list(width = 8,  height = 5)),
+    score_rank_plot          = list(label = "Cells ordered by score",
+                                     defaults = list(width = 9,  height = 5)),
+    score_box_source_plot    = list(label = "Score by cell type and source",
+                                     defaults = list(width = 10, height = 6)),
+    umap_plot                = list(label = "Embedding",
+                                     defaults = list(width = 10, height = 8)),
+    group_by_celltype_plot   = list(label = "Per-cell-type group enrichment",
+                                     defaults = list(width = 9,  height = 5)),
+    marker_heatmap           = list(label = "Marker-gene heatmap",
+                                     defaults = list(width = 12, height = 7))
+  )
+
+  active_plot_dl <- reactiveVal(NULL)
+
+  # Spin up one observer per plot panel. Each one watches its own
+  # *_modal_btn input and opens the shared modal with that panel's
+  # label + default dimensions. `local()` captures the loop variable
+  # so each observer closes over the right `pid`.
+  for (pid in names(plot_panels)) {
+    local({
+      panel_id <- pid
+      meta     <- plot_panels[[panel_id]]
+      observeEvent(input[[paste0(panel_id, "_modal_btn")]], {
+        active_plot_dl(panel_id)
+        showModal(phenomapr_plot_download_modal(
+          panel_label = meta$label,
+          defaults    = meta$defaults
+        ))
+      }, ignoreInit = TRUE)
+    })
+  }
+
+  # Shared downloadHandler: produces the file for whichever plot is
+  # currently active. `marker_heatmap` is special-cased because its
+  # underlying object is not a ggplot -- it has to be re-rendered
+  # from the cached args via plot_phenotype_markers(). All other
+  # panels stash a ggplot/patchwork object in `panel_objects[[pid]]`
+  # at render time, so they share the .phenomapr_save_plot() path.
+  output$plot_dl_action <- downloadHandler(
+    filename = function() {
+      pid <- isolate(active_plot_dl()) %||% "plot"
+      fmt <- isolate(input$plot_dl_format) %||% "png"
+      phenomapr_dl_filename(pid, fmt)
+    },
+    content = function(file) {
+      pid <- isolate(active_plot_dl())
+      if (is.null(pid)) {
+        .phenomapr_write_placeholder_png(
+          file, "No active plot for download.")
+        removeModal()
+        return(invisible(NULL))
+      }
+      fmt   <- isolate(input$plot_dl_format)   %||% "png"
+      w     <- as.numeric(isolate(input$plot_dl_width)  %||% 8)
+      h     <- as.numeric(isolate(input$plot_dl_height) %||% 6)
+      dpi   <- as.numeric(isolate(input$plot_dl_dpi)    %||% 300)
+      bsize <- as.numeric(isolate(input$plot_dl_base_size) %||% 14)
+
+      # Validate numeric inputs; fall back to defaults if NA / <= 0.
+      if (!is.finite(w)   || w   <= 0) w   <- 8
+      if (!is.finite(h)   || h   <= 0) h   <- 6
+      if (!is.finite(dpi) || dpi <= 0) dpi <- 300
+
+      if (identical(pid, "marker_heatmap")) {
+        # Heatmap path: re-render via plot_phenotype_markers() into a
+        # device matching the user's format selection. Width/height
+        # are interpreted as inches; for raster formats we multiply by
+        # dpi to get pixel dimensions.
+        args <- isolate(marker_heatmap_args())
+        if (is.null(args)) {
+          .phenomapr_write_placeholder_png(
+            file, "Draw the heatmap first, then re-try the download."
+          )
+          removeModal()
+          return(invisible(NULL))
+        }
+        fmt_lc <- tolower(fmt)
+        ok <- tryCatch({
+          switch(fmt_lc,
+            png  = grDevices::png(file, width = w * dpi, height = h * dpi, res = dpi),
+            jpeg = grDevices::jpeg(file, width = w * dpi, height = h * dpi, res = dpi, quality = 95),
+            tiff = grDevices::tiff(file, width = w * dpi, height = h * dpi, res = dpi),
+            pdf  = grDevices::pdf(file, width = w, height = h),
+            svg  = grDevices::svg(file, width = w, height = h),
+            stop("Unsupported format: ", fmt_lc)
+          )
+          on.exit(if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(),
+                                                     silent = TRUE),
+                  add = TRUE)
+          do.call(PhenoMapR::plot_phenotype_markers,
+                  c(args, list(draw = TRUE)))
+          TRUE
+        }, error = function(e) {
+          if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(), silent = TRUE)
+          FALSE
+        })
+        if (!isTRUE(ok)) {
+          .phenomapr_write_placeholder_png(
+            file, "plot_phenotype_markers() failed for this download."
+          )
+        }
+        removeModal()
+        return(invisible(NULL))
+      }
+
+      plot_obj <- isolate(panel_objects[[pid]])
+      if (is.null(plot_obj)) {
+        .phenomapr_write_placeholder_png(
+          file, paste0("Plot '", pid, "' has not been rendered yet.")
+        )
+        removeModal()
+        return(invisible(NULL))
+      }
+
+      ok <- tryCatch({
+        .phenomapr_save_plot(
+          file      = file,
+          plot_obj  = plot_obj,
+          format    = fmt,
+          width     = w,
+          height    = h,
+          dpi       = dpi,
+          base_size = bsize
+        )
+        TRUE
+      }, error = function(e) {
+        message("plot_dl_action failed for ", pid, ": ",
+                conditionMessage(e))
+        FALSE
+      })
+      if (!isTRUE(ok)) {
+        .phenomapr_write_placeholder_png(
+          file, paste0("Could not export plot '", pid, "'.")
+        )
+      }
+      removeModal()
+      invisible(NULL)
+    }
+  )
 
   # ------------------------------------------------------------------------
   # Hybrid file pickers (browser upload + server filesystem browse).
@@ -1896,6 +2065,13 @@ server <- function(input, output, session) {
   })
 
   output$celltype_count_plot <- renderPlot({
+    # Take a reactive dependency on the radius slider and replay the
+    # value into the option that .geom_rounded_*() reads at draw time.
+    # Setting it here (in addition to the global observe()) guarantees
+    # the option is up to date when the chicklet helpers run -- the
+    # observe() and this output share a flush cycle but observer
+    # ordering against outputs is not strictly guaranteed by Shiny.
+    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     md <- state$metadata
     ct_col <- input$meta_cell_type_col
     req(!is.null(md), nzchar(ct_col), ct_col != "(none)", ct_col %in% colnames(md))
@@ -1920,6 +2096,7 @@ server <- function(input, output, session) {
     width = 8, height = 5)
 
   output$source_count_plot <- renderPlot({
+    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     md <- state$metadata
     src_col <- input$meta_source_col
     req(!is.null(md), nzchar(src_col), src_col != "(none)", src_col %in% colnames(md))
@@ -1942,6 +2119,7 @@ server <- function(input, output, session) {
     width = 8, height = 5)
 
   output$celltype_source_plot <- renderPlot({
+    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     md <- state$metadata
     ct_col <- input$meta_cell_type_col
     src_col <- input$meta_source_col
@@ -2308,6 +2486,7 @@ server <- function(input, output, session) {
     function() isolate(panel_objects$gene_coverage_tbl))
 
   output$reference_signature_plot <- renderPlot({
+    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     req(state$reference)
     if (is.data.frame(state$reference) || is.matrix(state$reference)) {
       if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
@@ -2533,6 +2712,7 @@ server <- function(input, output, session) {
   # Per-cell-type × source boxplot with Wilcoxon brackets
   # ------------------------------------------------------------------------
   output$score_box_source_plot <- renderPlot({
+    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     df <- cell_table()
     req(df,
         "score" %in% colnames(df),
@@ -2653,10 +2833,33 @@ server <- function(input, output, session) {
     }
 
     if (!is.null(pval_df) && nrow(pval_df) > 0) {
-      use_signif <- requireNamespace("ggsignif", quietly = TRUE)
-      if (use_signif) {
+      # Two annotation modes:
+      #   - "annotation": single centred text label, no bracket or
+      #     connector line (currently the global-ANOVA case from
+      #     celltype_anova_pvalue()).
+      #   - default      : per-cell-type significance brackets via
+      #     ggsignif::geom_signif() (Wilcoxon or per-CT ANOVA).
+      render_kind <- attr(pval_df, "render_kind") %||% "bracket"
+      if (identical(render_kind, "annotation")) {
+        # Draw the ANOVA p-value as a single centred text annotation
+        # above the boxes. No bracket, no significance stars -- the
+        # plot stays uncluttered and the bare "ANOVA (p = ...)"
+        # label tells the story.
+        x_mid <- pval_df$x_mid[1L] %||%
+          ((pval_df$xmin[1L] + pval_df$xmax[1L]) / 2)
+        p <- p +
+          ggplot2::annotate(
+            "text",
+            x = x_mid,
+            y = pval_df$y_pos[1L],
+            label = pval_df$label[1L],
+            size = 4.2,
+            fontface = "plain",
+            colour = "black"
+          )
+      } else if (requireNamespace("ggsignif", quietly = TRUE)) {
         # Suppress benign "Ignoring unknown aesthetics" warnings from
-        # geom_signif manual mode — cosmetic, clutters the Shiny console.
+        # geom_signif manual mode -- cosmetic, clutters the Shiny console.
         suppressWarnings(
           p <- p + ggsignif::geom_signif(
             data        = pval_df,
@@ -3215,6 +3418,7 @@ server <- function(input, output, session) {
   })
 
   output$group_by_celltype_plot <- renderPlot({
+    options(phenomapr.plot_radius_pt = input$plot_radius_pt %||% 3)
     req(state$groups)
     g <- state$groups
     grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]

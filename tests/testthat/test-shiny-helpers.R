@@ -229,7 +229,13 @@ test_that("celltype_anova_pvalue returns one global F-test bracket spanning all 
   expect_equal(out$xmin, 1L)
   expect_equal(out$xmax, 3L)
   expect_lt(out$p_val, 1e-10)
-  expect_match(out$label, "^ANOVA")
+  # New label format: bare "ANOVA (p = ...)" with no significance
+  # stars and no significance/connector bracket -- the renderer
+  # draws this as a centred text annotation.
+  expect_match(out$label, "^ANOVA \\(p = ")
+  expect_false(grepl("\\*", out$label))
+  expect_equal(attr(out, "render_kind"), "annotation")
+  expect_true("x_mid" %in% colnames(out))
   expect_equal(attr(out, "cell_levels"), c("CT_A", "CT_B", "CT_C"))
 })
 
@@ -324,6 +330,85 @@ test_that(".plot_radius_unit picks up the phenomapr.plot_radius_pt option", {
 
   options(phenomapr.plot_radius_pt = -1)
   expect_equal(as.numeric(e$.plot_radius_unit(3)), 3)
+})
+
+# ---- plot-download modal helpers ----------------------------------------
+
+test_that("phenomapr_modal_dl_btn renders an action-button-shaped button", {
+  e <- source_shiny_helpers()
+  html <- as.character(htmltools::renderTags(
+    e$phenomapr_modal_dl_btn("score_dist_plot")
+  )$html)
+  expect_match(html, 'id="score_dist_plot_modal_btn"', fixed = TRUE)
+  expect_match(html, "action-button", fixed = TRUE)
+  expect_match(html, "phenomapr-panel-download-btn", fixed = TRUE)
+})
+
+test_that("phenomapr_card_header_modal_dl puts title + button together", {
+  e <- source_shiny_helpers()
+  html <- as.character(htmltools::renderTags(
+    e$phenomapr_card_header_modal_dl(
+      shiny::tags$strong("Score distribution"),
+      panel_id = "score_dist_plot"
+    )
+  )$html)
+  expect_match(html, "phenomapr-card-header-dl-title", fixed = TRUE)
+  expect_match(html, "Score distribution", fixed = TRUE)
+  expect_match(html, "score_dist_plot_modal_btn", fixed = TRUE)
+})
+
+test_that("phenomapr_plot_download_modal contains all the customisation inputs", {
+  e <- source_shiny_helpers()
+  html <- as.character(htmltools::renderTags(
+    e$phenomapr_plot_download_modal(
+      panel_label = "Score distribution",
+      defaults    = list(width = 9, height = 6, dpi = 200,
+                         format = "pdf", base_size = 16)
+    )
+  )$html)
+  for (needle in c('id="plot_dl_width"', 'id="plot_dl_height"',
+                   'id="plot_dl_dpi"', 'id="plot_dl_format"',
+                   'id="plot_dl_base_size"', 'id="plot_dl_action"',
+                   "Download plot: Score distribution")) {
+    expect_match(html, needle, fixed = TRUE)
+  }
+  # Defaults are pre-populated.
+  expect_match(html, 'value="9"',  fixed = TRUE)
+  expect_match(html, 'value="6"',  fixed = TRUE)
+  expect_match(html, 'value="200"', fixed = TRUE)
+})
+
+test_that(".phenomapr_save_plot writes ggplot output for png + pdf + svg", {
+  e <- source_shiny_helpers()
+  skip_if_not_installed("ggplot2")
+  gg <- ggplot2::ggplot(mtcars, ggplot2::aes(mpg, wt)) +
+    ggplot2::geom_point()
+  for (fmt in c("png", "pdf", "svg")) {
+    tmp <- tempfile(fileext = paste0(".", fmt))
+    on.exit(if (file.exists(tmp)) file.remove(tmp), add = TRUE)
+    e$.phenomapr_save_plot(
+      file = tmp, plot_obj = gg, format = fmt,
+      width = 4, height = 3, dpi = 100, base_size = 11
+    )
+    expect_true(file.exists(tmp))
+    expect_gt(file.info(tmp)$size, 0L)
+  }
+})
+
+test_that(".phenomapr_save_plot errors on unsupported format", {
+  e <- source_shiny_helpers()
+  skip_if_not_installed("ggplot2")
+  # The dispatch happens in switch() for non-ggplot inputs; for ggplot
+  # input ggsave itself rejects unknown devices. Either way we get an
+  # error / condition.
+  expect_error(
+    e$.phenomapr_save_plot(
+      file = tempfile(fileext = ".xyz"),
+      plot_obj = stats::runif(5),
+      format = "xyz", width = 4, height = 3, dpi = 100
+    ),
+    "Unsupported|unknown"
+  )
 })
 
 test_that("celltype_source_pvalues honours a caller-supplied cell_levels order", {

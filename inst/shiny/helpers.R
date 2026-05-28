@@ -1322,22 +1322,27 @@ celltype_anova_pvalue <- function(df,
   f <- tryCatch(sm[[1L]][["F value"]][1L], error = function(e) NA_real_)
   if (is.na(p)) return(NULL)
 
-  label <- if (p < 0.001) "***" else if (p < 0.01) "**" else
-           if (p < 0.05)  "*"   else "ns"
   y_top <- max(d$Score_scaled, na.rm = TRUE)
   if (!is.finite(y_top)) y_top <- 0
 
+  # NOTE: the no-source ANOVA case is rendered as a centred text
+  # annotation (not a ggsignif bracket) -- the renderer in app.R reads
+  # `attr(out, "render_kind")` and skips drawing the connector line and
+  # significance stars. We only emit the bare "ANOVA (p = ...)" label
+  # so the plot stays clean.
   out <- data.frame(
     xmin   = 1L,
     xmax   = length(cell_levels),
+    x_mid  = (1L + length(cell_levels)) / 2,
     y_pos  = y_top * 1.08,
     p_val  = p,
     F_val  = f,
-    label  = sprintf("ANOVA %s (p = %s)", label, format.pval(p, digits = 2L)),
+    label  = sprintf("ANOVA (p = %s)", format.pval(p, digits = 2L)),
     stringsAsFactors = FALSE
   )
   attr(out, "cell_levels") <- cell_levels
   attr(out, "y_top") <- y_top
+  attr(out, "render_kind") <- "annotation"
   out
 }
 
@@ -1786,6 +1791,157 @@ phenomapr_panel_banner_dl <- function(download_id, tooltip = "Download") {
     class = "phenomapr-panel-banner",
     phenomapr_dl_btn(download_id, tooltip)
   )
+}
+
+# ---- Plot-only modal-trigger download buttons -----------------------------
+#
+# Plots get a download icon that *opens a modal* instead of starting
+# the download immediately. The modal exposes width / height / DPI /
+# file format / base font size controls and contains the actual
+# `downloadButton("plot_dl_action", ...)` whose downloadHandler is
+# registered once at server start. Tables keep the direct
+# downloadButton flow above -- one click -> file -- since they have
+# fewer customisation knobs.
+#
+# Wiring:
+#   - phenomapr_modal_dl_btn(panel_id) renders an actionButton with
+#     inputId = paste0(panel_id, "_modal_btn") and shares the
+#     `.phenomapr-panel-download-btn` styling so it visually matches
+#     the table download buttons.
+#   - app.R server registers one observeEvent per plot panel that
+#     captures the click, stashes `panel_id` in a reactiveVal, and
+#     calls showModal(phenomapr_plot_download_modal(...)).
+#   - The shared `output$plot_dl_action` downloadHandler reads the
+#     stashed panel id and the modal inputs (width/height/dpi/format/
+#     base_size) to produce the file via .phenomapr_save_plot().
+
+phenomapr_modal_dl_btn <- function(panel_id,
+                                   tooltip = "Download (with options)") {
+  shiny::actionButton(
+    inputId = paste0(panel_id, "_modal_btn"),
+    label   = NULL,
+    icon    = shiny::icon("download"),
+    class   = "phenomapr-panel-download-btn",
+    title   = tooltip
+  )
+}
+
+phenomapr_card_header_modal_dl <- function(..., panel_id,
+                                           tooltip = "Download (with options)") {
+  bslib::card_header(
+    class = "phenomapr-card-header-dl",
+    shiny::tags$div(class = "phenomapr-card-header-dl-title", ...),
+    phenomapr_modal_dl_btn(panel_id, tooltip)
+  )
+}
+
+phenomapr_panel_banner_modal_dl <- function(panel_id,
+                                            tooltip = "Download (with options)") {
+  shiny::tags$div(
+    class = "phenomapr-panel-banner",
+    phenomapr_modal_dl_btn(panel_id, tooltip)
+  )
+}
+
+# Builds the modal dialog. `panel_label` is shown in the title; the
+# `defaults` list seeds the width / height / dpi / format / base_size
+# inputs so each panel can suggest sensible export dimensions.
+phenomapr_plot_download_modal <- function(panel_label = "plot",
+                                          defaults = list()) {
+  d <- utils::modifyList(
+    list(width = 8, height = 6, dpi = 300,
+         format = "png", base_size = 14),
+    defaults
+  )
+  shiny::modalDialog(
+    title = paste0("Download plot: ", panel_label),
+    size  = "m",
+    easyClose = TRUE,
+    shiny::div(
+      class = "phenomapr-plot-dl-modal",
+      shiny::fluidRow(
+        shiny::column(6,
+          shiny::numericInput("plot_dl_width", "Width (inches)",
+                              value = d$width, min = 1, max = 30, step = 0.5)),
+        shiny::column(6,
+          shiny::numericInput("plot_dl_height", "Height (inches)",
+                              value = d$height, min = 1, max = 30, step = 0.5))
+      ),
+      shiny::fluidRow(
+        shiny::column(6,
+          shiny::selectInput(
+            "plot_dl_format", "File format",
+            choices  = c("PNG (raster)"  = "png",
+                         "JPEG (raster)" = "jpeg",
+                         "TIFF (raster)" = "tiff",
+                         "PDF (vector)"  = "pdf",
+                         "SVG (vector)"  = "svg"),
+            selected = d$format
+          )),
+        shiny::column(6,
+          shiny::numericInput("plot_dl_dpi", "DPI (raster only)",
+                              value = d$dpi, min = 72, max = 600, step = 10))
+      ),
+      shiny::sliderInput("plot_dl_base_size",
+                         "Plot base font size",
+                         min = 8, max = 24, value = d$base_size, step = 1),
+      shiny::helpText(
+        "Width / height are in inches. DPI only affects raster ",
+        "formats (PNG / JPEG / TIFF); PDF and SVG are vector ",
+        "formats and render at any zoom. Base font size overrides ",
+        "the default plot text size at export time only -- the ",
+        "on-screen plot is unchanged."
+      )
+    ),
+    footer = shiny::tagList(
+      shiny::modalButton("Cancel"),
+      shiny::downloadButton("plot_dl_action", "Download",
+                            class = "btn-primary")
+    )
+  )
+}
+
+# Export-dispatch: write a captured plot object to file in the user-
+# chosen format. ggplot / patchwork objects go through ggplot2::ggsave
+# (which handles png / jpeg / tiff / pdf / svg via the `device` arg);
+# anything else (ComplexHeatmap, recordedplot, plain grobs) falls back
+# to grDevices::<device>() + print(). When `base_size` is set we apply
+# a theme override at export time only so the on-screen plot is
+# unchanged.
+.phenomapr_save_plot <- function(file, plot_obj, format,
+                                 width, height, dpi, base_size = NULL) {
+  format <- tolower(format)
+  is_gg  <- inherits(plot_obj, c("ggplot", "patchwork"))
+
+  if (is_gg && !is.null(base_size) && is.numeric(base_size) &&
+      is.finite(base_size) && base_size > 0) {
+    plot_obj <- plot_obj +
+      ggplot2::theme(text = ggplot2::element_text(size = base_size))
+  }
+
+  if (is_gg) {
+    ggplot2::ggsave(
+      file, plot = plot_obj, device = format,
+      width = width, height = height,
+      units = "in", dpi = dpi,
+      limitsize = FALSE
+    )
+    return(invisible(NULL))
+  }
+
+  switch(format,
+    png  = grDevices::png(file, width = width * dpi, height = height * dpi, res = dpi),
+    jpeg = grDevices::jpeg(file, width = width * dpi, height = height * dpi, res = dpi, quality = 95),
+    tiff = grDevices::tiff(file, width = width * dpi, height = height * dpi, res = dpi),
+    pdf  = grDevices::pdf(file, width = width, height = height),
+    svg  = grDevices::svg(file, width = width, height = height),
+    stop("Unsupported format: ", format)
+  )
+  on.exit(if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(),
+                                              silent = TRUE),
+          add = TRUE)
+  print(plot_obj)
+  invisible(NULL)
 }
 
 phenomapr_dl_filename <- function(stem, ext) {
