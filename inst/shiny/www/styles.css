@@ -902,9 +902,34 @@ table.dataTable thead th {
 
 /* Phenotype signature card: matches the 320 px envelope of its
  * "Top prognostic genes" sibling. Body padding is tightened so the
- * helpText + 200 px plot read flush against the card header. */
+ * 200 px plot reads flush against the card header. */
 .phenotype-signature-body { padding-top: 0.55rem; }
 .phenotype-signature-body .help-block { margin-bottom: 0.4rem; }
+
+/* Sidebar pre-filter note under the |z| cutoff slider. Small,
+ * muted, and visually distinct from a helpText so the user reads it
+ * as an informational footnote rather than another control label.
+ * The teal-tinted side border ties it to the brand palette without
+ * shouting. */
+.phenomapr-prefilter-note {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: #495057;
+  background-color: rgba(42, 157, 143, 0.08);
+  border-left: 3px solid rgba(42, 157, 143, 0.55);
+  padding: 0.4rem 0.55rem;
+  margin: 0 0 0.75rem;
+  border-radius: 0 4px 4px 0;
+}
+.phenomapr-prefilter-note .fa,
+.phenomapr-prefilter-note .fas,
+.phenomapr-prefilter-note .fa-solid {
+  color: #2A9D8F;
+  margin-right: 0.15rem;
+}
+.phenomapr-prefilter-note strong {
+  color: #264653;
+}
 
 /* Collapsible variant: a <details>/<summary> drop-down rendered with
  * the same header chrome as .welcome-section-header. The native

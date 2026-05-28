@@ -492,13 +492,28 @@ ui <- page_navbar(
         ),
         conditionalPanel(
           "input.reference_choice != '_custom'",
-          selectInput("cancer_type", "Cancer / tissue type", choices = NULL),
-          sliderInput("z_score_cutoff", "Signature |z| cutoff",
+          selectInput("cancer_type", "Select Cancer / tissue type",
+                      choices = NULL),
+          sliderInput("z_score_cutoff",
+                      "Set threshold for Signature |z| cutoff",
                       min = 0, max = 5, value = 2, step = 0.1),
-          radioButtons("reference_sign", "Direction",
-                       choices = c("Higher score = worse prognosis" = 1L,
-                                   "Higher score = better prognosis" = -1L),
-                       selected = 1L)
+          # Pre-filter note. Built-in signatures (PRECOG / TCGA /
+          # Pediatric PRECOG / ICI PRECOG) ship inside the package
+          # already filtered to |z| >= 2 to keep the install
+          # lightweight, so the slider can only tighten the cutoff
+          # past 2 (values below 2 are no-ops on the data that ships
+          # with PhenoMapR). Surfaced here so users do not assume
+          # they have access to the full |z| distribution.
+          tags$div(
+            class = "phenomapr-prefilter-note",
+            icon("info-circle"),
+            HTML(paste0(
+              " Built-in phenotype signatures ship pre-filtered to ",
+              "<strong>|z| &ge; 2</strong> to keep the package ",
+              "lightweight. The slider can only tighten this cutoff ",
+              "further; values below 2 are no-ops."
+            ))
+          )
         ),
         conditionalPanel(
           "input.reference_choice == '_custom'",
@@ -717,7 +732,6 @@ ui <- page_navbar(
           ),
           card_body(
             class = "phenotype-signature-body",
-            helpText("Top / bottom z-score genes for the selected signature column."),
             plotOutput("reference_signature_plot", height = "200px")
           )
         ),
@@ -2545,8 +2559,7 @@ server <- function(input, output, session) {
       tagList(
         tags$p(tags$strong("Built-in: "), ref),
         tags$p(tags$strong("Cancer type: "), input$cancer_type %||% "(none)"),
-        tags$p(tags$strong("|z| cutoff: "), input$z_score_cutoff),
-        tags$p(tags$strong("Direction sign: "), input$reference_sign)
+        tags$p(tags$strong("|z| cutoff: "), input$z_score_cutoff)
       )
     } else {
       tagList(
@@ -2628,7 +2641,11 @@ server <- function(input, output, session) {
     } else "custom signature"
     phenomapr_busy_show("Computing PhenoMap scores...", ref_label)
     on.exit(phenomapr_busy_hide(), add = TRUE)
-    sign <- tryCatch(as.integer(input$reference_sign), error = function(e) 1L)
+    # Direction radio was removed from the sidebar; PhenoMap() now
+    # always uses the built-in signature's native direction
+    # (reference_sign = 1L: higher score = worse prognosis), which
+    # is the convention used by PRECOG / TCGA / Pediatric PRECOG /
+    # ICI PRECOG signatures.
     scores <- tryCatch(
       run_phenomap_with_progress(
         expression = state$expression,
@@ -2639,7 +2656,7 @@ server <- function(input, output, session) {
         group_by = input$pseudobulk_group_by,
         assay = input$score_assay,
         slot = input$score_slot,
-        reference_sign = sign
+        reference_sign = 1L
       ),
       error = function(e) {
         showNotification(paste0("PhenoMap failed: ", conditionMessage(e)),
