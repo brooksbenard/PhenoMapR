@@ -704,30 +704,34 @@ ui <- page_navbar(
       layout_columns(
         col_widths = c(8, 4),
         card(
+          # `fill = FALSE` keeps the plot card from stretching to the
+          # height of its taller table sibling; the plot is fixed at
+          # 200 px so the row stays compact.
+          fill = FALSE,
           phenomapr_card_header_modal_dl(
             tags$strong("Phenotype signature"),
             panel_id = "reference_signature_plot"
           ),
           card_body(
+            class = "phenotype-signature-body",
             helpText("Top / bottom z-score genes for the selected signature column."),
-            plotOutput("reference_signature_plot", height = "260px")
+            plotOutput("reference_signature_plot", height = "200px")
           )
         ),
         card(
+          fill = FALSE,
           phenomapr_card_header_dl(
             tags$strong("Top prognostic genes"),
             download_id = "top_genes_tbl_download"
           ),
           card_body(
             class = "top-prognostic-genes-body",
-            # Local controls (formerly in the sidebar's "Reference
-            # diagnostics" block). Direction is inlined as a radio
-            # group so the entire control row stays compact even at
-            # the narrow 1/3 column width.
+            # Direction-only control (the "Top N genes" numeric input
+            # has been removed -- the table now shows the entire
+            # signature and users find genes via DT's built-in
+            # search box).
             tags$div(
               class = "top-prognostic-genes-controls",
-              numericInput("top_genes_n", "Top N genes",
-                           value = 50, min = 5, max = 1000),
               radioButtons(
                 "top_genes_dir", "Direction",
                 choices = c("both" = "both",
@@ -736,10 +740,6 @@ ui <- page_navbar(
                 selected = "both",
                 inline = TRUE
               )
-            ),
-            helpText(
-              "Auto-updates from the phenotype signature selected ",
-              "above."
             ),
             DTOutput("top_genes_tbl")
           )
@@ -3884,7 +3884,10 @@ server <- function(input, output, session) {
       PhenoMapR::get_top_prognostic_genes(
         reference   = rc,
         cancer_type = input$cancer_type,
-        n           = input$top_genes_n,
+        # `n = Inf` returns the entire signature -- the per-table search
+        # box (enabled below) is the new way users find specific genes,
+        # so we no longer cap with a sidebar top-N input.
+        n           = Inf,
         direction   = input$top_genes_dir
       ),
       error = function(e) {
@@ -3894,8 +3897,22 @@ server <- function(input, output, session) {
     )
     req(!is.null(tg))
     panel_objects$top_genes_tbl <- tg
-    datatable(tg, rownames = FALSE,
-              options = list(pageLength = 15, scrollX = TRUE))
+    datatable(
+      tg,
+      rownames = FALSE,
+      # Compact pagination keeps the row short (the entire signature
+      # has 10k+ genes -- users page or search rather than scroll).
+      # `searching = TRUE` (the default) surfaces DT's built-in
+      # search box at the top of the table so the full signature
+      # is filterable in place.
+      options = list(
+        pageLength      = 6,
+        lengthMenu      = c(6, 15, 50, 100),
+        scrollX         = TRUE,
+        searching       = TRUE,
+        searchHighlight = TRUE
+      )
+    )
   })
   phenomapr_register_table_download(output, "top_genes_tbl",
     function() isolate(panel_objects$top_genes_tbl))
