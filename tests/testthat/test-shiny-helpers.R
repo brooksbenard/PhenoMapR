@@ -3,11 +3,21 @@
 # call them as plain functions.
 
 source_shiny_helpers <- function() {
-  helpers <- system.file("shiny", "helpers.R", package = "PhenoMapR")
-  if (!nzchar(helpers)) {
-    helpers <- testthat::test_path("..", "..", "inst", "shiny", "helpers.R")
+  # Prefer the in-source helpers.R when running tests from a dev tree
+  # (so just-edited helpers are exercised without reinstalling), and
+  # fall back to the installed copy when the source tree is not
+  # available (e.g. R CMD check from a tarball).
+  src_helpers <- tryCatch(
+    testthat::test_path("..", "..", "inst", "shiny", "helpers.R"),
+    error = function(e) NULL
+  )
+  helpers <- if (!is.null(src_helpers) && file.exists(src_helpers)) {
+    src_helpers
+  } else {
+    system.file("shiny", "helpers.R", package = "PhenoMapR")
   }
-  testthat::skip_if(!file.exists(helpers), "shiny/helpers.R not found")
+  testthat::skip_if(!nzchar(helpers) || !file.exists(helpers),
+                    "shiny/helpers.R not found")
   env <- new.env(parent = globalenv())
   sys.source(helpers, envir = env)
   env
@@ -201,6 +211,119 @@ test_that("celltype_source_pvalues drops non-significant brackets by default", {
   out2 <- e$celltype_source_pvalues(df, "Score", "Cell_type", "Source",
                                     significant_only = FALSE)
   expect_true("CT_B" %in% out2$Cell_type)
+})
+
+test_that("celltype_anova_pvalue returns one global F-test bracket spanning all cell types", {
+  e <- source_shiny_helpers()
+  set.seed(101)
+  df <- data.frame(
+    Score = c(rnorm(40, -1, 0.4),
+              rnorm(40,  1, 0.4),
+              rnorm(40,  0, 0.4)),
+    Cell_type = rep(c("CT_A", "CT_B", "CT_C"), each = 40L),
+    stringsAsFactors = FALSE
+  )
+  out <- e$celltype_anova_pvalue(df, "Score", "Cell_type")
+  expect_s3_class(out, "data.frame")
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$xmin, 1L)
+  expect_equal(out$xmax, 3L)
+  expect_lt(out$p_val, 1e-10)
+  expect_match(out$label, "^ANOVA")
+  expect_equal(attr(out, "cell_levels"), c("CT_A", "CT_B", "CT_C"))
+})
+
+test_that("celltype_anova_pvalue returns NULL when there is only one cell type", {
+  e <- source_shiny_helpers()
+  df <- data.frame(Score = rnorm(20), Cell_type = rep("CT_A", 20L))
+  expect_null(e$celltype_anova_pvalue(df, "Score", "Cell_type"))
+})
+
+test_that("celltype_anova_pvalue honours caller-supplied cell_levels order", {
+  e <- source_shiny_helpers()
+  set.seed(202)
+  df <- data.frame(
+    Score = c(rnorm(40, -1, 0.4),
+              rnorm(40,  1, 0.4),
+              rnorm(40,  0, 0.4)),
+    Cell_type = rep(c("CT_A", "CT_B", "CT_C"), each = 40L),
+    stringsAsFactors = FALSE
+  )
+  custom_order <- c("CT_B", "CT_C", "CT_A")
+  out <- e$celltype_anova_pvalue(df, "Score", "Cell_type",
+                                 cell_levels = custom_order)
+  expect_equal(attr(out, "cell_levels"), custom_order)
+  expect_equal(out$xmin, 1L)
+  expect_equal(out$xmax, 3L)
+})
+
+test_that("celltype_source_anova_pvalues runs per-cell-type F-tests for 3+ sources", {
+  e <- source_shiny_helpers()
+  set.seed(303)
+  # CT_A: 3 separated source means -> significant ANOVA
+  # CT_B: 3 identical source means -> NS ANOVA
+  df <- data.frame(
+    Score = c(rnorm(40, -1, 0.3), rnorm(40,  1, 0.3), rnorm(40, 0, 0.3),
+              rnorm(40,  0, 0.5), rnorm(40,  0, 0.5), rnorm(40, 0, 0.5)),
+    Cell_type = rep(c("CT_A", "CT_B"), each = 120L),
+    Source    = rep(rep(c("S1", "S2", "S3"), each = 40L), times = 2L),
+    stringsAsFactors = FALSE
+  )
+  out <- e$celltype_source_anova_pvalues(df, "Score", "Cell_type", "Source",
+                                         significant_only = FALSE)
+  expect_s3_class(out, "data.frame")
+  expect_equal(nrow(out), 2L)
+  expect_true(all(out$n_sources == 3L))
+  expect_lt(out$p_val[out$Cell_type == "CT_A"], 0.001)
+  expect_gt(out$p_val[out$Cell_type == "CT_B"], 0.05)
+})
+
+test_that("celltype_source_anova_pvalues drops non-significant brackets by default", {
+  e <- source_shiny_helpers()
+  set.seed(404)
+  df <- data.frame(
+    Score = c(rnorm(40, -1, 0.3), rnorm(40,  1, 0.3), rnorm(40, 0, 0.3),
+              rnorm(40,  0, 0.5), rnorm(40,  0, 0.5), rnorm(40, 0, 0.5)),
+    Cell_type = rep(c("CT_A", "CT_B"), each = 120L),
+    Source    = rep(rep(c("S1", "S2", "S3"), each = 40L), times = 2L),
+    stringsAsFactors = FALSE
+  )
+  out <- e$celltype_source_anova_pvalues(df, "Score", "Cell_type", "Source")
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$Cell_type, "CT_A")
+})
+
+test_that("celltype_source_anova_pvalues skips cell types with <2 sources", {
+  e <- source_shiny_helpers()
+  df <- data.frame(
+    Score     = rnorm(80),
+    Cell_type = rep(c("CT_A", "CT_B"), each = 40L),
+    Source    = c(rep("S1", 40L), rep(c("S1", "S2", "S3"), length.out = 40L)),
+    stringsAsFactors = FALSE
+  )
+  out <- e$celltype_source_anova_pvalues(df, "Score", "Cell_type", "Source",
+                                         significant_only = FALSE)
+  expect_false("CT_A" %in% out$Cell_type)
+})
+
+# ---- .plot_radius_unit option-driven default --------------------------------
+
+test_that(".plot_radius_unit picks up the phenomapr.plot_radius_pt option", {
+  e <- source_shiny_helpers()
+  old <- getOption("phenomapr.plot_radius_pt")
+  on.exit(options(phenomapr.plot_radius_pt = old), add = TRUE)
+
+  options(phenomapr.plot_radius_pt = 8)
+  expect_equal(as.numeric(e$.plot_radius_unit()), 8)
+
+  options(phenomapr.plot_radius_pt = NULL)
+  expect_equal(as.numeric(e$.plot_radius_unit(3)), 3)
+
+  options(phenomapr.plot_radius_pt = "garbage")
+  expect_equal(as.numeric(e$.plot_radius_unit(3)), 3)
+
+  options(phenomapr.plot_radius_pt = -1)
+  expect_equal(as.numeric(e$.plot_radius_unit(3)), 3)
 })
 
 test_that("celltype_source_pvalues honours a caller-supplied cell_levels order", {

@@ -989,12 +989,30 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
 # we use the rounded variants so the app's bar / box / histogram plots
 # match the manuscript figures; otherwise we fall back to the standard
 # ggplot2 geoms so the app keeps working.
+#
+# The plot-radius slider in the navbar populates the global option
+# `phenomapr.plot_radius_pt` on change (see app.R server). All wrappers
+# read that as their default `radius`, so a single slider drives every
+# rounded-geom call in the app without having to thread the value down
+# manually at each site. Callers can still override per-call by passing
+# `radius = grid::unit(...)` explicitly.
 .use_chicklet <- function() {
   requireNamespace("ggchicklet2", quietly = TRUE)
 }
 
+# Default radius (in points) for the bar / stack / boxplot wrappers.
+# Falls back to 3 pt when nothing has set the option (e.g., in unit
+# tests sourcing helpers.R in isolation).
+.plot_radius_unit <- function(fallback_pt = 3) {
+  r <- getOption("phenomapr.plot_radius_pt", default = fallback_pt)
+  if (is.null(r) || !is.numeric(r) || !is.finite(r) || r < 0) {
+    r <- fallback_pt
+  }
+  grid::unit(r, "pt")
+}
+
 # Rounded `geom_col()` — pre-aggregated heights (stat = "identity").
-.geom_rounded_col <- function(..., radius = grid::unit(3, "pt"),
+.geom_rounded_col <- function(..., radius = .plot_radius_unit(3),
                               color = "white") {
   if (.use_chicklet()) {
     ggchicklet2::geom_chicklet_bar(
@@ -1006,7 +1024,7 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
 }
 
 # Rounded `geom_col(position = "stack", ...)` for stacked bar charts.
-.geom_rounded_stack <- function(..., radius = grid::unit(3, "pt"),
+.geom_rounded_stack <- function(..., radius = .plot_radius_unit(3),
                                 color = "white") {
   if (.use_chicklet()) {
     ggchicklet2::geom_chicklet_bar(
@@ -1019,7 +1037,7 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
 }
 
 # Rounded `geom_histogram()`.
-.geom_rounded_histogram <- function(..., radius = grid::unit(2, "pt"),
+.geom_rounded_histogram <- function(..., radius = .plot_radius_unit(2),
                                     color = "white") {
   if (.use_chicklet()) {
     ggchicklet2::geom_chicklet_histogram(
@@ -1031,7 +1049,7 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
 }
 
 # Rounded `geom_boxplot()`.
-.geom_rounded_boxplot <- function(..., radius = grid::unit(4, "pt")) {
+.geom_rounded_boxplot <- function(..., radius = .plot_radius_unit(4)) {
   if (.use_chicklet()) {
     ggchicklet2::geom_chicklet_boxplot(radius = radius, ...)
   } else {
@@ -1250,6 +1268,139 @@ celltype_source_pvalues <- function(df,
   if (isTRUE(significant_only)) {
     out <- out[out$p_val < p_threshold, , drop = FALSE]
     if (nrow(out) == 0L) return(NULL)
+  }
+  out$x_pos <- match(out$Cell_type, cell_levels)
+  out$xmin  <- out$x_pos - 0.2
+  out$xmax  <- out$x_pos + 0.2
+  out$y_pos <- y_top * 1.05
+  attr(out, "cell_levels") <- cell_levels
+  attr(out, "src_levels") <- src_levels
+  attr(out, "y_top") <- y_top
+  out
+}
+
+# ---- single global ANOVA across cell types -------------------------------
+#
+# Used by the "Score by cell type" plot when no source column is
+# mapped. Replaces the previous "pairwise Wilcoxon between every cell
+# type pair" annotation (which produced a forest of brackets) with a
+# single global F-test answering: "Does score vary across cell types
+# at all?". Returns a data.frame with one row carrying the
+# bracket-style geometry (xmin / xmax spanning all cell types, y_pos
+# slightly above the data) plus the F-test p-value and a Wilkinson
+# significance label.
+celltype_anova_pvalue <- function(df,
+                                  score_col = "Score",
+                                  cell_type_col = "Cell_type",
+                                  cell_levels = NULL) {
+  req_cols <- c(score_col, cell_type_col)
+  if (!all(req_cols %in% colnames(df))) return(NULL)
+  d <- df[, req_cols]
+  colnames(d) <- c("Score", "Cell_type")
+  d <- d[is.finite(d$Score) & !is.na(d$Cell_type), ]
+  if (nrow(d) < 4L) return(NULL)
+  d$Score_scaled <- as.numeric(scale(d$Score))
+
+  observed <- unique(as.character(d$Cell_type))
+  if (is.null(cell_levels)) {
+    cell_levels <- sort(observed)
+  } else {
+    cell_levels <- intersect(as.character(cell_levels), observed)
+    if (!length(cell_levels)) cell_levels <- sort(observed)
+  }
+  if (length(cell_levels) < 2L) return(NULL)
+
+  d$Cell_type <- factor(d$Cell_type, levels = cell_levels)
+  fit <- tryCatch(
+    stats::aov(Score_scaled ~ Cell_type, data = d),
+    error = function(e) NULL
+  )
+  if (is.null(fit)) return(NULL)
+  sm <- tryCatch(summary(fit), error = function(e) NULL)
+  if (is.null(sm) || !length(sm)) return(NULL)
+  p <- tryCatch(sm[[1L]][["Pr(>F)"]][1L], error = function(e) NA_real_)
+  f <- tryCatch(sm[[1L]][["F value"]][1L], error = function(e) NA_real_)
+  if (is.na(p)) return(NULL)
+
+  label <- if (p < 0.001) "***" else if (p < 0.01) "**" else
+           if (p < 0.05)  "*"   else "ns"
+  y_top <- max(d$Score_scaled, na.rm = TRUE)
+  if (!is.finite(y_top)) y_top <- 0
+
+  out <- data.frame(
+    xmin   = 1L,
+    xmax   = length(cell_levels),
+    y_pos  = y_top * 1.08,
+    p_val  = p,
+    F_val  = f,
+    label  = sprintf("ANOVA %s (p = %s)", label, format.pval(p, digits = 2L)),
+    stringsAsFactors = FALSE
+  )
+  attr(out, "cell_levels") <- cell_levels
+  attr(out, "y_top") <- y_top
+  out
+}
+
+# ---- per-cell-type ANOVA across 3+ sources -------------------------------
+#
+# Used by the "Score by cell type and source" plot when a source column
+# *is* mapped and contains more than 2 levels. Runs a one-way ANOVA
+# (Score ~ Source) *within* each cell type and returns one bracket
+# row per cell type with the F-test p-value. Cell types with fewer
+# than 2 sources observed are dropped.
+celltype_source_anova_pvalues <- function(df,
+                                          score_col = "Score",
+                                          cell_type_col = "Cell_type",
+                                          source_col = "Source",
+                                          cell_levels = NULL,
+                                          significant_only = TRUE,
+                                          p_threshold = 0.05) {
+  req_cols <- c(score_col, cell_type_col, source_col)
+  if (!all(req_cols %in% colnames(df))) return(NULL)
+  d <- df[, req_cols]
+  colnames(d) <- c("Score", "Cell_type", "Source")
+  d <- d[is.finite(d$Score) & !is.na(d$Cell_type) & !is.na(d$Source), ]
+  if (nrow(d) < 4L) return(NULL)
+  d$Score_scaled <- as.numeric(scale(d$Score))
+  y_top <- max(d$Score_scaled, na.rm = TRUE)
+  if (!is.finite(y_top)) y_top <- 0
+
+  observed <- unique(as.character(d$Cell_type))
+  if (is.null(cell_levels)) {
+    cell_levels <- sort(observed)
+  } else {
+    cell_levels <- intersect(as.character(cell_levels), observed)
+    if (!length(cell_levels)) cell_levels <- sort(observed)
+  }
+  src_levels <- sort(unique(as.character(d$Source)))
+
+  rows <- lapply(cell_levels, function(ct) {
+    sub <- d[d$Cell_type == ct, , drop = FALSE]
+    srcs <- unique(sub$Source)
+    if (length(srcs) < 2L) return(NULL)
+    sub$Source <- factor(sub$Source, levels = srcs)
+    fit <- tryCatch(stats::aov(Score_scaled ~ Source, data = sub),
+                    error = function(e) NULL)
+    if (is.null(fit)) return(NULL)
+    sm <- tryCatch(summary(fit), error = function(e) NULL)
+    if (is.null(sm) || !length(sm)) return(NULL)
+    p <- tryCatch(sm[[1L]][["Pr(>F)"]][1L], error = function(e) NA_real_)
+    if (is.na(p)) return(NULL)
+    lab <- if (p < 0.001) "***" else if (p < 0.01) "**" else
+           if (p < 0.05)  "*"   else "ns"
+    data.frame(
+      Cell_type = ct,
+      p_val     = p,
+      label     = lab,
+      n_sources = length(srcs),
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, rows)
+  if (is.null(out) || !nrow(out)) return(NULL)
+  if (isTRUE(significant_only)) {
+    out <- out[out$p_val < p_threshold, , drop = FALSE]
+    if (!nrow(out)) return(NULL)
   }
   out$x_pos <- match(out$Cell_type, cell_levels)
   out$xmin  <- out$x_pos - 0.2
@@ -1572,14 +1723,24 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 # ============================================================================
 #
 # Every plot and table panel in the app surfaces a small download button
-# in its top-right corner. Three pieces wire that up:
+# in the right-hand side of its card header (or a slim banner row when
+# the panel sits inside a nav_panel that has no card chrome). The
+# helpers are:
 #
-#   phenomapr_with_download(content, download_id, tooltip)
-#     UI helper. Wraps an output widget (plotOutput, DTOutput, ...) in a
-#     position-relative div and overlays an absolutely-positioned
-#     downloadButton in the top-right. The button is styled small and
-#     low-chrome via the .phenomapr-panel-download CSS rules in
-#     inst/shiny/www/styles.css.
+#   phenomapr_dl_btn(download_id, tooltip)
+#     UI helper. A small icon-only downloadButton with the
+#     `.phenomapr-panel-download-btn` class. Used directly inside
+#     card headers and banner rows.
+#
+#   phenomapr_card_header_dl(..., download_id, tooltip)
+#     UI helper. Returns a bslib::card_header() with the title
+#     content on the left and the download button pinned to the
+#     right via flex layout (see .phenomapr-card-header-dl in
+#     styles.css).
+#
+#   phenomapr_panel_banner_dl(download_id, tooltip)
+#     UI helper. Returns a slim, right-aligned banner row for cases
+#     where the panel has no card header (e.g., nav_panel children).
 #
 #   phenomapr_register_plot_download(output, id, plot_fn,
 #                                    width, height, dpi)
@@ -1602,20 +1763,28 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 # because the user can only click the download button after the panel
 # has rendered.
 
-phenomapr_with_download <- function(content, download_id, tooltip = "Download") {
+phenomapr_dl_btn <- function(download_id, tooltip = "Download") {
+  shiny::downloadButton(
+    download_id,
+    label = NULL,
+    icon  = shiny::icon("download"),
+    class = "phenomapr-panel-download-btn",
+    title = tooltip
+  )
+}
+
+phenomapr_card_header_dl <- function(..., download_id, tooltip = "Download") {
+  bslib::card_header(
+    class = "phenomapr-card-header-dl",
+    shiny::tags$div(class = "phenomapr-card-header-dl-title", ...),
+    phenomapr_dl_btn(download_id, tooltip)
+  )
+}
+
+phenomapr_panel_banner_dl <- function(download_id, tooltip = "Download") {
   shiny::tags$div(
-    class = "phenomapr-panel-wrap",
-    shiny::tags$div(
-      class = "phenomapr-panel-download",
-      shiny::downloadButton(
-        download_id,
-        label = NULL,
-        icon  = shiny::icon("download"),
-        class = "phenomapr-panel-download-btn",
-        title = tooltip
-      )
-    ),
-    content
+    class = "phenomapr-panel-banner",
+    phenomapr_dl_btn(download_id, tooltip)
   )
 }
 

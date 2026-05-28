@@ -394,35 +394,35 @@ ui <- page_navbar(
           layout_columns(
             col_widths = c(6, 6),
             card(
-              card_header(tags$strong("Cells per cell type")),
-              card_body(phenomapr_with_download(
-                plotOutput("celltype_count_plot", height = "260px"),
-                "celltype_count_plot_download"
-              ))
+              phenomapr_card_header_dl(
+                tags$strong("Cells per cell type"),
+                download_id = "celltype_count_plot_download"
+              ),
+              card_body(plotOutput("celltype_count_plot", height = "260px"))
             ),
             card(
-              card_header(tags$strong("Cells per source / group")),
-              card_body(phenomapr_with_download(
-                plotOutput("source_count_plot", height = "260px"),
-                "source_count_plot_download"
-              ))
+              phenomapr_card_header_dl(
+                tags$strong("Cells per source / group"),
+                download_id = "source_count_plot_download"
+              ),
+              card_body(plotOutput("source_count_plot", height = "260px"))
             )
           ),
           layout_columns(
             col_widths = c(6, 6),
             card(
-              card_header(tags$strong("Cell type × source composition")),
-              card_body(phenomapr_with_download(
-                plotOutput("celltype_source_plot", height = "260px"),
-                "celltype_source_plot_download"
-              ))
+              phenomapr_card_header_dl(
+                tags$strong("Cell type × source composition"),
+                download_id = "celltype_source_plot_download"
+              ),
+              card_body(plotOutput("celltype_source_plot", height = "260px"))
             ),
             card(
-              card_header(tags$strong("Metadata columns")),
-              card_body(phenomapr_with_download(
-                DTOutput("metadata_columns_tbl"),
-                "metadata_columns_tbl_download"
-              ))
+              phenomapr_card_header_dl(
+                tags$strong("Metadata columns"),
+                download_id = "metadata_columns_tbl_download"
+              ),
+              card_body(DTOutput("metadata_columns_tbl"))
             )
           )
         )
@@ -669,27 +669,27 @@ ui <- page_navbar(
         card(
           fill = FALSE,
           class = "compact-coverage-card",
-          card_header(tags$strong("Gene coverage")),
+          phenomapr_card_header_dl(
+            tags$strong("Gene coverage"),
+            download_id = "gene_coverage_tbl_download"
+          ),
           card_body(
             class = "compact-coverage-body",
             helpText(
               "Fraction of your expression genes that overlap the chosen signature."
             ),
-            phenomapr_with_download(
-              DTOutput("gene_coverage_tbl"),
-              "gene_coverage_tbl_download"
-            )
+            DTOutput("gene_coverage_tbl")
           )
         )
       ),
       card(
-        card_header(tags$strong("Phenotype signature")),
+        phenomapr_card_header_dl(
+          tags$strong("Phenotype signature"),
+          download_id = "reference_signature_plot_download"
+        ),
         card_body(
           helpText("Top / bottom z-score genes for the selected signature column."),
-          phenomapr_with_download(
-            plotOutput("reference_signature_plot", height = "260px"),
-            "reference_signature_plot_download"
-          )
+          plotOutput("reference_signature_plot", height = "260px")
         )
       ),
       # ---- Derived signature detail panel ------------------------------------
@@ -708,18 +708,18 @@ ui <- page_navbar(
             layout_columns(
               col_widths = c(6, 6),
               card(
-                card_header(tags$strong("Top positive (adverse-direction) genes")),
-                card_body(phenomapr_with_download(
-                  DTOutput("derived_top_pos_tbl"),
-                  "derived_top_pos_tbl_download"
-                ))
+                phenomapr_card_header_dl(
+                  tags$strong("Top positive (adverse-direction) genes"),
+                  download_id = "derived_top_pos_tbl_download"
+                ),
+                card_body(DTOutput("derived_top_pos_tbl"))
               ),
               card(
-                card_header(tags$strong("Top negative (favorable-direction) genes")),
-                card_body(phenomapr_with_download(
-                  DTOutput("derived_top_neg_tbl"),
-                  "derived_top_neg_tbl_download"
-                ))
+                phenomapr_card_header_dl(
+                  tags$strong("Top negative (favorable-direction) genes"),
+                  download_id = "derived_top_neg_tbl_download"
+                ),
+                card_body(DTOutput("derived_top_neg_tbl"))
               )
             )
           )
@@ -748,16 +748,16 @@ ui <- page_navbar(
       layout_columns(
         col_widths = c(7, 5),
         card(
-          card_header(tags$strong("Top prognostic genes")),
+          phenomapr_card_header_dl(
+            tags$strong("Top prognostic genes"),
+            download_id = "top_genes_tbl_download"
+          ),
           card_body(
             helpText(
               "Auto-updates from the phenotype signature selected above. ",
               "Adjust top-N and direction in the sidebar."
             ),
-            phenomapr_with_download(
-              DTOutput("top_genes_tbl"),
-              "top_genes_tbl_download"
-            )
+            DTOutput("top_genes_tbl")
           )
         ),
         card(
@@ -842,7 +842,10 @@ ui <- page_navbar(
       layout_columns(
         col_widths = c(6, 6),
         card(
-          card_header(tags$strong("Score distribution")),
+          phenomapr_card_header_dl(
+            tags$strong("Score distribution"),
+            download_id = "score_dist_plot_download"
+          ),
           card_body(
             # Score scale toggle drives both the histogram data and its
             # title. "PhenoMapR score" uses the raw weighted-sum score
@@ -856,20 +859,15 @@ ui <- page_navbar(
               selected = "raw",
               inline = TRUE
             ),
-            phenomapr_with_download(
-              plotOutput("score_dist_plot", height = "300px"),
-              "score_dist_plot_download"
-            )
+            plotOutput("score_dist_plot", height = "300px")
           )
         ),
         card(
-          card_header(tags$strong("Cells ordered by PhenoMapR score")),
+          phenomapr_card_header_dl(
+            tags$strong("Cells ordered by PhenoMapR score"),
+            download_id = "score_rank_plot_download"
+          ),
           card_body(
-            helpText(
-              "Each cell is shown as a point at its rank along the score axis. ",
-              "Use the colour control to highlight cell types or source / group ",
-              "annotations (if cell metadata has been provided)."
-            ),
             radioButtons(
               "rank_color_by", NULL,
               choices = c("Score"     = "score",
@@ -877,38 +875,34 @@ ui <- page_navbar(
                           "Source"    = "source"),
               inline = TRUE, selected = "score"
             ),
-            phenomapr_with_download(
-              plotOutput("score_rank_plot", height = "320px"),
-              "score_rank_plot_download"
-            )
+            plotOutput("score_rank_plot", height = "320px")
           )
         )
       ),
       card(
-        card_header(tags$strong("Score by cell type and source")),
+        phenomapr_card_header_dl(
+          tags$strong("Score by cell type and source"),
+          download_id = "score_box_source_plot_download"
+        ),
         card_body(
           helpText(
             "Boxplot of (scaled) PhenoMapR scores per cell type, ordered ",
-            "from lowest to highest median score. When a source / group ",
-            "column is also mapped on the Data tab, boxes are split by ",
-            "source within each cell type and Wilcoxon brackets compare ",
-            "sources within each cell type. When only a cell-type column ",
-            "is mapped, the plot shows one box per cell type and annotates ",
-            "pairwise Wilcoxon tests between cell types. Only significant ",
-            "(p < 0.05) brackets are drawn — brackets stacked by p-value."
+            "from lowest to highest median score. With no source / group ",
+            "column mapped, the plot annotates a single global ANOVA ",
+            "F-test across cell types. With exactly 2 sources mapped, ",
+            "Wilcoxon brackets compare sources within each cell type. ",
+            "With 3+ sources mapped, a one-way ANOVA is run within each ",
+            "cell type. Only significant (p < 0.05) brackets are drawn."
           ),
-          phenomapr_with_download(
-            plotOutput("score_box_source_plot", height = "440px"),
-            "score_box_source_plot_download"
-          )
+          plotOutput("score_box_source_plot", height = "440px")
         )
       ),
       card(
-        card_header(tags$strong("Score table")),
-        card_body(phenomapr_with_download(
-          DTOutput("score_table"),
-          "score_table_download"
-        ))
+        phenomapr_card_header_dl(
+          tags$strong("Score table"),
+          download_id = "score_table_download"
+        ),
+        card_body(DTOutput("score_table"))
       ),
 
       # ---- Phenotype groups (merged from the old standalone tab) ----------
@@ -936,13 +930,13 @@ ui <- page_navbar(
         card_body(uiOutput("group_summary"))
       ),
       card(
-        card_header(tags$strong("Per-cell-type group enrichment")),
+        phenomapr_card_header_dl(
+          tags$strong("Per-cell-type group enrichment"),
+          download_id = "group_by_celltype_plot_download"
+        ),
         card_body(
           helpText("Only shown when a cell-type column has been selected above."),
-          phenomapr_with_download(
-            plotOutput("group_by_celltype_plot", height = "320px"),
-            "group_by_celltype_plot_download"
-          )
+          plotOutput("group_by_celltype_plot", height = "320px")
         )
       )
     )
@@ -1048,11 +1042,11 @@ ui <- page_navbar(
                        class = "btn-outline-primary")
       ),
       card(
-        card_header(tags$strong("Embedding")),
-        card_body(phenomapr_with_download(
-          plotOutput("umap_plot", height = "560px"),
-          "umap_plot_download"
-        ))
+        phenomapr_card_header_dl(
+          tags$strong("Embedding"),
+          download_id = "umap_plot_download"
+        ),
+        card_body(plotOutput("umap_plot", height = "560px"))
       )
     )
   ),
@@ -1124,21 +1118,24 @@ ui <- page_navbar(
       navset_tab(
         nav_panel(
           "Adverse markers",
-          card_body(phenomapr_with_download(
-            DTOutput("adverse_markers_tbl"),
-            "adverse_markers_tbl_download"
-          ))
+          card_body(
+            phenomapr_panel_banner_dl("adverse_markers_tbl_download"),
+            DTOutput("adverse_markers_tbl")
+          )
         ),
         nav_panel(
           "Favorable markers",
-          card_body(phenomapr_with_download(
-            DTOutput("favorable_markers_tbl"),
-            "favorable_markers_tbl_download"
-          ))
+          card_body(
+            phenomapr_panel_banner_dl("favorable_markers_tbl_download"),
+            DTOutput("favorable_markers_tbl")
+          )
         )
       ),
       card(
-        card_header(tags$strong("Marker-gene heatmap")),
+        phenomapr_card_header_dl(
+          tags$strong("Marker-gene heatmap"),
+          download_id = "marker_heatmap_download"
+        ),
         card_body(
           helpText(
             "Heatmap of the top markers from the adverse and favorable tails. ",
@@ -1164,10 +1161,7 @@ ui <- page_navbar(
           # we draw once at a fixed DPI, which keeps gene labels intact.
           conditionalPanel(
             "input.draw_marker_heatmap > 0",
-            phenomapr_with_download(
-              imageOutput("marker_heatmap", height = "640px"),
-              "marker_heatmap_download"
-            )
+            imageOutput("marker_heatmap", height = "640px")
           ),
           conditionalPanel(
             "!input.draw_marker_heatmap",
@@ -1187,6 +1181,36 @@ ui <- page_navbar(
   ),
 
   nav_spacer(),
+  # Plot appearance popover. Surfaces global cosmetic controls that
+  # affect every chicklet-rounded plot in the app (bars, stacks,
+  # histograms, boxplots). The slider's value is mirrored into the
+  # `phenomapr.plot_radius_pt` R option from the server, and the
+  # `.geom_rounded_*()` wrappers in helpers.R read that option as
+  # their default radius -- so dragging the slider updates corner
+  # sharpness everywhere without having to plumb the value through
+  # to each render*() body manually.
+  nav_item(
+    bslib::popover(
+      title = "Plot appearance",
+      placement = "bottom",
+      tags$button(
+        type = "button",
+        class = "btn btn-sm btn-outline-secondary",
+        title = "Adjust plot appearance",
+        tagList(icon("sliders"), " Plot appearance")
+      ),
+      sliderInput(
+        "plot_radius_pt",
+        tagList(
+          "Bar / box corner sharpness (pt)",
+          tags$small(class = "text-muted", style = "display:block;",
+                     "Applies to ggchicklet2-rounded bars, stacks, ",
+                     "histograms, and boxplots.")
+        ),
+        min = 0, max = 12, value = 3, step = 0.5
+      )
+    )
+  ),
   nav_item(
     tags$a(
       href = "https://github.com/brooksbenard/PhenoMapR",
@@ -1298,6 +1322,22 @@ server <- function(input, output, session) {
   # downloadHandler reads back from this store on click. See
   # phenomapr_register_plot_download() / *_table_download() in helpers.R.
   panel_objects <- reactiveValues()
+
+  # Mirror the navbar "Plot appearance" slider into the global option
+  # the .geom_rounded_*() helpers read for their default radius. This
+  # gives us a single source of truth (R option) without threading the
+  # input through every render*() body. The observe() runs once on
+  # session start with the slider's default and on every drag.
+  observe({
+    r <- input$plot_radius_pt %||% 3
+    options(phenomapr.plot_radius_pt = r)
+  })
+
+  # Base font size for ggplot theme_minimal() across every panel.
+  # Bumped from the previous mix of 12 / 13 to a single 14 for
+  # easier readability at default plot sizes; downstream renderers
+  # read this through `.theme_base_size()`.
+  .theme_base_size <- function() 14L
 
   # ------------------------------------------------------------------------
   # Hybrid file pickers (browser upload + server filesystem browse).
@@ -1845,7 +1885,7 @@ server <- function(input, output, session) {
     p <- ggplot(df, aes(x = cell_type, y = n, fill = cell_type)) +
       .geom_rounded_col() +
       labs(x = NULL, y = "Cells", fill = "Cell type") +
-      theme_minimal(base_size = 12) +
+      theme_minimal(base_size = .theme_base_size()) +
       theme(axis.text.x = element_text(angle = 40, hjust = 1),
             legend.position = "none")
     if (!is.null(pal)) p <- p + scale_fill_manual(values = pal)
@@ -1868,7 +1908,7 @@ server <- function(input, output, session) {
       .geom_rounded_col() +
       scale_fill_phenomapr_d() +
       labs(x = NULL, y = "Cells", fill = "Source") +
-      theme_minimal(base_size = 12) +
+      theme_minimal(base_size = .theme_base_size()) +
       theme(axis.text.x = element_text(angle = 25, hjust = 1),
             legend.position = "none")
     panel_objects$source_count_plot <- p
@@ -1900,7 +1940,7 @@ server <- function(input, output, session) {
       .geom_rounded_stack() +
       scale_fill_phenomapr_d() +
       labs(x = NULL, y = "Cells", fill = "Source") +
-      theme_minimal(base_size = 12) +
+      theme_minimal(base_size = .theme_base_size()) +
       theme(axis.text.x = element_text(angle = 40, hjust = 1))
     panel_objects$celltype_source_plot <- p
     p
@@ -2275,7 +2315,7 @@ server <- function(input, output, session) {
         labs(x = "Reference z-score", y = "Count",
              title = sprintf("Top %d genes by |z| (%s · %s)",
                              nrow(tg), state$reference, input$cancer_type %||% "")) +
-        theme_minimal(base_size = 13)
+        theme_minimal(base_size = .theme_base_size())
       panel_objects$reference_signature_plot <- p
       p
     }
@@ -2345,7 +2385,9 @@ server <- function(input, output, session) {
       df <- data.frame(score = as.numeric(s[[cn]]))
       ttl <- sprintf("PhenoMapR score distribution (%s)", cn)
     }
-    p <- PhenoMapR::plot_score_distribution(df, score_column = "score", main = ttl)
+    p <- PhenoMapR::plot_score_distribution(df, score_column = "score",
+                                            main = ttl,
+                                            base_size = .theme_base_size())
     panel_objects$score_dist_plot <- p
     p
   })
@@ -2420,7 +2462,7 @@ server <- function(input, output, session) {
     )
     base <- ggplot(d, aes(x = rank, y = score)) +
       labs(x = "Rank by PhenoMapR score", y = "PhenoMapR score") +
-      theme_minimal(base_size = 13)
+      theme_minimal(base_size = .theme_base_size())
     if (color_by == "cell_type" && "cell_type" %in% colnames(d)) {
       pal <- tryCatch(
         PhenoMapR::get_celltype_palette(as.character(unique(d$cell_type))),
@@ -2500,21 +2542,35 @@ server <- function(input, output, session) {
     med <- med[order(med$Score), , drop = FALSE]
     cell_levels <- as.character(med$Cell_type)
 
-    # Compute Wilcoxon p-values:
-    #   - Source mapped: per-cell-type contrast between the two sources;
-    #     only significant brackets are returned (significant_only = TRUE).
-    #   - Source not mapped: pairwise Wilcoxon between cell types,
-    #     brackets stacked above the boxes for the significant pairs only.
-    # Both helpers honour the median-based `cell_levels` ordering so the
-    # bracket xmin/xmax positions match the plot's x-axis.
-    if (has_source) {
+    # Choose the appropriate significance test for the bracket annotation:
+    #   - No source mapped (only ordered cell types): single global
+    #     one-way ANOVA across cell types (F-test). Returns a single
+    #     bracket spanning the full x-axis carrying the ANOVA p-value
+    #     -- "is there ANY difference between cell types?".
+    #   - Source mapped with exactly 2 levels: per-cell-type Wilcoxon
+    #     contrast between the two sources (the classic 2-sample test).
+    #   - Source mapped with 3+ levels: per-cell-type one-way ANOVA
+    #     across sources (Score ~ Source) within each cell type, since
+    #     pairwise Wilcoxon is no longer the right comparison for >2
+    #     groups.
+    # All three helpers honour the median-based `cell_levels` ordering
+    # so the bracket xmin/xmax positions line up with the plot axis.
+    n_src_levels <- if (has_source) {
+      length(unique(stats::na.omit(dl$Source)))
+    } else 0L
+    if (!has_source) {
+      pval_df <- celltype_anova_pvalue(
+        dl, "Score", "Cell_type", cell_levels = cell_levels
+      )
+    } else if (n_src_levels == 2L) {
       pval_df <- celltype_source_pvalues(
         dl, "Score", "Cell_type", "Source",
         cell_levels = cell_levels, significant_only = TRUE
       )
     } else {
-      pval_df <- celltype_pairwise_pvalues(
-        dl, "Score", "Cell_type", cell_levels = cell_levels
+      pval_df <- celltype_source_anova_pvalues(
+        dl, "Score", "Cell_type", "Source",
+        cell_levels = cell_levels, significant_only = TRUE
       )
     }
 
@@ -2561,7 +2617,7 @@ server <- function(input, output, session) {
 
     p <- p +
       labs(x = NULL, y = "PhenoMapR score (scaled)", title = title) +
-      theme_minimal(base_size = 13) +
+      theme_minimal(base_size = .theme_base_size()) +
       theme(
         axis.text.x     = element_text(angle = 45, hjust = 1),
         legend.position = "right",
@@ -2949,7 +3005,7 @@ server <- function(input, output, session) {
     base <- ggplot(df, aes(x = dim1, y = dim2)) +
       labs(x = unique(df$dim1_name)[1L] %||% "dim1",
            y = unique(df$dim2_name)[1L] %||% "dim2") +
-      theme_minimal(base_size = 13) +
+      theme_minimal(base_size = .theme_base_size()) +
       theme(panel.grid.minor = element_blank())
     if (is_spatial) {
       base <- base +
@@ -3165,7 +3221,7 @@ server <- function(input, output, session) {
         "Other"           = "#BBBBBB"
       )) +
       labs(x = "Cell type", y = "Fraction of cells", fill = "Group") +
-      theme_minimal(base_size = 13) +
+      theme_minimal(base_size = .theme_base_size()) +
       theme(axis.text.x = element_text(angle = 35, hjust = 1))
     panel_objects$group_by_celltype_plot <- p
     p

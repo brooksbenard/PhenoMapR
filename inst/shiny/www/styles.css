@@ -1112,49 +1112,36 @@ table.dataTable thead th {
   box-shadow: 0 0 0 2px rgba(231, 111, 81, 0.35);
 }
 
-/* Small download affordance overlaid in the top-right of every plot
- * and table panel. We use absolute positioning so the button sits
- * just inside the panel without taking up its own row in the layout,
- * mirroring the way many dashboarding tools surface a "save" icon on
- * card headers. The button has a subtle background so it remains
- * legible on top of any plot, and lights up green-tinged on hover to
- * match the rest of the PhenoMapR palette. */
-.phenomapr-panel-wrap {
-  position: relative;
-}
-.phenomapr-panel-download {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 5;
-}
-.phenomapr-panel-download .shiny-download-link,
+/* Small download affordance pinned to the right side of each panel's
+ * card header (or, for nav_panel children, a slim banner row directly
+ * above the table). The button is icon-only, 20x20 px, with a low-
+ * chrome neutral background and the PhenoMapR teal hover state — small
+ * enough to sit unobtrusively in the header banner but large enough
+ * to be a comfortable hit target. */
 .phenomapr-panel-download-btn.shiny-download-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border-radius: 4px;
-  font-size: 0.78em;
+  font-size: 0.7em;
   line-height: 1;
-  background-color: rgba(255, 255, 255, 0.88);
+  background-color: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(0, 0, 0, 0.10);
   color: #495057;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
   text-decoration: none;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease,
+              border-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
 }
-.phenomapr-panel-download .shiny-download-link .fa,
 .phenomapr-panel-download-btn.shiny-download-link .fa,
-.phenomapr-panel-download .shiny-download-link .fas,
 .phenomapr-panel-download-btn.shiny-download-link .fas {
   margin: 0;
 }
-.phenomapr-panel-download .shiny-download-link:hover,
 .phenomapr-panel-download-btn.shiny-download-link:hover,
-.phenomapr-panel-download .shiny-download-link:focus,
 .phenomapr-panel-download-btn.shiny-download-link:focus {
   background-color: rgba(42, 157, 143, 0.12);
   color: #2A9D8F;
@@ -1162,9 +1149,38 @@ table.dataTable thead th {
   text-decoration: none;
   outline: none;
 }
-.phenomapr-panel-download .shiny-download-link:focus-visible,
 .phenomapr-panel-download-btn.shiny-download-link:focus-visible {
   box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.35);
+}
+
+/* card_header() with a download button on the right.
+ * The header itself becomes a flex row; the title content sits in a
+ * single growing div on the left and the download button pins to the
+ * far right via flex-shrink: 0.
+ *
+ * bslib renders card_header() as a <div class="card-header"> and we
+ * add our `.phenomapr-card-header-dl` class on top of that, so we
+ * style by combining the two selectors to override bslib's default
+ * block layout. */
+.card-header.phenomapr-card-header-dl {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.phenomapr-card-header-dl-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Slim banner used when a panel does not have a card_header to attach
+ * the download button to (e.g. nav_panel children inside a navset_tab).
+ * Renders as a thin right-aligned row directly above the panel
+ * content. */
+.phenomapr-panel-banner {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 4px 4px 6px 0;
 }
 
 /* Determinate-looking progress bar underneath the Browse row.
