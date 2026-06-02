@@ -477,7 +477,18 @@ test_that(".phenomapr_save_plot writes ggplot output for png + pdf + svg", {
   skip_if_not_installed("ggplot2")
   gg <- ggplot2::ggplot(mtcars, ggplot2::aes(mpg, wt)) +
     ggplot2::geom_point()
-  for (fmt in c("png", "pdf", "svg")) {
+  # SVG output goes through ggplot2::ggsave -> svglite, which is an
+  # optional ggplot2 dependency. CI runners (including the
+  # test-coverage workflow on Ubuntu) do not always have svglite
+  # installed, and ggsave aborts hard when it is not available.
+  # Drop the svg branch in that case so we still exercise png/pdf
+  # everywhere and the full svg path locally / in environments that
+  # do install svglite.
+  fmts <- c("png", "pdf")
+  if (requireNamespace("svglite", quietly = TRUE)) {
+    fmts <- c(fmts, "svg")
+  }
+  for (fmt in fmts) {
     tmp <- tempfile(fileext = paste0(".", fmt))
     on.exit(if (file.exists(tmp)) file.remove(tmp), add = TRUE)
     e$.phenomapr_save_plot(
