@@ -175,10 +175,23 @@ test_that("detect_expression_format handles 10X-scale dgCMatrix without warning 
   )
   elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
 
-  expect_lt(elapsed, 5)                # must be sub-second-ish even on CI
+  # Generous wall-clock bound. The original regression this test
+  # was added to catch made detect_expression_format() hang for
+  # *minutes* on a 30k x 50k 10X dgCMatrix, so 60s is more than
+  # enough to flag a re-introduction while staying robust to
+  # covr instrumentation overhead and slow CI runners (locally
+  # this completes in well under a second).
+  expect_lt(elapsed, 60)
   expect_length(warns, 0)               # no NAs-introduced-by-coercion noise
   expect_equal(d$format, "raw_counts")
   expect_equal(d$sc_or_bulk, "single_cell")
-  exact <- 1 - length(m@x) / (as.numeric(nrow(m)) * as.numeric(ncol(m)))
+  # Sparsity check uses Matrix::nnzero (which collapses any duplicate
+  # (i, j) pairs introduced by sample(..., replace = TRUE)), not the
+  # raw length(m@x), because that is what detect_expression_format()
+  # itself uses internally (see R/detect_format.R). With check = FALSE
+  # the constructor leaves duplicates unmerged in @x, so
+  # length(m@x) and Matrix::nnzero(m) can differ.
+  nnz_exact <- as.numeric(Matrix::nnzero(m))
+  exact <- 1 - nnz_exact / (as.numeric(nrow(m)) * as.numeric(ncol(m)))
   expect_lt(abs(d$sparsity - exact), 0.001)
 })
