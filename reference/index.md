@@ -38,6 +38,16 @@ helpers.
 - [`load_rds_fast()`](https://brooksbenard.github.io/PhenoMapR/reference/load_rds_fast.md)
   : Load RDS File with Fast Parallel Decompression
 
+## Matrix input preprocessing
+
+Detect expression format / gene-ID type and clean a matrix to
+HUGO-symbol log-normalized space.
+
+- [`detect_expression_format()`](https://brooksbenard.github.io/PhenoMapR/reference/detect_expression_format.md)
+  : Detect the format of an expression matrix
+- [`clean_matrix_input()`](https://brooksbenard.github.io/PhenoMapR/reference/clean_matrix_input.md)
+  : Clean and normalize an expression matrix
+
 ## Reference datasets (internal)
 
 Built-in reference data; use list_cancer_types() and PhenoMap() in

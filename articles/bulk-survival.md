@@ -345,7 +345,7 @@ sessionInfo()
     ## [5] patchwork_1.3.2 PhenoMapR_0.1.0
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] gtable_0.3.6       xfun_0.57          bslib_0.11.0       htmlwidgets_1.6.4 
+    ##  [1] gtable_0.3.6       xfun_0.58          bslib_0.11.0       htmlwidgets_1.6.4 
     ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
     ##  [9] tools_4.6.0        generics_0.1.4     curl_7.1.0         tibble_3.3.1      
     ## [13] pkgconfig_2.0.3    Matrix_1.7-5       RColorBrewer_1.1-3 S7_0.2.2          

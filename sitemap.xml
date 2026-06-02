@@ -16,9 +16,11 @@
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/add_scores_to_seurat.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/calculate_weighted_scores.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/cell_type_colors.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/clean_matrix_input.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/compute_scores.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/define_phenotype_groups.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/detect_expression_format.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/detect_input_type.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_X_to_genes_cells.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_find_symbol_column.html</loc></url>

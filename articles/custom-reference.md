@@ -847,5 +847,5 @@ sessionInfo()
     ## [70] evaluate_1.0.5          lattice_0.22-9          png_0.1-9              
     ## [73] backports_1.5.1         broom_1.0.13            gargle_1.6.1           
     ## [76] bslib_0.11.0            Rcpp_1.1.1-1.1          gridExtra_2.3          
-    ## [79] HGNChelper_0.8.15       xfun_0.57               fs_2.1.0               
+    ## [79] HGNChelper_0.8.15       xfun_0.58               fs_2.1.0               
     ## [82] pkgconfig_2.0.3         GlobalOptions_0.1.4
