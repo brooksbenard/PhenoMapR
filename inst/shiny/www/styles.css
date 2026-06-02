@@ -491,6 +491,205 @@ table.dataTable thead th {
   font-size: 0.83rem;
 }
 
+/* Cell-metadata-specific overrides on top of the generic compact stack.
+ * The metadata block has its own structural elements -- the h4 header,
+ * the metadata_status renderUI chip, the metadata_upload_panel
+ * <details>, and the file picker host -- that the generic rules don't
+ * touch. Tighten each so the three column dropdowns sit close to the
+ * picker above them. */
+.metadata-compact-stack > h4 {
+  /* Keep the h4 at its default size so every sidebar heading
+   * ("Expression input", "Cell metadata", "Embedding",
+   * "Marker parameters") reads at the same visual weight. We
+   * trim only the surrounding margins to keep the compact rhythm. */
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+}
+.metadata-compact-stack > .shiny-html-output,
+.metadata-compact-stack > .shiny-bound-output {
+  margin-bottom: 0.3rem;
+}
+.metadata-compact-stack .metadata-upload-details,
+.metadata-compact-stack details.metadata-upload-details-prompt {
+  margin-bottom: 0.3rem;
+}
+.metadata-compact-stack .metadata-upload-help {
+  margin-top: 0.35rem;
+}
+.metadata-compact-stack .metadata-upload-file-host {
+  margin-top: 0.1rem;
+  margin-bottom: 0.25rem;
+}
+.metadata-compact-stack .metadata-upload-file-host .phenomapr-file-input {
+  margin-bottom: 0;
+}
+
+/* Markers tab "Marker-gene heatmap" sub-section in the sidebar.
+ * Tighten the heading + helpText + two numericInputs + Draw button
+ * so the whole heatmap-control unit reads as one tight grouping
+ * directly below the <hr/>. */
+.marker-heatmap-compact-stack > h4 {
+  /* See .metadata-compact-stack > h4 -- keep default h4 size so this
+   * sub-section heading reads at the same weight as the surrounding
+   * "Marker parameters" h4 above it. */
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+.marker-heatmap-compact-stack .help-block {
+  margin-top: 0;
+  margin-bottom: 0.4rem;
+  font-size: 0.83rem;
+}
+.marker-heatmap-compact-stack > .btn,
+.marker-heatmap-compact-stack > .action-button {
+  margin-top: 0.15rem;
+}
+
+/* Data tab "Expression input" sub-section in the sidebar.
+ * Tightens spacing around the "Use a tiny demo matrix instead"
+ * actionLink and the matrix-diagnostics renderUI directly below it.
+ * The diagnostics renderUI is empty for object inputs (Seurat / SCE /
+ * AnnData), so without these overrides we get a wide blank gap
+ * between the actionLink and the <hr/> that follows. */
+.expression-compact-stack > h4 {
+  /* Default h4 size -- see .metadata-compact-stack > h4. */
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+}
+/* The use_demo actionLink renders as an inline <a class="action-button">
+ * by default; promote it to a block so its top/bottom padding is
+ * predictable, then trim it tight to the picker above and the
+ * diagnostics renderUI below. */
+.expression-compact-stack > #use_demo,
+.expression-compact-stack > a.action-button#use_demo {
+  display: inline-block;
+  margin-top: 0.1rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+}
+.expression-compact-stack > #use_demo .fa,
+.expression-compact-stack > #use_demo .fas {
+  margin-right: 0.25rem;
+}
+/* When the renderUI("expr_matrix_diagnostics") is empty (which is the
+ * default for object inputs), Shiny still emits an outer wrapper div
+ * with default margins. Reset its block margin to zero so it doesn't
+ * insert phantom whitespace between the actionLink and the <hr/>. */
+.expression-compact-stack > #expr_matrix_diagnostics {
+  margin: 0;
+}
+.expression-compact-stack > #expr_matrix_diagnostics:empty {
+  display: none;
+}
+
+/* Score tab "PhenoMap() parameters" sub-section in the sidebar.
+ * Trim the empty vertical space around the heading, the slot/assay
+ * conditionalPanel, the pseudobulk checkbox + nested controls, and
+ * the action / download buttons so the whole block reads as one
+ * tight grouping between the "Scoring summary" block above and the
+ * "Phenotype groups" block below. */
+.score-params-compact-stack > h4 {
+  /* Default h4 size -- see .metadata-compact-stack > h4. */
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+}
+.score-params-compact-stack > .form-group,
+.score-params-compact-stack .form-group {
+  /* Bootstrap's default form-group adds ~1rem of bottom margin around
+   * every input; that's noticeable in this dense sidebar where most
+   * controls are inside a stacked conditionalPanel. */
+  margin-bottom: 0.45rem;
+}
+.score-params-compact-stack .checkbox {
+  margin-top: 0.2rem;
+  margin-bottom: 0.3rem;
+}
+/* The slot/assay <details> chip ("Details" disclosure). Trim its
+ * margins so it doesn't add a gap when it's collapsed (the most
+ * common state). */
+.score-params-compact-stack > div > .score-slot-details,
+.score-params-compact-stack .score-slot-details {
+  margin-top: 0.1rem;
+  margin-bottom: 0.3rem;
+}
+/* helpText() chips inside the params block (the matrix-mode note
+ * and the pseudobulk explainer). Trim margins so they read as
+ * inline annotations on the controls above them rather than a
+ * standalone paragraph. */
+.score-params-compact-stack .help-block,
+.score-params-compact-stack .form-text {
+  margin-top: 0.2rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+/* "Compute PhenoMapR scores" + "Download score table (TSV)" buttons,
+ * stacked at the bottom of the block. Default Shiny actionButton /
+ * downloadButton chrome adds wide block margins; here we want them
+ * to sit one above the other with a small uniform gap. */
+.score-params-compact-stack > .btn,
+.score-params-compact-stack > .action-button,
+.score-params-compact-stack > a.btn,
+.score-params-compact-stack > a.shiny-download-link {
+  display: block;
+  margin-top: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+.score-params-compact-stack > .btn:last-child,
+.score-params-compact-stack > a.btn:last-child,
+.score-params-compact-stack > a.shiny-download-link:last-child {
+  margin-bottom: 0;
+}
+/* Empty conditionalPanel wrappers (e.g. when scoring against a
+ * matrix the slot/assay branch is hidden) still emit a div with
+ * default margins; collapse them to zero so there is no phantom
+ * whitespace where they used to render. */
+.score-params-compact-stack > .shiny-html-output:empty,
+.score-params-compact-stack > div[data-display-if]:empty,
+.score-params-compact-stack > div.shiny-condition-panel:empty {
+  margin: 0;
+  padding: 0;
+}
+
+/* Embeddings tab "Embedding" sub-section in the sidebar.
+ * Same idea as the Cell-metadata compact stack: trim heading, dropdown,
+ * status chip, spatial-sample selector, and the two help <details>
+ * margins so the entire upper group fits above the <hr/> divider that
+ * separates it from the "Color cells by" controls below. */
+.embedding-compact-stack > h4 {
+  /* Default h4 size -- see .metadata-compact-stack > h4. */
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+}
+.embedding-compact-stack > .shiny-html-output,
+.embedding-compact-stack > .shiny-bound-output {
+  margin-bottom: 0.3rem;
+}
+/* Re-tune the <details> helper blocks (About reductions /
+ * Upload a separate embedding file). These already have a custom
+ * `.embedding-help-details` class with subtle bg styling; here we just
+ * pull them tight to the controls above and to each other. */
+.embedding-compact-stack > details.embedding-help-details {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+.embedding-compact-stack > details.embedding-help-details:last-of-type {
+  margin-bottom: 0;
+}
+.embedding-compact-stack details.embedding-help-details > summary {
+  /* Slightly tighter padding inside the summary chevron row so the
+   * collapsed <details> reads as a compact pill rather than a wide
+   * banner that visually segments the sidebar. */
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+.embedding-compact-stack details.embedding-help-details .help-block {
+  margin-bottom: 0.4rem;
+}
+.embedding-compact-stack details.embedding-help-details .phenomapr-file-input {
+  margin-bottom: 0;
+}
+
 /* Score-tab "Scoring summary" block. Three row-style entries (input
  * data, phenotype source, cancer / tissue type) sit at the top of the
  * Score sidebar so users can confirm the (data, signature, cancer)
@@ -613,6 +812,30 @@ table.dataTable thead th {
   font-size: 0.92rem;
   color: #264653;
 }
+/* Score sidebar — collapsible "Details" chip above the
+ * Layer / slot radio. Hides a longer paragraph about what
+ * PhenoMapR is computing, what layer it expects, etc., so users
+ * who already know the convention aren't forced to scroll past it
+ * every time. Mirrors the .embedding-help-details treatment so the
+ * collapsible chips across sidebars all read uniform. */
+.score-slot-details {
+  margin: 0.1rem 0 0.4rem;
+}
+.score-slot-details > summary {
+  cursor: pointer;
+  list-style: revert;
+  padding: 0.15rem 0;
+  font-size: 0.92rem;
+  color: #264653;
+  font-weight: 600;
+}
+.score-slot-details .help-block,
+.score-slot-details .form-text {
+  margin-top: 0.25rem;
+  margin-bottom: 0.1rem;
+  font-size: 0.85rem;
+}
+
 /* Visualization sidebar — collapsible "About reductions & auto-detection"
  * block. Mirrors the metadata-upload-details treatment so the two
  * <details> blocks in the sidebars feel uniform. */
@@ -687,47 +910,79 @@ table.dataTable thead th {
   color: #486a78;
   font-variant-numeric: tabular-nums;
 }
-.metadata-upload-details-prompt {
+/* The metadata-upload <details> wrapper now holds BOTH the summary
+ * AND the file picker as static children; only the summary's
+ * children + the wrapper's `open` attribute / `mu-prompt` class
+ * toggle in response to state. The salmon "no metadata detected"
+ * styling is applied to the summary when its parent <details> has
+ * the `mu-prompt` class (toggled server-side via
+ * phenomapr-set-details-state). */
+
+/* Default <summary> look (Override / supplement... mode). */
+.metadata-upload-details > summary.metadata-upload-details-summary {
+  cursor: pointer;
+  list-style: revert;
+  padding: 0.15rem 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #264653;
+}
+
+/* Prompt-mode summary: salmon-tinted chip drawing the user's eye to
+ * upload metadata. The `mu-prompt` modifier class is added to the
+ * <details> wrapper by the server when an expression file has been
+ * loaded but no cell-level metadata was detected. */
+.metadata-upload-details.mu-prompt > summary.metadata-upload-details-summary {
+  color: #5b3a2c;
+  background: #fff5ee;
+  border-left: 3px solid #e76f51;
+  border-radius: 4px;
+  padding: 0.45rem 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.metadata-upload-details.mu-prompt > summary.metadata-upload-details-summary .mu-badge {
+  color: #e76f51;
+  margin-right: 0.25rem;
+}
+
+/* helpText sibling of the summary, inside the static <details>.
+ * Trim its margins so when the panel is open the helpText reads as
+ * one tight unit with the file picker below it. */
+.metadata-upload-help {
+  margin-top: 0.4rem;
+}
+.metadata-upload-help .help-block,
+.metadata-upload-help .form-text {
+  margin-top: 0.2rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* Legacy fall-back: previously the prompt class was applied to the
+ * <details> wrapper directly; we keep this rule scoped to <details>
+ * so any third-party path that still sets the class on the wrapper
+ * continues to look right. New code uses `mu-prompt` on the wrapper
+ * and styles the summary via the rules above. */
+details.metadata-upload-details-prompt {
   border-left: 3px solid #e76f51;
   background: #fff5ee;
   padding: 0.5rem 0.7rem 0.25rem;
   border-radius: 4px;
 }
-.metadata-upload-details-prompt > summary {
-  color: #5b3a2c;
-}
-.metadata-upload-details-prompt .mu-badge {
-  color: #e76f51;
-  margin-right: 0.4rem;
-}
-/* Inside the salmon auto-open prompt, suppress helpText()'s teal chip so
-   it doesn't fight the warning colour scheme — we use a plain inset
-   paragraph instead. */
-.metadata-upload-details-prompt .help-block {
-  display: block;
-  background: transparent;
-  border-left: none;
-  border-radius: 0;
-  padding: 0.35rem 0 0.5rem;
-  margin: 0.25rem 0 0.5rem;
-  font-size: 0.85rem;
-  line-height: 1.45;
-  color: #5b3a2c;
-}
 
-/* The metadata file picker is rendered statically directly below the
- * collapsible `metadata_upload_panel` <details> block; this keeps the
- * shinyFiles button DOM identity stable across state$metadata
- * transitions (see the comment block in inst/shiny/app.R near the
- * sidebar UI definition for the full rationale). The negative top
- * margin pulls the picker up so it visually hugs the details block
- * even when the block is collapsed. */
-.metadata-upload-file-host {
-  margin-top: -0.1rem;
+/* The metadata file picker now lives INSIDE the collapsible
+ * `<details id="metadata_upload_details">` wrapper as a static
+ * child (see the sidebar UI comment in inst/shiny/app.R). The
+ * <details> wrapper itself never re-renders, so the picker's DOM
+ * identity is stable across state$metadata transitions even with
+ * the picker tucked behind the disclosure. */
+.metadata-upload-details > .metadata-upload-file-host {
+  margin-top: 0.2rem;
   padding-left: 0.05rem;
-}
-.metadata-upload-details + .metadata-upload-file-host {
-  margin-top: 0.25rem;
 }
 
 /* UMAP / embedding tab — small status banner above the reduction picker. */
@@ -1289,6 +1544,14 @@ table.dataTable thead th {
  * ------------------------------------------------------------------------- */
 .phenomapr-file-input {
   margin-bottom: 0.9rem;
+  /* Force this block to participate in any ancestor flex layout
+   * (the bslib sidebar IS a flex column) with a shrinkable
+   * min-width / capped max-width. Without this the inner filename
+   * span could push the row wider than the sidebar, causing long
+   * file names (e.g. BRCA_GSE114727_10X_expression.h5) to spill
+   * past the right edge of the input. */
+  min-width: 0;
+  max-width: 100%;
 }
 .phenomapr-file-input .control-label {
   display: block;
@@ -1305,6 +1568,13 @@ table.dataTable thead th {
   align-items: stretch;
   flex-wrap: nowrap;
   min-width: 0;
+  /* Without max-width:100% the row sizes itself to its widest child
+   * (a long filename inside the inline-flex name span), bypassing
+   * the parent .phenomapr-file-input clamp. Pinning the row to its
+   * parent's width guarantees the filename text actually triggers
+   * the ellipsis CSS below. */
+  max-width: 100%;
+  width: 100%;
 }
 .phenomapr-file-input-btn {
   flex: 0 0 auto;
@@ -1343,7 +1613,15 @@ table.dataTable thead th {
 }
 .phenomapr-file-input-name {
   flex: 1 1 auto;
+  /* Triple guard: min-width:0 lets the flex item shrink below its
+   * intrinsic content size, max-width:100% caps it at the row's
+   * available width, and overflow:hidden actually clips any text
+   * that the ellipsis-on-text-element below could not catch
+   * (e.g. when the inner inline-flex wrapper grows to fit a long
+   * filename + the clear button). */
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   padding: 0.34rem 0.7rem;
@@ -1354,8 +1632,11 @@ table.dataTable thead th {
   border-bottom-right-radius: 0.25rem;
   font-size: 0.85rem;
   line-height: 1.2;
-  word-break: break-all;
-  overflow-wrap: anywhere;
+  /* word-break: break-all/overflow-wrap:anywhere are intentionally
+   * removed -- they were causing the name-set wrapper to size to
+   * its CONTENT (long filename) rather than to its parent. The
+   * cleaner pattern is white-space:nowrap on the inner text span
+   * (below) plus a single-line ellipsis. */
   color: #495057;
 }
 .phenomapr-file-input-name-empty {
@@ -1365,15 +1646,28 @@ table.dataTable thead th {
 .phenomapr-file-input-name-set {
   color: #264653;
   font-weight: 500;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.3rem;
+  /* Make the name-set fill the available width of its parent .name
+   * span instead of sizing to its own content. Without this
+   * flex: 1 1 auto, the inline-flex wrapper sizes to (text + clear
+   * button) width, which on long filenames overflows the parent
+   * because nothing in the layout was forcing the text span to
+   * shrink. */
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .phenomapr-file-input-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Force the text span to participate in shrinking inside its
+   * flex parent. Without flex:1 1 auto the span sizes to its
+   * intrinsic content width and the ellipsis never kicks in. */
+  flex: 1 1 auto;
   min-width: 0;
 }
 /* Small "x" affordance to remove (clear) the currently-loaded file.
@@ -1454,6 +1748,35 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link {
   margin: 0 !important;
   font-size: inherit !important;
 }
+
+/* Labeled variant: icon + visible text (e.g. "Download plot" /
+ * "Download plot data"). Used by panel headers that surface BOTH a
+ * plot-export and a data-export button side by side, where the
+ * icon-only buttons are visually indistinguishable. The `--labeled`
+ * modifier widens the button to fit the label and restores the
+ * normal flex gap between the icon and the text. */
+.btn.phenomapr-panel-download-btn-labeled,
+a.btn.phenomapr-panel-download-btn-labeled.shiny-download-link {
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0.22rem 0.6rem !important;
+  font-size: 0.76em !important;
+  font-weight: 500 !important;
+  gap: 0.32rem;
+  white-space: nowrap;
+}
+.btn.phenomapr-panel-download-btn-labeled .fa,
+.btn.phenomapr-panel-download-btn-labeled .fas,
+.btn.phenomapr-panel-download-btn-labeled .fab,
+.btn.phenomapr-panel-download-btn-labeled .far,
+.btn.phenomapr-panel-download-btn-labeled i {
+  /* Override the icon-only `margin: 0 !important` rule above so
+   * shiny::icon()'s default right margin (or our explicit gap) shows
+   * between the icon and the text. */
+  margin-right: 0.25rem !important;
+}
 .btn.phenomapr-panel-download-btn:hover,
 .btn.phenomapr-panel-download-btn:focus,
 a.btn.phenomapr-panel-download-btn.shiny-download-link:hover,
@@ -1531,6 +1854,65 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
   margin-left: 0 !important;
 }
 
+/* ---- "About data input" card -----------------------------------------
+ *
+ * Three peer callouts (.data-input-note) arranged horizontally inside
+ * a bslib::layout_columns(c(4,4,4)) row: "PhenoMapR accepts" (input
+ * types bullet list), "Gene IDs" (HUGO requirement), and "Upload
+ * size" (shiny.maxRequestSize note). Each card has a thin teal
+ * accent border and a translucent fill so the three reference notes
+ * read as visually equal -- none is more important than the others. */
+.data-input-note {
+  background-color: rgba(42, 157, 143, 0.06);
+  border: 1px solid rgba(42, 157, 143, 0.22);
+  border-left: 3px solid #2A9D8F;
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  /* Stretch each callout to fill its layout_columns cell so all
+   * three line up at the same height even when their bodies have
+   * different prose lengths (e.g. the bullet list is taller than
+   * the two paragraph notes). */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.data-input-note-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: #264653;
+  font-size: 0.84rem;
+  margin-bottom: 0.3rem;
+}
+.data-input-note-title .fa,
+.data-input-note-title .fas,
+.data-input-note-title .far {
+  color: #2A9D8F;
+  font-size: 0.92em;
+}
+/* Bullet list inside a callout: trim default UL indentation so the
+ * bullets sit close to the left accent bar without crowding it. */
+.data-input-note ul {
+  margin: 0;
+  padding-left: 1.05rem;
+}
+.data-input-note li {
+  margin-bottom: 0.1rem;
+}
+.data-input-note p:last-child,
+.data-input-note ul:last-child {
+  margin-bottom: 0;
+}
+.data-input-note code {
+  font-size: 0.85em;
+  background-color: rgba(38, 70, 83, 0.08);
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
+}
+
 /* Slim banner used when a panel does not have a card_header to attach
  * the download button to (e.g. nav_panel children inside a navset_tab).
  * Renders as a thin right-aligned row directly above the panel
@@ -1601,6 +1983,64 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
 .phenomapr-plot-dl-divider {
   margin: 0.4rem 0 0.6rem;
   border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* ---- Plot-download-modal header (Cancel + Download buttons) ----------
+ *
+ * The modal header places its <h5 class="modal-title"> as the first
+ * flex item and Bootstrap's implicit `.close` (x) button after it.
+ * We override the title content with a flex row that holds the title
+ * text on the left and a right-aligned actions cluster (Cancel +
+ * Download), so the user has CTAs at the top-right without scrolling
+ * past the preview to the bottom of the dialog. We also bump the
+ * title's font-size down a touch from h5's default so the two
+ * buttons + the (x) close glyph all fit comfortably on one line. */
+.phenomapr-plot-dl-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+.phenomapr-plot-dl-modal-title-text {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #264653;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* Long panel labels should ellipsize rather than push the actions
+   * cluster off-screen. */
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.phenomapr-plot-dl-modal-title-text .fa,
+.phenomapr-plot-dl-modal-title-text .fas {
+  color: #2A9D8F;
+  font-size: 0.95em;
+}
+.phenomapr-plot-dl-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.phenomapr-plot-dl-modal-actions .btn {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.phenomapr-plot-dl-modal-actions .btn.btn-primary {
+  background-color: #2A9D8F;
+  border-color: #2A9D8F;
+}
+.phenomapr-plot-dl-modal-actions .btn.btn-primary:hover,
+.phenomapr-plot-dl-modal-actions .btn.btn-primary:focus {
+  background-color: #228377;
+  border-color: #228377;
 }
 
 /* Determinate-looking progress bar underneath the Browse row.

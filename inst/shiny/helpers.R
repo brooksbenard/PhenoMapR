@@ -1834,12 +1834,24 @@ phenomapr_file_pick <- function(id, input, output, session, roots = NULL,
 # because the user can only click the download button after the panel
 # has rendered.
 
-phenomapr_dl_btn <- function(download_id, tooltip = "Download") {
+phenomapr_dl_btn <- function(download_id, tooltip = "Download",
+                             label = NULL) {
+  # When `label` is provided we render an icon + visible text button
+  # (still styled by .phenomapr-panel-download-btn but with the
+  # `--labeled` modifier so it widens to fit the label and the icon
+  # gets a small right gap). Callers that want the compact 22x22
+  # icon-only button just omit `label` -- this is what every other
+  # panel header has been doing forever, so no migration is needed.
+  classes <- if (!is.null(label) && nzchar(label)) {
+    "phenomapr-panel-download-btn phenomapr-panel-download-btn-labeled"
+  } else {
+    "phenomapr-panel-download-btn"
+  }
   shiny::downloadButton(
     download_id,
-    label = NULL,
+    label = label,
     icon  = shiny::icon("download"),
-    class = "phenomapr-panel-download-btn",
+    class = classes,
     title = tooltip
   )
 }
@@ -1882,20 +1894,31 @@ phenomapr_panel_banner_dl <- function(download_id, tooltip = "Download") {
 #     base_size) to produce the file via .phenomapr_save_plot().
 
 phenomapr_modal_dl_btn <- function(panel_id,
-                                   tooltip = "Download (with options)") {
+                                   tooltip = "Download (with options)",
+                                   label = NULL) {
+  # See phenomapr_dl_btn for the labeled/icon-only convention; the
+  # modal trigger uses the same `--labeled` modifier so the two
+  # buttons in a `data + plot` header line up visually.
+  classes <- if (!is.null(label) && nzchar(label)) {
+    "phenomapr-panel-download-btn phenomapr-panel-download-btn-labeled"
+  } else {
+    "phenomapr-panel-download-btn"
+  }
   shiny::actionButton(
     inputId = paste0(panel_id, "_modal_btn"),
-    label   = NULL,
+    label   = label,
     icon    = shiny::icon("download"),
-    class   = "phenomapr-panel-download-btn",
+    class   = classes,
     title   = tooltip
   )
 }
 
 phenomapr_card_header_modal_dl <- function(..., panel_id,
                                            tooltip = "Download (with options)",
+                                           plot_label = NULL,
                                            data_download_id = NULL,
-                                           data_tooltip = "Download plot data (TSV)") {
+                                           data_tooltip = "Download plot data (TSV)",
+                                           data_label = NULL) {
   # If a panel exposes both its rendered plot AND its underlying
   # tabular data for download (e.g. "Score by cell type and source",
   # whose data is the per-cell score table), we render TWO download
@@ -1907,7 +1930,13 @@ phenomapr_card_header_modal_dl <- function(..., panel_id,
   # the right still works without leaving a wide gap between the two
   # buttons (which the default `justify-content: space-between` would
   # otherwise insert).
-  modal_btn <- phenomapr_modal_dl_btn(panel_id, tooltip)
+  #
+  # `plot_label` / `data_label` (both default NULL) opt the buttons
+  # into the labeled style: when set, the button shows icon + text
+  # so users with two adjacent download buttons can tell them apart
+  # at a glance ("Download plot" vs "Download plot data") instead of
+  # having to hover for the tooltip.
+  modal_btn <- phenomapr_modal_dl_btn(panel_id, tooltip, label = plot_label)
   title_div <- shiny::tags$div(class = "phenomapr-card-header-dl-title", ...)
   if (is.null(data_download_id)) {
     bslib::card_header(
@@ -1921,7 +1950,8 @@ phenomapr_card_header_modal_dl <- function(..., panel_id,
       title_div,
       shiny::tags$div(
         class = "phenomapr-card-header-dl-actions",
-        phenomapr_dl_btn(data_download_id, data_tooltip),
+        phenomapr_dl_btn(data_download_id, data_tooltip,
+                         label = data_label),
         modal_btn
       )
     )
@@ -1943,11 +1973,36 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
                                           defaults = list()) {
   d <- utils::modifyList(
     list(width = 8, height = 6, dpi = 300,
-         format = "png", base_size = 14, radius_pt = 3),
+         format = "png", base_size = 14, radius_pt = 3,
+         units = "in"),
     defaults
   )
+  # Build a flex header that puts the dialog title on the left and a
+  # right-aligned Cancel / Download actions cluster. We pass this in
+  # via `title` (because Bootstrap's modal-header already lays its
+  # children out as a flex row) and clear out `footer` so the buttons
+  # only live in the header. The implicit `.close` (x) glyph in the
+  # top-right corner stays as a third dismiss affordance.
+  title_row <- shiny::tags$div(
+    class = "phenomapr-plot-dl-modal-title-row",
+    shiny::tags$span(
+      class = "phenomapr-plot-dl-modal-title-text",
+      shiny::icon("download"),
+      " ",
+      paste0("Download plot: ", panel_label)
+    ),
+    shiny::tags$div(
+      class = "phenomapr-plot-dl-modal-actions",
+      shiny::modalButton("Cancel"),
+      shiny::downloadButton("plot_dl_action", "Download",
+                            class = "btn-primary")
+    )
+  )
+  ## Convenience labels for Width / Height that carry the active unit.
+  unit_lbl <- function(side) sprintf("%s (%s)", side,
+                                     if (identical(d$units, "cm")) "cm" else "inches")
   shiny::modalDialog(
-    title = paste0("Download plot: ", panel_label),
+    title = title_row,
     size  = "l",
     easyClose = TRUE,
     shiny::div(
@@ -1979,13 +2034,29 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
       ),
       shiny::tags$hr(class = "phenomapr-plot-dl-divider"),
       # ---- Sizing & format controls ---------------------------------------
+      # Width / height live in a row WITH a unit selector (inches vs cm).
+      # The selector is wired in app.R: when the user toggles units, the
+      # width / height fields are rescaled (x 2.54 to cm, /2.54 to in) so
+      # the physical size stays constant and the labels update to match.
       shiny::fluidRow(
-        shiny::column(6,
-          shiny::numericInput("plot_dl_width", "Width (inches)",
-                              value = d$width, min = 1, max = 30, step = 0.5)),
-        shiny::column(6,
-          shiny::numericInput("plot_dl_height", "Height (inches)",
-                              value = d$height, min = 1, max = 30, step = 0.5))
+        shiny::column(4,
+          shiny::radioButtons(
+            "plot_dl_units", "Units",
+            choices  = c("inches" = "in", "cm" = "cm"),
+            selected = d$units,
+            inline   = TRUE
+          )
+        ),
+        shiny::column(4,
+          shiny::numericInput("plot_dl_width", unit_lbl("Width"),
+                              value = d$width, min = 1,
+                              max = if (identical(d$units, "cm")) 80 else 30,
+                              step = if (identical(d$units, "cm")) 1 else 0.5)),
+        shiny::column(4,
+          shiny::numericInput("plot_dl_height", unit_lbl("Height"),
+                              value = d$height, min = 1,
+                              max = if (identical(d$units, "cm")) 80 else 30,
+                              step = if (identical(d$units, "cm")) 1 else 0.5))
       ),
       shiny::fluidRow(
         shiny::column(6,
@@ -2016,20 +2087,18 @@ phenomapr_plot_download_modal <- function(panel_label = "plot",
                              step = 0.5))
       ),
       shiny::helpText(
-        "Width / height are in inches. DPI only affects raster ",
-        "formats (PNG / JPEG / TIFF); PDF and SVG are vector ",
-        "formats and render at any zoom. Base font size and corner ",
-        "sharpness affect this export only (the on-screen plot is ",
-        "unchanged). Corner sharpness applies to ggchicklet2-rounded ",
+        "Choose your preferred unit (inches or cm) -- width / height are ",
+        "rescaled automatically when you switch so the physical size stays ",
+        "constant. DPI only affects raster formats (PNG / JPEG / TIFF); ",
+        "PDF and SVG are vector formats and render at any zoom. Base font ",
+        "size and corner sharpness affect this export only (the on-screen ",
+        "plot is unchanged). Corner sharpness applies to ggchicklet2-rounded ",
         "bars, stacks, histograms and boxplots; non-chicklet plots ",
         "ignore it gracefully."
       )
     ),
-    footer = shiny::tagList(
-      shiny::modalButton("Cancel"),
-      shiny::downloadButton("plot_dl_action", "Download",
-                            class = "btn-primary")
-    )
+    # Footer-less: Cancel + Download live in the title row above.
+    footer = NULL
   )
 }
 
@@ -2297,6 +2366,9 @@ phenomapr_busy_assets <- function() {
     if (ov && !ov.classList.contains("is-visible")) {
       ov.classList.add("is-visible");
       isVisible = true;
+      shownAt = (typeof performance !== "undefined" && performance.now)
+        ? performance.now()
+        : Date.now();
       dbg("overlay shown", currentMessage);
     }
   }
@@ -2305,6 +2377,7 @@ phenomapr_busy_assets <- function() {
     if (ov && ov.classList.contains("is-visible")) {
       ov.classList.remove("is-visible");
       isVisible = false;
+      shownAt = 0;
       dbg("overlay hidden");
     }
   }
@@ -2320,6 +2393,23 @@ phenomapr_busy_assets <- function() {
   var defaultMessage    = { message: "Working...", detail: "", hint: "" };
   var isVisible         = false;
   var dismissedThisRun  = false;
+  // shownAt: high-resolution timestamp (ms) when the popup last
+  // transitioned to visible. Drives both the shiny:value-driven
+  // proactive hide and the rAF-driven body-class polling fallback
+  // (see below) -- these together guarantee the popup goes away the
+  // moment R is no longer driving work, regardless of whether the
+  // explicit phenomapr_busy_hide() custom message gets processed
+  // before or after the heavy reactive output cascade.
+  var shownAt           = 0;
+  var SHOWN_MIN_MS      = 120;   // grace window: do not auto-hide for fast ops
+  var IDLE_GRACE_MS     = 250;   // body must be non-busy for this long before fallback hide
+  var ABSOLUTE_TIMEOUT  = 180000;// last-resort hard cap (3 min) on popup visibility
+  // bodyIdleSince: timestamp at which the document body last
+  // transitioned out of the .shiny-busy state. NaN whenever the
+  // body is currently busy. Used by the rAF poll to decide if
+  // enough idle time has elapsed since the last R-side reactive
+  // cycle to confidently hide the popup.
+  var bodyIdleSince     = NaN;
 
   function resetMessage() {
     currentMessage = {
@@ -2344,6 +2434,108 @@ phenomapr_busy_assets <- function() {
     dismissedThisRun = false;
     clearAllFileInputLoading();
   }
+
+  // ---- Proactive popup hide on output arrival ------------------------
+  // When the popup is up and an output value arrives at the browser, R
+  // has finished the heavy work and produced results -- the user\'s
+  // perspective is "the data is loaded". In a perfect world R\'s
+  // explicit phenomapr_busy_hide() message would already have been
+  // processed by the time outputs land, but Shiny bundles all
+  // invalidatedOutputValues into a single websocket frame that can
+  // contain many large image / HTML payloads, and depending on
+  // browser/JS-runtime timing the frame\'s processing of the new DOM
+  // content can paint before the hide custom message immediately
+  // following it gets executed. The result the user sees: "data has
+  // loaded but the popup is still up for a few seconds afterwards".
+  //
+  // To close this gap deterministically we listen for shiny:value /
+  // shiny:visualchange and -- IFF the popup has been visible for at
+  // least SHOWN_MIN_MS (a small grace window so a fast op whose
+  // show+hide land in the same flush isn\'t pre-empted before it ever
+  // paints) -- hide it immediately.
+  //
+  // Async-scheduled via setTimeout(..., 0) so the hide runs AFTER the
+  // current event handler stack unwinds. This means the output value
+  // gets applied first (DOM gets the new content), then on the
+  // immediately-following macrotask the popup is removed -- no
+  // flicker or double-paint.
+  function maybeProactiveHide(reason) {
+    if (!isVisible) return;
+    var now = (typeof performance !== "undefined" && performance.now)
+      ? performance.now()
+      : Date.now();
+    if (shownAt > 0 && (now - shownAt) < SHOWN_MIN_MS) return;
+    setTimeout(function () {
+      if (isVisible) {
+        dbg("proactive hide on " + reason);
+        renderHide();
+        resetMessage();
+      }
+    }, 0);
+  }
+  function onShinyValue() { maybeProactiveHide("shiny:value"); }
+  function onShinyVisualChange() { maybeProactiveHide("shiny:visualchange"); }
+  function onShinyFlushed() { maybeProactiveHide("shiny:flushed"); }
+  function onShinyMessage() { maybeProactiveHide("shiny:message"); }
+
+  // ---- rAF-driven body-class polling fallback ------------------------
+  // Defence in depth against the popup lingering after a long op:
+  // every animation frame we check whether (a) the popup is still
+  // visible and (b) Shiny has been NON-busy (no `.shiny-busy` class on
+  // <body>) for at least IDLE_GRACE_MS. If both, we hide the popup --
+  // no matter whether the R-side phenomapr_busy_hide() custom message
+  // ever made it through. This is the most reliable signal we have
+  // because the `.shiny-busy` class is added/removed by Shiny.js at
+  // exactly the boundaries where R is doing reactive work, and it
+  // does NOT depend on which order custom messages and output values
+  // happen to be batched / dispatched in any given Shiny version.
+  //
+  // Also acts as the absolute-timeout safety net: any popup visible
+  // for longer than ABSOLUTE_TIMEOUT (3 min) is force-hidden,
+  // protecting against a rogue path that emits show without an
+  // eventual hide (which would otherwise stick on screen forever).
+  function isShinyBusy() {
+    return !!(document.body &&
+              document.body.classList &&
+              document.body.classList.contains("shiny-busy"));
+  }
+  function busyPollTick() {
+    var now = (typeof performance !== "undefined" && performance.now)
+      ? performance.now()
+      : Date.now();
+    if (isVisible) {
+      // Track when shiny last transitioned to non-busy.
+      if (isShinyBusy()) {
+        bodyIdleSince = NaN;
+      } else if (isNaN(bodyIdleSince)) {
+        bodyIdleSince = now;
+      }
+      // Hide once shiny has been idle for >= IDLE_GRACE_MS AND the
+      // popup itself has been visible for >= SHOWN_MIN_MS.
+      var visibleFor = shownAt > 0 ? (now - shownAt) : 0;
+      var idleFor    = isNaN(bodyIdleSince) ? 0 : (now - bodyIdleSince);
+      if (visibleFor >= SHOWN_MIN_MS && idleFor >= IDLE_GRACE_MS) {
+        dbg("rAF poll: shiny idle for " + Math.round(idleFor) + "ms, hiding");
+        renderHide();
+        resetMessage();
+      } else if (visibleFor >= ABSOLUTE_TIMEOUT) {
+        dbg("rAF poll: absolute timeout reached, forcing hide");
+        renderHide();
+        resetMessage();
+      }
+    } else {
+      bodyIdleSince = NaN;
+    }
+    // Reschedule. We use rAF (~16ms cadence) rather than setInterval
+    // so we naturally pause when the tab is backgrounded, and we
+    // never run more than 60x/sec.
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(busyPollTick);
+    } else {
+      setTimeout(busyPollTick, 100);
+    }
+  }
+
   function onShinyDisconnected() {
     if (isVisible) renderHide();
     resetMessage();
@@ -2481,9 +2673,21 @@ phenomapr_busy_assets <- function() {
   // idempotent. Note: shiny:busy is intentionally NOT listened to --
   // popup visibility is purely R-driven now.
   if (document && document.addEventListener) {
-    document.addEventListener("shiny:idle",         onShinyIdle,         false);
-    document.addEventListener("shiny:disconnected", onShinyDisconnected, false);
-    document.addEventListener("shiny:inputchanged", onInputChanged,      false);
+    document.addEventListener("shiny:idle",          onShinyIdle,          false);
+    document.addEventListener("shiny:disconnected",  onShinyDisconnected,  false);
+    document.addEventListener("shiny:inputchanged",  onInputChanged,       false);
+    // Proactive hide hooks. shiny:value fires once per output that
+    // receives a new value; shiny:visualchange fires when an output
+    // re-renders (e.g. plot resize); shiny:flushed fires after a
+    // full reactive flush completes; shiny:message fires when ANY
+    // websocket message arrives. We listen broadly because Shiny
+    // versions / plugins differ in which of these are dispatched on
+    // document vs target element, and we want at least one to fire
+    // for every meaningful R-side event.
+    document.addEventListener("shiny:value",         onShinyValue,         false);
+    document.addEventListener("shiny:visualchange",  onShinyVisualChange,  false);
+    document.addEventListener("shiny:flushed",       onShinyFlushed,       false);
+    document.addEventListener("shiny:message",       onShinyMessage,       false);
   }
 
   function attachDismissHandlers() {
@@ -2514,13 +2718,59 @@ phenomapr_busy_assets <- function() {
     Shiny.addCustomMessageHandler("phenomapr-busy-show", handleShow);
     Shiny.addCustomMessageHandler("phenomapr-busy-hide", handleHide);
 
+    // Toggle the `open` attribute and an optional `mu-prompt`
+    // class on a static HTML5 <details> element by id. Used to
+    // auto-open the metadata-upload panel (and apply the salmon
+    // prompt look) when the freshly-loaded expression file did
+    // NOT carry its own cell-level metadata, and to auto-close +
+    // un-prompt it once metadata is available -- without ever
+    // re-rendering the <details> wrapper itself (which would tear
+    // down the file picker inside it).
+    //
+    // msg = { id: "<element id>",
+    //         open: true|false,
+    //         prompt: true|false }
+    Shiny.addCustomMessageHandler(
+      "phenomapr-set-details-state",
+      function(msg) {
+        if (!msg || !msg.id) return;
+        var el = document.getElementById(msg.id);
+        if (!el) return;
+        if (msg.open) {
+          el.setAttribute("open", "open");
+        } else {
+          el.removeAttribute("open");
+        }
+        if (typeof msg.prompt !== "undefined") {
+          if (msg.prompt) {
+            el.classList.add("mu-prompt");
+          } else {
+            el.classList.remove("mu-prompt");
+          }
+        }
+      }
+    );
+
     var $j = window.jQuery || window.$;
     if ($j) {
-      $j(document).on("shiny:idle",         onShinyIdle);
-      $j(document).on("shiny:disconnected", onShinyDisconnected);
-      $j(document).on("shiny:inputchanged", onInputChanged);
+      $j(document).on("shiny:idle",          onShinyIdle);
+      $j(document).on("shiny:disconnected",  onShinyDisconnected);
+      $j(document).on("shiny:inputchanged",  onInputChanged);
+      $j(document).on("shiny:value",         onShinyValue);
+      $j(document).on("shiny:visualchange",  onShinyVisualChange);
+      $j(document).on("shiny:flushed",       onShinyFlushed);
+      $j(document).on("shiny:message",       onShinyMessage);
     } else {
       dbg("jQuery not available at bind(); relying on native listeners");
+    }
+
+    // Start the rAF body-class polling fallback. Idempotent: bind()
+    // is itself idempotent (called once at DOMContentLoaded), so this
+    // starts exactly one rAF chain per page load.
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(busyPollTick);
+    } else {
+      setTimeout(busyPollTick, 100);
     }
   }
   if (document.readyState === "loading") {

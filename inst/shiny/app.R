@@ -362,82 +362,145 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 360,
-        h4("Expression input"),
-        phenomapr_file_input(
-          "expr_file",
-          label = NULL,
-          accept = c(".rds", ".h5", ".h5ad", ".tsv", ".csv", ".txt"),
-          width = "100%"
+        # ---- Expression input sub-section ----
+        # Wrapped in `.phenomapr-compact-stack expression-compact-stack`
+        # so the file picker, "Use a tiny demo matrix instead"
+        # actionLink, and the matrix-diagnostics renderUI sit close
+        # together (the renderUI is often empty for object inputs and
+        # would otherwise leave a wide blank gap under the
+        # actionLink before the <hr/> divider).
+        tags$div(
+          class = "phenomapr-compact-stack expression-compact-stack",
+          h4("Expression input"),
+          phenomapr_file_input(
+            "expr_file",
+            label = NULL,
+            accept = c(".rds", ".h5", ".h5ad", ".tsv", ".csv", ".txt"),
+            width = "100%"
+          ),
+          actionLink("use_demo", "Use a tiny demo matrix instead",
+                     icon = icon("flask")),
+          # Matrix-only diagnostics panel: gene-ID style (HUGO / ENSG /
+          # mixed), expression format (raw counts / CPM/TPM / log-norm /
+          # z-scaled), and a single-cell vs bulk guess via sparsity. The
+          # `uiOutput` is rendered only when state$expr_summary$kind is
+          # "matrix" (see the server-side renderUI further below). When
+          # cleanup is recommended the same panel also exposes
+          # checkboxes + a "Clean & normalize" button that runs
+          # clean_matrix_input() in place on state$expression.
+          uiOutput("expr_matrix_diagnostics")
         ),
-        actionLink("use_demo", "Use a tiny demo matrix instead",
-                   icon = icon("flask")),
-        # Matrix-only diagnostics panel: gene-ID style (HUGO / ENSG /
-        # mixed), expression format (raw counts / CPM/TPM / log-norm /
-        # z-scaled), and a single-cell vs bulk guess via sparsity. The
-        # `uiOutput` is rendered only when state$expr_summary$kind is
-        # "matrix" (see the server-side renderUI further below). When
-        # cleanup is recommended the same panel also exposes
-        # checkboxes + a "Clean & normalize" button that runs
-        # clean_matrix_input() in place on state$expression.
-        uiOutput("expr_matrix_diagnostics"),
 
         hr(),
-        h4("Cell metadata"),
-        uiOutput("metadata_status"),
-        # Metadata upload section. Architecturally split in two so the
-        # shinyFiles `<button id="meta_file_server">` DOM identity stays
-        # stable across state$metadata transitions:
-        #
-        #   * `metadata_upload_panel` (renderUI): collapsible <details>
-        #     wrapper holding only a summary label + a short helpText.
-        #     The summary label / open-state depend on whether the
-        #     user has metadata yet, so the renderUI MUST re-fire on
-        #     state$metadata changes -- but it no longer contains the
-        #     file picker, so re-renders cannot tear down the picker.
-        #
-        #   * Static `phenomapr_file_input("meta_file", ...)` directly
-        #     below the renderUI. Its DOM identity is therefore
-        #     guaranteed never to change. This eliminates the reactive
-        #     feedback loop where a renderUI re-fire would destroy the
-        #     picker, emit input$meta_file_server = NULL, and trigger
-        #     the picker observer's "user cleared the file" branch,
-        #     wiping state$metadata a heartbeat after the upload.
-        uiOutput("metadata_upload_panel"),
+        # ---- Cell metadata sub-section ----
+        # Wrapped in `.phenomapr-compact-stack` so the three column
+        # dropdowns (cell-ID / cell-type / source) and the surrounding
+        # helper UI (status, upload <details>, file picker) all share
+        # the tightened sidebar rhythm. Without this wrapper the
+        # default Shiny .form-group spacing leaves a large vertical
+        # gap between dropdowns that pushes the "About data input"
+        # card below the fold on shorter viewports.
         tags$div(
-          class = "metadata-upload-file-host",
-          phenomapr_file_input(
-            "meta_file",
-            label = NULL,
-            accept = c(".rds", ".tsv", ".csv", ".txt"),
-            width = "100%"
-          )
-        ),
-        selectInput("meta_cell_id_col", "Cell ID column", choices = NULL),
-        selectInput("meta_cell_type_col", "Cell type column (optional)",
-                    choices = NULL),
-        selectInput("meta_source_col", "Source / group column (optional)",
-                    choices = NULL)
+          class = "phenomapr-compact-stack metadata-compact-stack",
+          h4("Cell metadata"),
+          uiOutput("metadata_status"),
+          # Metadata upload section -- single static <details> wrapper
+          # housing the dynamic <summary> label, a short helpText, and
+          # the file picker. Stable DOM identity is preserved by
+          # NEVER re-rendering the wrapper or the file picker via
+          # renderUI: only the <summary> *content* is server-rendered
+          # through `metadata_upload_summary`, which is replaced
+          # surgically without disturbing the file picker below it.
+          # The `open` attribute (auto-open when no metadata is
+          # present, auto-close once metadata arrives) is toggled via
+          # a custom message handler ("phenomapr-set-details-open")
+          # registered in helpers.R.
+          tags$details(
+            id    = "metadata_upload_details",
+            class = "metadata-upload-details",
+            # Custom container = tags$summary so the disclosure
+            # trigger is a real HTML5 <summary> as a direct child of
+            # the <details>. The renderUI body supplies just the
+            # summary's text/icon children; the <summary> itself (id
+            # + class) is stable across re-renders, which means the
+            # collapsed/open state controlled by the wrapper's `open`
+            # attribute is never disturbed.
+            uiOutput(
+              "metadata_upload_summary",
+              container = function(...)
+                tags$summary(class = "metadata-upload-details-summary", ...)
+            ),
+            tags$div(
+              class = "metadata-upload-help",
+              helpText(
+                "Optional \u2014 only needed for matrix uploads, or to ",
+                "attach extra annotations on top of an object's built-in ",
+                "metadata. A cell-ID column must match the expression ",
+                "matrix columns."
+              )
+            ),
+            tags$div(
+              class = "metadata-upload-file-host",
+              phenomapr_file_input(
+                "meta_file",
+                label  = NULL,
+                accept = c(".rds", ".tsv", ".csv", ".txt"),
+                width  = "100%"
+              )
+            )
+          ),
+          selectInput("meta_cell_id_col", "Cell ID column", choices = NULL),
+          selectInput("meta_cell_type_col", "Cell type column (optional)",
+                      choices = NULL),
+          selectInput("meta_source_col", "Source / group column (optional)",
+                      choices = NULL)
+        )
       ),
       card(
         card_header(icon("circle-info"), " About data input"),
         card_body(
-          markdown(
-            "PhenoMapR accepts:
-
-            * **Matrix / data.frame** — rows = genes, columns = cells/samples.
-            * **Seurat** (v4 / v5; assays `RNA`, `Spatial`).
-            * **SingleCellExperiment** / **SpatialExperiment**.
-            * **AnnData** (via `reticulate`).
-
-            For matrix uploads, gene IDs must be HUGO symbols (e.g. `TP53`).
-            ENSG IDs are detected and flagged; convert with `biomaRt` /
-            `AnnotationDbi` before uploading.
-
-            By default this app accepts uploads of any size — Shiny's 5 MB
-            cap is removed so very large `.rds` / `.h5ad` objects work as
-            long as your machine has enough RAM to hold them. Cap the limit
-            with `options(shiny.maxRequestSize = <bytes>)` before launching
-            if needed."
+          # Three peer callouts arranged horizontally. Each one has a
+          # subtle teal accent border and a translucent fill so they
+          # read as side-by-side reference notes rather than a wall
+          # of prose. All three live inside the same flex row, which
+          # bslib's layout_columns(c(4,4,4)) gives us on desktop and
+          # automatically stacks vertically on narrow viewports.
+          layout_columns(
+            col_widths = c(4, 4, 4),
+            tags$div(
+              class = "data-input-note",
+              tags$div(class = "data-input-note-title",
+                       icon("file-import"), " PhenoMapR accepts"),
+              markdown(
+                "* **Matrix / data.frame** \u2014 rows = genes, columns = cells/samples.
+                * **Seurat** (v4 / v5; assays `RNA`, `Spatial`).
+                * **SingleCellExperiment** / **SpatialExperiment**.
+                * **AnnData** (via `reticulate`)."
+              )
+            ),
+            tags$div(
+              class = "data-input-note",
+              tags$div(class = "data-input-note-title",
+                       icon("dna"), " Gene IDs"),
+              markdown(
+                "For matrix uploads, gene IDs must be HUGO symbols
+                (e.g. `TP53`). ENSG IDs are detected and flagged;
+                convert with `biomaRt` / `AnnotationDbi` before
+                uploading."
+              )
+            ),
+            tags$div(
+              class = "data-input-note",
+              tags$div(class = "data-input-note-title",
+                       icon("server"), " Upload size"),
+              markdown(
+                "By default this app accepts uploads of any size \u2014
+                analyses should work as long as your machine has
+                enough RAM to process them. Cap the limit with
+                `options(shiny.maxRequestSize = <bytes>)` before
+                launching if needed."
+              )
+            )
           )
         )
       ),
@@ -851,70 +914,88 @@ ui <- page_navbar(
         h4(tagList(icon("compass"), " Scoring summary")),
         uiOutput("score_data_status"),
         hr(),
-        h4("PhenoMap() parameters"),
-        # Slot / assay controls. Only rendered for object-typed inputs
-        # (Seurat / SCE / SpatialExperiment / AnnData), since plain
-        # matrices and data.frames have no concept of an assay or a
-        # named layer -- their values are scored directly. The
-        # `score_show_slot_block` flag is driven by state$expr_summary
-        # below (TRUE iff kind != "matrix"); using a conditionalPanel
-        # rather than a uiOutput keeps the inputs in the DOM with
-        # stable IDs so the observer further down can still call
-        # updateRadioButtons / updateTextInput on them when an object
-        # is loaded next.
-        conditionalPanel(
-          condition = "output.score_show_slot_block",
-          helpText(
-            icon("info-circle"),
-            " PhenoMapR computes a weighted sum of expression x reference ",
-            "z-score across signature genes. It expects ",
-            tags$strong("log-normalized expression"),
-            " (the 'data' / log-counts layer); choose 'counts (raw)' only ",
-            "if your object lacks a normalized layer."
+        # ---- PhenoMap() parameters block --------------------------------
+        # Wrapped in a `phenomapr-compact-stack score-params-compact-stack`
+        # div so all children (heading, slot/assay controls, pseudobulk
+        # toggle, action / download buttons) share the same tight
+        # vertical rhythm and do not accrue Bootstrap's default
+        # form-group margins around every input.
+        tags$div(
+          class = "phenomapr-compact-stack score-params-compact-stack",
+          h4("PhenoMap() parameters"),
+          # Slot / assay controls. Only rendered for object-typed inputs
+          # (Seurat / SCE / SpatialExperiment / AnnData), since plain
+          # matrices and data.frames have no concept of an assay or a
+          # named layer -- their values are scored directly. The
+          # `score_show_slot_block` flag is driven by state$expr_summary
+          # below (TRUE iff kind != "matrix"); using a conditionalPanel
+          # rather than a uiOutput keeps the inputs in the DOM with
+          # stable IDs so the observer further down can still call
+          # updateRadioButtons / updateTextInput on them when an object
+          # is loaded next.
+          conditionalPanel(
+            condition = "output.score_show_slot_block",
+            # Hide the slot/assay rationale behind a collapsible
+            # <details> chip labeled "Details" so the sidebar stays
+            # uncluttered for users who already know what to score
+            # against. The chevron (>) state is driven by HTML5; no
+            # JavaScript needed.
+            tags$details(
+              class = "score-slot-details",
+              tags$summary("Details"),
+              helpText(
+                icon("info-circle"),
+                " PhenoMapR computes a weighted sum of expression x reference ",
+                "z-score across signature genes. It expects ",
+                tags$strong("log-normalized expression"),
+                " (the 'data' / log-counts layer); choose 'counts (raw)' only ",
+                "if your object lacks a normalized layer."
+              )
+            ),
+            radioButtons(
+              "score_slot", "Layer / slot to score against",
+              choices = c("data (log-normalized)" = "data",
+                          "counts (raw)"          = "counts"),
+              selected = "data"
+            ),
+            textInput("score_assay",
+                      "Assay (Seurat / SCE; blank = auto)",
+                      value = "")
           ),
-          radioButtons(
-            "score_slot", "Layer / slot to score against",
-            choices = c("data (log-normalized)" = "data",
-                        "counts (raw)"          = "counts"),
-            selected = "data"
+          # For matrix / data.frame inputs we still want a one-line note
+          # so users know why the slot/assay controls aren't shown. (We
+          # use a conditionalPanel with the opposite condition so this
+          # text only appears for matrix-class inputs, never alongside
+          # the radio block above.)
+          conditionalPanel(
+            condition = "!output.score_show_slot_block && output.score_have_matrix",
+            helpText(
+              icon("info-circle"),
+              " Plain matrices are scored directly -- PhenoMapR expects ",
+              tags$strong("log-normalized expression"),
+              " (e.g. Seurat-style log-counts, log2(CPM+1), or log2(TPM+1)). ",
+              "Use the diagnostics block in 1. Data to normalize raw counts ",
+              "before scoring."
+            )
           ),
-          textInput("score_assay",
-                    "Assay (Seurat / SCE; blank = auto)",
-                    value = "")
+          checkboxInput("pseudobulk", "Aggregate to pseudobulk", value = FALSE),
+          conditionalPanel(
+            "input.pseudobulk == true",
+            selectInput("pseudobulk_group_by",
+                        "Group cells by (metadata column)",
+                        choices = NULL),
+            helpText(
+              "Pick the column whose values define each pseudobulk sample ",
+              "(e.g. patient / donor / sample / cluster / tissue core / ",
+              "spatial slide). Cells sharing that value are summed into one ",
+              "pseudobulk profile before scoring."
+            )
+          ),
+          actionButton("run_score", "Compute PhenoMapR scores",
+                       icon = icon("play"), class = "btn-primary"),
+          downloadButton("download_scores", "Download score table (TSV)",
+                         class = "btn-outline-primary")
         ),
-        # For matrix / data.frame inputs we still want a one-line note
-        # so users know why the slot/assay controls aren't shown. (We
-        # use a conditionalPanel with the opposite condition so this
-        # text only appears for matrix-class inputs, never alongside
-        # the radio block above.)
-        conditionalPanel(
-          condition = "!output.score_show_slot_block && output.score_have_matrix",
-          helpText(
-            icon("info-circle"),
-            " Plain matrices are scored directly -- PhenoMapR expects ",
-            tags$strong("log-normalized expression"),
-            " (e.g. Seurat-style log-counts, log2(CPM+1), or log2(TPM+1)). ",
-            "Use the diagnostics block in 1. Data to normalize raw counts ",
-            "before scoring."
-          )
-        ),
-        checkboxInput("pseudobulk", "Aggregate to pseudobulk", value = FALSE),
-        conditionalPanel(
-          "input.pseudobulk == true",
-          selectInput("pseudobulk_group_by",
-                      "Group cells by (metadata column)",
-                      choices = NULL),
-          helpText(
-            "Pick the column whose values define each pseudobulk sample ",
-            "(e.g. patient / donor / sample / cluster / tissue core / ",
-            "spatial slide). Cells sharing that value are summed into one ",
-            "pseudobulk profile before scoring."
-          )
-        ),
-        actionButton("run_score", "Compute PhenoMapR scores",
-                     icon = icon("play"), class = "btn-primary"),
-        downloadButton("download_scores", "Download score table (TSV)",
-                       class = "btn-outline-primary"),
         hr(),
         h4("Phenotype groups"),
         helpText(
@@ -935,6 +1016,13 @@ ui <- page_navbar(
                        class = "btn-outline-primary")
       ),
       card(
+        # `fill = FALSE` so the card sizes to its prose body instead of
+        # stretching to fill the column height when its taller siblings
+        # below (the Score-distribution + Cells-ordered cards) push the
+        # layout. Without it, bslib's default flex behavior leaves a
+        # large empty band beneath the markdown blurb -- the same fix
+        # we already use on the Markers tab's About-markers card.
+        fill = FALSE,
         card_header(icon("circle-info"), " About scoring"),
         card_body(
           markdown(
@@ -987,49 +1075,28 @@ ui <- page_navbar(
           )
         )
       ),
-      card(
-        # "Score by cell type and source" gets BOTH a "Download plot"
-        # (modal) button AND a "Download plot data" button. The
-        # data button exposes the same per-cell score table that the
-        # standalone "Score table" panel used to surface -- we removed
-        # the panel itself (it duplicated the sidebar "Download score
-        # table (TSV)" button and pushed the more useful boxplot down
-        # below the fold), but kept the underlying data download
-        # accessible from the boxplot header so users can grab the
-        # rows the plot was built from without bouncing back to the
-        # sidebar.
-        phenomapr_card_header_modal_dl(
-          tags$strong("Score by cell type and source"),
-          panel_id = "score_box_source_plot",
-          data_download_id = "score_table_download",
-          data_tooltip = "Download plot data (TSV)"
-        ),
-        card_body(
-          helpText(
-            "Boxplot of (scaled) PhenoMapR scores per cell type, ordered ",
-            "from lowest to highest median score. With no source / group ",
-            "column mapped, the plot annotates a single global ANOVA ",
-            "F-test across cell types. With exactly 2 sources mapped, ",
-            "Wilcoxon brackets compare sources within each cell type. ",
-            "With 3+ sources mapped, a one-way ANOVA is run within each ",
-            "cell type. Only significant (p < 0.05) brackets are drawn."
-          ),
-          plotOutput("score_box_source_plot", height = "440px")
-        )
-      ),
-
       # ---- Phenotype groups (merged from the old standalone tab) ----------
+      # NOTE: the two PLOTS that used to live here ("Score by cell type
+      # and source" and "Per-cell-type group enrichment") have been
+      # moved to the 4. Visualization tab so the Score tab can stay
+      # focused on the score table + group-size summary, and the
+      # visualization tab gathers all of the plot panels in one place.
+      # The underlying server-side renderPlot / register_plot_download
+      # wiring is unchanged -- only the UI placement moved.
       tags$div(
         class = "score-section-divider",
         tags$h3(tagList(icon("layer-group"), " Phenotype groups"))
       ),
       # About-tails + Group-sizes share a single row at 50/50 width so
       # the conceptual explanation and the live group counts sit next
-      # to each other rather than stacking. Per-cell-type group
-      # enrichment continues on its own full-width row below.
+      # to each other rather than stacking.
       layout_columns(
         col_widths = c(6, 6),
         card(
+          # `fill = FALSE` -- prose body is short, so size to content
+          # instead of stretching to whatever the taller sibling card
+          # would be. See same comment on the "About scoring" card above.
+          fill = FALSE,
           card_header(icon("circle-info"), " About phenotype tails"),
           card_body(
             markdown(
@@ -1045,18 +1112,13 @@ ui <- page_navbar(
           )
         ),
         card(
+          # Same rationale -- the Group-sizes table is exactly N+1 rows
+          # (one per phenotype group), so we don't want it stretched
+          # vertically. Pinning fill = FALSE here also matches the
+          # About-tails card width-mate so both peers align cleanly.
+          fill = FALSE,
           card_header(tags$strong("Group sizes")),
           card_body(uiOutput("group_summary"))
-        )
-      ),
-      card(
-        phenomapr_card_header_modal_dl(
-          tags$strong("Per-cell-type group enrichment"),
-          panel_id = "group_by_celltype_plot"
-        ),
-        card_body(
-          helpText("Only shown when a cell-type column has been selected above."),
-          plotOutput("group_by_celltype_plot", height = "320px")
         )
       )
     )
@@ -1080,51 +1142,64 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 360,
-        h4("Embedding"),
-        # Collapse the long "how detection works" copy into a <details>
-        # block so the sidebar isn't dominated by a wall of text by
-        # default. The Reduction dropdown is the primary control and now
-        # sits right under the section header.
-        selectInput("umap_reduction", "Reduction", choices = NULL),
-        uiOutput("umap_reduction_status"),
-        # Tissue-section / core / library switcher. Surfaces ONLY when
-        # the currently-selected embedding is spatial AND the loaded
-        # object stamps >1 unique section label on its spots (Seurat
-        # @images named entries, SpatialExperiment colData$sample_id,
-        # AnnData obs[library_id]/etc). Server-side renderUI keeps the
-        # control hidden otherwise so the sidebar isn't cluttered for
-        # single-section datasets.
-        uiOutput("spatial_sample_selector"),
-        tags$details(
-          class = "embedding-help-details",
-          tags$summary("About reductions & auto-detection"),
-          helpText(
-            "Reductions stored on a Seurat / SingleCellExperiment / ",
-            "AnnData object are picked up automatically. Spatial inputs ",
-            "(Seurat with @images, SpatialExperiment, AnnData with ",
-            "obsm['spatial']) also surface tissue coordinates as a ",
-            "\"spatial\" reduction in the dropdown above. For matrix ",
-            "uploads, the app additionally auto-detects 2D coordinate ",
-            "column pairs (e.g. UMAP_1/UMAP_2, tSNE_1/tSNE_2, ",
-            "X_umap_0/X_umap_1) on the metadata table from the Data tab ",
-            "\u2014 no second upload needed. Use the file picker below ",
-            "to supply a separate embedding file if you don't have one ",
-            "in your metadata."
-          )
-        ),
-        tags$details(
-          class = "embedding-help-details embedding-upload-details",
-          tags$summary("Upload a separate embedding file"),
-          helpText(
-            "Only needed when the metadata table on the Data tab does not ",
-            "already contain coordinate columns. Expects either an RDS / ",
-            "TSV / CSV with a cell-ID column and two numeric coordinate ",
-            "columns."
+        # ---- Embedding selector + help sub-section ----
+        # Wrapped in `.phenomapr-compact-stack embedding-compact-stack`
+        # so the section header, Reduction dropdown, reduction-status
+        # chip, spatial-sample selector, and the two collapsible
+        # <details> blocks sit tight together above the <hr/> that
+        # separates this group from the "Color cells by" controls
+        # below. Without this wrapper the default Shiny .form-group
+        # spacing + the <details> default margins leave a large
+        # vertical gap pushing the Color/Point-size controls below
+        # the fold on shorter viewports.
+        tags$div(
+          class = "phenomapr-compact-stack embedding-compact-stack",
+          h4("Embedding"),
+          # Collapse the long "how detection works" copy into a <details>
+          # block so the sidebar isn't dominated by a wall of text by
+          # default. The Reduction dropdown is the primary control and now
+          # sits right under the section header.
+          selectInput("umap_reduction", "Reduction", choices = NULL),
+          uiOutput("umap_reduction_status"),
+          # Tissue-section / core / library switcher. Surfaces ONLY when
+          # the currently-selected embedding is spatial AND the loaded
+          # object stamps >1 unique section label on its spots (Seurat
+          # @images named entries, SpatialExperiment colData$sample_id,
+          # AnnData obs[library_id]/etc). Server-side renderUI keeps the
+          # control hidden otherwise so the sidebar isn't cluttered for
+          # single-section datasets.
+          uiOutput("spatial_sample_selector"),
+          tags$details(
+            class = "embedding-help-details",
+            tags$summary("About reductions & auto-detection"),
+            helpText(
+              "Reductions stored on a Seurat / SingleCellExperiment / ",
+              "AnnData object are picked up automatically. Spatial inputs ",
+              "(Seurat with @images, SpatialExperiment, AnnData with ",
+              "obsm['spatial']) also surface tissue coordinates as a ",
+              "\"spatial\" reduction in the dropdown above. For matrix ",
+              "uploads, the app additionally auto-detects 2D coordinate ",
+              "column pairs (e.g. UMAP_1/UMAP_2, tSNE_1/tSNE_2, ",
+              "X_umap_0/X_umap_1) on the metadata table from the Data tab ",
+              "\u2014 no second upload needed. Use the file picker below ",
+              "to supply a separate embedding file if you don't have one ",
+              "in your metadata."
+            )
           ),
-          phenomapr_file_input(
-            "umap_upload",
-            label = NULL,
-            accept = c(".tsv", ".csv", ".txt", ".rds"), width = "100%"
+          tags$details(
+            class = "embedding-help-details embedding-upload-details",
+            tags$summary("Upload a separate embedding file"),
+            helpText(
+              "Only needed when the metadata table on the Data tab does not ",
+              "already contain coordinate columns. Expects either an RDS / ",
+              "TSV / CSV with a cell-ID column and two numeric coordinate ",
+              "columns."
+            ),
+            phenomapr_file_input(
+              "umap_upload",
+              label = NULL,
+              accept = c(".tsv", ".csv", ".txt", ".rds"), width = "100%"
+            )
           )
         ),
         hr(),
@@ -1167,6 +1242,57 @@ ui <- page_navbar(
           panel_id = "umap_plot"
         ),
         card_body(plotOutput("umap_plot", height = "560px"))
+      ),
+      # ---- Score by cell type and source (moved from 3. Score tab) ----
+      #
+      # The Score-tab boxplot was relocated here so all plot panels live
+      # in the Visualization tab. The renderPlot / phenomapr_register_
+      # plot_download wiring keyed on "score_box_source_plot" is
+      # unchanged; only this UI card moved.
+      #
+      # Gets BOTH a "Download plot" (modal) button AND a "Download plot
+      # data" button. The data button exposes the same per-cell score
+      # table that the standalone "Score table" panel used to surface
+      # -- we removed that panel earlier (it duplicated the sidebar
+      # "Download score table (TSV)" button and pushed the more useful
+      # boxplot down below the fold), but kept the underlying data
+      # download accessible from the boxplot header so users can grab
+      # the rows the plot was built from without bouncing back to the
+      # sidebar.
+      card(
+        phenomapr_card_header_modal_dl(
+          tags$strong("Score by cell type and source"),
+          panel_id = "score_box_source_plot",
+          plot_label = "Download plot",
+          tooltip = "Download plot (with options)",
+          data_download_id = "score_table_download",
+          data_label = "Download plot data",
+          data_tooltip = "Download plot data (TSV, includes phenotype group labels)"
+        ),
+        card_body(
+          helpText(
+            "Boxplot of (scaled) PhenoMapR scores per cell type, ordered ",
+            "from lowest to highest median score. With no source / group ",
+            "column mapped, the plot annotates a single global ANOVA ",
+            "F-test across cell types. With exactly 2 sources mapped, ",
+            "Wilcoxon brackets compare sources within each cell type. ",
+            "With 3+ sources mapped, a one-way ANOVA is run within each ",
+            "cell type. Only significant (p < 0.05) brackets are drawn."
+          ),
+          plotOutput("score_box_source_plot", height = "440px")
+        )
+      ),
+      # ---- Per-cell-type group enrichment (moved from 3. Score tab) ----
+      # Same migration rationale as the boxplot above. The downstream
+      # download / render path is unchanged.
+      card(
+        phenomapr_card_header_modal_dl(
+          tags$strong("Per-cell-type group enrichment"),
+          panel_id = "group_by_celltype_plot"
+        ),
+        card_body(
+          plotOutput("group_by_celltype_plot", height = "320px")
+        )
       )
     )
   ),
@@ -1182,10 +1308,25 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 360,
+        # Sidebar heading -- mirrors the h4 banners we use in the
+        # other tabs ("Cell metadata", "Phenotype groups", etc.) so
+        # the sidebar reads as a labeled control surface rather than
+        # a wall of widgets.
+        h4("Marker parameters"),
         radioButtons(
           "marker_scope", "Scope",
-          choices = c("Cohort-wide (adverse vs favorable)" = "phenotype_groups",
-                      "Cell-type specific"                 = "cell_type_specific"),
+          # Labels track the customer-facing phenotype rebrand:
+          # "adverse / favorable" -> "phenotype + / phenotype \u2212"
+          # mirrors the legend remap in score_rank_plot /
+          # group_by_celltype_plot and the home-page hero blurb.
+          # The "(within phenotype groups)" clarifier for the
+          # cell-type-specific scope makes explicit that the
+          # contrast is still adverse-vs-favorable inside each cell
+          # type (not cell-type-vs-cell-type).
+          choices = c(
+            "Cohort-wide (phenotype + vs phenotype \u2212)"  = "phenotype_groups",
+            "Cell-type specific (within phenotype groups)"    = "cell_type_specific"
+          ),
           selected = "phenotype_groups"
         ),
         sliderInput("marker_min_pct", "Min. fraction expressing (min.pct)",
@@ -1201,18 +1342,26 @@ ui <- page_navbar(
         downloadButton("download_markers", "Download marker tables (RDS)",
                        class = "btn-outline-primary"),
         # ---- Heatmap drawing controls (moved into the sidebar) ----------
+        # Wrapped in `.phenomapr-compact-stack marker-heatmap-compact-stack`
+        # so the heatmap-specific controls (helpText, two numericInputs,
+        # the Draw button) read as a tight grouping right under the
+        # divider, instead of inheriting the default Shiny .form-group
+        # spacing that would push the Draw button below the fold.
         hr(),
-        h4("Marker-gene heatmap"),
-        helpText(
-          "After running marker discovery, configure and draw a ",
-          "ComplexHeatmap of the top markers per block."
-        ),
-        numericInput("hm_top_n", "Top genes per block", value = 20,
-                     min = 5, max = 200, step = 5),
-        numericInput("hm_n_labels", "Gene labels per block", value = 5,
-                     min = 0, max = 50, step = 1),
-        actionButton("draw_marker_heatmap", "Draw heatmap",
-                     icon = icon("th"), class = "btn-primary")
+        tags$div(
+          class = "phenomapr-compact-stack marker-heatmap-compact-stack",
+          h4("Marker-gene heatmap"),
+          helpText(
+            "After running marker discovery, configure and draw a ",
+            "ComplexHeatmap of the top markers per block."
+          ),
+          numericInput("hm_top_n", "Top genes per block", value = 20,
+                       min = 5, max = 200, step = 5),
+          numericInput("hm_n_labels", "Gene labels per block", value = 5,
+                       min = 0, max = 50, step = 1),
+          actionButton("draw_marker_heatmap", "Draw heatmap",
+                       icon = icon("th"), class = "btn-primary")
+        )
       ),
       card(
         # `fill = FALSE` keeps this short explanatory card from being
@@ -1544,21 +1693,86 @@ server <- function(input, output, session) {
   # and trying to render it twice (once for the main panel via
   # imageOutput, once for the preview via renderPlot) is both slow
   # and brittle. Instead the preview shows a friendly placeholder.
+
+  # ---- Unit conversion helpers ----
+  # The modal exposes `plot_dl_units = "in" | "cm"`. width / height
+  # inputs carry the value in whatever unit the user picked; every
+  # downstream consumer (renderPlot preview sizing, ggsave / device
+  # calls in the downloadHandler) needs the value in INCHES because
+  # that is what grDevices and ggsave expect.
+  .CM_PER_INCH <- 2.54
+  .to_inches <- function(v, units) {
+    if (identical(units, "cm")) v / .CM_PER_INCH else v
+  }
+  # State: remember the previous unit so we know which direction to
+  # rescale when the user toggles the radio. Default "in".
+  prev_dl_units <- reactiveVal("in")
+
+  # When the user toggles the units radio, rescale width / height to
+  # KEEP THE PHYSICAL SIZE CONSTANT (8 in -> 20.32 cm rather than
+  # 8 cm), update the labels to carry the new unit, and bump max +
+  # step accordingly so the input keeps reasonable bounds.
+  observeEvent(input$plot_dl_units, {
+    cur <- input$plot_dl_units
+    prv <- isolate(prev_dl_units())
+    if (identical(cur, prv)) return()
+
+    factor <- if (identical(prv, "in") && identical(cur, "cm")) {
+      .CM_PER_INCH
+    } else if (identical(prv, "cm") && identical(cur, "in")) {
+      1 / .CM_PER_INCH
+    } else {
+      1
+    }
+    w <- suppressWarnings(as.numeric(isolate(input$plot_dl_width)))
+    h <- suppressWarnings(as.numeric(isolate(input$plot_dl_height)))
+    if (!is.finite(w) || w <= 0) w <- 8 * (if (identical(cur, "cm")) .CM_PER_INCH else 1)
+    if (!is.finite(h) || h <= 0) h <- 6 * (if (identical(cur, "cm")) .CM_PER_INCH else 1)
+    if (factor != 1) {
+      w <- round(w * factor, 2)
+      h <- round(h * factor, 2)
+    }
+    is_cm <- identical(cur, "cm")
+    new_max  <- if (is_cm) 80 else 30
+    new_step <- if (is_cm) 1  else 0.5
+    new_w_label <- sprintf("Width (%s)",  if (is_cm) "cm" else "inches")
+    new_h_label <- sprintf("Height (%s)", if (is_cm) "cm" else "inches")
+    updateNumericInput(session, "plot_dl_width",
+                       label = new_w_label,
+                       value = w, max = new_max, step = new_step)
+    updateNumericInput(session, "plot_dl_height",
+                       label = new_h_label,
+                       value = h, max = new_max, step = new_step)
+    prev_dl_units(cur)
+  }, ignoreInit = TRUE)
+
+  # Reset the "previous units" memory each time a new modal opens so
+  # the first rescale event always references the modal's seeded unit
+  # rather than whatever the last modal left behind.
+  observeEvent(active_plot_dl(), {
+    prev_dl_units(input$plot_dl_units %||% "in")
+  }, ignoreInit = FALSE)
+
   .plot_dl_preview_dims <- function(input,
                                     max_w = 640, max_h = 320,
                                     fallback = list(w = 8, h = 6)) {
     w <- suppressWarnings(as.numeric(input$plot_dl_width))
     h <- suppressWarnings(as.numeric(input$plot_dl_height))
-    if (!is.finite(w) || w <= 0) w <- fallback$w
-    if (!is.finite(h) || h <= 0) h <- fallback$h
-    # Fit (w x h) inches into a max_w x max_h pixel box preserving
-    # aspect ratio. Whichever dimension hits the cap first decides
-    # the scale factor.
-    sw <- max_w / w
-    sh <- max_h / h
+    units <- input$plot_dl_units %||% "in"
+    if (!is.finite(w) || w <= 0) w <- fallback$w * (if (identical(units, "cm")) .CM_PER_INCH else 1)
+    if (!is.finite(h) || h <= 0) h <- fallback$h * (if (identical(units, "cm")) .CM_PER_INCH else 1)
+    # Convert to inches before sizing the preview pixel box so the
+    # screen aspect ratio matches what ggsave will produce on disk.
+    w_in <- .to_inches(w, units)
+    h_in <- .to_inches(h, units)
+    # Fit (w_in x h_in) inches into a max_w x max_h pixel box
+    # preserving aspect ratio. Whichever dimension hits the cap first
+    # decides the scale factor.
+    sw <- max_w / w_in
+    sh <- max_h / h_in
     s  <- min(sw, sh)
-    list(width  = max(120L, round(w * s)),
-         height = max(120L, round(h * s)))
+    list(width  = max(120L, round(w_in * s)),
+         height = max(120L, round(h_in * s)))
   }
 
   # Friendly empty / error state for the preview pane. Returns a
@@ -1640,6 +1854,7 @@ server <- function(input, output, session) {
         return(invisible(NULL))
       }
       fmt    <- isolate(input$plot_dl_format)   %||% "png"
+      units  <- isolate(input$plot_dl_units)    %||% "in"
       w      <- as.numeric(isolate(input$plot_dl_width)  %||% 8)
       h      <- as.numeric(isolate(input$plot_dl_height) %||% 6)
       dpi    <- as.numeric(isolate(input$plot_dl_dpi)    %||% 300)
@@ -1651,6 +1866,12 @@ server <- function(input, output, session) {
       if (!is.finite(h)      || h      <= 0) h      <- 6
       if (!is.finite(dpi)    || dpi    <= 0) dpi    <- 300
       if (!is.finite(radius) || radius < 0)  radius <- 3
+
+      # ggsave + grDevices::png/jpeg/tiff/pdf/svg all expect width and
+      # height in inches. Convert here so the rest of the export path
+      # is unit-agnostic. .to_inches is a no-op for "in".
+      w <- .to_inches(w, units)
+      h <- .to_inches(h, units)
 
       if (identical(pid, "marker_heatmap")) {
         # Heatmap path: re-render via plot_phenotype_markers() into a
@@ -1970,54 +2191,61 @@ server <- function(input, output, session) {
   output$meta_columns_available <- reactive({ length(state$meta_columns) > 0 })
   outputOptions(output, "meta_columns_available", suspendWhenHidden = FALSE)
 
-  # Metadata-upload panel (a <details> block above the cell-ID / cell-type /
-  # source dropdowns). When an expression file has been loaded but no
-  # metadata was detected, the panel is rendered with `open` so the user is
-  # prompted to attach a tabular metadata file. Once metadata is available
-  # — from the object, a demo, or an uploaded file — the panel collapses to
-  # keep the sidebar tidy. The user can still toggle it manually.
-  # Collapsible <details> wrapper that sits above the static
-  # phenomapr_file_input("meta_file", ...) in the sidebar. The renderUI
-  # owns ONLY the summary label + a short helpText; the file picker
-  # itself is rendered statically below the renderUI so its DOM
-  # identity is stable across state$metadata transitions (see the
-  # sidebar UI comment for the full rationale).
-  output$metadata_upload_panel <- renderUI({
-    has_expr <- !is.null(state$expression)
-    no_meta  <- is.null(state$metadata) || !length(state$meta_columns)
-    auto_open <- has_expr && no_meta
+  # Metadata-upload <summary> body + open-state toggle.
+  #
+  # The <details> WRAPPER is rendered statically in the sidebar UI
+  # together with the file picker, so the picker's DOM identity stays
+  # stable across state$metadata transitions (see the sidebar UI
+  # comment for the rationale). Here we only:
+  #
+  #   1. server-render the SUMMARY content, which morphs between a
+  #      "No metadata detected -- upload a tabular metadata file"
+  #      prompt (when expression is loaded but no metadata was found)
+  #      and a more neutral "Override / supplement with a tabular
+  #      metadata file" label (when metadata is already in hand).
+  #
+  #   2. toggle the `open` attribute on the static <details> via a
+  #      custom JS message ("phenomapr-set-details-open"), so the
+  #      panel auto-opens when no metadata is present and auto-closes
+  #      once metadata arrives. The user can always click the chevron
+  #      to override.
+  # Children of the static <summary>. Only these inner nodes change
+  # across state$metadata transitions; the <summary> wrapper itself
+  # (created by the uiOutput container in the sidebar UI) keeps a
+  # stable DOM identity, which is what guarantees the file picker
+  # below it never gets torn down.
+  output$metadata_upload_summary <- renderUI({
+    has_expr  <- !is.null(state$expression)
+    no_meta   <- is.null(state$metadata) || !length(state$meta_columns)
+    prompt    <- isTRUE(has_expr && no_meta)
 
-    summary_label <- if (auto_open) {
-      "No metadata detected \u2014 upload a tabular metadata file"
+    if (prompt) {
+      tagList(
+        tags$span(class = "mu-badge", icon("upload")),
+        tags$strong(
+          "No metadata detected \u2014 upload a tabular metadata file"
+        )
+      )
     } else {
       "Override / supplement with a tabular metadata file"
     }
+  })
 
-    body <- helpText(
-      "Optional \u2014 only needed for matrix uploads, or to attach extra ",
-      "annotations on top of an object's built-in metadata. A cell-ID ",
-      "column must match the expression matrix columns."
+  # Auto-open / auto-close the static <details> AND tag it with the
+  # `mu-prompt` class so CSS can apply the salmon-tinted prompt look
+  # to the summary. We push the desired state via a custom message;
+  # the JS handler in helpers.R sets or removes both the `open`
+  # attribute and the class.
+  observe({
+    has_expr <- !is.null(state$expression)
+    no_meta  <- is.null(state$metadata) || !length(state$meta_columns)
+    prompt   <- isTRUE(has_expr && no_meta)
+    session$sendCustomMessage(
+      "phenomapr-set-details-state",
+      list(id     = "metadata_upload_details",
+           open   = prompt,
+           prompt = prompt)
     )
-
-    details_class <- if (auto_open)
-      "metadata-upload-details metadata-upload-details-prompt"
-    else
-      "metadata-upload-details"
-    summary_node <- if (auto_open) {
-      tags$summary(
-        tags$span(class = "mu-badge", icon("upload")),
-        tags$strong(summary_label)
-      )
-    } else {
-      tags$summary(summary_label)
-    }
-
-    if (auto_open) {
-      tags$details(class = details_class, open = "open",
-                   summary_node, body)
-    } else {
-      tags$details(class = details_class, summary_node, body)
-    }
   })
 
   # Status banner above the metadata dropdowns: explains where the metadata
@@ -2728,7 +2956,6 @@ server <- function(input, output, session) {
     }
     phenomapr_busy_show("Cleaning matrix...",
                         "Running HUGO cleanup and / or normalization")
-    on.exit(phenomapr_busy_hide(), add = TRUE)
     res <- tryCatch(
       clean_matrix_input(
         state$expression,
@@ -2746,21 +2973,37 @@ server <- function(input, output, session) {
         NULL
       }
     )
+    # Hide BEFORE state assignment so the hide message lands in a
+    # flush ahead of the (potentially heavy) downstream
+    # invalidations -- expr_summary, dataset_overview, embedding,
+    # diagnostics, cell-table-driven plots, etc. all re-render off
+    # state$expression.
+    phenomapr_busy_hide()
     if (is.null(res)) return()
-    state$expression <- res$matrix
-    state$expr_summary <- summarize_expression_object(res$matrix)
-    state$expr_summary$notes <- paste(
-      "Matrix cleaned via clean_matrix_input():",
-      paste(res$steps, collapse = "; ")
-    )
-    showNotification(
-      paste0(
-        "Cleanup complete -- ",
-        if (length(res$steps)) paste(res$steps, collapse = "; ")
-        else "no changes were necessary."
-      ),
-      type = "message", duration = 8
-    )
+    sess <- session
+    later::later(function() {
+      tryCatch({
+        state$expression <- res$matrix
+        state$expr_summary <- summarize_expression_object(res$matrix)
+        state$expr_summary$notes <- paste(
+          "Matrix cleaned via clean_matrix_input():",
+          paste(res$steps, collapse = "; ")
+        )
+        shiny::showNotification(
+          paste0(
+            "Cleanup complete -- ",
+            if (length(res$steps)) paste(res$steps, collapse = "; ")
+            else "no changes were necessary."
+          ),
+          type = "message", duration = 8, session = sess
+        )
+      }, error = function(e) {
+        shiny::showNotification(
+          paste0("Internal error after cleanup: ", conditionMessage(e)),
+          type = "error", duration = 10, session = sess
+        )
+      })
+    }, delay = 0)
   })
 
   # ------------------------------------------------------------------------
@@ -3109,7 +3352,6 @@ server <- function(input, output, session) {
               input$cancer_type %||% "")
     } else "custom signature"
     phenomapr_busy_show("Computing PhenoMap scores...", ref_label)
-    on.exit(phenomapr_busy_hide(), add = TRUE)
     # Direction radio was removed from the sidebar; PhenoMap() now
     # always uses the built-in signature's native direction
     # (reference_sign = 1L: higher score = worse prognosis), which
@@ -3132,18 +3374,43 @@ server <- function(input, output, session) {
                          type = "error", duration = 10); NULL
       }
     )
+    # Hide the popup BEFORE assigning to state$scores. Reason: state$scores
+    # invalidates ~half a dozen downstream renderPlot/renderUI outputs
+    # (score histogram, rank plot, box-by-source plot, group enrichment
+    # plot, score data status, score-table data, ...). Each of those
+    # produces a payload that ships in the next flush's single big
+    # websocket frame; if the popup-hide custom message is bundled
+    # alongside those large image payloads, browser timing can paint the
+    # new content before processing the hide. By calling hide here and
+    # deferring the state assignment via later::later() into a fresh
+    # tick, the hide message lands in its own (tiny) flush BEFORE any
+    # output values are produced, eliminating the lag entirely.
+    phenomapr_busy_hide()
     if (is.null(scores)) return()
-    state$scores <- scores
-    state$groups <- NULL  # invalidate downstream
-    state$markers <- NULL
-    nm <- colnames(scores)
-    updateSelectInput(session, "groups_score_col", choices = nm, selected = nm[1L])
-    showNotification(
-      sprintf("Scored %s (%.1fs).",
-              .fmt_n_units(nrow(scores), "row"),
-              attr(scores, "elapsed_s") %||% NA_real_),
-      type = "message", duration = 5
-    )
+    sess <- session
+    later::later(function() {
+      tryCatch({
+        state$scores <- scores
+        state$groups <- NULL  # invalidate downstream
+        state$markers <- NULL
+        nm <- colnames(scores)
+        shiny::updateSelectInput(sess, "groups_score_col",
+                                 choices = nm, selected = nm[1L])
+        shiny::showNotification(
+          sprintf("Scored %s (%.1fs).",
+                  .fmt_n_units(nrow(scores), "row"),
+                  attr(scores, "elapsed_s") %||% NA_real_),
+          type = "message", duration = 5,
+          session = sess
+        )
+      }, error = function(e) {
+        shiny::showNotification(
+          paste0("Internal error while applying scores: ",
+                 conditionMessage(e)),
+          type = "error", duration = 10, session = sess
+        )
+      })
+    }, delay = 0)
   })
 
   # Score distribution histogram. The "Score scale" radio in the card
@@ -3215,10 +3482,24 @@ server <- function(input, output, session) {
   # downloadHandler reads this reactive directly, so users still get
   # the per-cell score table without needing it rendered as a table.
   #
-  # Schema: starts from state$scores (rownames = cell IDs), promotes
-  # the row names to a `cell_id` column, then adds a matching
-  # `scaled_<col>` (mean 0, sd 1) for every numeric score column so
-  # the export contains both raw and scaled values inline.
+  # Schema:
+  #   cell_id                                    -- cell identifier
+  #   <score_col>                                -- raw PhenoMapR score
+  #   scaled_<score_col>                         -- z-scaled score
+  #   phenotype_group_<score_col>                -- "Most Adverse" /
+  #     "Most Favorable" / "Other" (only present when scores have
+  #     been thresholded into groups, i.e. state$groups is set).
+  #
+  # The phenotype-group merge means the "Download plot data" TSV is
+  # self-contained: the user can recolour / refilter the boxplot
+  # offline using the canonical group labels without also having to
+  # download the sidebar "Download labels (TSV)" file separately.
+  # We keep the CANONICAL strings ("Most Adverse" / "Most Favorable")
+  # in the export rather than the displayed "Most Phenotype +/-"
+  # labels so the file is interoperable with PhenoMapR R functions
+  # (find_phenotype_markers, plot_phenotype_markers, the
+  # prognostic_analysis tests + vignettes) that pattern-match those
+  # literals.
   score_table_data <- reactive({
     req(state$scores)
     s <- state$scores
@@ -3229,9 +3510,31 @@ server <- function(input, output, session) {
       v <- as.numeric(scale(s[[col]]))
       s[[paste0("scaled_", col)]] <- v
     }
-    ordered_cols <- c("cell_id", unlist(lapply(score_cols, function(col) {
-      if (col %in% numeric_cols) c(col, paste0("scaled_", col)) else col
-    }), use.names = FALSE))
+
+    # Optionally splice phenotype_group_<score_col> columns from
+    # state$groups. state$groups carries cell IDs in BOTH `cell_id`
+    # column AND rownames; we join on rownames so the alignment
+    # survives even if some scoring runs strip the cell_id column
+    # downstream.
+    grp_cols <- character(0)
+    if (!is.null(state$groups)) {
+      grp_cols <- grep("^phenotype_group_", colnames(state$groups),
+                       value = TRUE)
+      if (length(grp_cols)) {
+        join_idx <- match(rownames(s), rownames(state$groups))
+        for (gc in grp_cols) {
+          s[[gc]] <- state$groups[[gc]][join_idx]
+        }
+      }
+    }
+
+    ordered_cols <- c(
+      "cell_id",
+      unlist(lapply(score_cols, function(col) {
+        if (col %in% numeric_cols) c(col, paste0("scaled_", col)) else col
+      }), use.names = FALSE),
+      grp_cols
+    )
     s[, ordered_cols, drop = FALSE]
   })
   phenomapr_register_table_download(output, "score_table",
@@ -3427,13 +3730,32 @@ server <- function(input, output, session) {
       title <- "PhenoMapR Score distribution by Cell Type"
     }
 
+    # Subtitle. When per-cell-type bracket annotations are drawn (the
+    # Wilcoxon-2-source path or the per-CT ANOVA path), prepend a
+    # significance-key line so users know what * / ** / *** mean
+    # without scanning a separate legend. The bare-ANOVA case
+    # (annotation render_kind, no stars on the plot) doesn't get the
+    # key because the label there literally reads "ANOVA (p = X.XXX)".
+    render_kind  <- if (!is.null(pval_df))
+      (attr(pval_df, "render_kind") %||% "bracket") else "bracket"
+    has_brackets <- !is.null(pval_df) && nrow(pval_df) > 0L &&
+      !identical(render_kind, "annotation")
+    plot_subtitle <- if (has_brackets) {
+      "Significance: *** p < 0.001, ** p < 0.01, * p < 0.05"
+    } else NULL
+
     p <- p +
-      labs(x = NULL, y = "PhenoMapR score (scaled)", title = title) +
+      labs(x = NULL, y = "PhenoMapR score (scaled)",
+           title = title, subtitle = plot_subtitle) +
       theme_minimal(base_size = .theme_base_size()) +
       theme(
         axis.text.x     = element_text(angle = 45, hjust = 1),
         legend.position = "right",
-        plot.title      = element_text(hjust = 0.5)
+        plot.title      = element_text(hjust = 0.5),
+        plot.subtitle   = element_text(
+          hjust = 0.5, size = .theme_base_size() * 0.85,
+          colour = "#3a3a3a", margin = ggplot2::margin(t = 1, b = 6)
+        )
       )
     if (!is.null(pal_cells)) {
       p <- p + scale_fill_manual(values = pal_cells, name = "Cell type")
@@ -3446,9 +3768,15 @@ server <- function(input, output, session) {
       #   - "annotation": single centred text label, no bracket or
       #     connector line (currently the global-ANOVA case from
       #     celltype_anova_pvalue()).
-      #   - default      : per-cell-type significance brackets via
-      #     ggsignif::geom_signif() (Wilcoxon or per-CT ANOVA).
-      render_kind <- attr(pval_df, "render_kind") %||% "bracket"
+      #   - default      : per-cell-type significance brackets drawn
+      #     manually via geom_segment + geom_text. We do NOT use
+      #     ggsignif::geom_signif() here because in some
+      #     ggsignif/ggplot2 version combos the manual-mode renderer
+      #     drops short labels ("*", "**") while keeping long ones
+      #     ("***"), producing the empty-bracket look the user
+      #     reported. Drawing brackets ourselves with explicit
+      #     geom_segment + geom_text guarantees every bracket carries
+      #     its label regardless of length.
       if (identical(render_kind, "annotation")) {
         # Draw the ANOVA p-value as a single centred text annotation
         # above the boxes. No bracket, no significance stars -- the
@@ -3466,48 +3794,76 @@ server <- function(input, output, session) {
             fontface = "plain",
             colour = "black"
           )
-      } else if (requireNamespace("ggsignif", quietly = TRUE)) {
-        # Suppress benign "Ignoring unknown aesthetics" warnings from
-        # geom_signif manual mode -- cosmetic, clutters the Shiny console.
-        suppressWarnings(
-          p <- p + ggsignif::geom_signif(
-            data        = pval_df,
-            aes(xmin = xmin, xmax = xmax,
-                annotations = label, y_position = y_pos),
-            manual      = TRUE,
-            tip_length  = 0.02,
-            textsize    = 4,
-            color       = "black",
-            inherit.aes = FALSE
-          )
-        )
       } else {
-        # ggsignif fallback: hand-drawn brackets.
+        # Manual bracket drawing. Each row of pval_df contributes
+        # three primitives:
+        #   1. A horizontal segment from xmin to xmax at y_pos
+        #      (the bracket spine).
+        #   2. Two short vertical segments at xmin / xmax dropping
+        #      down a small amount (the bracket "tips").
+        #   3. A geom_text label centred above the spine, raised by
+        #      a constant offset that scales with the y range so the
+        #      label never overlaps the spine.
+        # The spine y is taken straight from helpers.R's pval_df
+        # (which uses `y_top * 1.05`); for the label we add a small
+        # constant in scaled-score units. This keeps every label
+        # visible and at the same height regardless of star length.
+        y_top <- attr(pval_df, "y_top") %||% max(pval_df$y_pos, na.rm = TRUE)
+        if (!is.finite(y_top)) y_top <- 0
+        # Tip length in y units. Using a small fraction of y_top
+        # keeps the bracket tips proportionate to the data range.
+        tip_h <- max(0.08, abs(y_top) * 0.05)
+        # Label offset above the spine. A bit larger than tip_h so
+        # the text never collides with the bracket spine.
+        lab_offset <- max(0.18, abs(y_top) * 0.10)
+
         seg_df <- data.frame(
-          x = pval_df$xmin, xend = pval_df$xmax,
-          y = pval_df$y_pos, yend = pval_df$y_pos
+          x    = pval_df$xmin,
+          xend = pval_df$xmax,
+          y    = pval_df$y_pos,
+          yend = pval_df$y_pos,
+          stringsAsFactors = FALSE
         )
         tick_df <- data.frame(
-          x = c(pval_df$xmin, pval_df$xmax),
+          x    = c(pval_df$xmin, pval_df$xmax),
           xend = c(pval_df$xmin, pval_df$xmax),
           y    = c(pval_df$y_pos, pval_df$y_pos),
-          yend = c(pval_df$y_pos - 0.1, pval_df$y_pos - 0.1)
+          yend = c(pval_df$y_pos - tip_h, pval_df$y_pos - tip_h),
+          stringsAsFactors = FALSE
         )
         text_df <- data.frame(
-          x = (pval_df$xmin + pval_df$xmax) / 2,
-          y = pval_df$y_pos + 0.15,
-          label = pval_df$label
+          x     = (pval_df$xmin + pval_df$xmax) / 2,
+          y     = pval_df$y_pos + lab_offset,
+          label = as.character(pval_df$label),
+          stringsAsFactors = FALSE
         )
+
         p <- p +
-          geom_segment(data = seg_df,
-                       aes(x = x, xend = xend, y = y, yend = yend),
-                       inherit.aes = FALSE, color = "black") +
-          geom_segment(data = tick_df,
-                       aes(x = x, xend = xend, y = y, yend = yend),
-                       inherit.aes = FALSE, color = "black") +
-          geom_text(data = text_df,
-                    aes(x = x, y = y, label = label),
-                    inherit.aes = FALSE, size = 4)
+          geom_segment(
+            data = seg_df,
+            aes(x = x, xend = xend, y = y, yend = yend),
+            inherit.aes = FALSE, color = "black", linewidth = 0.5
+          ) +
+          geom_segment(
+            data = tick_df,
+            aes(x = x, xend = xend, y = y, yend = yend),
+            inherit.aes = FALSE, color = "black", linewidth = 0.5
+          ) +
+          geom_text(
+            data = text_df,
+            aes(x = x, y = y, label = label),
+            inherit.aes = FALSE,
+            size = 5, fontface = "bold", colour = "black",
+            vjust = 0
+          )
+
+        # Expand the y axis upward so the labels (especially the
+        # bold "*" / "**" / "***" text at y_pos + lab_offset) are
+        # never clipped by the panel boundary. Without this, ggplot's
+        # auto-scaling can crop the top row of stars on smaller
+        # devices, which is exactly the symptom the user reported.
+        y_max <- max(text_df$y, na.rm = TRUE) + lab_offset * 0.6
+        p <- p + ggplot2::expand_limits(y = y_max)
       }
     }
 
@@ -3893,7 +4249,13 @@ server <- function(input, output, session) {
       )
       p <- base +
         geom_point(aes(color = cell_type), size = pt_size, alpha = pt_alpha) +
-        labs(color = "Cell type")
+        labs(color = "Cell type") +
+        # Match the score_rank_plot legend point size so the cell-type
+        # swatches in the Embedding legend are easy to read regardless
+        # of how small `pt_size` (input$umap_point_size) is set.
+        ggplot2::guides(color = ggplot2::guide_legend(
+          override.aes = list(size = 4, alpha = 1)
+        ))
       if (!is.null(pal)) p <- p + scale_color_manual(values = pal)
     } else if (color_by == "source" && "source" %in% colnames(df)) {
       # Apply the PhenoMapR brand palette so the Source coloring here
@@ -3928,7 +4290,12 @@ server <- function(input, output, session) {
           ),
           na.value = "#E0E0E0",
           name = "Group"
-        )
+        ) +
+        # Same legend point size override as the cell_type / source
+        # branches and the score_rank_plot legend.
+        ggplot2::guides(color = ggplot2::guide_legend(
+          override.aes = list(size = 4, alpha = 1)
+        ))
     } else {
       p <- base + geom_point(size = pt_size, alpha = pt_alpha, color = "#555555")
     }
@@ -4082,6 +4449,47 @@ server <- function(input, output, session) {
       dplyr::group_by(cell_type) %>%
       dplyr::mutate(frac = n / sum(n)) %>%
       dplyr::ungroup()
+
+    # Order cell types by ascending median PhenoMapR score so this
+    # enrichment plot matches the x-axis order of the
+    # `Score by cell type and source` boxplot directly above it. We
+    # pull scores from `cell_table()` (the same reactive that drives
+    # the boxplot); when scores aren't available yet we fall back to
+    # alphabetical ordering on the cell types observed here. The
+    # fallback also covers the rare case where the cell-type column
+    # was set BEFORE scores landed.
+    ct_levels <- {
+      cell_tbl <- tryCatch(cell_table(), error = function(e) NULL)
+      have_scores <- !is.null(cell_tbl) &&
+        all(c("score", "cell_type") %in% colnames(cell_tbl)) &&
+        any(is.finite(cell_tbl$score))
+      if (have_scores) {
+        med <- stats::aggregate(
+          score ~ cell_type,
+          data  = data.frame(
+            score     = as.numeric(cell_tbl$score),
+            cell_type = as.character(cell_tbl$cell_type),
+            stringsAsFactors = FALSE
+          ),
+          FUN   = function(x) stats::median(x, na.rm = TRUE)
+        )
+        med <- med[order(med$score), , drop = FALSE]
+        present <- as.character(unique(df_count$cell_type))
+        ordered <- as.character(med$cell_type[
+          as.character(med$cell_type) %in% present
+        ])
+        # Tail any cell types that show up here but not in the score
+        # table (e.g. NA/0-score rows filtered out of cell_table)
+        # alphabetically so they still appear instead of disappearing.
+        tail <- sort(setdiff(present, ordered))
+        c(ordered, tail)
+      } else {
+        sort(as.character(unique(df_count$cell_type)))
+      }
+    }
+    df_count$cell_type <- factor(as.character(df_count$cell_type),
+                                 levels = ct_levels)
+
     p <- ggplot(df_count, aes(x = cell_type, y = frac, fill = group)) +
       .geom_rounded_stack(color = NA) +
       scale_y_continuous(labels = scales::percent_format()) +
@@ -4130,10 +4538,10 @@ server <- function(input, output, session) {
       "Finding marker genes...",
       sprintf("Scope: %s", input$marker_scope %||% "across-all-cells")
     )
-    on.exit(phenomapr_busy_hide(), add = TRUE)
 
     grp_col <- grep("^phenotype_group_", colnames(state$groups), value = TRUE)[1L]
     if (is.na(grp_col)) {
+      phenomapr_busy_hide()
       showNotification("Could not find a phenotype_group_* column.",
                        type = "error", duration = 6); return()
     }
@@ -4162,13 +4570,29 @@ server <- function(input, output, session) {
                          type = "error", duration = 10); NULL
       }
     )
+    # See the score observer above for the rationale: hide BEFORE
+    # state$markers assignment, defer the assignment via later::later
+    # so the hide message lands in a flush ahead of the heavy
+    # marker-table renders.
+    phenomapr_busy_hide()
     if (is.null(markers)) return()
-    state$markers <- markers
-    showNotification(sprintf(
-      "Found %s adverse + %s favorable markers.",
-      .fmt_int(nrow(markers$adverse_markers)),
-      .fmt_int(nrow(markers$favorable_markers))
-    ), type = "message", duration = 5)
+    sess <- session
+    later::later(function() {
+      tryCatch({
+        state$markers <- markers
+        shiny::showNotification(sprintf(
+          "Found %s adverse + %s favorable markers.",
+          .fmt_int(nrow(markers$adverse_markers)),
+          .fmt_int(nrow(markers$favorable_markers))
+        ), type = "message", duration = 5, session = sess)
+      }, error = function(e) {
+        shiny::showNotification(
+          paste0("Internal error while applying markers: ",
+                 conditionMessage(e)),
+          type = "error", duration = 10, session = sess
+        )
+      })
+    }, delay = 0)
   })
 
   output$adverse_markers_tbl <- renderDT({
@@ -4222,6 +4646,14 @@ server <- function(input, output, session) {
       "Building marker heatmap...",
       "Assembling expression matrix and per-cell metadata"
     )
+    # Use on.exit instead of the deferred-state pattern here because
+    # the actual heavy drawing happens inside renderImage(), NOT in
+    # this observer body. This observer only assembles inputs and
+    # writes them to marker_heatmap_args(), which invalidates the
+    # renderImage. The heavy work is therefore in a separate flush
+    # cycle from this observer's hide call, so a plain on.exit hide
+    # is sufficient -- by the time the renderImage's PNG is sent,
+    # the popup is long gone.
     on.exit(phenomapr_busy_hide(), add = TRUE)
 
     # For AnnData inputs, the marker heatmap only needs the marker genes —

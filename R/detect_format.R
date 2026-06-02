@@ -204,12 +204,16 @@ detect_expression_format <- function(x, sample_cap = 10000L,
   }
 
   # ---- 4) Single-cell vs bulk --------------------------------------------
+  # The column-count noun is conditioned on the predicted modality:
+  # single-cell data is denominated in CELLS, bulk in SAMPLES. When
+  # the heuristic can't tell, we hedge with "columns" so we don't
+  # mis-label either way.
   if (is.finite(frac_zero)) {
     if (frac_zero >= 0.5 ||
         (n_samples >= 200 && frac_zero >= 0.3)) {
       out$sc_or_bulk <- "single_cell"
       out$sc_or_bulk_label <- sprintf(
-        "Single-cell-like (%.0f%% zeros, %s samples)",
+        "Single-cell-like (%.0f%% zeros, %s cells)",
         frac_zero * 100, .fmt_int_safe(n_samples)
       )
     } else if (n_samples < 200 && frac_zero < 0.3) {
@@ -221,7 +225,7 @@ detect_expression_format <- function(x, sample_cap = 10000L,
     } else {
       out$sc_or_bulk <- "unclear"
       out$sc_or_bulk_label <- sprintf(
-        "Unclear (%.0f%% zeros, %s samples)",
+        "Unclear (%.0f%% zeros, %s columns)",
         frac_zero * 100, .fmt_int_safe(n_samples)
       )
     }

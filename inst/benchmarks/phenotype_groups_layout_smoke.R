@@ -89,9 +89,13 @@ stopifnot_msg(
   grepl('data_download_id = "score_table_download"', sb_slice, fixed = TRUE),
   "boxplot header now also exposes the data-download button"
 )
+## The exact tooltip wording can be extended over time (e.g. to
+## advertise that the TSV now self-contains phenotype group labels),
+## so we only require that the tooltip BEGINS with the canonical
+## "Download plot data (TSV" prefix.
 stopifnot_msg(
-  grepl('data_tooltip = "Download plot data \\(TSV\\)"', sb_slice),
-  "data-download button uses the 'Download plot data (TSV)' tooltip"
+  grepl('data_tooltip = "Download plot data \\(TSV', sb_slice),
+  "data-download button uses a 'Download plot data (TSV...' tooltip"
 )
 
 ## phenomapr_card_header_modal_dl supports the new args.

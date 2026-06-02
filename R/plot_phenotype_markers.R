@@ -365,6 +365,15 @@ plot_phenotype_markers <- function(markers,
           width = grid::unit(3, "mm"),
           na_col = "transparent"
         ),
+        # Suppress auto-legends from this rowAnnotation. The manual
+        # phenotype-group / cell-type legends below (lgd_group +
+        # optional cell-type Legend) are the canonical ones we want
+        # rendered. Without this, anno_simple() auto-emits a stray
+        # legend per strip -- when a strip has only one level (e.g.
+        # the metadata cell-type column has a single value like "1")
+        # the auto-legend renders as a lone teal "1" swatch floating
+        # next to the Scaled expr legend.
+        show_legend = FALSE,
         show_annotation_name = FALSE,
         gap = grid::unit(0, "mm"),
         annotation_width = grid::unit(c(18, 3), c("mm", "mm"))
@@ -389,6 +398,8 @@ plot_phenotype_markers <- function(markers,
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
         ),
+        # Same auto-legend suppression as ha_left -- see comment there.
+        show_legend = FALSE,
         show_annotation_name = FALSE,
         gap = grid::unit(0, "mm"),
         annotation_width = grid::unit(c(3, 18), c("mm", "mm"))
@@ -567,6 +578,16 @@ plot_phenotype_markers <- function(markers,
           width = grid::unit(3, "mm"),
           na_col = "transparent"
         ),
+        # Suppress auto-legends. The manual `annotation_legend_list`
+        # built below (lgd_score, lgd_group, optional cell-type
+        # Legend when >=2 cell types) is the canonical legend set.
+        # Without this, anno_simple() auto-emits a per-strip legend;
+        # when the cell-type column has a single level (e.g. "1")
+        # that auto-legend renders as a stray teal "1" swatch
+        # floating next to the Scaled expr legend, even though our
+        # manual list intentionally omits the one-level cell-type
+        # legend (see line ~700).
+        show_legend = FALSE,
         show_annotation_name = FALSE,
         gap = grid::unit(0, "mm"),
         annotation_width = grid::unit(c(18, 3, 3), c("mm", "mm", "mm"))
@@ -597,6 +618,8 @@ plot_phenotype_markers <- function(markers,
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
         ),
+        # Same auto-legend suppression as ha_left -- see comment there.
+        show_legend = FALSE,
         show_annotation_name = FALSE,
         gap = grid::unit(0, "mm"),
         annotation_width = grid::unit(c(3, 3, 18), c("mm", "mm", "mm"))

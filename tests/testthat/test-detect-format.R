@@ -24,6 +24,23 @@ test_that("detect_expression_format flags single-cell raw counts via sparsity", 
   expect_equal(d$format, "raw_counts")
   expect_equal(d$sc_or_bulk, "single_cell")
   expect_true(d$sparsity >= 0.5)
+  # Single-cell modality => label is denominated in CELLS, not samples.
+  expect_match(d$sc_or_bulk_label, "Single-cell-like\\b")
+  expect_match(d$sc_or_bulk_label, "\\bcells\\b")
+  expect_false(grepl("\\bsamples\\b", d$sc_or_bulk_label))
+})
+
+
+test_that("detect_expression_format keeps 'samples' wording for bulk-like data", {
+  set.seed(13)
+  ## Dense, low-sparsity matrix with few columns -> bulk.
+  m <- matrix(runif(200 * 30, min = 0.5, max = 12), nrow = 200,
+              dimnames = list(paste0("G", 1:200), paste0("S", 1:30)))
+  d <- detect_expression_format(m)
+  expect_equal(d$sc_or_bulk, "bulk")
+  expect_match(d$sc_or_bulk_label, "Bulk-like\\b")
+  expect_match(d$sc_or_bulk_label, "\\bsamples\\b")
+  expect_false(grepl("\\bcells\\b", d$sc_or_bulk_label))
 })
 
 
