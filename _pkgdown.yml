@@ -93,6 +93,11 @@ reference:
   - get_celltype_palette
   - cell_type_colors
   - load_rds_fast
+- title: Matrix input preprocessing
+  desc: Detect expression format / gene-ID type and clean a matrix to HUGO-symbol log-normalized space.
+  contents:
+  - detect_expression_format
+  - clean_matrix_input
 - title: Reference datasets (internal)
   desc: Built-in reference data; use list_cancer_types() and PhenoMap() in practice.
   contents:
