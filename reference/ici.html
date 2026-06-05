@@ -59,8 +59,14 @@ inhibitors, separated by primary and metastatic disease.</p>
 
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
-    <p>A data.frame with genes as rows and columns in format:
-CANCER_THERAPY_STAGE_ENDPOINT (e.g., "MELANOMA_Anti-PD1_Primary_OS")</p>
+    <p>A matrix with genes as rows and columns in format
+<code>CANCER_THERAPY_STAGE_ENDPOINT</code> (e.g. <code>"SKCM_PD1_Primary_Naive"</code>).
+Unlike the other built-in references, the ICI table is shipped at a
+<strong>relaxed</strong> cutoff: <code>data-raw/shrink_reference_data.R</code> keeps every entry
+with <code>|z| &gt; 1</code> and only sets <code>|z| \eqn{\leq} 1</code> to <code>NA</code>. PRECOG / TCGA /
+pediatric ship at <code>|z| &gt; 2</code>, but several ICI columns drop to <strong>zero</strong>
+finite values once trimmed at 2; relaxing to 1 keeps all 47 ICI columns
+usable while only adding ~1 MB to the install.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
