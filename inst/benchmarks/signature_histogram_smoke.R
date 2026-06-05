@@ -10,9 +10,13 @@
 ##      live vertical-line overlay regardless of which signature
 ##      source the user picked.
 ##
-##   2. The built-in pre-filter note (|z| >= 2) STILL lives inside
-##      the built-in-only conditionalPanel -- it does not apply to
-##      custom signatures.
+##   2. The built-in pre-filter note STILL lives inside the
+##      built-in-only conditionalPanel -- it does not apply to
+##      custom signatures. The note is reference-aware: ICI PRECOG
+##      ships at |z| >= 1, every other built-in ships at |z| >= 2,
+##      so the note has two nested conditionalPanels gating on
+##      input.reference_choice == 'ici_precog' so each user sees
+##      the cutoff that actually applies to their selection.
 ##
 ##   3. output$reference_signature_plot:
 ##        a. Always renders a histogram (no more ComplexHeatmap
@@ -94,6 +98,28 @@ stopifnot_msg(
 stopifnot_msg(
   note_pos < custom_cond,
   "pre-filter note appears before the custom-source conditionalPanel"
+)
+
+## --- 2b. Pre-filter note has per-reference branches (ICI vs others) ------
+##
+## The note must mention the relaxed ICI PRECOG cutoff (|z| >= 1) and the
+## stricter cutoff (|z| >= 2) used by every other built-in. We don't pin
+## the exact wording -- just the two cutoffs and the ici_precog gate.
+note_window <- substr(
+  app_src, note_pos,
+  min(nchar(app_src), note_pos + 2000L)
+)
+stopifnot_msg(
+  grepl("input\\.reference_choice\\s*==\\s*'ici_precog'", note_window, perl = TRUE),
+  "pre-filter note branches on input.reference_choice == 'ici_precog'"
+)
+stopifnot_msg(
+  grepl("\\|z\\|\\s*&ge;\\s*1", note_window, perl = TRUE),
+  "pre-filter note advertises the ICI PRECOG cutoff |z| >= 1"
+)
+stopifnot_msg(
+  grepl("\\|z\\|\\s*&ge;\\s*2", note_window, perl = TRUE),
+  "pre-filter note still advertises the |z| >= 2 cutoff for non-ICI built-ins"
 )
 
 ## --- 3a. reference_signature_plot is a histogram for both branches --------

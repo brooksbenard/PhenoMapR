@@ -581,22 +581,47 @@ ui <- page_navbar(
                     min = 0, max = 5, value = 2, step = 0.1),
         conditionalPanel(
           "input.reference_choice != '_custom'",
-          # Pre-filter note. Built-in signatures (PRECOG / TCGA /
-          # Pediatric PRECOG / ICI PRECOG) ship inside the package
-          # already filtered to |z| >= 2 to keep the install
-          # lightweight, so the slider can only tighten the cutoff
-          # past 2 (values below 2 are no-ops on the data that ships
-          # with PhenoMapR). Surfaced here so users do not assume
-          # they have access to the full |z| distribution.
+          # Pre-filter note. Built-in signatures ship inside the
+          # package already filtered to keep the install lightweight,
+          # so the slider can only tighten the cutoff further (values
+          # below the pre-filter are no-ops on the data that ships
+          # with PhenoMapR). The pre-filter is per-reference:
+          #   PRECOG / TCGA / Pediatric PRECOG --> |z| >= 2
+          #   ICI PRECOG                       --> |z| >= 1
+          # ICI is relaxed to 1 because several ICI columns drop to
+          # zero finite genes once trimmed at 2 (the package would
+          # otherwise be unable to score those signatures at all);
+          # the looser cutoff keeps every ICI column usable while
+          # only adding ~1 MB to the install. Two nested
+          # conditionalPanels keep the message reference-aware
+          # without burying the class string ("phenomapr-prefilter-
+          # note") inside a renderUI -- the smoke test still finds
+          # it inline between the slider and the custom-source
+          # conditionalPanel.
           tags$div(
             class = "phenomapr-prefilter-note",
             icon("info-circle"),
-            HTML(paste0(
-              " Built-in phenotype signatures ship pre-filtered to ",
-              "<strong>|z| &ge; 2</strong> to keep the package ",
-              "lightweight. The slider can only tighten this cutoff ",
-              "further; values below 2 are no-ops."
-            ))
+            conditionalPanel(
+              "input.reference_choice == 'ici_precog'",
+              HTML(paste0(
+                " ICI PRECOG ships pre-filtered to ",
+                "<strong>|z| &ge; 1</strong> (every other built-in ",
+                "ships at <strong>|z| &ge; 2</strong>). The slider ",
+                "can only tighten this cutoff further; values below ",
+                "1 are no-ops on the shipped ICI matrix."
+              ))
+            ),
+            conditionalPanel(
+              "input.reference_choice != 'ici_precog'",
+              HTML(paste0(
+                " This built-in phenotype signature ships ",
+                "pre-filtered to <strong>|z| &ge; 2</strong> to keep ",
+                "the package lightweight. The slider can only ",
+                "tighten this cutoff further; values below 2 are ",
+                "no-ops. (ICI PRECOG is the exception and ships at ",
+                "<strong>|z| &ge; 1</strong>.)"
+              ))
+            )
           )
         ),
         conditionalPanel(
@@ -1249,7 +1274,35 @@ ui <- page_navbar(
                     value = 0.75, step = 0.05),
         checkboxInput("umap_facet_source", "Facet by source", value = FALSE),
         downloadButton("download_umap_table", "Download embedding (TSV)",
-                       class = "btn-outline-primary")
+                       class = "btn-outline-primary"),
+        hr(),
+        # ---- "Score by cell type and source" plot controls ----------------
+        # These two controls live in the sidebar (rather than inline in
+        # the boxplot card_body) so they share the same visual rhythm
+        # as every other plot knob on this tab and don't eat vertical
+        # space inside the card. They feed the second card on this tab
+        # (`output$score_box_source_plot`):
+        #
+        #   * Source palette         -- Color (brand) vs Greyscale (B/W ramp)
+        #   * Cell-type legend ncol  -- 1..8, spreads the legend across
+        #     N columns so it stays on-canvas even with many cell types
+        #     (e.g. 30+ in a PDAC atlas).
+        tags$div(
+          class = "phenomapr-score-box-controls",
+          tags$h6("Score by cell type and source"),
+          radioButtons(
+            "score_box_source_palette",
+            "Source palette",
+            choices = c("Color" = "color", "Greyscale" = "greyscale"),
+            selected = "color",
+            inline = TRUE
+          ),
+          numericInput(
+            "score_box_celltype_legend_ncol",
+            "Cell-type legend columns",
+            value = 1L, min = 1L, max = 8L, step = 1L
+          )
+        )
       ),
       card(
         phenomapr_card_header_modal_dl(
@@ -1292,7 +1345,9 @@ ui <- page_navbar(
             "F-test across cell types. With exactly 2 sources mapped, ",
             "Wilcoxon brackets compare sources within each cell type. ",
             "With 3+ sources mapped, a one-way ANOVA is run within each ",
-            "cell type. Only significant (p < 0.05) brackets are drawn."
+            "cell type. Only significant (p < 0.05) brackets are drawn. ",
+            "Source palette and cell-type legend columns are configured ",
+            "in the sidebar."
           ),
           plotOutput("score_box_source_plot", height = "440px")
         )
@@ -3490,14 +3545,15 @@ server <- function(input, output, session) {
   # SAME thing: a histogram of every gene\'s reference z-score in the
   # currently selected signature. Two material differences:
   #
-  #   * Built-in references ship pre-filtered to |z| >= 2 to keep
-  #     the install lightweight, so the histogram has nothing to
-  #     show in the (-2, +2) interior. We facet by sign and let
+  #   * Built-in references ship pre-filtered to keep the install
+  #     lightweight (PRECOG / TCGA / Pediatric PRECOG -> |z| >= 2;
+  #     ICI PRECOG -> |z| >= 1), so the histogram has nothing to
+  #     show in the |z| < cutoff interior. We facet by sign and let
   #     each tail use its own x scale, which produces a "broken
   #     axis" layout that omits the empty middle entirely (the user
   #     asked us to "simplify" the built-in histogram by not showing
-  #     |z| < 2 -- this is the cleanest way to do that without
-  #     hand-rolling ggh4x dependencies).
+  #     the empty interior -- this is the cleanest way to do that
+  #     without hand-rolling ggh4x dependencies).
   #
   #   * Custom signatures often span the full distribution
   #     including |z| < 2 (e.g. genes with weak survival
@@ -3602,8 +3658,9 @@ server <- function(input, output, session) {
                    .fmt_int(n_genes))
     # facet_wrap(scales = "free_x") gives each tail its own
     # x-scale, producing the "broken axis" layout the user asked for
-    # (no empty -2 < z < 2 middle for built-in references that ship
-    # pre-filtered to |z| >= 2).
+    # (built-in references ship pre-filtered: |z| >= 2 for PRECOG /
+    # TCGA / Pediatric PRECOG, |z| >= 1 for ICI PRECOG, so the
+    # interior is empty in either case).
     p <- ggplot(df, aes(x = z)) +
       .geom_rounded_histogram(bins = 30, fill = "#2A9D8F", color = "white") +
       ggplot2::facet_wrap(~ side, scales = "free_x", nrow = 1) +
@@ -4013,15 +4070,45 @@ server <- function(input, output, session) {
       error = function(e) NULL
     )
 
+    # Cell-type legend columns -- defensively coerce to a positive
+    # integer so a NULL / blank / non-finite numericInput doesn't break
+    # the plot. Bounded to [1, 8] to match the input's max.
+    legend_ncol_raw <- suppressWarnings(
+      as.integer(input$score_box_celltype_legend_ncol)
+    )
+    legend_ncol <- if (length(legend_ncol_raw) == 1L &&
+                      is.finite(legend_ncol_raw) &&
+                      legend_ncol_raw >= 1L) {
+      min(8L, legend_ncol_raw)
+    } else {
+      1L
+    }
+
     if (has_source) {
-      # Source levels are colored with the PhenoMapR brand palette so the
-      # Source coloring on this plot lines up 1:1 with the source-keyed
-      # plots elsewhere ("Cells per source / group", "Cell type × source
-      # composition", score rank plot, UMAP). We freeze the level order
-      # via factor() so the palette → level mapping is stable.
+      # Source levels are colored with the PhenoMapR brand palette by
+      # default so this plot lines up 1:1 with the other source-keyed
+      # plots ("Cells per source / group", "Cell type x source
+      # composition", score rank plot, UMAP). The "Greyscale" radio
+      # toggle swaps in a black-to-light-grey ramp instead -- useful
+      # for publications that print in black/white, or when the user
+      # wants all the visual emphasis on the cell-type fill colour
+      # and only a secondary monochrome cue on Source. The level
+      # order is frozen via factor() so palette -> level mapping is
+      # stable in either branch.
       src_levels <- sort(unique(dl$Source))
       dl$Source <- factor(dl$Source, levels = src_levels)
-      src_pal <- setNames(pm_brand_palette(length(src_levels)), src_levels)
+      use_greyscale <- identical(input$score_box_source_palette, "greyscale")
+      src_pal <- if (use_greyscale) {
+        # gray.colors() with a slight off-black start (0.15) and an
+        # off-white end (0.75) keeps adjacent shades visually
+        # distinguishable on box outlines without flat-out white,
+        # which would disappear into the panel background.
+        setNames(grDevices::gray.colors(
+          length(src_levels), start = 0.15, end = 0.75
+        ), src_levels)
+      } else {
+        setNames(pm_brand_palette(length(src_levels)), src_levels)
+      }
       p <- ggplot(dl, aes(x = Cell_type, y = scale(Score),
                           fill = Cell_type, color = Source)) +
         .geom_rounded_boxplot(
@@ -4033,7 +4120,7 @@ server <- function(input, output, session) {
         ) +
         scale_color_manual(values = src_pal, name = "Source") +
         guides(
-          fill  = guide_legend(order = 1),
+          fill  = guide_legend(order = 1, ncol = legend_ncol, byrow = TRUE),
           color = guide_legend(order = 2)
         )
       title <- "PhenoMapR Score distribution by Source and Cell Type"
@@ -4043,7 +4130,8 @@ server <- function(input, output, session) {
           outlier.alpha    = 0.5,
           median.linewidth = 0.5,
           outlier.shape    = 21
-        )
+        ) +
+        guides(fill = guide_legend(ncol = legend_ncol, byrow = TRUE))
       title <- "PhenoMapR Score distribution by Cell Type"
     }
 

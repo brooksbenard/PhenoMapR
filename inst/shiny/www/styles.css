@@ -651,6 +651,50 @@ table.dataTable thead th {
   padding: 0;
 }
 
+/* "Score by cell type and source" sidebar plot controls.
+ *
+ * Two compact controls (Source palette radio + Cell-type legend
+ * columns numericInput) live in the Visualization-tab sidebar
+ * (right under the embedding download button) so they read as
+ * just-another-plot-knob alongside the embedding controls and
+ * don't eat vertical space inside the boxplot card. The block
+ * leads with a small <h6> sub-heading so users know which plot
+ * the controls feed. We tighten the rhythm so the heading +
+ * radio + numericInput read as a single grouped unit rather
+ * than three independent .form-group blocks. */
+.phenomapr-score-box-controls {
+  margin-top: 0.25rem;
+}
+.phenomapr-score-box-controls > h6 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #444;
+  margin-top: 0;
+  margin-bottom: 0.45rem;
+}
+.phenomapr-score-box-controls .form-group,
+.phenomapr-score-box-controls .shiny-input-container {
+  margin-bottom: 0.45rem;
+}
+.phenomapr-score-box-controls .form-group:last-child,
+.phenomapr-score-box-controls .shiny-input-container:last-child {
+  margin-bottom: 0;
+}
+.phenomapr-score-box-controls .control-label,
+.phenomapr-score-box-controls label {
+  margin-bottom: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+/* Keep the numericInput narrow -- a 4-digit input is plenty for a
+ * "1 to 8 columns" knob; the default full-width input would look
+ * out of place next to the compact radio above it. */
+.phenomapr-score-box-controls input[type="number"] {
+  max-width: 5.5rem;
+}
+
 /* Embeddings tab "Embedding" sub-section in the sidebar.
  * Same idea as the Cell-metadata compact stack: trim heading, dropdown,
  * status chip, spatial-sample selector, and the two help <details>

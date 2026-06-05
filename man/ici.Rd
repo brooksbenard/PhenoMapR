@@ -5,8 +5,14 @@
 \alias{ici}
 \title{Immune Checkpoint Inhibitor (ICI) Prognostic Z-Scores}
 \format{
-A data.frame with genes as rows and columns in format:
-CANCER_THERAPY_STAGE_ENDPOINT (e.g., "MELANOMA_Anti-PD1_Primary_OS")
+A matrix with genes as rows and columns in format
+\code{CANCER_THERAPY_STAGE_ENDPOINT} (e.g. \code{"SKCM_PD1_Primary_Naive"}).
+Unlike the other built-in references, the ICI table is shipped at a
+\strong{relaxed} cutoff: \code{data-raw/shrink_reference_data.R} keeps every entry
+with \verb{|z| > 1} and only sets \verb{|z| \eqn{\leq} 1} to \code{NA}. PRECOG / TCGA /
+pediatric ship at \verb{|z| > 2}, but several ICI columns drop to \strong{zero}
+finite values once trimmed at 2; relaxing to 1 keeps all 47 ICI columns
+usable while only adding ~1 MB to the install.
 }
 \usage{
 ici
