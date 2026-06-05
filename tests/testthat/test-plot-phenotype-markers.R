@@ -447,15 +447,14 @@ test_that("plot_phenotype_markers legend uses Most Phenotype +/- labels", {
   # exact strings keeps working). We assert the source of
   # plot_phenotype_markers builds a Legend whose `at` keeps the
   # data values and whose `labels` uses the new "+/-" wording.
-  src <- readLines(
-    system.file("R", "plot_phenotype_markers.R", package = "PhenoMapR"),
-    warn = FALSE
+  # Introspect the installed function body rather than the on-disk
+  # R/*.R file: the latter is not shipped in the installed package
+  # (only the compiled .rdb/.rdx are) and the dev fallback path is
+  # not reachable inside R CMD check's tests/testthat working dir.
+  src_one <- paste(
+    deparse(PhenoMapR::plot_phenotype_markers, width.cutoff = 500L),
+    collapse = "\n"
   )
-  dev_src <- file.path(getwd(), "..", "..", "R", "plot_phenotype_markers.R")
-  if (file.exists(dev_src)) {
-    src <- readLines(dev_src, warn = FALSE)
-  }
-  src_one <- paste(src, collapse = "\n")
   expect_match(
     src_one,
     paste0(
@@ -624,12 +623,12 @@ test_that("plot_phenotype_markers omits cell-type strip when only one level repr
 
   # Source-level assertion: every anno_simple call that takes the
   # cell-type palette must be guarded by `show_celltype_strip`.
-  src_path <- file.path(getwd(), "..", "..", "R", "plot_phenotype_markers.R")
-  if (!file.exists(src_path)) {
-    src_path <- system.file("R", "plot_phenotype_markers.R",
-                            package = "PhenoMapR")
-  }
-  src <- paste(readLines(src_path, warn = FALSE), collapse = "\n")
+  # Use deparse() so this works against the installed package
+  # (R CMD check tests run with no on-disk R/*.R source files).
+  src <- paste(
+    deparse(PhenoMapR::plot_phenotype_markers, width.cutoff = 500L),
+    collapse = "\n"
+  )
   expect_match(src,
                "show_celltype_strip <- has_celltype && length\\(hm_celltype_levels\\) > 1L",
                perl = TRUE)
