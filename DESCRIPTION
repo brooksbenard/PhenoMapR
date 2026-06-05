@@ -43,6 +43,7 @@ Suggests:
     presto,
     viridis,
     Seurat (>= 4.0.0),
+    SeuratObject,
     SingleCellExperiment,
     SpatialExperiment,
     SummarizedExperiment,
