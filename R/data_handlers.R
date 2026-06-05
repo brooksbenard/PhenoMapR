@@ -163,9 +163,21 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
     stop("Seurat package required but not installed")
   }
 
-  # Determine assay
+  # Determine assay. Honour the object's DefaultAssay() first so that
+  # SCTransform-normalized objects (default assay "SCT") and any
+  # other multi-assay Seurat workflows are served by the assay the
+  # user actually intends. Falls back to the historical
+  # Spatial-vs-RNA priority for objects without a usable default.
   if (is.null(assay)) {
-    assay <- if ("Spatial" %in% names(obj@assays)) "Spatial" else "RNA"
+    avail <- names(obj@assays)
+    assay <- tryCatch(Seurat::DefaultAssay(obj),
+                      error = function(e) NULL)
+    if (is.null(assay) || !nzchar(assay) || !assay %in% avail) {
+      assay <- if ("Spatial" %in% avail) "Spatial"
+               else if ("RNA" %in% avail) "RNA"
+               else if ("SCT" %in% avail) "SCT"
+               else avail[1L]
+    }
   }
 
   # Map slot names to layer names for Seurat v5
@@ -202,11 +214,7 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
       # Single pseudobulk group: Seurat::AggregateExpression can fail internally
       # (e.g. colnames<- on a 1D category matrix). Sum across cells = same RNA
       # aggregation as one group in AggregateExpression(counts).
-      assay_data <- tryCatch({
-        Seurat::GetAssayData(obj, assay = assay, layer = layer_name)
-      }, error = function(e) {
-        Seurat::GetAssayData(obj, assay = assay, slot = slot)
-      })
+      assay_data <- .get_assay_data_compat(obj, assay = assay, slot = layer_name)
       if (inherits(assay_data, "Matrix") || inherits(assay_data, "sparseMatrix")) {
         summed <- Matrix::rowSums(assay_data)
       } else {
@@ -242,13 +250,7 @@ process_seurat <- function(obj, pseudobulk, group_by, assay, slot, genes_to_extr
     # Get assay data from the full object (do not subset the Seurat object by
     # genes, to avoid copying spatial images and triggering VisiumV1/etc.
     # validity errors when the object was saved with a different Seurat version).
-    assay_data <- tryCatch({
-      Seurat::GetAssayData(obj, assay = assay, layer = layer_name)
-    }, error = function(e) {
-      # nocov start - slot fallback when layer fails
-      Seurat::GetAssayData(obj, assay = assay, slot = slot)
-      # nocov end
-    })
+    assay_data <- .get_assay_data_compat(obj, assay = assay, slot = layer_name)
 
     # nocov start - genes_to_extract subset (PhenoMap sets it for Seurat/SCE; tests use small objects)
     if (length(genes_to_extract) > 0) {

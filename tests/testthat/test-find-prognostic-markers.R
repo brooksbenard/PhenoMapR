@@ -164,6 +164,131 @@ test_that("vs_cohort_rest defines a larger reference set than within_cell_type f
   expect_true(n_cohort > n_within)
 })
 
+test_that("find_phenotype_markers cell_type_specific accepts celltype_contrast vs_opposite_tail", {
+  set.seed(70)
+  n_genes <- 20
+  n_cells <- 12
+  expr <- matrix(
+    pmax(0, rnorm(n_genes * n_cells)),
+    nrow = n_genes,
+    ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
+  )
+  groups_df <- data.frame(
+    cell_id = colnames(expr),
+    pg = c(
+      rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2),
+      rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2)
+    ),
+    cell_type = c(rep("T", 6), rep("B", 6)),
+    stringsAsFactors = FALSE
+  )
+
+  out <- find_phenotype_markers(
+    expr,
+    group_labels = groups_df,
+    group_column = "pg",
+    cell_id_column = "cell_id",
+    marker_scope = "cell_type_specific",
+    cell_type_column = "cell_type",
+    celltype_contrast = "vs_opposite_tail",
+    min.pct = 0,
+    logfc.threshold = 0,
+    pval_threshold = 1,
+    max_cells_per_ident = Inf,
+    verbose = FALSE
+  )
+
+  expect_type(out, "list")
+  expect_named(out, c("adverse_markers", "favorable_markers"))
+  expect_true("cell_type" %in% names(out$adverse_markers))
+})
+
+test_that("find_phenotype_markers vs_opposite_tail still produces markers when a cell type exists in only one tail", {
+  # Setup: ductal cells appear ONLY in Most Adverse, immune cells ONLY in
+  # Most Favorable. With celltype_contrast = "within_cell_type" the
+  # ductal-adverse block has no same-type comparator (no favorable ductal
+  # cells exist) and the immune-favorable block has no same-type
+  # comparator either, so within_cell_type returns empty in both blocks.
+  # vs_opposite_tail compares against the entire opposite tail
+  # (regardless of cell type) and should still produce non-empty
+  # markers, demonstrating the new option recovers signal that
+  # within_cell_type drops.
+  set.seed(202)
+  n_genes <- 60
+  n_cells <- 30
+  # Construct expression so that ductal-adverse cells differ strongly
+  # from favorable cells: shift the first 5 gene means up only in the
+  # ductal-adverse block. Then the wilcoxon vs_opposite_tail contrast
+  # should pick those genes up.
+  expr <- matrix(
+    pmax(0, rnorm(n_genes * n_cells, mean = 1, sd = 0.5)),
+    nrow = n_genes,
+    ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)),
+                    paste0("C", seq_len(n_cells)))
+  )
+
+  cell_type <- c(rep("ductal", 10), rep("immune", 20))
+  pg <- c(
+    rep("Most Adverse", 10),
+    rep("Most Favorable", 10),
+    rep("Most Adverse", 5), rep("Most Favorable", 5)
+  )
+  # Ductal cells that ARE adverse: bump first 5 genes.
+  ductal_adv_idx <- which(cell_type == "ductal" & pg == "Most Adverse")
+  expr[1:5, ductal_adv_idx] <- expr[1:5, ductal_adv_idx] + 4
+
+  # No favorable ductal cells in this design: confirm.
+  expect_equal(sum(cell_type == "ductal" & pg == "Most Favorable"), 0L)
+
+  groups_df <- data.frame(
+    cell_id = colnames(expr),
+    pg = pg,
+    cell_type = cell_type,
+    stringsAsFactors = FALSE
+  )
+
+  out_within <- find_phenotype_markers(
+    expr,
+    group_labels = groups_df,
+    group_column = "pg",
+    cell_id_column = "cell_id",
+    marker_scope = "cell_type_specific",
+    cell_type_column = "cell_type",
+    celltype_contrast = "within_cell_type",
+    min.pct = 0,
+    logfc.threshold = 0,
+    pval_threshold = 1,
+    max_cells_per_ident = Inf,
+    verbose = FALSE
+  )
+  out_opp <- find_phenotype_markers(
+    expr,
+    group_labels = groups_df,
+    group_column = "pg",
+    cell_id_column = "cell_id",
+    marker_scope = "cell_type_specific",
+    cell_type_column = "cell_type",
+    celltype_contrast = "vs_opposite_tail",
+    min.pct = 0,
+    logfc.threshold = 0,
+    pval_threshold = 1,
+    max_cells_per_ident = Inf,
+    verbose = FALSE
+  )
+
+  # within_cell_type returns nothing for ductal (no favorable ductal
+  # comparator); vs_opposite_tail should still surface ductal-adverse
+  # markers vs all favorable cells.
+  ductal_within_adv <- out_within$adverse_markers[
+    out_within$adverse_markers$cell_type == "ductal", , drop = FALSE]
+  ductal_opp_adv <- out_opp$adverse_markers[
+    out_opp$adverse_markers$cell_type == "ductal", , drop = FALSE]
+  expect_equal(nrow(ductal_within_adv), 0L)
+  expect_gt(nrow(ductal_opp_adv), 0L)
+})
+
 test_that("find_phenotype_markers cell_type_specific handles empty per-cell-type results", {
   set.seed(66)
   n_genes <- 30

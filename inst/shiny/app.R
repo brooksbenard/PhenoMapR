@@ -26,11 +26,27 @@ suppressPackageStartupMessages({
       paste(missing, collapse = "\", \""), "\"))."
     )
   }
-  library(shiny)
-  library(bslib)
-  library(DT)
-  library(ggplot2)
-  library(dplyr)
+  # Attach the shiny / bslib / DT / ggplot2 / dplyr packages, but
+  # SKIP any that are already on the search path. This sidesteps a
+  # nasty environment-specific reload trap reported in the wild:
+  #
+  #   "Loading required package: shiny
+  #    Failed with error: 'Package 'shiny' version 1.8.1.1 cannot
+  #    be unloaded: namespace 'shiny' is imported by 'miniUI',
+  #    'Seurat', 'AUCell' so cannot be unloaded'"
+  #
+  # When the user has already attached shiny indirectly (via Seurat,
+  # AUCell, miniUI...) and an on-disk version mismatch causes
+  # library(shiny) to attempt a reload, that reload chain fails
+  # because shiny is locked by its importers. Simply not re-attaching
+  # what is already attached avoids the reload entirely. The
+  # packages we need are already loaded into the search path by the
+  # earlier requireNamespace() calls above and remain fully usable.
+  for (pkg in required) {
+    if (!paste0("package:", pkg) %in% search()) {
+      do.call(library, list(pkg, character.only = TRUE))
+    }
+  }
 })
 
 if (!requireNamespace("PhenoMapR", quietly = TRUE)) {
@@ -285,49 +301,15 @@ ui <- page_navbar(
                   )
                 )
               )
-            ),
-
-            # "Server / remote use" — companion card matching the stepper
-            # chrome, with the code block visually called out so users can
-            # spot the remote-launch command at a glance. Rendered as a
-            # native HTML5 <details>/<summary> so the section is collapsed
-            # by default (most users are running locally and do not need
-            # to see the remote-launch command on every visit) but stays
-            # one click away. No JS / Shiny round-trip is needed -- the
-            # browser handles the toggle and accessibility for free.
-            tags$details(
-              class = "welcome-section welcome-server welcome-collapsible",
-              tags$summary(
-                class = "welcome-section-header welcome-section-summary",
-                icon("server"),
-                tags$span("Server / remote use"),
-                # Right-pinned chevron that flips on open/close via CSS.
-                tags$span(class = "welcome-section-caret", icon("chevron-down"))
-              ),
-              tags$div(
-                class = "welcome-section-body",
-                tags$p(
-                  HTML("This app is just a thin UI over the regular ",
-                       "PhenoMapR API. Run it on a remote workstation with:")
-                ),
-                # Emit <pre><code>…</code></pre> as a single HTML string so
-                # htmltools' default pretty-printing doesn't insert newlines
-                # between the <pre> and <code> tags — those newlines are
-                # preserved by `white-space: pre` on .welcome-code and would
-                # render as a stray blank line below the command.
-                HTML(paste0(
-                  '<pre class="welcome-code"><code>',
-                  'PhenoMapR::run_app(host = "0.0.0.0", port = 3838)',
-                  '</code></pre>'
-                )),
-                tags$p(
-                  HTML("and open ",
-                       "<code>http://&lt;server&gt;:3838</code> from your ",
-                       "browser. <em>No data leaves the machine the app ",
-                       "runs on.</em>")
-                )
-              )
             )
+            # NOTE: the former "Server / remote use" collapsible card
+            # was removed at the user\'s request -- the
+            # PhenoMapR::run_app(host = "0.0.0.0", port = 3838) recipe
+            # remains documented in the package README and the
+            # ?run_app help page, which are the appropriate homes for
+            # deployment instructions. Keeping the welcome page focused
+            # on the in-app workflow (How it works) makes the
+            # landing screen tidier for the typical local-laptop user.
           ),
           tags$div(
             class = "welcome-image",
@@ -581,10 +563,24 @@ ui <- page_navbar(
         conditionalPanel(
           "input.reference_choice != '_custom'",
           selectInput("cancer_type", "Select Cancer / tissue type",
-                      choices = NULL),
-          sliderInput("z_score_cutoff",
-                      "Set threshold for Signature |z| cutoff",
-                      min = 0, max = 5, value = 2, step = 0.1),
+                      choices = NULL)
+        ),
+        # Signature |z| cutoff slider. Lives OUTSIDE the
+        # built-in-only conditionalPanel so it remains visible (and
+        # therefore wired up) for custom phenotype signatures as
+        # well; the Phenotype-signature histogram below uses
+        # input$z_score_cutoff to draw live vertical lines on either
+        # side of zero, mirroring the cutoff overlay the score
+        # distribution histogram already does for percentile
+        # thresholds. PhenoMap() honours this cutoff for every
+        # reference (not just built-ins), so showing the slider for
+        # custom signatures matches what the scoring step does
+        # downstream.
+        sliderInput("z_score_cutoff",
+                    "Set threshold for Signature |z| cutoff",
+                    min = 0, max = 5, value = 2, step = 0.1),
+        conditionalPanel(
+          "input.reference_choice != '_custom'",
           # Pre-filter note. Built-in signatures (PRECOG / TCGA /
           # Pediatric PRECOG / ICI PRECOG) ship inside the package
           # already filtered to |z| >= 2 to keep the install
@@ -773,29 +769,48 @@ ui <- page_navbar(
           )
         )
       ),
-      # Side-by-side: signature status + gene coverage. Both are small
-      # status-style cards, so showing them on one row saves vertical
-      # space and the signature plot below sits closer to the top.
-      layout_columns(
-        col_widths = c(6, 6),
-        card(
-          fill = FALSE,
-          card_header(tags$strong("Phenotype signature status")),
-          card_body(uiOutput("reference_status"))
+      # Combined: phenotype signature status (left) + gene coverage
+      # (right) inside a single card. The two halves used to live as
+      # separate cards stacked side-by-side; merging them under one
+      # card_header trims the redundant chrome (two card titles +
+      # two card bodies + their borders) and lets the user read
+      # "what reference is loaded, how restrictive is the cutoff, and
+      # how much of my expression matrix overlaps it" as a single
+      # status block. The download icon in the upper-right of the
+      # header is wired to gene_coverage_tbl_download (same TSV
+      # export as before) -- the signature-status side has no
+      # download because it is computed live from the inputs.
+      card(
+        fill = FALSE,
+        class = "compact-coverage-card phenomapr-signature-coverage-card",
+        phenomapr_card_header_dl(
+          tags$strong("Phenotype signature & gene coverage"),
+          download_id = "gene_coverage_tbl_download",
+          tooltip     = "Download gene coverage (TSV)"
         ),
-        card(
-          fill = FALSE,
-          class = "compact-coverage-card",
-          phenomapr_card_header_dl(
-            tags$strong("Gene coverage"),
-            download_id = "gene_coverage_tbl_download"
-          ),
-          card_body(
-            class = "compact-coverage-body",
-            helpText(
-              "Fraction of your expression genes that overlap the chosen signature."
+        card_body(
+          class = "compact-coverage-body",
+          layout_columns(
+            col_widths = c(6, 6),
+            tags$div(
+              class = "phenomapr-signature-coverage-half",
+              tags$h6(
+                "Phenotype signature status",
+                class = "phenomapr-signature-coverage-subhead"
+              ),
+              uiOutput("reference_status")
             ),
-            DTOutput("gene_coverage_tbl")
+            tags$div(
+              class = "phenomapr-signature-coverage-half",
+              tags$h6(
+                "Gene coverage",
+                class = "phenomapr-signature-coverage-subhead"
+              ),
+              helpText(
+                "Fraction of your expression genes that overlap the chosen signature."
+              ),
+              DTOutput("gene_coverage_tbl")
+            )
           )
         )
       ),
@@ -1319,13 +1334,30 @@ ui <- page_navbar(
           # "adverse / favorable" -> "phenotype + / phenotype \u2212"
           # mirrors the legend remap in score_rank_plot /
           # group_by_celltype_plot and the home-page hero blurb.
-          # The "(within phenotype groups)" clarifier for the
-          # cell-type-specific scope makes explicit that the
-          # contrast is still adverse-vs-favorable inside each cell
-          # type (not cell-type-vs-cell-type).
+          #
+          # Three modes, listed in order of *increasing stringency* so
+          # the user reads them top-to-bottom from "broadest" to
+          # "narrowest":
+          #   1. "phenotype_groups": cohort-wide adverse-vs-favorable
+          #      (cell type agnostic).
+          #   2. "cell_type_vs_opposite": for each cell type in a tail,
+          #      compare against ALL cells in the opposite tail
+          #      (regardless of cell type). Mid-stringency -- still
+          #      surfaces phenotype-driven markers for cell types that
+          #      exist in only one tail (e.g. only adverse ductal, no
+          #      favorable ductal), where the within-cell-type
+          #      contrast below would return empty.
+          #   3. "cell_type_specific": for each cell type, adverse vs
+          #      favorable cells of the SAME cell type only. Most
+          #      stringent. Returns nothing for a cell type when the
+          #      same cell type does not exist in the opposite tail.
           choices = c(
-            "Cohort-wide (phenotype + vs phenotype \u2212)"  = "phenotype_groups",
-            "Cell-type specific (within phenotype groups)"    = "cell_type_specific"
+            "Cohort-wide (phenotype + vs phenotype \u2212)"
+              = "phenotype_groups",
+            "Cell-type \u00D7 phenotype vs all opposite-tail cells"
+              = "cell_type_vs_opposite",
+            "Cell-type specific (within phenotype groups)"
+              = "cell_type_specific"
           ),
           selected = "phenotype_groups"
         ),
@@ -1359,6 +1391,21 @@ ui <- page_navbar(
                        min = 5, max = 200, step = 5),
           numericInput("hm_n_labels", "Gene labels per block", value = 5,
                        min = 0, max = 50, step = 1),
+          # Block-outline controls. Only meaningful for
+          # heatmap_type = "cell_type_specific" (the per-cell-type
+          # heatmap is already split into one row slice per
+          # cell-type * phenotype-bin block, with column extents
+          # computed from the meta_df group/celltype columns -- see
+          # marker_heatmap_args -> plot_phenotype_markers()). For the
+          # cohort-wide heatmap this checkbox is a no-op.
+          # Default OFF so the heatmap reads cleanly without
+          # additional rules; flipping ON immediately re-renders the
+          # heatmap with thick black outlines around each block,
+          # which is what users actually want when they need to
+          # explain "this block here".
+          checkboxInput("hm_block_borders",
+                        "Black borders around cell-type \u00D7 phenotype blocks",
+                        value = FALSE),
           actionButton("draw_marker_heatmap", "Draw heatmap",
                        icon = icon("th"), class = "btn-primary")
         )
@@ -1378,9 +1425,25 @@ ui <- page_navbar(
             installed, base R otherwise; Seurat's `FindMarkers` is used for
             Seurat inputs in cohort-wide mode).
 
-            **Cell-type-specific** contrasts each phenotype tail × cell type
-            against other phenotype groups in the *same* cell type by
-            default."
+            The three scopes are listed below in order of *increasing
+            stringency* \u2014 the same order as the sidebar radio buttons
+            \u2014 so reading top-to-bottom moves from the broadest contrast
+            (no cell-type partitioning) to the narrowest (matched cell type
+            in both tails required).
+
+            **Cell-type \u00D7 phenotype vs all opposite-tail cells**
+            contrasts each phenotype tail \u00D7 cell type against *every
+            cell* in the opposite phenotype group regardless of cell type.
+            Mid-stringency: still surfaces phenotype-driven markers when a
+            cell type is present in only one tail \u2014 e.g. only adverse
+            ductal cells, no favorable ductal cells \u2014 which is exactly
+            the situation where the next mode returns empty.
+
+            **Cell-type specific (within phenotype groups)** contrasts each
+            phenotype tail \u00D7 cell type against the *same cell type* in
+            the opposite phenotype group. Most stringent, but returns nothing
+            for a cell type that exists in only one tail (e.g. only adverse
+            ductal cells, no favorable ductal cells)."
           )
         )
       ),
@@ -1886,6 +1949,14 @@ server <- function(input, output, session) {
           removeModal()
           return(invisible(NULL))
         }
+        # Mirror the live block-border toggle so the export matches
+        # what the user is currently looking at.
+        borders_on <- isTRUE(isolate(input$hm_block_borders))
+        args$outline_marker_blocks <- borders_on
+        args$block_outline_color   <- if (borders_on) "black" else "white"
+        # Use a slightly slimmer line (~1.5pt) so the borders read as
+        # clean dividers rather than thick chrome around each block.
+        args$block_outline_lwd     <- if (borders_on) 1.5 else 1
         fmt_lc <- tolower(fmt)
         ok <- tryCatch({
           switch(fmt_lc,
@@ -1993,51 +2064,52 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Reading expression file...", pick$name)
-    res <- tryCatch(
-      parse_expression_upload(pick$datapath, pick$name),
-      error = function(e) {
-        showNotification(paste0("Upload failed: ", conditionMessage(e)),
-                         type = "error", duration = 8)
-        NULL
-      }
-    )
-    # CRITICAL: hide the popup AS SOON AS the heavy file read is done,
-    # BEFORE we touch state$. Reason: in Shiny, every reactiveValues
-    # assignment inside an observer invalidates downstream reactives;
-    # all of those downstream renderUI/renderPlot outputs are queued in
-    # the SAME flushOutput batch as the busy-hide custom message, so
-    # the client receives a long stream of DOM updates (dataset
-    # overview cards, count plots, metadata table, score-tab UI, ...)
-    # AHEAD of the busy-hide message. The browser processes them
-    # serially on the main thread, so the popup stays on screen for
-    # the entire DOM-update wave even though R said "hide" right
-    # after the read completed.
-    #
-    # Calling busy_hide() here lets that message join the flush before
-    # any state-change-driven reactives invalidate; deferring the
-    # state propagation via later::later() then runs it in a fresh
-    # tick, so it lands as a separate flushOutput batch where it can
-    # no longer "delay" the popup hide. The result: popup disappears
-    # the instant the read is done, and the rest of the UI populates a
-    # heartbeat later.
-    phenomapr_busy_hide()
-    if (is.null(res)) return()
-
-    res_obj <- res
+    # CRITICAL: defer the heavy synchronous file read into a
+    # later::later() callback. Without this, the observer body would
+    # block libuv\'s I/O loop for the duration of the read, so the
+    # phenomapr-busy-show custom message we just queued never gets
+    # transmitted to the browser until AFTER the read finishes -- by
+    # which point we\'ve already queued the busy-hide right behind it
+    # and the user sees no popup at all. Yielding via later() lets
+    # this observer\'s flushReact complete first (which actually
+    # delivers the show message), and the heavy read then runs in
+    # a fresh tick where it\'s free to block libuv without losing
+    # the show signal. See the busy-overlay file-comment in
+    # helpers.R for the full rationale.
+    pick_local <- pick
     sess <- session
     later::later(function() {
-      tryCatch({
-        state$expression <- res_obj$object
-        state$expr_summary <- res_obj
-        md <- extract_object_metadata(res_obj$object)
-        state$metadata <- md
-        state$meta_columns <- if (!is.null(md)) colnames(md) else character(0)
-        state$metadata_source <- if (!is.null(md)) "object" else "(none)"
-        shiny::showNotification(
-          paste(res_obj$notes, collapse = " "),
-          type = "message", duration = 5,
-          session = sess
-        )
+      res <- tryCatch(
+        parse_expression_upload(pick_local$datapath, pick_local$name),
+        error = function(e) {
+          showNotification(paste0("Upload failed: ", conditionMessage(e)),
+                           type = "error", duration = 8, session = sess)
+          NULL
+        }
+      )
+      # Hide the popup AS SOON AS the heavy file read is done, BEFORE
+      # we touch state$. State assignments invalidate downstream
+      # reactives; deferring them with another later() ensures the
+      # busy-hide custom message lands in its own (tiny) flush ahead
+      # of the heavy renderUI/renderPlot cascade triggered by the
+      # state mutations.
+      phenomapr_busy_hide(session = sess)
+      if (is.null(res)) return()
+
+      res_obj <- res
+      later::later(function() {
+        tryCatch({
+          state$expression <- res_obj$object
+          state$expr_summary <- res_obj
+          md <- extract_object_metadata(res_obj$object)
+          state$metadata <- md
+          state$meta_columns <- if (!is.null(md)) colnames(md) else character(0)
+          state$metadata_source <- if (!is.null(md)) "object" else "(none)"
+          shiny::showNotification(
+            paste(res_obj$notes, collapse = " "),
+            type = "message", duration = 5,
+            session = sess
+          )
 
         # When loading an AnnData (.h5ad), surface a clear message if the
         # in-object metadata could not be auto-extracted. Some round-trip
@@ -2101,7 +2173,8 @@ server <- function(input, output, session) {
           type = "error", duration = 10, session = sess
         )
       })
-    }, delay = 0)
+      }, delay = 0)  # close inner later::later() (state propagation)
+    }, delay = 0)    # close outer later::later() (heavy file read)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   observeEvent(input$use_demo, {
@@ -2153,38 +2226,41 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Loading cell metadata...", pick$name)
-    md <- tryCatch(
-      parse_metadata_upload(pick$datapath, pick$name),
-      error = function(e) {
-        showNotification(conditionMessage(e), type = "error", duration = 8)
-        NULL
-      }
-    )
-    # See the comment in the expression-upload observer above for the
-    # rationale: hide the popup BEFORE assigning to state$metadata so
-    # the renderUI/renderPlot cascade triggered by the metadata change
-    # does not pile up ahead of the busy-hide message in the same
-    # flushOutput batch.
-    phenomapr_busy_hide()
-    if (is.null(md)) return()
-
-    md_local <- md
+    # See the expression-upload observer above for the deferred-work
+    # rationale: heavy reads MUST run inside later::later() so the
+    # busy_show custom message can be transmitted to the browser
+    # before libuv gets blocked by the read.
+    pick_local <- pick
     sess <- session
     later::later(function() {
-      tryCatch({
-        state$metadata <- md_local
-        state$meta_columns <- colnames(md_local)
-        state$metadata_source <- "upload"
-        shiny::showNotification("Metadata loaded.",
-                                type = "message", duration = 4,
-                                session = sess)
-      }, error = function(e) {
-        shiny::showNotification(
-          paste0("Internal error while applying metadata: ",
-                 conditionMessage(e)),
-          type = "error", duration = 10, session = sess
-        )
-      })
+      md <- tryCatch(
+        parse_metadata_upload(pick_local$datapath, pick_local$name),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8,
+                           session = sess)
+          NULL
+        }
+      )
+      phenomapr_busy_hide(session = sess)
+      if (is.null(md)) return()
+
+      md_local <- md
+      later::later(function() {
+        tryCatch({
+          state$metadata <- md_local
+          state$meta_columns <- colnames(md_local)
+          state$metadata_source <- "upload"
+          shiny::showNotification("Metadata loaded.",
+                                  type = "message", duration = 4,
+                                  session = sess)
+        }, error = function(e) {
+          shiny::showNotification(
+            paste0("Internal error while applying metadata: ",
+                   conditionMessage(e)),
+            type = "error", duration = 10, session = sess
+          )
+        })
+      }, delay = 0)
     }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
@@ -2956,53 +3032,59 @@ server <- function(input, output, session) {
     }
     phenomapr_busy_show("Cleaning matrix...",
                         "Running HUGO cleanup and / or normalization")
-    res <- tryCatch(
-      clean_matrix_input(
-        state$expression,
-        do_hugo          = isTRUE(input$diag_do_hugo),
-        do_collapse_dups = isTRUE(input$diag_do_collapse),
-        do_normalize     = isTRUE(input$diag_do_normalize),
-        mode             = input$diag_norm_mode %||% "auto",
-        hugo_species     = "human",
-        verbose          = FALSE
-      ),
-      error = function(e) {
-        showNotification(paste0("Cleanup failed: ",
-                                conditionMessage(e)),
-                         type = "error", duration = 8)
-        NULL
-      }
-    )
-    # Hide BEFORE state assignment so the hide message lands in a
-    # flush ahead of the (potentially heavy) downstream
-    # invalidations -- expr_summary, dataset_overview, embedding,
-    # diagnostics, cell-table-driven plots, etc. all re-render off
-    # state$expression.
-    phenomapr_busy_hide()
-    if (is.null(res)) return()
+    # See the expression-upload observer for the deferred-work
+    # rationale: heavy synchronous work MUST run inside later::later()
+    # so the busy_show custom message reaches the browser BEFORE
+    # libuv is blocked by the work.
+    expr_snapshot <- state$expression
+    do_hugo          <- isTRUE(input$diag_do_hugo)
+    do_collapse_dups <- isTRUE(input$diag_do_collapse)
+    do_normalize     <- isTRUE(input$diag_do_normalize)
+    norm_mode        <- input$diag_norm_mode %||% "auto"
     sess <- session
     later::later(function() {
-      tryCatch({
-        state$expression <- res$matrix
-        state$expr_summary <- summarize_expression_object(res$matrix)
-        state$expr_summary$notes <- paste(
-          "Matrix cleaned via clean_matrix_input():",
-          paste(res$steps, collapse = "; ")
-        )
-        shiny::showNotification(
-          paste0(
-            "Cleanup complete -- ",
-            if (length(res$steps)) paste(res$steps, collapse = "; ")
-            else "no changes were necessary."
-          ),
-          type = "message", duration = 8, session = sess
-        )
-      }, error = function(e) {
-        shiny::showNotification(
-          paste0("Internal error after cleanup: ", conditionMessage(e)),
-          type = "error", duration = 10, session = sess
-        )
-      })
+      res <- tryCatch(
+        clean_matrix_input(
+          expr_snapshot,
+          do_hugo          = do_hugo,
+          do_collapse_dups = do_collapse_dups,
+          do_normalize     = do_normalize,
+          mode             = norm_mode,
+          hugo_species     = "human",
+          verbose          = FALSE
+        ),
+        error = function(e) {
+          showNotification(paste0("Cleanup failed: ",
+                                  conditionMessage(e)),
+                           type = "error", duration = 8, session = sess)
+          NULL
+        }
+      )
+      phenomapr_busy_hide(session = sess)
+      if (is.null(res)) return()
+      later::later(function() {
+        tryCatch({
+          state$expression <- res$matrix
+          state$expr_summary <- summarize_expression_object(res$matrix)
+          state$expr_summary$notes <- paste(
+            "Matrix cleaned via clean_matrix_input():",
+            paste(res$steps, collapse = "; ")
+          )
+          shiny::showNotification(
+            paste0(
+              "Cleanup complete -- ",
+              if (length(res$steps)) paste(res$steps, collapse = "; ")
+              else "no changes were necessary."
+            ),
+            type = "message", duration = 8, session = sess
+          )
+        }, error = function(e) {
+          shiny::showNotification(
+            paste0("Internal error after cleanup: ", conditionMessage(e)),
+            type = "error", duration = 10, session = sess
+          )
+        })
+      }, delay = 0)
     }, delay = 0)
   })
 
@@ -3029,21 +3111,30 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Loading custom signature...", pick$name)
-    on.exit(phenomapr_busy_hide(), add = TRUE)
-    ref <- tryCatch(
-      parse_reference_upload(pick$datapath, pick$name),
-      error = function(e) {
-        showNotification(conditionMessage(e), type = "error", duration = 8)
-        NULL
-      }
-    )
-    if (is.null(ref)) return()
-    state$reference <- ref
-    state$reference_label <- paste0("Custom (", pick$name, ")")
-    showNotification(
-      sprintf("Custom reference loaded (%d genes).", nrow(ref)),
-      type = "message", duration = 4
-    )
+    # Defer the heavy synchronous read so busy_show reaches the
+    # browser before libuv is blocked.
+    pick_local <- pick
+    sess <- session
+    later::later(function() {
+      ref <- tryCatch(
+        parse_reference_upload(pick_local$datapath, pick_local$name),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8,
+                           session = sess)
+          NULL
+        }
+      )
+      phenomapr_busy_hide(session = sess)
+      if (is.null(ref)) return()
+      later::later(function() {
+        state$reference <- ref
+        state$reference_label <- paste0("Custom (", pick_local$name, ")")
+        showNotification(
+          sprintf("Custom reference loaded (%d genes).", nrow(ref)),
+          type = "message", duration = 4, session = sess
+        )
+      }, delay = 0)
+    }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   # Custom: derive from bulk + phenotype
@@ -3054,21 +3145,27 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Loading bulk expression...", pick$name)
-    on.exit(phenomapr_busy_hide(), add = TRUE)
-    res <- tryCatch(
-      parse_expression_upload(pick$datapath, pick$name),
-      error = function(e) {
-        showNotification(conditionMessage(e), type = "error", duration = 8); NULL
-      }
-    )
-    if (!is.null(res)) {
-      state$derive_bulk <- res$object
-      showNotification(
-        sprintf("Bulk expression: %s genes × %s samples.",
-                .fmt_int(res$n_genes %||% 0L), .fmt_int(res$n_samples %||% 0L)),
-        type = "message", duration = 5
+    pick_local <- pick
+    sess <- session
+    later::later(function() {
+      res <- tryCatch(
+        parse_expression_upload(pick_local$datapath, pick_local$name),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8,
+                           session = sess); NULL
+        }
       )
-    }
+      phenomapr_busy_hide(session = sess)
+      if (is.null(res)) return()
+      later::later(function() {
+        state$derive_bulk <- res$object
+        showNotification(
+          sprintf("Bulk expression: %s genes \u00d7 %s samples.",
+                  .fmt_int(res$n_genes %||% 0L), .fmt_int(res$n_samples %||% 0L)),
+          type = "message", duration = 5, session = sess
+        )
+      }, delay = 0)
+    }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   output$derive_bulk_summary <- renderUI({
@@ -3120,21 +3217,28 @@ server <- function(input, output, session) {
       return()
     }
     phenomapr_busy_show("Loading phenotype table...", pick$name)
-    on.exit(phenomapr_busy_hide(), add = TRUE)
-    df <- tryCatch(
-      parse_metadata_upload(pick$datapath, pick$name),
-      error = function(e) {
-        showNotification(conditionMessage(e), type = "error", duration = 8); NULL
-      }
-    )
-    if (is.null(df)) return()
-    state$derive_phen <- df
-    cols <- colnames(df)
-    updateSelectInput(session, "derive_id_col", choices = cols, selected = cols[1L])
-    updateSelectInput(session, "derive_pheno_col", choices = cols,
-                      selected = if (length(cols) > 1L) cols[2L] else cols[1L])
-    updateSelectInput(session, "derive_time_col", choices = cols)
-    updateSelectInput(session, "derive_event_col", choices = cols)
+    pick_local <- pick
+    sess <- session
+    later::later(function() {
+      df <- tryCatch(
+        parse_metadata_upload(pick_local$datapath, pick_local$name),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8,
+                           session = sess); NULL
+        }
+      )
+      phenomapr_busy_hide(session = sess)
+      if (is.null(df)) return()
+      later::later(function() {
+        state$derive_phen <- df
+        cols <- colnames(df)
+        updateSelectInput(sess, "derive_id_col", choices = cols, selected = cols[1L])
+        updateSelectInput(sess, "derive_pheno_col", choices = cols,
+                          selected = if (length(cols) > 1L) cols[2L] else cols[1L])
+        updateSelectInput(sess, "derive_time_col", choices = cols)
+        updateSelectInput(sess, "derive_event_col", choices = cols)
+      }, delay = 0)
+    }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   observeEvent(input$derive_run, {
@@ -3143,41 +3247,60 @@ server <- function(input, output, session) {
       "Deriving phenotype signature...",
       sprintf("Bulk + phenotype | %s outcome", input$derive_type %||% "binary")
     )
-    on.exit(phenomapr_busy_hide(), add = TRUE)
     bin_pos <- if (input$derive_binary_positive %in% c("first", "second")) {
       input$derive_binary_positive
     } else "second"
-    ref <- tryCatch(
-      PhenoMapR::derive_reference_from_bulk(
-        bulk_expression  = state$derive_bulk,
-        phenotype        = state$derive_phen,
-        sample_id_column = input$derive_id_col,
-        phenotype_column = if (input$derive_type == "survival") NULL else input$derive_pheno_col,
-        phenotype_type   = input$derive_type,
-        survival_time    = if (input$derive_type == "survival") input$derive_time_col else NULL,
-        survival_event   = if (input$derive_type == "survival") input$derive_event_col else NULL,
-        normalize        = isTRUE(input$derive_normalize),
-        hugo_species     = input$derive_hugo_species %||% "human",
-        binary_positive_reference = bin_pos,
-        verbose          = TRUE
-      ),
-      error = function(e) {
-        showNotification(paste0("derive_reference_from_bulk failed: ",
-                                conditionMessage(e)),
-                         type = "error", duration = 10); NULL
-      }
+    bulk_snapshot  <- state$derive_bulk
+    phen_snapshot  <- state$derive_phen
+    derive_args <- list(
+      sample_id_column = input$derive_id_col,
+      phenotype_column = if (input$derive_type == "survival") NULL else input$derive_pheno_col,
+      phenotype_type   = input$derive_type,
+      survival_time    = if (input$derive_type == "survival") input$derive_time_col else NULL,
+      survival_event   = if (input$derive_type == "survival") input$derive_event_col else NULL,
+      normalize        = isTRUE(input$derive_normalize),
+      hugo_species     = input$derive_hugo_species %||% "human",
+      binary_positive_reference = bin_pos
     )
-    if (!is.null(ref)) {
-      state$reference <- ref
-      state$reference_label <- sprintf(
-        "Custom (derived from bulk + phenotype, type = %s)",
-        attr(ref, "phenotype_type") %||% input$derive_type
+    sess <- session
+    later::later(function() {
+      ref <- tryCatch(
+        PhenoMapR::derive_reference_from_bulk(
+          bulk_expression  = bulk_snapshot,
+          phenotype        = phen_snapshot,
+          sample_id_column = derive_args$sample_id_column,
+          phenotype_column = derive_args$phenotype_column,
+          phenotype_type   = derive_args$phenotype_type,
+          survival_time    = derive_args$survival_time,
+          survival_event   = derive_args$survival_event,
+          normalize        = derive_args$normalize,
+          hugo_species     = derive_args$hugo_species,
+          binary_positive_reference = derive_args$binary_positive_reference,
+          verbose          = TRUE
+        ),
+        error = function(e) {
+          showNotification(paste0("derive_reference_from_bulk failed: ",
+                                  conditionMessage(e)),
+                           type = "error", duration = 10, session = sess); NULL
+        }
       )
-      showNotification(
-        sprintf("Reference derived (%s genes).", .fmt_int(nrow(ref))),
-        type = "message", duration = 5
-      )
-    }
+      phenomapr_busy_hide(session = sess)
+      if (is.null(ref)) {
+        return()
+      }
+      derive_type_local <- derive_args$phenotype_type
+      later::later(function() {
+        state$reference <- ref
+        state$reference_label <- sprintf(
+          "Custom (derived from bulk + phenotype, type = %s)",
+          attr(ref, "phenotype_type") %||% derive_type_local
+        )
+        showNotification(
+          sprintf("Reference derived (%s genes).", .fmt_int(nrow(ref))),
+          type = "message", duration = 5, session = sess
+        )
+      }, delay = 0)
+    }, delay = 0)
   })
 
   # ---- Derived reference preview ------------------------------------------
@@ -3267,17 +3390,74 @@ server <- function(input, output, session) {
   output$reference_status <- renderUI({
     ref <- state$reference
     if (is.null(ref)) return(tags$p(tags$em("No reference selected.")))
+    # Resolve the live |z| threshold once so both the "|z| cutoff"
+    # row and the "Significant genes" row stay in sync as the user
+    # scrubs the slider. NA / non-finite values fall back to "(n/a)".
+    cut_raw <- suppressWarnings(as.numeric(input$z_score_cutoff))
+    cut_val <- if (length(cut_raw) == 1L && is.finite(cut_raw)) {
+      cut_raw
+    } else {
+      NA_real_
+    }
+    cut_lbl <- if (is.finite(cut_val)) format(cut_val) else "(n/a)"
+    # Count signature genes that pass |z| >= cutoff. We surface this
+    # alongside the cutoff itself so the user can immediately see how
+    # restrictive the current threshold is for the chosen reference;
+    # bumping the slider one notch and watching this number react is
+    # often the fastest way to settle on a sensible value.
+    n_sig <- NA_integer_
     if (is.character(ref)) {
+      ct <- input$cancer_type %||% NA_character_
+      valid_cts <- tryCatch(get_cancer_types(ref), error = function(e) character())
+      if (is.finite(cut_val) && !is.na(ct) && nzchar(ct) && ct %in% valid_cts) {
+        # `n = Inf` returns the entire signature; we then count
+        # entries with |z_score| >= cutoff. This is the same gene
+        # set that `phenomap()` will pre-filter on for scoring, so
+        # the number is exactly "how many genes are about to drive
+        # the score" -- not a paraphrase.
+        n_sig <- tryCatch({
+          tg <- PhenoMapR::get_top_prognostic_genes(
+            reference   = ref,
+            cancer_type = ct,
+            n           = Inf,
+            direction   = "both"
+          )
+          z_vec <- suppressWarnings(as.numeric(tg$z_score))
+          sum(is.finite(z_vec) & abs(z_vec) >= cut_val)
+        }, error = function(e) NA_integer_)
+      }
       tagList(
         tags$p(tags$strong("Built-in: "), ref),
         tags$p(tags$strong("Cancer type: "), input$cancer_type %||% "(none)"),
-        tags$p(tags$strong("|z| cutoff: "), input$z_score_cutoff)
+        tags$p(tags$strong("|z| cutoff: "), cut_lbl),
+        tags$p(
+          tags$strong("Significant genes: "),
+          if (is.na(n_sig)) tags$em("(set cancer type & cutoff)")
+          else .fmt_int(n_sig)
+        )
       )
     } else {
+      # Custom signature: count rows in the user's reference whose
+      # absolute z-score is at or above the cutoff.
+      n_sig <- if (is.finite(cut_val)) {
+        z_col <- which(vapply(as.data.frame(ref), is.numeric, logical(1)))[1L]
+        if (is.na(z_col)) NA_integer_ else {
+          z_vec <- suppressWarnings(as.numeric(as.data.frame(ref)[[z_col]]))
+          sum(is.finite(z_vec) & abs(z_vec) >= cut_val)
+        }
+      } else {
+        NA_integer_
+      }
       tagList(
         tags$p(tags$strong("Source: "), state$reference_label),
         tags$p(tags$strong("Genes: "), .fmt_int(nrow(ref))),
-        tags$p(tags$strong("z column: "), colnames(ref)[1L])
+        tags$p(tags$strong("z column: "), colnames(ref)[1L]),
+        tags$p(tags$strong("|z| cutoff: "), cut_lbl),
+        tags$p(
+          tags$strong("Significant genes: "),
+          if (is.na(n_sig)) tags$em("(set a numeric z column & cutoff)")
+          else .fmt_int(n_sig)
+        )
       )
     }
   })
@@ -3302,41 +3482,166 @@ server <- function(input, output, session) {
   phenomapr_register_table_download(output, "gene_coverage_tbl",
     function() isolate(panel_objects$gene_coverage_tbl))
 
+  # Phenotype-signature histogram.
+  #
+  # In both built-in (PRECOG / TCGA / Pediatric PRECOG / ICI PRECOG)
+  # and custom (data.frame / matrix returned by
+  # derive_reference_from_bulk()) modes, the panel now shows the
+  # SAME thing: a histogram of every gene\'s reference z-score in the
+  # currently selected signature. Two material differences:
+  #
+  #   * Built-in references ship pre-filtered to |z| >= 2 to keep
+  #     the install lightweight, so the histogram has nothing to
+  #     show in the (-2, +2) interior. We facet by sign and let
+  #     each tail use its own x scale, which produces a "broken
+  #     axis" layout that omits the empty middle entirely (the user
+  #     asked us to "simplify" the built-in histogram by not showing
+  #     |z| < 2 -- this is the cleanest way to do that without
+  #     hand-rolling ggh4x dependencies).
+  #
+  #   * Custom signatures often span the full distribution
+  #     including |z| < 2 (e.g. genes with weak survival
+  #     associations), so we render them as a single, continuous
+  #     histogram with no x-axis trimming.
+  #
+  # In both cases, the input$z_score_cutoff slider in the sidebar
+  # drives a pair of dashed vertical lines at +cut and -cut
+  # superimposed on the histogram, mirroring the percentile-cutoff
+  # overlay the Score-distribution panel uses. Updating the slider
+  # reactively redraws the lines without recomputing the histogram
+  # data, so the user can scrub through cutoff values and see the
+  # corresponding gene partition immediately.
   output$reference_signature_plot <- renderPlot({
     req(state$reference)
+    cut_raw <- suppressWarnings(as.numeric(input$z_score_cutoff))
+    cut_val <- if (length(cut_raw) == 1L && is.finite(cut_raw)) {
+      cut_raw
+    } else {
+      NA_real_
+    }
+    cut_label <- if (is.finite(cut_val)) {
+      sprintf("|z| = %g", cut_val)
+    } else {
+      NA_character_
+    }
+    base_size <- .theme_base_size()
+
     if (is.data.frame(state$reference) || is.matrix(state$reference)) {
-      if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
-        showNotification("Install ComplexHeatmap for the signature heatmap.",
-                         type = "warning", duration = 5)
+      # Custom signature: full continuous histogram of every gene\'s
+      # z-score. The first numeric column is the z-score column by
+      # convention (derive_reference_from_bulk() / the upload path
+      # both emit a single-column data.frame).
+      ref_df <- as.data.frame(state$reference)
+      z_col <- which(vapply(ref_df, is.numeric, logical(1)))[1L]
+      if (is.na(z_col)) {
         panel_objects$reference_signature_plot <- NULL
         return(NULL)
       }
-      p <- PhenoMapR::plot_reference_signature(state$reference)
+      z_vec <- as.numeric(ref_df[[z_col]])
+      z_vec <- z_vec[is.finite(z_vec)]
+      if (!length(z_vec)) {
+        panel_objects$reference_signature_plot <- NULL
+        return(NULL)
+      }
+      df <- data.frame(z = z_vec)
+      ttl <- sprintf("Custom phenotype signature (%s gene%s)",
+                     .fmt_int(length(z_vec)),
+                     if (length(z_vec) == 1L) "" else "s")
+      p <- ggplot(df, aes(x = z)) +
+        .geom_rounded_histogram(bins = 50, fill = "#2A9D8F", color = "white") +
+        labs(x = "Reference z-score", y = "Count", title = ttl) +
+        theme_minimal(base_size = base_size)
+      if (is.finite(cut_val) && cut_val > 0) {
+        p <- p +
+          ggplot2::geom_vline(
+            xintercept = c(-cut_val, cut_val),
+            linetype = "dashed", colour = "#264653", linewidth = 0.7
+          ) +
+          ggplot2::annotate(
+            "text", x = -cut_val, y = Inf, label = cut_label,
+            hjust = 1.05, vjust = 1.3, size = 3.2, colour = "#264653"
+          ) +
+          ggplot2::annotate(
+            "text", x = cut_val, y = Inf, label = cut_label,
+            hjust = -0.05, vjust = 1.3, size = 3.2, colour = "#264653"
+          )
+      }
       panel_objects$reference_signature_plot <- p
-      p
-    } else {
-      # Built-in: gate on `cancer_type` actually being a valid cancer type
-      # for the currently selected reference. When the user switches
-      # reference (e.g. PRECOG -> TCGA) Shiny fires `input$reference_choice`
-      # immediately but `input$cancer_type` only updates asynchronously
-      # via `updateSelectInput()`. Without this guard, the renderer
-      # transiently sees a stale (reference, cancer_type) pair like
-      # ("tcga", "Adrenocortical") and `get_top_prognostic_genes()` throws.
-      valid_cts <- get_cancer_types(state$reference)
-      req(input$cancer_type, input$cancer_type %in% valid_cts)
-      tg <- PhenoMapR::get_top_prognostic_genes(
-        reference = state$reference, cancer_type = input$cancer_type,
-        n = 500L, direction = "both"
-      )
-      p <- ggplot(tg, aes(x = z_score)) +
-        .geom_rounded_histogram(bins = 40, fill = "#2A9D8F", color = "white") +
-        labs(x = "Reference z-score", y = "Count",
-             title = sprintf("Top %d genes by |z| (%s · %s)",
-                             nrow(tg), state$reference, input$cancer_type %||% "")) +
-        theme_minimal(base_size = .theme_base_size())
-      panel_objects$reference_signature_plot <- p
-      p
+      return(p)
     }
+
+    # Built-in: gate on `cancer_type` actually being a valid cancer
+    # type for the currently selected reference. When the user
+    # switches reference (e.g. PRECOG -> TCGA) Shiny fires
+    # `input$reference_choice` immediately but `input$cancer_type`
+    # only updates asynchronously via `updateSelectInput()`. Without
+    # this guard, the renderer transiently sees a stale
+    # (reference, cancer_type) pair like ("tcga", "Adrenocortical")
+    # and `get_top_prognostic_genes()` throws.
+    valid_cts <- get_cancer_types(state$reference)
+    req(input$cancer_type, input$cancer_type %in% valid_cts)
+    tg <- PhenoMapR::get_top_prognostic_genes(
+      reference = state$reference, cancer_type = input$cancer_type,
+      # Inf -> head(scores, Inf) returns the full sorted table.
+      n = Inf, direction = "both"
+    )
+    z_vec <- as.numeric(tg$z_score)
+    z_vec <- z_vec[is.finite(z_vec)]
+    n_genes <- length(z_vec)
+    if (!n_genes) {
+      panel_objects$reference_signature_plot <- NULL
+      return(NULL)
+    }
+    df <- data.frame(z = z_vec)
+    df$side <- factor(
+      ifelse(df$z < 0, "Negative tail (z < 0)", "Positive tail (z > 0)"),
+      levels = c("Negative tail (z < 0)", "Positive tail (z > 0)")
+    )
+    ttl <- sprintf("Phenotype signature distribution (%s \u00B7 %s, %s genes)",
+                   state$reference, input$cancer_type %||% "",
+                   .fmt_int(n_genes))
+    # facet_wrap(scales = "free_x") gives each tail its own
+    # x-scale, producing the "broken axis" layout the user asked for
+    # (no empty -2 < z < 2 middle for built-in references that ship
+    # pre-filtered to |z| >= 2).
+    p <- ggplot(df, aes(x = z)) +
+      .geom_rounded_histogram(bins = 30, fill = "#2A9D8F", color = "white") +
+      ggplot2::facet_wrap(~ side, scales = "free_x", nrow = 1) +
+      labs(x = "Reference z-score", y = "Count", title = ttl) +
+      theme_minimal(base_size = base_size) +
+      theme(strip.background = element_rect(fill = "#F4F1DE",
+                                             colour = NA),
+            strip.text = element_text(face = "bold"),
+            panel.spacing.x = grid::unit(1.2, "lines"))
+    # Live |z| cutoff vlines: -cut on the negative facet, +cut on
+    # the positive facet. We pass a per-facet data.frame so each
+    # facet only draws its own line (and the label sits inside the
+    # right facet, not duplicated across both).
+    if (is.finite(cut_val) && cut_val > 0) {
+      vline_df <- data.frame(
+        side = factor(
+          c("Negative tail (z < 0)", "Positive tail (z > 0)"),
+          levels = levels(df$side)
+        ),
+        x = c(-cut_val, cut_val),
+        hjust = c(1.05, -0.05)
+      )
+      p <- p +
+        ggplot2::geom_vline(
+          data = vline_df,
+          ggplot2::aes(xintercept = x),
+          linetype = "dashed", colour = "#264653", linewidth = 0.7,
+          inherit.aes = FALSE
+        ) +
+        ggplot2::geom_text(
+          data = vline_df,
+          ggplot2::aes(x = x, y = Inf, label = cut_label, hjust = hjust),
+          vjust = 1.3, size = 3.2, colour = "#264653",
+          inherit.aes = FALSE
+        )
+    }
+    panel_objects$reference_signature_plot <- p
+    p
   })
   phenomapr_register_plot_download(output, "reference_signature_plot",
     function() isolate(panel_objects$reference_signature_plot),
@@ -3352,64 +3657,76 @@ server <- function(input, output, session) {
               input$cancer_type %||% "")
     } else "custom signature"
     phenomapr_busy_show("Computing PhenoMap scores...", ref_label)
+    # CRITICAL: defer the heavy PhenoMap() computation into a
+    # later::later() callback so the busy_show custom message can
+    # actually reach the browser before libuv is blocked. See the
+    # busy-overlay file-comment in helpers.R for the full
+    # rationale.
+    #
     # Direction radio was removed from the sidebar; PhenoMap() now
     # always uses the built-in signature's native direction
     # (reference_sign = 1L: higher score = worse prognosis), which
     # is the convention used by PRECOG / TCGA / Pediatric PRECOG /
     # ICI PRECOG signatures.
-    scores <- tryCatch(
-      run_phenomap_with_progress(
-        expression = state$expression,
-        reference = state$reference,
-        cancer_type = input$cancer_type,
-        z_score_cutoff = input$z_score_cutoff,
-        pseudobulk = isTRUE(input$pseudobulk),
-        group_by = input$pseudobulk_group_by,
-        assay = input$score_assay,
-        slot = input$score_slot,
-        reference_sign = 1L
-      ),
-      error = function(e) {
-        showNotification(paste0("PhenoMap failed: ", conditionMessage(e)),
-                         type = "error", duration = 10); NULL
-      }
+    expr_snapshot <- state$expression
+    ref_snapshot  <- state$reference
+    score_args <- list(
+      cancer_type    = input$cancer_type,
+      z_score_cutoff = input$z_score_cutoff,
+      pseudobulk     = isTRUE(input$pseudobulk),
+      group_by       = input$pseudobulk_group_by,
+      assay          = input$score_assay,
+      slot           = input$score_slot
     )
-    # Hide the popup BEFORE assigning to state$scores. Reason: state$scores
-    # invalidates ~half a dozen downstream renderPlot/renderUI outputs
-    # (score histogram, rank plot, box-by-source plot, group enrichment
-    # plot, score data status, score-table data, ...). Each of those
-    # produces a payload that ships in the next flush's single big
-    # websocket frame; if the popup-hide custom message is bundled
-    # alongside those large image payloads, browser timing can paint the
-    # new content before processing the hide. By calling hide here and
-    # deferring the state assignment via later::later() into a fresh
-    # tick, the hide message lands in its own (tiny) flush BEFORE any
-    # output values are produced, eliminating the lag entirely.
-    phenomapr_busy_hide()
-    if (is.null(scores)) return()
     sess <- session
     later::later(function() {
-      tryCatch({
-        state$scores <- scores
-        state$groups <- NULL  # invalidate downstream
-        state$markers <- NULL
-        nm <- colnames(scores)
-        shiny::updateSelectInput(sess, "groups_score_col",
-                                 choices = nm, selected = nm[1L])
-        shiny::showNotification(
-          sprintf("Scored %s (%.1fs).",
-                  .fmt_n_units(nrow(scores), "row"),
-                  attr(scores, "elapsed_s") %||% NA_real_),
-          type = "message", duration = 5,
-          session = sess
-        )
-      }, error = function(e) {
-        shiny::showNotification(
-          paste0("Internal error while applying scores: ",
-                 conditionMessage(e)),
-          type = "error", duration = 10, session = sess
-        )
-      })
+      scores <- tryCatch(
+        run_phenomap_with_progress(
+          expression = expr_snapshot,
+          reference = ref_snapshot,
+          cancer_type = score_args$cancer_type,
+          z_score_cutoff = score_args$z_score_cutoff,
+          pseudobulk = score_args$pseudobulk,
+          group_by = score_args$group_by,
+          assay = score_args$assay,
+          slot = score_args$slot,
+          reference_sign = 1L
+        ),
+        error = function(e) {
+          showNotification(paste0("PhenoMap failed: ", conditionMessage(e)),
+                           type = "error", duration = 10, session = sess); NULL
+        }
+      )
+      # Hide the popup BEFORE assigning to state$scores so the hide
+      # custom message lands in its own (tiny) flush ahead of the
+      # ~half-dozen renderPlot/renderUI outputs that re-render off
+      # state$scores (histogram, rank plot, box-by-source, group
+      # enrichment, score table, status, etc.).
+      phenomapr_busy_hide(session = sess)
+      if (is.null(scores)) return()
+      later::later(function() {
+        tryCatch({
+          state$scores <- scores
+          state$groups <- NULL  # invalidate downstream
+          state$markers <- NULL
+          nm <- colnames(scores)
+          shiny::updateSelectInput(sess, "groups_score_col",
+                                   choices = nm, selected = nm[1L])
+          shiny::showNotification(
+            sprintf("Scored %s (%.1fs).",
+                    .fmt_n_units(nrow(scores), "row"),
+                    attr(scores, "elapsed_s") %||% NA_real_),
+            type = "message", duration = 5,
+            session = sess
+          )
+        }, error = function(e) {
+          shiny::showNotification(
+            paste0("Internal error while applying scores: ",
+                   conditionMessage(e)),
+            type = "error", duration = 10, session = sess
+          )
+        })
+      }, delay = 0)
     }, delay = 0)
   })
 
@@ -4550,48 +4867,86 @@ server <- function(input, output, session) {
       ct_col_use <- NULL
     }
 
-    markers <- tryCatch(
-      PhenoMapR::find_phenotype_markers(
-        expression = state$expression,
-        group_labels = state$groups,
-        group_column = grp_col,
-        cell_id_column = "cell_id",
-        marker_scope = input$marker_scope,
-        cell_type_column = ct_col_use,
-        min.pct = input$marker_min_pct,
-        logfc.threshold = input$marker_logfc,
-        pval_threshold = input$marker_pval,
-        max_cells_per_ident = input$marker_maxcells,
-        verbose = TRUE
-      ),
-      error = function(e) {
-        showNotification(paste0("find_phenotype_markers failed: ",
-                                conditionMessage(e)),
-                         type = "error", duration = 10); NULL
-      }
+    # CRITICAL: defer the heavy find_phenotype_markers() call into
+    # later::later() so the busy_show custom message can reach the
+    # browser before libuv is blocked. See helpers.R\'s busy-overlay
+    # file-comment for the full rationale.
+    expr_snapshot   <- state$expression
+    groups_snapshot <- state$groups
+
+    # Decode the single sidebar radio into the (marker_scope,
+    # celltype_contrast) tuple expected by find_phenotype_markers().
+    # Three UI choices:
+    #   "phenotype_groups"        -> cohort-wide
+    #   "cell_type_specific"      -> per cell type, within-tail contrast
+    #   "cell_type_vs_opposite"   -> per cell type, vs ALL cells in the
+    #                                opposite phenotype tail
+    scope_ui <- input$marker_scope %||% "phenotype_groups"
+    if (identical(scope_ui, "cell_type_vs_opposite")) {
+      marker_scope_use      <- "cell_type_specific"
+      celltype_contrast_use <- "vs_opposite_tail"
+    } else if (identical(scope_ui, "cell_type_specific")) {
+      marker_scope_use      <- "cell_type_specific"
+      celltype_contrast_use <- "within_cell_type"
+    } else {
+      marker_scope_use      <- "phenotype_groups"
+      celltype_contrast_use <- "within_cell_type"
+    }
+
+    marker_args <- list(
+      group_column        = grp_col,
+      marker_scope        = marker_scope_use,
+      celltype_contrast   = celltype_contrast_use,
+      cell_type_column    = ct_col_use,
+      min.pct             = input$marker_min_pct,
+      logfc.threshold     = input$marker_logfc,
+      pval_threshold      = input$marker_pval,
+      max_cells_per_ident = input$marker_maxcells
     )
-    # See the score observer above for the rationale: hide BEFORE
-    # state$markers assignment, defer the assignment via later::later
-    # so the hide message lands in a flush ahead of the heavy
-    # marker-table renders.
-    phenomapr_busy_hide()
-    if (is.null(markers)) return()
     sess <- session
     later::later(function() {
-      tryCatch({
-        state$markers <- markers
-        shiny::showNotification(sprintf(
-          "Found %s adverse + %s favorable markers.",
-          .fmt_int(nrow(markers$adverse_markers)),
-          .fmt_int(nrow(markers$favorable_markers))
-        ), type = "message", duration = 5, session = sess)
-      }, error = function(e) {
-        shiny::showNotification(
-          paste0("Internal error while applying markers: ",
-                 conditionMessage(e)),
-          type = "error", duration = 10, session = sess
-        )
-      })
+      markers <- tryCatch(
+        PhenoMapR::find_phenotype_markers(
+          expression = expr_snapshot,
+          group_labels = groups_snapshot,
+          group_column = marker_args$group_column,
+          cell_id_column = "cell_id",
+          marker_scope = marker_args$marker_scope,
+          celltype_contrast = marker_args$celltype_contrast,
+          cell_type_column = marker_args$cell_type_column,
+          min.pct = marker_args$min.pct,
+          logfc.threshold = marker_args$logfc.threshold,
+          pval_threshold = marker_args$pval_threshold,
+          max_cells_per_ident = marker_args$max_cells_per_ident,
+          verbose = TRUE
+        ),
+        error = function(e) {
+          showNotification(paste0("find_phenotype_markers failed: ",
+                                  conditionMessage(e)),
+                           type = "error", duration = 10, session = sess); NULL
+        }
+      )
+      # Hide BEFORE assigning state$markers so the hide custom
+      # message lands in a flush ahead of the heavy marker-table
+      # renders (renderDT * 2, plus the marker heatmap UI).
+      phenomapr_busy_hide(session = sess)
+      if (is.null(markers)) return()
+      later::later(function() {
+        tryCatch({
+          state$markers <- markers
+          shiny::showNotification(sprintf(
+            "Found %s adverse + %s favorable markers.",
+            .fmt_int(nrow(markers$adverse_markers)),
+            .fmt_int(nrow(markers$favorable_markers))
+          ), type = "message", duration = 5, session = sess)
+        }, error = function(e) {
+          shiny::showNotification(
+            paste0("Internal error while applying markers: ",
+                   conditionMessage(e)),
+            type = "error", duration = 10, session = sess
+          )
+        })
+      }, delay = 0)
     }, delay = 0)
   })
 
@@ -4646,104 +5001,152 @@ server <- function(input, output, session) {
       "Building marker heatmap...",
       "Assembling expression matrix and per-cell metadata"
     )
-    # Use on.exit instead of the deferred-state pattern here because
-    # the actual heavy drawing happens inside renderImage(), NOT in
-    # this observer body. This observer only assembles inputs and
-    # writes them to marker_heatmap_args(), which invalidates the
-    # renderImage. The heavy work is therefore in a separate flush
-    # cycle from this observer's hide call, so a plain on.exit hide
-    # is sufficient -- by the time the renderImage's PNG is sent,
-    # the popup is long gone.
-    on.exit(phenomapr_busy_hide(), add = TRUE)
+    # Defer the heavy assembly work (extract_expression_matrix +
+    # joins) into later::later() so the busy_show custom message
+    # can reach the browser before libuv gets blocked. See
+    # helpers.R\'s busy-overlay file-comment for the rationale.
+    # The popup will stay up through the renderImage draw too,
+    # because that happens inside this same logical "busy"
+    # window from the user\'s perspective.
+    expr_obj_snapshot   <- state$expression
+    markers_snapshot    <- state$markers
+    scores_snapshot     <- state$scores
+    groups_snapshot     <- state$groups
+    metadata_snapshot   <- state$metadata
+    score_assay_input   <- input$score_assay %||% ""
+    score_slot_input    <- input$score_slot   %||% "data"
+    marker_scope_input  <- input$marker_scope
+    meta_ct_col_input   <- input$meta_cell_type_col
+    meta_id_col_input   <- input$meta_cell_id_col
+    hm_top_n_input      <- input$hm_top_n     %||% 20L
+    hm_n_labels_input   <- input$hm_n_labels  %||% 5L
+    hm_block_borders_in <- isTRUE(input$hm_block_borders)
+    sess <- session
+    later::later(function() {
+      # For AnnData inputs, the marker heatmap only needs the marker genes,
+      # we pass that list straight to extract_expression_matrix() so that
+      # subsetting happens on the Python side and we don't materialise the
+      # full expression matrix in R.
+      marker_genes <- unique(c(
+        if (!is.null(markers_snapshot$adverse_markers))   markers_snapshot$adverse_markers$gene,
+        if (!is.null(markers_snapshot$favorable_markers)) markers_snapshot$favorable_markers$gene
+      ))
+      marker_genes <- marker_genes[nzchar(marker_genes)]
 
-    # For AnnData inputs, the marker heatmap only needs the marker genes —
-    # we pass that list straight to extract_expression_matrix() so that
-    # subsetting happens on the Python side and we don't materialise the
-    # full expression matrix in R.
-    marker_genes <- unique(c(
-      if (!is.null(state$markers$adverse_markers))   state$markers$adverse_markers$gene,
-      if (!is.null(state$markers$favorable_markers)) state$markers$favorable_markers$gene
-    ))
-    marker_genes <- marker_genes[nzchar(marker_genes)]
-
-    expr_mat <- tryCatch(
-      extract_expression_matrix(
-        state$expression,
-        assay = if (nzchar(input$score_assay %||% "")) input$score_assay else NULL,
-        slot = input$score_slot %||% "data",
-        gene_subset = if (length(marker_genes)) marker_genes else NULL
-      ),
-      error = function(e) {
-        showNotification(paste0("Could not extract expression matrix: ",
-                                conditionMessage(e)),
-                         type = "error", duration = 8); NULL
+      expr_mat <- tryCatch(
+        extract_expression_matrix(
+          expr_obj_snapshot,
+          assay = if (nzchar(score_assay_input)) score_assay_input else NULL,
+          slot = score_slot_input,
+          gene_subset = if (length(marker_genes)) marker_genes else NULL
+        ),
+        error = function(e) {
+          showNotification(paste0("Could not extract expression matrix: ",
+                                  conditionMessage(e)),
+                           type = "error", duration = 8, session = sess); NULL
+        }
+      )
+      if (is.null(expr_mat)) {
+        phenomapr_busy_hide(session = sess)
+        return()
       }
-    )
-    if (is.null(expr_mat)) return()
 
-    # Build per-cell metadata: cell_id, group, score, cell_type
-    grp_col <- grep("^phenotype_group_", colnames(state$groups), value = TRUE)[1L]
-    if (is.na(grp_col)) {
-      showNotification("No phenotype_group_* column on the groups table — re-tag groups first.",
-                       type = "error", duration = 6); return()
-    }
-    score_name <- colnames(state$scores)[1L]
-    scores_df <- data.frame(
-      cell_id = rownames(state$scores),
-      .score = as.numeric(state$scores[[1L]]),
-      stringsAsFactors = FALSE
-    )
-    colnames(scores_df)[2L] <- score_name
-    meta_df <- data.frame(
-      cell_id = as.character(state$groups$cell_id),
-      stringsAsFactors = FALSE
-    )
-    meta_df$.group <- state$groups[[grp_col]]
-    colnames(meta_df)[2L] <- grp_col
-    meta_df <- dplyr::left_join(meta_df, scores_df, by = "cell_id")
-
-    ct_col_use <- input$meta_cell_type_col
-    has_ct <- !is.null(ct_col_use) && nzchar(ct_col_use) && ct_col_use != "(none)" &&
-      !is.null(state$metadata) && ct_col_use %in% colnames(state$metadata)
-    if (has_ct) {
-      md <- state$metadata
-      id_col <- input$meta_cell_id_col
-      if (!nzchar(id_col) || !(id_col %in% colnames(md))) id_col <- ".cell_id"
-      if (!(id_col %in% colnames(md))) id_col <- colnames(md)[1L]
-      md$.cell_id <- as.character(md[[id_col]])
-      ct_df <- data.frame(
-        cell_id = md$.cell_id,
-        .ct = as.character(md[[ct_col_use]]),
+      grp_col <- grep("^phenotype_group_", colnames(groups_snapshot), value = TRUE)[1L]
+      if (is.na(grp_col)) {
+        phenomapr_busy_hide(session = sess)
+        showNotification("No phenotype_group_* column on the groups table \u2014 re-tag groups first.",
+                         type = "error", duration = 6, session = sess); return()
+      }
+      score_name <- colnames(scores_snapshot)[1L]
+      scores_df <- data.frame(
+        cell_id = rownames(scores_snapshot),
+        .score = as.numeric(scores_snapshot[[1L]]),
         stringsAsFactors = FALSE
       )
-      colnames(ct_df)[2L] <- ct_col_use
-      meta_df <- dplyr::left_join(meta_df, ct_df, by = "cell_id")
-    }
+      colnames(scores_df)[2L] <- score_name
+      meta_df <- data.frame(
+        cell_id = as.character(groups_snapshot$cell_id),
+        stringsAsFactors = FALSE
+      )
+      meta_df$.group <- groups_snapshot[[grp_col]]
+      colnames(meta_df)[2L] <- grp_col
+      meta_df <- dplyr::left_join(meta_df, scores_df, by = "cell_id")
 
-    # Decide which heatmap to draw: cell-type-specific when both the markers
-    # were computed that way AND a cell-type column is mapped.
-    is_ct <- input$marker_scope == "cell_type_specific" && has_ct
-    heatmap_type <- if (is_ct) "cell_type_specific" else "global"
+      ct_col_use <- meta_ct_col_input
+      has_ct <- !is.null(ct_col_use) && nzchar(ct_col_use) && ct_col_use != "(none)" &&
+        !is.null(metadata_snapshot) && ct_col_use %in% colnames(metadata_snapshot)
+      if (has_ct) {
+        md <- metadata_snapshot
+        id_col <- meta_id_col_input
+        if (!nzchar(id_col) || !(id_col %in% colnames(md))) id_col <- ".cell_id"
+        if (!(id_col %in% colnames(md))) id_col <- colnames(md)[1L]
+        md$.cell_id <- as.character(md[[id_col]])
+        ct_df <- data.frame(
+          cell_id = md$.cell_id,
+          .ct = as.character(md[[ct_col_use]]),
+          stringsAsFactors = FALSE
+        )
+        colnames(ct_df)[2L] <- ct_col_use
+        meta_df <- dplyr::left_join(meta_df, ct_df, by = "cell_id")
+      }
 
-    marker_heatmap_args(list(
-      markers = state$markers,
-      expr_mat = expr_mat,
-      meta = meta_df,
-      cell_id_col = "cell_id",
-      group_col = grp_col,
-      score_col = score_name,
-      celltype_col = if (has_ct) ct_col_use else NULL,
-      heatmap_type = heatmap_type,
-      top_n_markers = input$hm_top_n %||% 20L,
-      n_mark_labels = input$hm_n_labels %||% 5L,
-      use_raster = FALSE
-    ))
-    showNotification("Heatmap ready -- drawing...", type = "message", duration = 3)
+      # Both per-cell-type contrasts ("cell_type_specific" /
+      # "cell_type_vs_opposite") render as a cell-type-specific
+      # heatmap; the underlying marker tables already carry a
+      # cell_type column for either contrast.
+      is_ct <- (marker_scope_input %in%
+                  c("cell_type_specific", "cell_type_vs_opposite")) &&
+               has_ct
+      heatmap_type <- if (is_ct) "cell_type_specific" else "global"
+
+      phenomapr_busy_hide(session = sess)
+      later::later(function() {
+        marker_heatmap_args(list(
+          markers = markers_snapshot,
+          expr_mat = expr_mat,
+          meta = meta_df,
+          cell_id_col = "cell_id",
+          group_col = grp_col,
+          score_col = score_name,
+          celltype_col = if (has_ct) ct_col_use else NULL,
+          heatmap_type = heatmap_type,
+          top_n_markers = hm_top_n_input,
+          n_mark_labels = hm_n_labels_input,
+          # Block-outline parameters captured at draw time. The
+          # renderImage handler also consults the live
+          # `input$hm_block_borders` value, so toggling the
+          # checkbox after the heatmap exists triggers a
+          # cheap re-render without rebuilding the cached
+          # expression matrix or metadata.
+          outline_marker_blocks = hm_block_borders_in,
+          block_outline_color = if (hm_block_borders_in) "black" else "white",
+          # 1.5pt is slightly slimmer than the previous 2pt default
+          # so the borders read as clean dividers instead of heavy
+          # chrome around each block.
+          block_outline_lwd = if (hm_block_borders_in) 1.5 else 1,
+          use_raster = FALSE
+        ))
+        showNotification("Heatmap ready -- drawing...", type = "message",
+                         duration = 3, session = sess)
+      }, delay = 0)
+    }, delay = 0)
   })
 
   output$marker_heatmap <- renderImage(
     {
       args <- marker_heatmap_args(); req(args)
+
+      # Live block-border toggle: the checkbox feeds renderImage
+      # directly so flipping it re-renders the cached heatmap with
+      # the new outline color without rebuilding the (expensive)
+      # expression matrix or metadata join. The cached `args` was
+      # populated at "Draw heatmap" time -- we just override the
+      # outline knobs here from the current input value.
+      borders_on <- isTRUE(input$hm_block_borders)
+      args$outline_marker_blocks <- borders_on
+      args$block_outline_color   <- if (borders_on) "black" else "white"
+      # Slightly slimmer line (1.5pt) than the original 2pt default.
+      args$block_outline_lwd     <- if (borders_on) 1.5 else 1
 
       # Render to a real PNG at fixed pixel size + DPI. ComplexHeatmap +
       # anno_mark are notoriously fragile under Shiny's renderPlot()
@@ -4810,6 +5213,13 @@ server <- function(input, output, session) {
         )
         return(invisible(NULL))
       }
+      # Mirror the live block-border toggle so the downloaded PNG
+      # matches what the user currently sees on screen.
+      borders_on <- isTRUE(isolate(input$hm_block_borders))
+      args$outline_marker_blocks <- borders_on
+      args$block_outline_color   <- if (borders_on) "black" else "white"
+      # Slightly slimmer line (1.5pt) than the original 2pt default.
+      args$block_outline_lwd     <- if (borders_on) 1.5 else 1
       ok <- tryCatch({
         grDevices::png(file, width = width, height = height, res = 110)
         on.exit(if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(),

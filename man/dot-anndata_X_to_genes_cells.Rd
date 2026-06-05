@@ -2,14 +2,14 @@
 % Please edit documentation in R/data_handlers.R
 \name{.anndata_X_to_genes_cells}
 \alias{.anndata_X_to_genes_cells}
-\title{Convert AnnData.X into a genes × cells Matrix}
+\title{Convert AnnData.X into a genes x cells Matrix}
 \usage{
 .anndata_X_to_genes_cells(obj, gene_subset = NULL)
 }
 \description{
 Returns a \code{dgCMatrix} (sparse) when \code{adata.X} is a scipy sparse
-matrix, or a regular dense matrix otherwise. Always genes × cells (i.e.
-the transpose of AnnData's native cells × genes layout) with
+matrix, or a regular dense matrix otherwise. Always genes x cells (i.e.
+the transpose of AnnData's native cells x genes layout) with
 \code{rownames = var_names} and \code{colnames = obs_names}.
 }
 \details{
@@ -22,10 +22,10 @@ is copied into R. This is the dominant cost reduction for multi-GB
 AnnData objects: only the genes that actually contribute to the
 score are transferred.
 \item For scipy-sparse \code{.X}, the AnnData native CSR storage of a
-(n_obs × n_vars) matrix is the same as the CSC storage of the
-transposed (n_vars × n_obs) matrix. We reuse \code{indices},
+(n_obs x n_vars) matrix is the same as the CSC storage of the
+transposed (n_vars x n_obs) matrix. We reuse \code{indices},
 \code{indptr} and \code{data} arrays directly to build a
-\code{dgCMatrix} in genes × cells orientation, with no extra
+\code{dgCMatrix} in genes x cells orientation, with no extra
 allocation for a transpose pass.
 }
 }

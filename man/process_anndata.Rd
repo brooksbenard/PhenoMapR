@@ -7,7 +7,7 @@
 process_anndata(obj, pseudobulk, group_by, genes_to_extract = NULL)
 }
 \description{
-Convert a Python \pkg{anndata} object into a genes × cells expression matrix
+Convert a Python \pkg{anndata} object into a genes x cells expression matrix
 that the rest of PhenoMapR understands. Optimized for very large objects:
 \itemize{
 \item When \code{genes_to_extract} is supplied (e.g. the reference genes
@@ -18,8 +18,8 @@ files: only a few hundred to a few thousand genes typically pass
 the cutoff, so we transfer ~1-3\\% of the matrix instead of all of
 it.
 \item scipy-sparse \code{.X} is reinterpreted directly as a
-\code{dgCMatrix} in genes × cells orientation by treating the
-native CSR-of-(cells×genes) storage as CSC-of-(genes×cells); this
+\code{dgCMatrix} in genes x cells orientation by treating the
+native CSR-of-(cellsxgenes) storage as CSC-of-(genesxcells); this
 avoids \code{Matrix::t()} and the doubling of memory it would
 otherwise cause.
 }

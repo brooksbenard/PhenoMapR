@@ -42,14 +42,12 @@ stopifnot(file.exists(app_R), file.exists(helpers_R))
 app_src     <- paste(readLines(app_R, warn = FALSE),   collapse = "\n")
 helpers_src <- paste(readLines(helpers_R, warn = FALSE), collapse = "\n")
 
-## --- 1. JS reset of dismissedThisRun in handleShow -------------------------
-stopifnot_msg(
-  grepl("dismissedThisRun = false;\\s*currentMessage", helpers_src),
-  "JS handleShow resets dismissedThisRun before rendering"
-)
-## And the *blocking* `if (dismissedThisRun) ... return;` branch must be gone
-## from handleShow (it survived in earlier iterations and was the root cause
-## of the "popup never reappears on the next upload" report).
+## --- 1. dismissedThisRun reset on shiny:idle and handleHide ----------------
+## In the new custom-message-driven popup model, the `dismissedThisRun`
+## flag is reset both when the server signals idle (advisory) AND when
+## R explicitly calls busy_hide(), so a user-dismissed popup does not
+## suppress subsequent operations. Earlier iterations only reset on
+## handleShow which was a fragile coupling.
 hs_block <- regmatches(
   helpers_src,
   regexpr("function handleShow\\(p\\) \\{[\\s\\S]*?\\n  \\}", helpers_src,
@@ -57,12 +55,53 @@ hs_block <- regmatches(
 )
 stopifnot_msg(length(hs_block) == 1L,
               "located the handleShow function body in helpers.R")
+## handleShow now uses SHOW_DELAY_MS debounce + setTimeout to drive
+## visibility (custom-message driven). It still reads dismissedThisRun
+## as a guard so a user-dismissed popup does not pop right back inside
+## the same logical cycle.
 stopifnot_msg(
-  !grepl("if \\(dismissedThisRun\\)", hs_block),
-  "handleShow no longer suppresses renderShow when dismissedThisRun is set"
+  grepl("SHOW_DELAY_MS", hs_block) && grepl("setTimeout", hs_block),
+  "handleShow uses SHOW_DELAY_MS debounce via setTimeout"
+)
+stopifnot_msg(
+  grepl("dismissedThisRun", hs_block),
+  "handleShow respects dismissedThisRun (suppresses re-show within same cycle)"
 )
 
-## --- 2. Expression observer defers state assignments via later::later ------
+## handleHide clears dismissedThisRun so the next op can show again.
+## NOTE: handleHide MUST declare exactly one parameter
+## (e.g. `handleHide(_msg)`) -- Shiny.addCustomMessageHandler enforces
+## handler.length === 1 and silently refuses zero-arg handlers with a
+## "Uncaught handler must be a function that takes one argument."
+## error in the browser console. Without that arg the entire hide
+## path is dead AND dismissedThisRun stays pinned to true after a
+## manual dismiss, suppressing every subsequent show.
+hh_block <- regmatches(
+  helpers_src,
+  regexpr("function handleHide\\([A-Za-z_][A-Za-z0-9_]*\\) \\{[\\s\\S]*?\\n  \\}",
+          helpers_src, perl = TRUE)
+)
+stopifnot_msg(length(hh_block) == 1L,
+              "located the handleHide(<arg>) function body in helpers.R")
+stopifnot_msg(
+  grepl("dismissedThisRun = false", hh_block),
+  "handleHide clears dismissedThisRun (so next op can re-show)"
+)
+
+## onShinyIdle still clears dismissedThisRun (advisory safety net).
+idle_block <- regmatches(
+  helpers_src,
+  regexpr("function onShinyIdle\\(\\) \\{[\\s\\S]*?\\n  \\}", helpers_src,
+          perl = TRUE)
+)
+stopifnot_msg(length(idle_block) == 1L,
+              "located the onShinyIdle function body in helpers.R")
+stopifnot_msg(
+  grepl("dismissedThisRun = false", idle_block),
+  "onShinyIdle also clears dismissedThisRun (so next op can re-show)"
+)
+
+## --- 2. Expression observer defers HEAVY WORK + state via later::later -----
 ## Locate the slice of app.R between phenomapr_busy_show("Reading expression
 ## file...") and the matching `}, ignoreNULL = FALSE, ignoreInit = TRUE)`
 ## terminator so we are inspecting *only* the expression-upload observer.
@@ -75,13 +114,25 @@ stopifnot_msg(slice_match > 0,
 slice <- substr(app_src, slice_match,
                 slice_match + attr(slice_match, "match.length") - 1L)
 
-stopifnot_msg(
-  grepl("phenomapr_busy_hide\\(\\)", slice),
-  "observer calls phenomapr_busy_hide() explicitly after parse"
-)
+## CRITICAL: parse_expression_upload() (the heavy work) MUST live
+## inside the deferred later::later() body, not in the observer body.
+## Otherwise libuv is blocked during the read and the busy_show
+## message never reaches the browser.
 stopifnot_msg(
   grepl("later::later\\(function\\(\\)", slice),
-  "observer defers state assignments via later::later(function() ...)"
+  "observer defers work via later::later(function() ...)"
+)
+## Find the position of the FIRST later::later in the slice and
+## confirm parse_expression_upload appears AFTER it.
+later_pos <- regexpr("later::later\\(function\\(\\)", slice, perl = TRUE)
+parse_pos <- regexpr("parse_expression_upload\\(", slice, perl = TRUE)
+stopifnot_msg(
+  parse_pos > later_pos,
+  "parse_expression_upload() runs INSIDE the deferred later::later() body"
+)
+stopifnot_msg(
+  grepl("phenomapr_busy_hide\\(session = sess\\)", slice),
+  "observer calls phenomapr_busy_hide(session = sess) inside the deferred body"
 )
 stopifnot_msg(
   grepl("state\\$expression <- res_obj\\$object", slice),
@@ -91,10 +142,6 @@ stopifnot_msg(
   grepl("session = sess", slice),
   "deferred body passes session = sess to showNotification calls"
 )
-## The old `on.exit(phenomapr_busy_hide(), add = TRUE)` pattern must NOT be
-## present in the expr-upload observer any more -- it would defeat the whole
-## point of the defer (state assignments would re-queue the hide message
-## behind the downstream cascade in the same flush).
 stopifnot_msg(
   !grepl("on\\.exit\\(phenomapr_busy_hide", slice),
   "expr-upload observer no longer uses on.exit(phenomapr_busy_hide())"
@@ -112,6 +159,12 @@ meta_slice <- substr(app_src, meta_match,
 stopifnot_msg(
   grepl("later::later\\(function\\(\\)", meta_slice),
   "metadata observer also defers via later::later"
+)
+meta_later <- regexpr("later::later\\(function\\(\\)", meta_slice, perl = TRUE)
+meta_parse <- regexpr("parse_metadata_upload\\(", meta_slice, perl = TRUE)
+stopifnot_msg(
+  meta_parse > meta_later,
+  "parse_metadata_upload() runs INSIDE the deferred later::later() body"
 )
 stopifnot_msg(
   !grepl("on\\.exit\\(phenomapr_busy_hide", meta_slice),

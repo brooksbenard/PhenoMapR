@@ -20,7 +20,7 @@ derive_reference_from_bulk(
 }
 \arguments{
 \item{bulk_expression}{Matrix or data.frame. Bulk expression with \strong{genes as
-rows} and \strong{samples as columns}. If the matrix appears to be samples ×
+rows} and \strong{samples as columns}. If the matrix appears to be samples x
 genes (e.g. fewer rows than columns), the function will transpose and
 message the user.}
 
@@ -38,7 +38,7 @@ outcome. For \code{phenotype_type = "survival"} this is ignored; use
 
 \item{phenotype_type}{One of \code{"auto"}, \code{"survival"}, \code{"binary"},
 \code{"continuous"}. If \code{"auto"}, inferred from the phenotype column
-(numeric with >2 unique → continuous; 2 unique → binary; or use survival
+(numeric with >2 unique -> continuous; 2 unique -> binary; or use survival
 if \code{survival_time} and \code{survival_event} are provided).}
 
 \item{survival_time}{Character. Column name in \code{phenotype} for
@@ -83,8 +83,8 @@ phenotype (binary, continuous, or survival), this function computes gene-level
 association z-scores that can be used as a custom reference in \code{\link{PhenoMap}}.
 }
 \details{
-Steps: (1) ensure genes × samples format (transpose with message if heuristic
-suggests the matrix was provided as samples × genes), (2) clean gene names to
+Steps: (1) ensure genes x samples format (transpose with message if heuristic
+suggests the matrix was provided as samples x genes), (2) clean gene names to
 approved HUGO symbols, (3) check if expression is normalized and normalize
 if needed, (4) compute phenotype association z-scores per gene (Cox for
 survival, logistic regression for binary, correlation for continuous).

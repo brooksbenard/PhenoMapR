@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_reference_signature.R
 \name{plot_reference_signature}
 \alias{plot_reference_signature}
-\title{Plot reference signature z-scores as a 1×N heatmap}
+\title{Plot reference signature z-scores as a 1xN heatmap}
 \usage{
 plot_reference_signature(
   reference,

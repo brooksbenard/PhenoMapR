@@ -104,9 +104,10 @@ define_phenotype_groups <- function(scores,
 #'       phenotype groups globally (cell type agnostic; default).
 #'     \item \code{"cell_type_specific"}: for each cell type, find markers for
 #'       cells of that type in the adverse (or favorable) tail vs a reference
-#'       group controlled by \code{celltype_contrast} (default: same cell type,
-#'       not in that tail; use \code{"vs_cohort_rest"} for the original cohort-wide
-#'       contrast).
+#'       group controlled by \code{celltype_contrast} (default
+#'       \code{"within_cell_type"}; see that argument for the full set of
+#'       reference-cell strategies, including \code{"vs_opposite_tail"} for
+#'       cell types that exist in only one tail).
 #'   }
 #' @param cell_type_column When \code{marker_scope = "cell_type_specific"}, the
 #'   column in \code{group_labels} that contains cell type labels.
@@ -134,11 +135,26 @@ define_phenotype_groups <- function(scores,
 #'   by \code{p_adj}). This avoids the same gene (e.g. highly expressed
 #'   housekeeping transcripts) appearing as a top marker in many cell-type
 #'   blocks. Set to \code{FALSE} to retain all significant hits per block.
-#' @param celltype_contrast When \code{marker_scope = "cell_type_specific"}: \code{"within_cell_type"}
-#'   (default) compares each phenotype tail within a cell type to other phenotype
-#'   groups in the \strong{same} cell type only. \code{"vs_cohort_rest"} restores the
-#'   original behaviour: (cell type \eqn{\cap} tail) vs \strong{all other cells} in
-#'   the dataset (other cell types and other phenotype groups).
+#' @param celltype_contrast When \code{marker_scope = "cell_type_specific"},
+#'   selects the reference cell population for each (cell type, phenotype tail)
+#'   block. Three modes are available:
+#'   \itemize{
+#'     \item \code{"within_cell_type"} (default): reference is the \strong{same
+#'       cell type} but in a different phenotype group. Most stringent --
+#'       isolates phenotype-driven signal within a single cell-type identity.
+#'       Returns empty for a (cell type, tail) pair when the same cell type
+#'       does not exist outside that tail.
+#'     \item \code{"vs_cohort_rest"}: reference is \strong{every other cell}
+#'       in the dataset with a non-missing phenotype label (other cell types
+#'       AND the opposite tail). Most permissive; markers reflect both
+#'       phenotype- and cell-type-driven differences.
+#'     \item \code{"vs_opposite_tail"}: reference is \strong{all cells in the
+#'       opposite phenotype tail}, regardless of cell type. Useful when one
+#'       tail has no cells of a given cell type (e.g. only adverse ductal
+#'       cells, no favorable ductal cells) -- \code{"within_cell_type"} would
+#'       return empty for ductal here; this contrast still surfaces the
+#'       phenotype signal by comparing against the entire opposite tail.
+#'   }
 #' @details
 #' Phenotype tails (e.g. top/bottom 5\%) come from \code{\link{define_phenotype_groups}()}.
 #' For \code{marker_scope = "cell_type_specific"}, the contrast is set by
@@ -158,10 +174,11 @@ define_phenotype_groups <- function(scores,
 #'   \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
 #'   When \code{marker_scope = "cell_type_specific"}, each row is one gene for
 #'   one cell type; the \code{cell_type} column identifies which type the
-#'   in-group was anchored on. If \code{celltype_contrast = "within_cell_type"}
-#'   (default), the reference is other phenotype groups within that cell type; if
-#'   \code{"vs_cohort_rest"}, the reference is all other cells with a phenotype
-#'   label (original behaviour).
+#'   in-group was anchored on. The reference set depends on
+#'   \code{celltype_contrast} (see above): same cell type / different tail
+#'   (\code{"within_cell_type"}), all other cells with a phenotype label
+#'   (\code{"vs_cohort_rest"}), or all cells in the opposite tail
+#'   (\code{"vs_opposite_tail"}).
 #'
 #' @examples
 #' \dontrun{
@@ -196,11 +213,44 @@ find_phenotype_markers <- function(expression,
                                     max_cells_per_ident = 5000L,
                                     validate_expression_axes = TRUE,
                                     celltype_unique_genes = TRUE,
-                                    celltype_contrast = c("within_cell_type", "vs_cohort_rest"),
+                                    celltype_contrast = c("within_cell_type",
+                                                          "vs_cohort_rest",
+                                                          "vs_opposite_tail"),
                                     ...) {
   test.use <- match.arg(test.use)
   marker_scope <- match.arg(marker_scope)
   celltype_contrast <- match.arg(celltype_contrast)
+
+  # Resolve the assay to use for Seurat input ONCE, here, before any
+  # downstream helper sees it. This is what makes the function work
+  # transparently on:
+  #   * standard scRNA-seq Seurat (default assay "RNA")
+  #   * spatial Seurat / SpatialExperiment-flavoured Seurat
+  #     (default assay "Spatial")
+  #   * SCTransform-normalized objects (default assay "SCT")
+  #   * any multi-assay Seurat the user has set DefaultAssay() on
+  #
+  # The previous code hard-coded "RNA" as fallback, so spatial users
+  # got the cryptic
+  #   "Assay 'RNA' not found. Available: Spatial, SCT"
+  # the moment they hit the Markers tab. Honour the object's own
+  # DefaultAssay() first, then fall through a sensible priority list,
+  # and only as a last resort pick the first available assay.
+  if (is.null(assay) && inherits(expression, "Seurat")) {
+    avail <- names(expression@assays)
+    if (requireNamespace("Seurat", quietly = TRUE)) {
+      assay <- tryCatch(Seurat::DefaultAssay(expression),
+                        error = function(e) NULL)
+    }
+    if (is.null(assay) || !nzchar(assay) || !assay %in% avail) {
+      for (cand in c("RNA", "Spatial", "SCT")) {
+        if (cand %in% avail) { assay <- cand; break }
+      }
+      if (is.null(assay) || !assay %in% avail) {
+        assay <- avail[1L]
+      }
+    }
+  }
 
   # Resolve expression and cell order
   expr_info <- process_expression_for_markers(
@@ -327,7 +377,7 @@ find_phenotype_markers <- function(expression,
   assay_use <- assay %||% attr(seurat_obj, "PhenoMapR_assay") %||% "RNA"
   if (slot_use == "counts" && inherits(seurat_obj, "Seurat")) {
     dat_check <- tryCatch(
-      Seurat::GetAssayData(seurat_obj, assay = assay_use, layer = "data"),
+      .get_assay_data_compat(seurat_obj, assay = assay_use, slot = "data"),
       error = function(e) NULL
     )
     if (is.null(dat_check) || (nrow(dat_check) == 0 || ncol(dat_check) == 0)) {
@@ -681,11 +731,27 @@ run_markers_on_matrix <- function(mat,
 
 #' One contrast: cell-type phenotype tail vs reference cells
 #'
-#' With \code{contrast = "within_cell_type"} (default), compares phenotype extreme
-#' cells of type \code{ct} to other phenotype groups \strong{within the same cell
-#' type} only. With \code{contrast = "vs_cohort_rest"}, uses the original definition:
-#' (cell type \eqn{\cap} tail) vs \strong{all other cells} with a non-missing group
-#' (whole cohort minus the in-group).
+#' Three reference-cell strategies, controlled by \code{contrast}:
+#' \itemize{
+#'   \item \code{"within_cell_type"} (default): in-group is (cell type
+#'     \eqn{\cap} tail). Reference is the \strong{same cell type} but in
+#'     a different phenotype group. Most stringent contrast -- isolates
+#'     phenotype-driven signal within a single cell-type identity.
+#'     Returns empty when the same cell type does not exist outside
+#'     this tail.
+#'   \item \code{"vs_cohort_rest"}: in-group is (cell type \eqn{\cap}
+#'     tail). Reference is \strong{every other cell} with a non-missing
+#'     phenotype group (other cell types AND the opposite tail). Most
+#'     permissive; markers reflect both phenotype- and cell-type-driven
+#'     differences vs the cohort.
+#'   \item \code{"vs_opposite_tail"}: in-group is (cell type \eqn{\cap}
+#'     tail). Reference is \strong{all cells in the opposite phenotype
+#'     tail}, regardless of cell type. Useful when one tail has no
+#'     cells of this cell type at all (e.g. only adverse ductal cells,
+#'     no favorable ductal cells) -- "within_cell_type" returns empty
+#'     in that case, but this contrast still surfaces the phenotype
+#'     signal by comparing against the entire opposite tail.
+#' }
 #'
 #' @keywords internal
 #' @noRd
@@ -699,7 +765,9 @@ run_celltype_phenotype_vs_rest <- function(mat,
                                            pval_threshold = 0.05,
                                            max_cells_per_ident = 5000L,
                                            verbose = TRUE,
-                                           contrast = c("within_cell_type", "vs_cohort_rest")) {
+                                           contrast = c("within_cell_type",
+                                                        "vs_cohort_rest",
+                                                        "vs_opposite_tail")) {
   contrast <- match.arg(contrast)
   empty_markers <- function() {
     data.frame(
@@ -713,13 +781,34 @@ run_celltype_phenotype_vs_rest <- function(mat,
     )
   }
 
+  # phenotype_tail is one of "Most Adverse" / "Most Favorable"; the
+  # "opposite" of one is the other.
+  opposite_tail <- if (identical(phenotype_tail, "Most Adverse")) {
+    "Most Favorable"
+  } else if (identical(phenotype_tail, "Most Favorable")) {
+    "Most Adverse"
+  } else {
+    NA_character_
+  }
+
   cell_type_vec <- as.character(cell_type_vec)
   is_in <- !is.na(cell_type_vec) & !is.na(group_vec) &
     (cell_type_vec == cell_type_label) & (group_vec == phenotype_tail)
   in_i <- which(is_in)
   if (contrast == "vs_cohort_rest") {
-    # Original: in-group = (ct cap tail); rest = every other cell with a phenotype label
+    # in-group = (ct cap tail); rest = every other cell with a
+    # phenotype label.
     out_i <- which(!is_in & !is.na(group_vec))
+  } else if (contrast == "vs_opposite_tail") {
+    # in-group = (ct cap tail); rest = every cell in the OPPOSITE
+    # phenotype tail (any cell type). Crucially this still produces
+    # markers when the in-group's cell type is absent from the
+    # opposite tail entirely -- the within_cell_type contrast returns
+    # empty in that case.
+    if (is.na(opposite_tail)) {
+      return(empty_markers())
+    }
+    out_i <- which(!is.na(group_vec) & group_vec == opposite_tail)
   } else {
     is_out <- !is.na(cell_type_vec) & !is.na(group_vec) &
       (cell_type_vec == cell_type_label) & (group_vec != phenotype_tail)
@@ -745,6 +834,10 @@ run_celltype_phenotype_vs_rest <- function(mat,
         if (contrast == "vs_cohort_rest") {
           message(glue::glue(
             "Subsampled cohort-rest (non-in-group) cells for '{cell_type_label}' {phenotype_tail} contrast to {max_cells_per_ident} (memory limit)"
+          ))
+        } else if (contrast == "vs_opposite_tail") {
+          message(glue::glue(
+            "Subsampled opposite-tail ({opposite_tail}) cells for '{cell_type_label}' {phenotype_tail} contrast to {max_cells_per_ident} (memory limit)"
           ))
         } else {
           message(glue::glue(
@@ -883,7 +976,9 @@ run_markers_on_matrix_by_celltype <- function(mat,
                                                max_cells_per_ident = 5000L,
                                                verbose = TRUE,
                                                unique_genes_across_celltypes = TRUE,
-                                               celltype_contrast = c("within_cell_type", "vs_cohort_rest")) {
+                                               celltype_contrast = c("within_cell_type",
+                                                                     "vs_cohort_rest",
+                                                                     "vs_opposite_tail")) {
   celltype_contrast <- match.arg(celltype_contrast)
   if (length(group_vec) != ncol(mat)) {
     stop("Length of 'group_vec' must match number of columns in expression matrix")
@@ -978,7 +1073,21 @@ run_markers_on_matrix_by_celltype <- function(mat,
 # nocov start - only used by Seurat path in find_phenotype_markers (nocov'd)
 get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, assay, slot) {
   if (inherits(expression, "Seurat")) {
-    assay <- assay %||% "RNA"
+    # `assay` should have been resolved by find_phenotype_markers
+    # (DefaultAssay-honouring block). When called with assay = NULL
+    # we still cover the spatial / SCT case here so this helper is
+    # safe to use independently.
+    if (is.null(assay)) {
+      avail <- names(expression@assays)
+      assay <- tryCatch(Seurat::DefaultAssay(expression),
+                        error = function(e) NULL)
+      if (is.null(assay) || !nzchar(assay) || !assay %in% avail) {
+        for (cand in c("RNA", "Spatial", "SCT")) {
+          if (cand %in% avail) { assay <- cand; break }
+        }
+        if (is.null(assay) || !assay %in% avail) assay <- avail[1L]
+      }
+    }
     obj <- expression
     # Ensure cells in same order as expr_info
     cell_ids <- expr_info$cell_names
@@ -1076,6 +1185,11 @@ process_expression_for_markers <- function(expression,
     if (!requireNamespace("Seurat", quietly = TRUE)) {
       stop("Seurat package required for Seurat input")
     }
+    # `assay` is expected to have been resolved by the caller (see
+    # find_phenotype_markers' DefaultAssay-honouring resolution
+    # block). When called directly with assay = NULL we still fall
+    # back to "RNA" for backwards compatibility, but a clearer
+    # error message lists what assays the object actually has.
     assay <- assay %||% "RNA"
     if (!assay %in% names(expression@assays)) {
       stop(glue::glue("Assay '{assay}' not found. Available: {paste(names(expression@assays), collapse = ', ')}"))
@@ -1083,20 +1197,14 @@ process_expression_for_markers <- function(expression,
     layer_map <- c(data = "data", counts = "counts", scale.data = "scale.data")
     layer_name <- if (slot %in% names(layer_map)) layer_map[slot] else "data"
     mat <- tryCatch(
-      Seurat::GetAssayData(expression, assay = assay, layer = layer_name),
+      .get_assay_data_compat(expression, assay = assay, slot = layer_name),
       error = function(e) NULL
     )
     slot_used <- slot
-    if (is.null(mat)) {
-      mat <- tryCatch(
-        Seurat::GetAssayData(expression, assay = assay, slot = slot),
-        error = function(e) NULL
-      )
-    }
     if (is.null(mat) || (nrow(mat) == 0 || ncol(mat) == 0)) {
       mat <- tryCatch(
-        Seurat::GetAssayData(expression, assay = assay, layer = "counts"),
-        error = function(e) Seurat::GetAssayData(expression, assay = assay, slot = "counts")
+        .get_assay_data_compat(expression, assay = assay, slot = "counts"),
+        error = function(e) NULL
       )
       if (!is.null(mat) && (nrow(mat) > 0 && ncol(mat) > 0)) slot_used <- "counts"
     }

@@ -1,18 +1,16 @@
 #!/usr/bin/env Rscript
 ## Smoke tests for two follow-up fixes:
 ##
-##   A. Aggressive popup-hide fallback. The previous proactive-hide
-##      relied on Shiny dispatching `shiny:value` / `shiny:visualchange`
-##      events to the document level, but in some Shiny version /
-##      browser combinations those events do NOT bubble to document
-##      reliably. Adding more event listeners (`shiny:flushed`,
-##      `shiny:message`) helps, but the bullet-proof fix is a
-##      requestAnimationFrame poll that watches the body's
-##      `.shiny-busy` class -- which Shiny.js maintains itself
-##      regardless of event-dispatch quirks. When the popup has been
-##      visible for >= SHOWN_MIN_MS AND the body has been non-busy
-##      for >= IDLE_GRACE_MS, the poll hides the popup. Plus an
-##      ABSOLUTE_TIMEOUT (3 min) hard cap as a final safety net.
+##   A. Custom-message-driven popup with debounce + watchdog. The
+##      centered "busy" popup is now driven by R-side custom messages
+##      (phenomapr-busy-show / phenomapr-busy-hide) with a JS-side
+##      SHOW_DELAY_MS debounce on the show side. R observers MUST
+##      defer their heavy synchronous work into later::later() so the
+##      busy_show message reaches the browser BEFORE libuv is blocked
+##      by the work. A 3-minute absolute watchdog is still wired as a
+##      last-resort hard cap; shiny:idle is an advisory fallback hide.
+##      (See busy_popup_proactive_hide_smoke.R for the full
+##      structural-shape assertions.)
 ##
 ##   B. Score-by-cell-type-and-source plot star labels. Previously
 ##      drawn via ggsignif::geom_signif(manual = TRUE), which in some
@@ -39,86 +37,103 @@ stopifnot(file.exists(app_R), file.exists(helpers_R))
 app_src     <- paste(readLines(app_R,     warn = FALSE), collapse = "\n")
 helpers_src <- paste(readLines(helpers_R, warn = FALSE), collapse = "\n")
 
-## ---- A. rAF body-class polling fallback ---------------------------------
+## ---- A. Custom-message-driven popup with debounce + watchdog -----------
 stopifnot_msg(
-  grepl("var IDLE_GRACE_MS", helpers_src, fixed = TRUE),
-  "helpers.R declares IDLE_GRACE_MS"
+  grepl("var SHOW_DELAY_MS", helpers_src, fixed = TRUE),
+  "helpers.R declares SHOW_DELAY_MS (debounce before showing)"
+)
+stopifnot_msg(
+  grepl("var IDLE_SETTLE_MS", helpers_src, fixed = TRUE),
+  "helpers.R declares IDLE_SETTLE_MS (advisory shiny:idle hide delay)"
 )
 stopifnot_msg(
   grepl("var ABSOLUTE_TIMEOUT", helpers_src, fixed = TRUE),
-  "helpers.R declares ABSOLUTE_TIMEOUT"
-)
-stopifnot_msg(
-  grepl("var bodyIdleSince", helpers_src, fixed = TRUE),
-  "helpers.R tracks bodyIdleSince"
-)
-stopifnot_msg(
-  grepl("function isShinyBusy", helpers_src, fixed = TRUE),
-  "helpers.R defines isShinyBusy()"
-)
-stopifnot_msg(
-  grepl('classList\\.contains\\("shiny-busy"\\)', helpers_src),
-  "isShinyBusy reads the body's .shiny-busy class"
-)
-stopifnot_msg(
-  grepl("function busyPollTick", helpers_src, fixed = TRUE),
-  "helpers.R defines busyPollTick()"
+  "helpers.R declares ABSOLUTE_TIMEOUT (3-min watchdog cap)"
 )
 
-## busyPollTick body must trigger renderHide once shiny has been
-## idle for >= IDLE_GRACE_MS and the popup itself has been visible
-## for >= SHOWN_MIN_MS.
-poll_anchor <- "function busyPollTick"
-pp <- regexpr(poll_anchor, helpers_src, fixed = TRUE)
-stopifnot_msg(pp > 0L, "located busyPollTick body")
-poll_window <- substr(helpers_src, pp, min(nchar(helpers_src), pp + 1500L))
+## handleShow() drives the visible popup via SHOW_DELAY_MS debounce.
+hs_anchor <- "function handleShow"
+hs_pos <- regexpr(hs_anchor, helpers_src, fixed = TRUE)
+stopifnot_msg(hs_pos > 0L, "located handleShow body")
+hs_window <- substr(helpers_src, hs_pos, min(nchar(helpers_src), hs_pos + 1500L))
 stopifnot_msg(
-  grepl("idleFor >= IDLE_GRACE_MS", poll_window, fixed = TRUE),
-  "busyPollTick gates the hide on idleFor >= IDLE_GRACE_MS"
+  grepl("SHOW_DELAY_MS", hs_window, fixed = TRUE) &&
+    grepl("setTimeout", hs_window, fixed = TRUE),
+  "handleShow applies SHOW_DELAY_MS debounce via setTimeout"
 )
 stopifnot_msg(
-  grepl("visibleFor >= SHOWN_MIN_MS", poll_window, fixed = TRUE),
-  "busyPollTick gates the hide on visibleFor >= SHOWN_MIN_MS"
-)
-stopifnot_msg(
-  grepl("visibleFor >= ABSOLUTE_TIMEOUT", poll_window, fixed = TRUE),
-  "busyPollTick has an ABSOLUTE_TIMEOUT escape hatch"
-)
-stopifnot_msg(
-  grepl("requestAnimationFrame(busyPollTick)", poll_window, fixed = TRUE),
-  "busyPollTick reschedules via requestAnimationFrame"
+  grepl("renderShow()", hs_window, fixed = TRUE),
+  "handleShow ultimately renders the popup once debounce elapses"
 )
 
-## bind() must kick off the rAF chain.
+## handleHide() cancels any pending show timer and hides the popup.
+hh_anchor <- "function handleHide"
+hh_pos <- regexpr(hh_anchor, helpers_src, fixed = TRUE)
+stopifnot_msg(hh_pos > 0L, "located handleHide body")
+hh_window <- substr(helpers_src, hh_pos, min(nchar(helpers_src), hh_pos + 800L))
+stopifnot_msg(
+  grepl("clearPendingShow|clearTimeout", hh_window),
+  "handleHide cancels any pending show timer"
+)
+## handleHide() now goes through forceHide(), the unified DOM-probing
+## hide path that cannot be defeated by a drifted JS isVisible flag.
+## renderHide() is kept as a thin forwarder so legacy callers still
+## work.
+stopifnot_msg(
+  grepl("forceHide(", hh_window, fixed = TRUE) ||
+    grepl("renderHide()", hh_window, fixed = TRUE),
+  "handleHide hides the popup if it was visible (forceHide / renderHide)"
+)
+
+## Watchdog (rAF) enforces the absolute hard cap.
+wd_anchor <- "function watchdogTick"
+wd_pos <- regexpr(wd_anchor, helpers_src, fixed = TRUE)
+stopifnot_msg(wd_pos > 0L, "located watchdogTick body")
+wd_window <- substr(helpers_src, wd_pos, min(nchar(helpers_src), wd_pos + 1500L))
+stopifnot_msg(
+  grepl("ABSOLUTE_TIMEOUT", wd_window, fixed = TRUE),
+  "watchdogTick enforces ABSOLUTE_TIMEOUT"
+)
+stopifnot_msg(
+  grepl("requestAnimationFrame(watchdogTick)", wd_window, fixed = TRUE),
+  "watchdogTick reschedules via requestAnimationFrame"
+)
+
+## bind() must register the custom-message handlers and start the watchdog.
 bind_anchor <- "function bind() {"
 ba <- regexpr(bind_anchor, helpers_src, fixed = TRUE)
 stopifnot_msg(ba > 0L, "located bind() body")
 bind_window <- substr(helpers_src, ba, min(nchar(helpers_src), ba + 3000L))
 stopifnot_msg(
-  grepl("requestAnimationFrame(busyPollTick)", bind_window, fixed = TRUE),
-  "bind() starts the busyPollTick rAF chain"
+  grepl('Shiny.addCustomMessageHandler("phenomapr-busy-show", handleShow)',
+        bind_window, fixed = TRUE),
+  "bind() registers phenomapr-busy-show -> handleShow"
+)
+stopifnot_msg(
+  grepl('Shiny.addCustomMessageHandler("phenomapr-busy-hide", handleHide)',
+        bind_window, fixed = TRUE),
+  "bind() registers phenomapr-busy-hide -> handleHide"
+)
+stopifnot_msg(
+  grepl("requestAnimationFrame(watchdogTick)", bind_window, fixed = TRUE),
+  "bind() starts the watchdogTick rAF chain"
 )
 
-## Additional event listeners are wired up.
+## shiny:idle / shiny:disconnected listeners are wired up (advisory hides).
 stopifnot_msg(
-  grepl('document\\.addEventListener\\("shiny:flushed",\\s*onShinyFlushed',
+  grepl('document\\.addEventListener\\("shiny:idle",\\s*onShinyIdle',
         helpers_src),
-  "shiny:flushed wired via native addEventListener"
+  "shiny:idle wired via native addEventListener (advisory)"
 )
 stopifnot_msg(
-  grepl('document\\.addEventListener\\("shiny:message",\\s*onShinyMessage',
+  grepl('document\\.addEventListener\\("shiny:disconnected",\\s*onShinyDisconnected',
         helpers_src),
-  "shiny:message wired via native addEventListener"
+  "shiny:disconnected wired via native addEventListener"
 )
 stopifnot_msg(
-  grepl('\\$j\\(document\\)\\.on\\("shiny:flushed",\\s*onShinyFlushed\\)',
+  grepl('\\$j\\(document\\)\\.on\\("shiny:idle",\\s*onShinyIdle\\)',
         helpers_src),
-  "shiny:flushed wired via jQuery .on()"
-)
-stopifnot_msg(
-  grepl('\\$j\\(document\\)\\.on\\("shiny:message",\\s*onShinyMessage\\)',
-        helpers_src),
-  "shiny:message wired via jQuery .on()"
+  "shiny:idle also wired via jQuery .on()"
 )
 
 ## ---- B. Manual bracket / star rendering on score boxplot ----------------

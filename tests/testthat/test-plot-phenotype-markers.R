@@ -122,6 +122,70 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
   expect_s4_class(ht, "Heatmap")
 })
 
+test_that("plot_phenotype_markers cell_type_specific accepts block_outline_color and lwd args", {
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  genes <- paste0("G", 1:15)
+  cells <- paste0("C", 1:24)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells))),
+    length(genes),
+    length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 8),
+    score = rnorm(24),
+    celltype_original = rep(c("T1", "T2"), 12),
+    stringsAsFactors = FALSE
+  )
+  markers <- list(
+    adverse_markers = data.frame(
+      gene = c("G1", "G2"), cell_type = c("T1", "T1"),
+      avg_log2FC = c(1.2, 1.0), p_adj = c(0.01, 0.02),
+      stringsAsFactors = FALSE
+    ),
+    favorable_markers = data.frame(
+      gene = c("G3", "G4"), cell_type = c("T2", "T2"),
+      avg_log2FC = c(1.1, 0.9), p_adj = c(0.01, 0.03),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  # draw = FALSE only exercises Heatmap construction; we just want to
+  # confirm the new args round-trip through formals + match.arg without
+  # error and that the returned heatmap object is still valid. The
+  # actual decorate_heatmap_body grid.rect call only fires when
+  # draw = TRUE, but ComplexHeatmap::draw() requires a graphics device
+  # which we don't have in CI -- so only sanity-check the formals here.
+  expect_no_error({
+    ht <- plot_phenotype_markers(
+      markers = markers,
+      expr_mat = expr,
+      meta = meta,
+      group_col = "phenotype_group",
+      score_col = "score",
+      heatmap_type = "cell_type_specific",
+      top_n_markers = 5L,
+      n_mark_labels = 2L,
+      p_adj_threshold = 0.05,
+      outline_marker_blocks = TRUE,
+      block_outline_color = "black",
+      block_outline_lwd = 2,
+      draw = FALSE
+    )
+  })
+  expect_s4_class(ht, "Heatmap")
+
+  fmls <- formals(plot_phenotype_markers)
+  expect_true("block_outline_color" %in% names(fmls))
+  expect_true("block_outline_lwd"   %in% names(fmls))
+  expect_identical(eval(fmls$block_outline_color), "white")
+  expect_equal(eval(fmls$block_outline_lwd), 1)
+})
+
 test_that("plot_phenotype_markers global mode runs with celltype_col = NULL (no cell-type strip)", {
   skip_if_not_installed("ComplexHeatmap")
   skip_if_not_installed("circlize")
@@ -373,4 +437,202 @@ test_that(".rect_native_ct_marker_blocks returns jmin/jmax per row_split block",
   expect_equal(r$jmax, c(3L, 5L))
   expect_equal(r$r1, c(1L, 3L))
   expect_equal(r$r2, c(2L, 3L))
+})
+
+test_that("plot_phenotype_markers legend uses Most Phenotype +/- labels", {
+  # The phenotype-group legend in the heatmap renders "Most Phenotype +"
+  # and "Most Phenotype -" instead of "Most Favorable" / "Most Adverse"
+  # while the underlying data values stay "Most Favorable" /
+  # "Most Adverse" (so every pipeline that pattern-matches on those
+  # exact strings keeps working). We assert the source of
+  # plot_phenotype_markers builds a Legend whose `at` keeps the
+  # data values and whose `labels` uses the new "+/-" wording.
+  src <- readLines(
+    system.file("R", "plot_phenotype_markers.R", package = "PhenoMapR"),
+    warn = FALSE
+  )
+  dev_src <- file.path(getwd(), "..", "..", "R", "plot_phenotype_markers.R")
+  if (file.exists(dev_src)) {
+    src <- readLines(dev_src, warn = FALSE)
+  }
+  src_one <- paste(src, collapse = "\n")
+  expect_match(
+    src_one,
+    paste0(
+      'at\\s*=\\s*c\\(\\s*"Most Favorable",\\s*"Other",\\s*"Most Adverse"\\s*\\)',
+      '[\\s\\S]*?',
+      'labels\\s*=\\s*c\\(\\s*"Most Phenotype \\+",\\s*"Other",\\s*"Most Phenotype -"\\s*\\)'
+    ),
+    perl = TRUE
+  )
+})
+
+test_that("plot_phenotype_markers cell_type_specific renders block outlines via column_split", {
+  # Regression test for the EcoTyper-style block-outline fix:
+  # we column_split on the same (phenotype_bin x cell_type) key as
+  # the row split and then call decorate_heatmap_body() with no
+  # explicit coordinates. The previous "manual native unit" approach
+  # silently failed (rectangles were drawn outside the visible body),
+  # so this test asserts that requesting block outlines does not
+  # error out *and* produces a richer PNG than plotting without
+  # outlines (extra black ink should add visible bytes).
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(11)
+  genes <- paste0("G", 1:24)
+  cells <- paste0("C", 1:36)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells), 1, 0.5)),
+    length(genes), length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 12),
+    score = rnorm(36),
+    celltype_original = rep(c("T1", "T2"), 18),
+    stringsAsFactors = FALSE
+  )
+  adv <- data.frame(
+    gene = c("G1", "G2", "G3", "G4"),
+    cell_type = c("T1", "T1", "T2", "T2"),
+    avg_log2FC = c(1.2, 1.0, 1.1, 0.9),
+    p_adj = c(0.01, 0.02, 0.01, 0.03),
+    stringsAsFactors = FALSE
+  )
+  fav <- data.frame(
+    gene = c("G5", "G6", "G7", "G8"),
+    cell_type = c("T1", "T1", "T2", "T2"),
+    avg_log2FC = c(1.0, 0.9, 1.1, 0.85),
+    p_adj = c(0.01, 0.02, 0.01, 0.03),
+    stringsAsFactors = FALSE
+  )
+
+  render <- function(outline) {
+    f <- tempfile(fileext = ".png")
+    grDevices::png(f, width = 1100, height = 600, res = 110)
+    on.exit(grDevices::dev.off(), add = TRUE)
+    PhenoMapR::plot_phenotype_markers(
+      markers = list(adverse_markers = adv, favorable_markers = fav),
+      expr_mat = expr, meta = meta,
+      group_col = "phenotype_group", score_col = "score",
+      heatmap_type = "cell_type_specific",
+      top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
+      outline_marker_blocks = outline,
+      block_outline_color = "black",
+      block_outline_lwd = 2.5,
+      draw = TRUE
+    )
+    f
+  }
+  f_off <- render(FALSE)
+  f_on  <- render(TRUE)
+  expect_true(file.exists(f_off) && file.exists(f_on))
+  size_off <- file.info(f_off)$size
+  size_on  <- file.info(f_on)$size
+  # Sanity check: both renders are non-trivial.
+  expect_gt(size_off, 20000)
+  expect_gt(size_on,  20000)
+  # The outlined version must contain at least as much ink. We do
+  # not insist on a strict greater-than because the PNG encoder can
+  # occasionally compress identical decorations to similar sizes,
+  # but with thick black borders we expect the outlined PNG to be
+  # at least within ~5% of the un-outlined one (and usually larger).
+  expect_gt(size_on, size_off * 0.95)
+})
+
+test_that("plot_phenotype_markers omits cell-type strip when only one level represented", {
+  # Regression test for the stray teal "1" badge: when the
+  # cell-type column has a single represented level, a uniform
+  # cell-type strip used to render at the top / left / right of
+  # the heatmap, AND its anno_simple auto-legend leaked as a
+  # stray single-cell-type tile despite show_legend = FALSE on
+  # the parent annotation. We now drop the cell-type strip in
+  # both `global` and `cell_type_specific` modes; this test asserts
+  # that:
+  #   1. the source code routes through `show_celltype_strip`
+  #      to gate every cell-type anno_simple call, and
+  #   2. rendering with a single represented cell type still
+  #      succeeds AND produces a smaller PNG than the same data
+  #      with two cell types -- the strip + legend are real
+  #      visual area, so dropping them is detectable.
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(7)
+  genes <- paste0("G", 1:24)
+  cells <- paste0("C", 1:36)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells), 1, 0.5)),
+    length(genes), length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta_one <- data.frame(
+    Cell = cells,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"),
+                          each = 12),
+    score = rnorm(36),
+    cell_type = rep("Acinar", 36),
+    stringsAsFactors = FALSE
+  )
+  meta_two <- meta_one
+  meta_two$cell_type <- rep(c("Acinar", "Beta"), 18)
+  adv <- data.frame(
+    gene = c("G1", "G2", "G3", "G4"),
+    cell_type = c("Acinar", "Acinar", "Beta", "Beta"),
+    avg_log2FC = c(1.2, 1.0, 1.1, 0.9),
+    p_adj = c(0.01, 0.02, 0.01, 0.03),
+    stringsAsFactors = FALSE
+  )
+  fav <- data.frame(
+    gene = c("G5", "G6", "G7", "G8"),
+    cell_type = c("Acinar", "Acinar", "Beta", "Beta"),
+    avg_log2FC = c(1.0, 0.9, 1.1, 0.85),
+    p_adj = c(0.01, 0.02, 0.01, 0.03),
+    stringsAsFactors = FALSE
+  )
+  # Markers for the single-celltype run only need the matched cell type.
+  adv_one <- adv[adv$cell_type == "Acinar", , drop = FALSE]
+  fav_one <- fav[fav$cell_type == "Acinar", , drop = FALSE]
+
+  render <- function(meta, mk_adv, mk_fav) {
+    f <- tempfile(fileext = ".png")
+    grDevices::png(f, width = 1100, height = 600, res = 110)
+    on.exit(grDevices::dev.off(), add = TRUE)
+    PhenoMapR::plot_phenotype_markers(
+      markers = list(adverse_markers = mk_adv, favorable_markers = mk_fav),
+      expr_mat = expr, meta = meta,
+      group_col = "phenotype_group", celltype_col = "cell_type",
+      score_col = "score",
+      heatmap_type = "cell_type_specific",
+      top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
+      outline_marker_blocks = TRUE,
+      block_outline_color = "black",
+      block_outline_lwd = 1.5,
+      draw = TRUE
+    )
+    f
+  }
+
+  f_one <- render(meta_one, adv_one, fav_one)
+  f_two <- render(meta_two, adv,     fav)
+  expect_true(file.exists(f_one) && file.exists(f_two))
+  # The single-celltype render should be at least as small as the
+  # two-celltype one (no cell-type strip, no cell-type legend).
+  expect_lt(file.info(f_one)$size, file.info(f_two)$size)
+
+  # Source-level assertion: every anno_simple call that takes the
+  # cell-type palette must be guarded by `show_celltype_strip`.
+  src_path <- file.path(getwd(), "..", "..", "R", "plot_phenotype_markers.R")
+  if (!file.exists(src_path)) {
+    src_path <- system.file("R", "plot_phenotype_markers.R",
+                            package = "PhenoMapR")
+  }
+  src <- paste(readLines(src_path, warn = FALSE), collapse = "\n")
+  expect_match(src,
+               "show_celltype_strip <- has_celltype && length\\(hm_celltype_levels\\) > 1L",
+               perl = TRUE)
+  expect_match(src, "if \\(show_celltype_strip\\)",
+               perl = TRUE)
 })

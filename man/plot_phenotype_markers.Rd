@@ -24,7 +24,9 @@ plot_phenotype_markers(
   column_title = NULL,
   draw = TRUE,
   use_raster = FALSE,
-  outline_marker_blocks = TRUE
+  outline_marker_blocks = TRUE,
+  block_outline_color = "white",
+  block_outline_lwd = 1
 )
 }
 \arguments{
@@ -88,8 +90,19 @@ single number interpreted as millimeters.}
 \item{use_raster}{Passed to \code{Heatmap()} (default \code{FALSE}).}
 
 \item{outline_marker_blocks}{If \code{TRUE} (default) and
-\code{heatmap_type = "cell_type_specific"}, draws white outline boxes around
-each marker-gene block after \code{draw()}. Set \code{FALSE} to omit them.}
+\code{heatmap_type = "cell_type_specific"}, draws outline boxes around each
+marker-gene block (one per cell-type \eqn{\times} phenotype-bin slice)
+after \code{draw()}. Set \code{FALSE} to omit them.}
+
+\item{block_outline_color}{Outline colour used when
+\code{outline_marker_blocks = TRUE} (default \code{"white"}). Set to
+\code{"black"} for stronger visual separation between cell-type
+\eqn{\times} phenotype-bin blocks.}
+
+\item{block_outline_lwd}{Outline line width used when
+\code{outline_marker_blocks = TRUE} (default \code{1}). Slightly thicker
+widths (e.g. \code{1.5} or \code{2}) read better with darker
+\code{block_outline_color}.}
 }
 \value{
 Invisibly, the \code{ComplexHeatmap::Heatmap} object (or \code{NULL} if

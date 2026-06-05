@@ -48,8 +48,17 @@
 #'   \code{FALSE}, returns the \code{Heatmap} object invisibly.
 #' @param use_raster Passed to \code{Heatmap()} (default \code{FALSE}).
 #' @param outline_marker_blocks If \code{TRUE} (default) and
-#'   \code{heatmap_type = "cell_type_specific"}, draws white outline boxes around
-#'   each marker-gene block after \code{draw()}. Set \code{FALSE} to omit them.
+#'   \code{heatmap_type = "cell_type_specific"}, draws outline boxes around each
+#'   marker-gene block (one per cell-type \eqn{\times} phenotype-bin slice)
+#'   after \code{draw()}. Set \code{FALSE} to omit them.
+#' @param block_outline_color Outline colour used when
+#'   \code{outline_marker_blocks = TRUE} (default \code{"white"}). Set to
+#'   \code{"black"} for stronger visual separation between cell-type
+#'   \eqn{\times} phenotype-bin blocks.
+#' @param block_outline_lwd Outline line width used when
+#'   \code{outline_marker_blocks = TRUE} (default \code{1}). Slightly thicker
+#'   widths (e.g. \code{1.5} or \code{2}) read better with darker
+#'   \code{block_outline_color}.
 #'
 #' @return Invisibly, the \code{ComplexHeatmap::Heatmap} object (or \code{NULL} if
 #'   nothing was plotted).
@@ -112,9 +121,23 @@ plot_phenotype_markers <- function(markers,
                                    column_title = NULL,
                                    draw = TRUE,
                                    use_raster = FALSE,
-                                   outline_marker_blocks = TRUE) {
+                                   outline_marker_blocks = TRUE,
+                                   block_outline_color = "white",
+                                   block_outline_lwd = 1) {
   heatmap_type <- match.arg(heatmap_type)
   rank_by <- match.arg(rank_by)
+  if (!is.character(block_outline_color) ||
+      length(block_outline_color) != 1L ||
+      is.na(block_outline_color) ||
+      !nzchar(block_outline_color)) {
+    block_outline_color <- "white"
+  }
+  if (!is.numeric(block_outline_lwd) ||
+      length(block_outline_lwd) != 1L ||
+      !is.finite(block_outline_lwd) ||
+      block_outline_lwd <= 0) {
+    block_outline_lwd <- 1
+  }
 
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE) ||
       !requireNamespace("circlize", quietly = TRUE)) {
@@ -181,21 +204,43 @@ plot_phenotype_markers <- function(markers,
 
   hm_group_levels <- c("Most Favorable", "Other", "Most Adverse")
   hm_celltype_levels <- if (has_celltype) {
-    levels(factor(meta[[celltype_col]]))
+    # Drop ghost factor levels (levels declared on the factor but with
+    # zero rows in the actual data). Without this, a `cell_type` factor
+    # whose levels are c("1", "Acinar", "Beta") but whose values are
+    # all "Acinar" still reports 3 levels, which (a) wastes a slot in
+    # the cell-type legend and (b) re-introduces the very "1" tile
+    # this guard is meant to prevent.
+    keep <- as.character(unique(stats::na.omit(meta[[celltype_col]])))
+    intersect(levels(factor(meta[[celltype_col]])), keep)
   } else {
     character(0)
   }
-  # In `global` mode, a cell-type column with a single unique value is not
-  # informative -- the top annotation strip becomes a uniform colored bar
-  # and the legend renders as one stray colored swatch (e.g. a teal "1"
-  # box if the user mapped a column whose only level is "1"). Skip the
-  # cell-type strip and legend in that case. We keep this guard global-only
-  # because cell-type-specific heatmaps still slice on cell type even when
-  # there's just one of them.
+  # `show_celltype_strip` controls whether the *visual* cell-type strip
+  # annotation (and its associated legend tile) is rendered on the
+  # heatmap. It is independent of `has_celltype`, which still gates
+  # the cell-type-specific *slicing* logic (the row/column splits use
+  # block_key = paste(phenotype_bin, cell_type, ...) and need the
+  # column to exist even when there is only one level).
+  #
+  # A uniform colored strip carrying only one value is uninformative
+  # AND historically leaked a stray auto-legend tile -- a tiny "1" or
+  # single-celltype badge floating next to the main legend column --
+  # despite `show_legend = FALSE` on the parent HeatmapAnnotation /
+  # rowAnnotation in some ComplexHeatmap versions. Skipping the
+  # strip entirely (in BOTH global and cell_type_specific modes) is
+  # the most robust way to suppress that artifact: no anno_simple
+  # for cell type means no auto-legend to leak.
+  show_celltype_strip <- has_celltype && length(hm_celltype_levels) > 1L
+  # Preserve the long-standing global-mode behaviour: when the cell
+  # type has a single level, the global heatmap also drops the
+  # has_celltype gate so legend code paths that take the "no cell
+  # type at all" branch keep firing. Cell-type-specific keeps
+  # has_celltype = TRUE so block_key splitting still works.
   if (has_celltype && heatmap_type == "global" &&
       length(hm_celltype_levels) <= 1L) {
     has_celltype <- FALSE
     hm_celltype_levels <- character(0)
+    show_celltype_strip <- FALSE
   }
 
   if (heatmap_type == "global") {
@@ -260,7 +305,12 @@ plot_phenotype_markers <- function(markers,
   }
   score_col_fun <- .phenomap_score_col_fun(smin, smax)
 
-  decorate_ct_rect <- NULL
+  # Initialise the (row_slice, column_slice) decoration pair list to
+  # empty so the post-render block-outline loop is a no-op for the
+  # "global" heatmap path (which has no per-cell-type splits to
+  # outline). The cell-type-specific branch overwrites this with
+  # diagonal pairs.
+  decorate_pairs <- list()
 
   if (heatmap_type == "global") {
     pick_global <- function(df, n_keep) {
@@ -301,7 +351,11 @@ plot_phenotype_markers <- function(markers,
         width = grid::unit(3, "mm")
       )
     )
-    if (has_celltype) {
+    if (show_celltype_strip) {
+      # Same single-level guard as the cell_type_specific path:
+      # only emit the cell-type strip when there are at least two
+      # represented levels. A uniform-coloured strip is
+      # uninformative AND historically leaked a stray "1" tile.
       top_anno_args[["Cell type"]] <- ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
@@ -514,25 +568,38 @@ plot_phenotype_markers <- function(markers,
       start <- start + n
     }
 
-    ha_top <- ComplexHeatmap::HeatmapAnnotation(
+    # Build the top annotation as a named list so the cell-type
+    # strip can be inserted conditionally. When the cell-type
+    # column has just one represented level, dropping the strip
+    # entirely (rather than rendering a uniform colored bar) is
+    # what prevents the stray "1" auto-legend tile that some
+    # ComplexHeatmap versions emit despite `show_legend = FALSE`.
+    top_anno_args_ct <- list(
       `Phenotype group` = ComplexHeatmap::anno_simple(
         as.character(meta[[group_col]][meta_idx_hm]),
         col = pal_group,
         width = grid::unit(3, "mm")
-      ),
-      `Cell type` = ComplexHeatmap::anno_simple(
+      )
+    )
+    if (show_celltype_strip) {
+      top_anno_args_ct[["Cell type"]] <- ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
         width = grid::unit(3, "mm")
-      ),
-      `PhenoMapR score` = ComplexHeatmap::anno_simple(
-        score_ann,
-        col = score_col_fun
-      ),
-      annotation_name_side = "right",
-      show_annotation_name = TRUE,
-      show_legend = FALSE,
-      gap = grid::unit(0, "mm")
+      )
+    }
+    top_anno_args_ct[["PhenoMapR score"]] <- ComplexHeatmap::anno_simple(
+      score_ann,
+      col = score_col_fun
+    )
+    ha_top <- do.call(
+      ComplexHeatmap::HeatmapAnnotation,
+      c(top_anno_args_ct, list(
+        annotation_name_side = "right",
+        show_annotation_name = TRUE,
+        show_legend = FALSE,
+        gap = grid::unit(0, "mm")
+      ))
     )
 
     row_split <- factor(block_key, levels = unique(block_key))
@@ -554,75 +621,120 @@ plot_phenotype_markers <- function(markers,
       strip_r_ct[idx_adv] <- as.character(gene_info$cell_type[idx_adv])
     }
 
+    # Build left/right rowAnnotations as named lists so the cell-type
+    # strip can be omitted whenever `show_celltype_strip` is FALSE
+    # (single represented cell-type level). Dropping the strip is
+    # the only reliable way to suppress the stray teal "1" tile that
+    # ComplexHeatmap can emit despite show_legend = FALSE on the
+    # parent rowAnnotation -- see the long comment at the top of the
+    # function (`show_celltype_strip` definition) for the full story.
     ha_left <- NULL
     if (length(idx_fav) > 0L) {
-      # Left (outside -> heatmap): marks | cell type | phenotype bin
-      ha_left <- ComplexHeatmap::rowAnnotation(
+      left_args <- list(
+        # `which = "row"` must be set explicitly here because we
+        # construct the rowAnnotation via do.call() below, which
+        # bypasses ComplexHeatmap's normal auto-detection of the
+        # annotation orientation from the enclosing call.
         marks = ComplexHeatmap::anno_mark(
           at = marks_at_fav,
           labels = marks_lab_fav,
+          which = "row",
           side = "left",
           labels_gp = grid::gpar(fontsize = 7),
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
-        ),
-        `Cell type` = ComplexHeatmap::anno_simple(
+        )
+      )
+      if (show_celltype_strip) {
+        # `which = "row"` is REQUIRED on every anno_simple constructed
+        # for a rowAnnotation built via do.call(): the auto-detection
+        # of orientation only fires when the annotations are passed
+        # to rowAnnotation()'s named-args call (via `match.call()`
+        # magic). do.call() bypasses that, so we must mark each
+        # annotation as a row annotation up-front.
+        left_args[["Cell type"]] <- ComplexHeatmap::anno_simple(
           strip_l_ct,
           col = pal_celltype,
+          which = "row",
           width = grid::unit(3, "mm"),
           na_col = "transparent"
-        ),
-        `Phenotype` = ComplexHeatmap::anno_simple(
-          strip_l_pheno,
-          col = pal_group,
-          width = grid::unit(3, "mm"),
-          na_col = "transparent"
-        ),
-        # Suppress auto-legends. The manual `annotation_legend_list`
-        # built below (lgd_score, lgd_group, optional cell-type
-        # Legend when >=2 cell types) is the canonical legend set.
-        # Without this, anno_simple() auto-emits a per-strip legend;
-        # when the cell-type column has a single level (e.g. "1")
-        # that auto-legend renders as a stray teal "1" swatch
-        # floating next to the Scaled expr legend, even though our
-        # manual list intentionally omits the one-level cell-type
-        # legend (see line ~700).
-        show_legend = FALSE,
-        show_annotation_name = FALSE,
-        gap = grid::unit(0, "mm"),
-        annotation_width = grid::unit(c(18, 3, 3), c("mm", "mm", "mm"))
+        )
+      }
+      left_args[["Phenotype"]] <- ComplexHeatmap::anno_simple(
+        strip_l_pheno,
+        col = pal_group,
+        which = "row",
+        width = grid::unit(3, "mm"),
+        na_col = "transparent"
+      )
+      # Annotation widths track the actual entries in `left_args`:
+      # marks (18mm) is always present; cell-type strip is only
+      # included when show_celltype_strip is TRUE; phenotype strip
+      # is always present.
+      left_widths <- if (show_celltype_strip) {
+        grid::unit(c(18, 3, 3), c("mm", "mm", "mm"))
+      } else {
+        grid::unit(c(18, 3), c("mm", "mm"))
+      }
+      ha_left <- do.call(
+        ComplexHeatmap::rowAnnotation,
+        c(left_args, list(
+          show_legend = FALSE,
+          show_annotation_name = FALSE,
+          gap = grid::unit(0, "mm"),
+          annotation_width = left_widths
+        ))
       )
     }
 
     ha_right <- NULL
     if (length(idx_adv) > 0L) {
-      # Right (heatmap -> outside): phenotype | cell type | marks
-      ha_right <- ComplexHeatmap::rowAnnotation(
+      right_args <- list(
         `Phenotype` = ComplexHeatmap::anno_simple(
           strip_r_pheno,
           col = pal_group,
+          # See the long note in ha_left's anno_simple block for why
+          # `which = "row"` is required on every anno_simple
+          # constructed for a do.call(rowAnnotation, ...) build.
+          which = "row",
           width = grid::unit(3, "mm"),
           na_col = "transparent"
-        ),
-        `Cell type` = ComplexHeatmap::anno_simple(
+        )
+      )
+      if (show_celltype_strip) {
+        right_args[["Cell type"]] <- ComplexHeatmap::anno_simple(
           strip_r_ct,
           col = pal_celltype,
+          which = "row",
           width = grid::unit(3, "mm"),
           na_col = "transparent"
-        ),
-        marks = ComplexHeatmap::anno_mark(
-          at = marks_at_adv,
-          labels = marks_lab_adv,
-          side = "right",
-          labels_gp = grid::gpar(fontsize = 7),
-          link_gp = grid::gpar(col = "grey50", lwd = 0.6),
-          padding = grid::unit(0.5, "mm")
-        ),
-        # Same auto-legend suppression as ha_left -- see comment there.
-        show_legend = FALSE,
-        show_annotation_name = FALSE,
-        gap = grid::unit(0, "mm"),
-        annotation_width = grid::unit(c(3, 3, 18), c("mm", "mm", "mm"))
+        )
+      }
+      right_args[["marks"]] <- ComplexHeatmap::anno_mark(
+        at = marks_at_adv,
+        labels = marks_lab_adv,
+        # See note in ha_left: do.call(rowAnnotation, ...) does
+        # not propagate the row-orientation default to anno_mark,
+        # so we set it explicitly.
+        which = "row",
+        side = "right",
+        labels_gp = grid::gpar(fontsize = 7),
+        link_gp = grid::gpar(col = "grey50", lwd = 0.6),
+        padding = grid::unit(0.5, "mm")
+      )
+      right_widths <- if (show_celltype_strip) {
+        grid::unit(c(3, 3, 18), c("mm", "mm", "mm"))
+      } else {
+        grid::unit(c(3, 18), c("mm", "mm"))
+      }
+      ha_right <- do.call(
+        ComplexHeatmap::rowAnnotation,
+        c(right_args, list(
+          show_legend = FALSE,
+          show_annotation_name = FALSE,
+          gap = grid::unit(0, "mm"),
+          annotation_width = right_widths
+        ))
       )
     }
 
@@ -631,7 +743,7 @@ plot_phenotype_markers <- function(markers,
     ct <- column_title %||% "Cell-type-specific phenotype marker genes"
 
     # Per-column key must match block_key = paste(phenotype_bin, cell_type, sep = "||")
-    # (same convention as gene rows) so white boxes align with column blocks.
+    # (same convention as gene rows) so block outlines align with column blocks.
     ncol_hm <- ncol(mat_plot)
     col_block_key <- rep(NA_character_, ncol_hm)
     for (j in seq_len(ncol_hm)) {
@@ -644,10 +756,54 @@ plot_phenotype_markers <- function(markers,
         )
       }
     }
-    decorate_ct_rect <- if (isTRUE(outline_marker_blocks)) {
-      list(row_split = row_split, col_block_key = col_block_key)
+    # Build a column_split factor that mirrors the row_split block_key
+    # scheme. By splitting BOTH axes on the same (phenotype_bin x
+    # cell_type) key, ComplexHeatmap renders each block as an
+    # independent (row_slice, column_slice) viewport. We can then
+    # outline a block by simply calling
+    # `decorate_heatmap_body(row_slice = ri, column_slice = cj, ...)`
+    # with `grid.rect()` and no explicit coordinates -- following the
+    # EcoTyper / jokergoo recommended pattern. This is far more
+    # robust than the previous "decorate_heatmap_body + manual native
+    # x/width" approach, which failed silently because the inner
+    # pushViewport reset the native x-scale to 0..1 and the rectangle
+    # ended up clipped outside the visible body.
+    #
+    # NA columns (cells without a phenotype/celltype label) get
+    # bucketed into their own slice so they never trigger an
+    # incorrect outline; we filter the decorate loop below to only
+    # the slices whose level matches the row_split levels.
+    col_split_levels <- unique(col_block_key[!is.na(col_block_key)])
+    has_unassigned <- any(is.na(col_block_key))
+    col_split_factor <- if (length(col_split_levels) > 0L) {
+      vals <- col_block_key
+      lvls <- col_split_levels
+      if (has_unassigned) {
+        vals <- ifelse(is.na(vals), "__phenomap_unassigned__", vals)
+        lvls <- c(col_split_levels, "__phenomap_unassigned__")
+      }
+      factor(vals, levels = lvls)
     } else {
       NULL
+    }
+    # Match row-slice indices to column-slice indices on the shared
+    # block_key. Diagonal pairs (i, j) where row_levels[i] ==
+    # column_levels[j] are the only ones we outline.
+    row_slice_levels <- levels(row_split)
+    decorate_pairs <- if (isTRUE(outline_marker_blocks) &&
+                         !is.null(col_split_factor) &&
+                         length(row_slice_levels) > 0L) {
+      col_lv <- levels(col_split_factor)
+      pairs <- list()
+      for (ri in seq_along(row_slice_levels)) {
+        cj <- match(row_slice_levels[ri], col_lv)
+        if (!is.na(cj)) {
+          pairs[[length(pairs) + 1L]] <- c(row_slice = ri, column_slice = cj)
+        }
+      }
+      pairs
+    } else {
+      list()
     }
 
     ht <- ComplexHeatmap::Heatmap(
@@ -663,12 +819,20 @@ plot_phenotype_markers <- function(markers,
       cluster_row_slices = FALSE,
       row_gap = grid::unit(0, "mm"),
       row_title = rep("", nlevels(row_split)),
+      column_split = col_split_factor,
+      cluster_column_slices = FALSE,
+      column_gap = grid::unit(0, "mm"),
+      # Per-slice column titles are noisy (one block_key per slice
+      # repeated above the heatmap), so suppress them. The overall
+      # column title is set below via column_title = ct (length 1)
+      # which ComplexHeatmap centres across all slices when split.
+      column_title = ct,
+      column_title_side = "top",
       show_column_names = FALSE,
       show_row_names = FALSE,
       top_annotation = ha_top,
       left_annotation = ha_left,
       right_annotation = ha_right,
-      column_title = ct,
       # Avoid black borders around every row-split slice and/or cell.
       border = FALSE,
       rect_gp = grid::gpar(col = NA),
@@ -710,9 +874,20 @@ plot_phenotype_markers <- function(markers,
       direction = "vertical",
       legend_height = grid::unit(3, "cm")
     )
+    # The underlying data column still holds "Most Favorable" /
+    # "Most Adverse" (so every downstream pipeline that pattern-
+    # matches on those exact strings keeps working). For the
+    # rendered legend we relabel them to the more neutral
+    # "Most Phenotype +" / "Most Phenotype -" so the heatmap reads
+    # the same regardless of whether higher-z = better or higher-z
+    # = worse for the cohort under study. Passing `labels` while
+    # leaving `at` (and the colour mapping) untouched is the
+    # ComplexHeatmap-supported way to do this without re-encoding
+    # the metadata.
     lgd_group <- ComplexHeatmap::Legend(
       title = "Phenotype group",
       at = c("Most Favorable", "Other", "Most Adverse"),
+      labels = c("Most Phenotype +", "Other", "Most Phenotype -"),
       legend_gp = grid::gpar(
         fill = pal_group[c("Most Favorable", "Other", "Most Adverse")]
       )
@@ -740,40 +915,37 @@ plot_phenotype_markers <- function(markers,
       merge_legends = TRUE,
       padding = grid::unit(c(4, 4, 4, 50), "mm")
     )
-    if (isTRUE(outline_marker_blocks) && !is.null(decorate_ct_rect)) {
-      rect <- .rect_native_ct_marker_blocks(
-        decorate_ct_rect$col_block_key,
-        decorate_ct_rect$row_split
-      )
-      rs <- decorate_ct_rect$row_split
-      n_slice <- nlevels(rs)
-      for (si in seq_len(n_slice)) {
-        bk <- levels(rs)[si]
-        kk <- match(bk, rect$block)
-        if (is.na(kk)) next
-        rows_slice <- which(as.integer(rs) == si)
-        n_sr <- length(rows_slice)
-        if (!n_sr) next
-        j1 <- rect$jmin[kk]
-        j2 <- rect$jmax[kk]
+    if (isTRUE(outline_marker_blocks) && length(decorate_pairs) > 0L) {
+      # EcoTyper-style block outlines. Because we column_split on the
+      # SAME (phenotype_bin x cell_type) key as the row split,
+      # ComplexHeatmap renders each block as its own
+      # (row_slice, column_slice) viewport. Calling grid.rect() with
+      # no explicit coordinates inside `decorate_heatmap_body(..., row_slice = ri,
+      # column_slice = cj, ...)` therefore draws a rectangle that
+      # exactly fills that block's viewport -- no fragile native-unit
+      # arithmetic, no nested viewport pushes that reset the x-scale.
+      # See the EcoTyper marker-gene heatmap and the ComplexHeatmap
+      # FAQ ("Draw border on one axis only" / "split on columns?")
+      # for the canonical version of this idiom.
+      lwd_use <- block_outline_lwd
+      col_use <- block_outline_color
+      for (pair in decorate_pairs) {
+        ri <- pair[["row_slice"]]
+        cj <- pair[["column_slice"]]
         ComplexHeatmap::decorate_heatmap_body(
           "phenomap_ct_markers",
+          row_slice = ri,
+          column_slice = cj,
           {
-            # Ensure outline boxes are clipped to the heatmap body viewport so they
-            # cannot extend into annotation/legend areas.
-            grid::pushViewport(grid::viewport(clip = "on"))
             grid::grid.rect(
-              x = grid::unit(j1 - 1L, "native"),
-              y = grid::unit(1, "npc"),
-              width = grid::unit(j2 - j1 + 1L, "native"),
-              height = grid::unit(1, "npc"),
-              hjust = 0,
-              vjust = 1,
-              gp = grid::gpar(col = "white", fill = NA, lty = 1L, lwd = 1)
+              gp = grid::gpar(
+                col = col_use,
+                fill = NA,
+                lty = 1L,
+                lwd = lwd_use
+              )
             )
-            grid::popViewport()
-          },
-          slice = si
+          }
         )
       }
     }

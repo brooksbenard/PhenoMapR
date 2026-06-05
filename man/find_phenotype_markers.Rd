@@ -21,7 +21,7 @@ find_phenotype_markers(
   max_cells_per_ident = 5000L,
   validate_expression_axes = TRUE,
   celltype_unique_genes = TRUE,
-  celltype_contrast = c("within_cell_type", "vs_cohort_rest"),
+  celltype_contrast = c("within_cell_type", "vs_cohort_rest", "vs_opposite_tail"),
   ...
 )
 }
@@ -47,9 +47,10 @@ name for cell/sample IDs (default \code{"cell_id"}).}
 phenotype groups globally (cell type agnostic; default).
 \item \code{"cell_type_specific"}: for each cell type, find markers for
 cells of that type in the adverse (or favorable) tail vs a reference
-group controlled by \code{celltype_contrast} (default: same cell type,
-not in that tail; use \code{"vs_cohort_rest"} for the original cohort-wide
-contrast).
+group controlled by \code{celltype_contrast} (default
+\code{"within_cell_type"}; see that argument for the full set of
+reference-cell strategies, including \code{"vs_opposite_tail"} for
+cell types that exist in only one tail).
 }}
 
 \item{cell_type_column}{When \code{marker_scope = "cell_type_specific"}, the
@@ -89,11 +90,26 @@ by \code{p_adj}). This avoids the same gene (e.g. highly expressed
 housekeeping transcripts) appearing as a top marker in many cell-type
 blocks. Set to \code{FALSE} to retain all significant hits per block.}
 
-\item{celltype_contrast}{When \code{marker_scope = "cell_type_specific"}: \code{"within_cell_type"}
-(default) compares each phenotype tail within a cell type to other phenotype
-groups in the \strong{same} cell type only. \code{"vs_cohort_rest"} restores the
-original behaviour: (cell type \eqn{\cap} tail) vs \strong{all other cells} in
-the dataset (other cell types and other phenotype groups).}
+\item{celltype_contrast}{When \code{marker_scope = "cell_type_specific"},
+selects the reference cell population for each (cell type, phenotype tail)
+block. Three modes are available:
+\itemize{
+\item \code{"within_cell_type"} (default): reference is the \strong{same
+cell type} but in a different phenotype group. Most stringent --
+isolates phenotype-driven signal within a single cell-type identity.
+Returns empty for a (cell type, tail) pair when the same cell type
+does not exist outside that tail.
+\item \code{"vs_cohort_rest"}: reference is \strong{every other cell}
+in the dataset with a non-missing phenotype label (other cell types
+AND the opposite tail). Most permissive; markers reflect both
+phenotype- and cell-type-driven differences.
+\item \code{"vs_opposite_tail"}: reference is \strong{all cells in the
+opposite phenotype tail}, regardless of cell type. Useful when one
+tail has no cells of a given cell type (e.g. only adverse ductal
+cells, no favorable ductal cells) -- \code{"within_cell_type"} would
+return empty for ductal here; this contrast still surfaces the
+phenotype signal by comparing against the entire opposite tail.
+}}
 
 \item{...}{Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).}
 }
@@ -109,10 +125,11 @@ Each data.frame has columns: \code{gene}, \code{avg_log2FC},
 \code{pct_in_group}, \code{pct_rest}, \code{p_val}, \code{p_adj}.
 When \code{marker_scope = "cell_type_specific"}, each row is one gene for
 one cell type; the \code{cell_type} column identifies which type the
-in-group was anchored on. If \code{celltype_contrast = "within_cell_type"}
-(default), the reference is other phenotype groups within that cell type; if
-\code{"vs_cohort_rest"}, the reference is all other cells with a phenotype
-label (original behaviour).
+in-group was anchored on. The reference set depends on
+\code{celltype_contrast} (see above): same cell type / different tail
+(\code{"within_cell_type"}), all other cells with a phenotype label
+(\code{"vs_cohort_rest"}), or all cells in the opposite tail
+(\code{"vs_opposite_tail"}).
 }
 \description{
 Performs differential expression between the top (adverse) and bottom

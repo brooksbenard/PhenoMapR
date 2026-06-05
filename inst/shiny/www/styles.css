@@ -798,6 +798,34 @@ table.dataTable thead th {
   padding-bottom: 0 !important;
 }
 
+/* Combined "Phenotype signature & gene coverage" card. The two halves
+   share the same compact-coverage-card chrome but each side gets a
+   small subhead + a thin vertical divider so the grouping reads
+   visually even though the columns are flush in the same card body. */
+.phenomapr-signature-coverage-card .phenomapr-signature-coverage-half {
+  padding-right: 0.6rem;
+}
+.phenomapr-signature-coverage-card .phenomapr-signature-coverage-half + .phenomapr-signature-coverage-half {
+  padding-left: 0.85rem;
+  border-left: 1px solid rgba(38, 70, 83, 0.12);
+}
+.phenomapr-signature-coverage-card .phenomapr-signature-coverage-subhead {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #264653;
+  opacity: 0.78;
+}
+/* Tighter spacing on the status <p> rows so the four/five-line block
+   on the left does not visually outweigh the small DT on the right. */
+.phenomapr-signature-coverage-card #reference_status p {
+  margin: 0 0 0.18rem 0;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
 /* Data tab — metadata-upload <details> block above the column dropdowns.
    When no metadata has been detected, the renderer adds the
    metadata-upload-details-prompt class + open attribute, and we tint the
@@ -1496,6 +1524,23 @@ details.metadata-upload-details-prompt {
  * "Draw heatmap". A subtle muted block keeps the card from looking
  * broken (or like it's missing content) while still making it clear
  * that an action is needed. */
+/* Defensive belt-and-braces against the "stray teal '1' badge" that
+   some browsers paint over an `<img>` element with an empty/broken
+   `src` inside `.shiny-image-output`. The lazy-mounting
+   conditionalPanel above prevents the imageOutput from rendering at
+   all before the first "Draw heatmap" click, but if Shiny ever
+   transiently emits an empty <img> (e.g. while the renderImage
+   callback is still computing the PNG, or after a render errors
+   out) the browser placeholder reappears as a clickable green box.
+   We hide any <img> inside the marker-heatmap output that is
+   missing a src or has src="" so the broken-image placeholder
+   never renders -- the actual heatmap PNG is always served with a
+   non-empty src so this rule never affects a successful render. */
+#marker_heatmap.shiny-image-output > img:not([src]),
+#marker_heatmap.shiny-image-output > img[src=""] {
+  display: none !important;
+}
+
 .marker-heatmap-empty {
   padding: 1.25rem 1rem;
   color: #6c7a82;
@@ -1507,25 +1552,13 @@ details.metadata-upload-details-prompt {
 }
 .marker-heatmap-empty strong { color: #264653; }
 
-/* Code block inside Server / remote use. Visually called out with a teal
- * accent rule on the left and a muted code-editor background. */
-.welcome-code {
-  background-color: #f5f7f9;
-  border: 1px solid rgba(38, 70, 83, 0.12);
-  border-left: 3px solid #2A9D8F;
-  border-radius: 6px;
-  padding: 0.7rem 0.95rem;
-  font-size: 0.92rem;
-  overflow-x: auto;
-  margin: 0.7rem 0;
-  white-space: pre;
-}
-.welcome-code code {
-  background: transparent;
-  padding: 0;
-  font-family: 'Fira Code', 'Source Code Pro', Consolas, 'Liberation Mono', monospace;
-  color: #264653;
-}
+/* (Removed) `.welcome-code` and `.welcome-server` rules used to live
+ * here -- they styled the teal-accented code block inside the
+ * "Server / remote use" card on the welcome screen. The card was
+ * removed at the user's request (the deployment recipe lives in
+ * the README and ?run_app instead), so the rules are gone too. The
+ * inline-code styling for the remaining welcome paragraphs is kept
+ * below. */
 .welcome-section-body p code {
   background-color: rgba(38, 70, 83, 0.07);
   padding: 0.05rem 0.35rem;

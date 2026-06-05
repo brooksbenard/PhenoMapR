@@ -1,3 +1,57 @@
+#' Seurat 4 / 5 compatibility shim for \code{Seurat::GetAssayData()}
+#'
+#' Picks the right argument name -- \code{layer} on Seurat /
+#' SeuratObject 5.0 and later (where \code{slot} is now defunct) or
+#' \code{slot} on Seurat 4.x (where \code{layer} isn't a known
+#' argument) -- and forwards the call. Avoids the
+#' deprecation/defunct messages users were seeing during scoring on
+#' recent Seurat installs.
+#'
+#' Detection is via \code{packageVersion("SeuratObject")}:
+#' SeuratObject became a separate package in Seurat 4.x and bumped to
+#' \code{5.0.0} when \code{layer} replaced \code{slot}. Probing
+#' \code{formals(Seurat::GetAssayData)} doesn't work because the
+#' top-level function is just \code{function(object, ...)} on Seurat
+#' 5+ and dispatches to an S4 method that absorbs the named args
+#' through \code{...} -- so neither \code{layer} nor \code{slot}
+#' appears in the formal args at all.
+#'
+#' \code{slot} stays the public-facing argument name on this side of
+#' the call so existing call sites (which all use
+#' \code{slot = "data" / "counts" / "scale.data"}) don't have to
+#' change.
+#'
+#' @param obj A Seurat object.
+#' @param assay Assay name (e.g. \code{"RNA"}, \code{"Spatial"},
+#'   \code{"SCT"}); passed straight through.
+#' @param slot Layer/slot name to fetch. Forwarded as \code{layer}
+#'   on SeuratObject >= 5.0, else as \code{slot}.
+#' @return The matrix returned by \code{Seurat::GetAssayData()}.
+#'
+#' @keywords internal
+#' @noRd
+.get_assay_data_compat <- function(obj, assay = NULL, slot = "data") {
+  if (!requireNamespace("Seurat", quietly = TRUE)) {
+    stop("'Seurat' package is not installed.", call. = FALSE)
+  }
+  args <- list(object = obj)
+  if (!is.null(assay) && nzchar(assay)) {
+    args$assay <- assay
+  }
+  use_layer <- tryCatch(
+    requireNamespace("SeuratObject", quietly = TRUE) &&
+      utils::packageVersion("SeuratObject") >= "5.0.0",
+    error = function(e) TRUE  # Default to layer= on lookup failure (modern Seurat).
+  )
+  if (isTRUE(use_layer)) {
+    args$layer <- slot
+  } else {
+    args$slot <- slot
+  }
+  do.call(Seurat::GetAssayData, args)
+}
+
+
 #' Default Cell Type Color Palette
 #'
 #' Named vector of hex colors for common cell types. Used in vignettes for

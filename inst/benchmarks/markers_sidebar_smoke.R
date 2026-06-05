@@ -8,12 +8,26 @@
 ##            -> "Cohort-wide (phenotype + vs phenotype -)"
 ##         "Cell-type specific"
 ##            -> "Cell-type specific (within phenotype groups)"
-##      The values stayed the same ("phenotype_groups" / "cell_type_specific")
-##      so all server logic that pattern-matches them still works.
+##      The first two values stayed the same ("phenotype_groups" /
+##      "cell_type_specific") so all server logic that pattern-matches
+##      them still works.
+##   2b. A NEW third value "cell_type_vs_opposite" is exposed by the
+##      same radioButtons -- contrasts each (cell type x tail) block
+##      against ALL cells in the opposite phenotype tail (any cell
+##      type). This recovers markers for cell types that exist in
+##      only one tail, where the "within phenotype groups" contrast
+##      returns empty. The run_markers observer maps it to
+##      celltype_contrast = "vs_opposite_tail".
 ##   3. The "Marker-gene heatmap" subsection of the sidebar is wrapped
 ##      in `.phenomapr-compact-stack marker-heatmap-compact-stack`, and
 ##      styles.css ships the supplementary `.marker-heatmap-compact-stack`
 ##      rules that tighten the h4 / helpText / Draw button spacing.
+##   4. The Marker-gene heatmap subsection exposes a
+##      checkboxInput("hm_block_borders") so users can toggle
+##      visible black borders around each cell-type x phenotype
+##      block. The renderImage path consults this input live and
+##      passes block_outline_color = "black" / "white" to
+##      plot_phenotype_markers().
 
 stopifnot_msg <- function(cond, msg) {
   if (!isTRUE(cond)) stop("FAIL: ", msg, call. = FALSE)
@@ -99,16 +113,17 @@ stopifnot_msg(
   "Marker-gene heatmap subsection is wrapped in the compact stack"
 )
 
-## All five expected children live inside the wrapper, in order.
+## All six expected children live inside the wrapper, in order.
 wrap_anchor <- 'class = "phenomapr-compact-stack marker-heatmap-compact-stack"'
 wp <- regexpr(wrap_anchor, slice, fixed = TRUE)
 stopifnot_msg(wp > 0, "located the marker-heatmap-compact-stack opening")
-sub_slice <- substr(slice, wp, min(nchar(slice), wp + 2500L))
+sub_slice <- substr(slice, wp, min(nchar(slice), wp + 3000L))
 for (needle in c(
   'h4("Marker-gene heatmap")',
   'helpText(',
   'numericInput("hm_top_n"',
   'numericInput("hm_n_labels"',
+  'checkboxInput("hm_block_borders"',
   'actionButton("draw_marker_heatmap"'
 )) {
   stopifnot_msg(
@@ -116,6 +131,86 @@ for (needle in c(
     sprintf("compact stack contains: %s", needle)
   )
 }
+
+## --- 2b. Third marker scope option (cell_type_vs_opposite) ---------------
+stopifnot_msg(
+  grepl('"cell_type_vs_opposite"', slice, fixed = TRUE),
+  "marker_scope radioButtons exposes 'cell_type_vs_opposite' value"
+)
+stopifnot_msg(
+  grepl("Cell-type", slice, fixed = TRUE) &&
+    grepl("opposite-tail cells", slice, fixed = TRUE),
+  "marker_scope third option label mentions 'Cell-type' and 'opposite-tail cells'"
+)
+## Server-side decode: the run_markers observer maps the new UI value
+## to celltype_contrast = "vs_opposite_tail" before calling
+## find_phenotype_markers().
+stopifnot_msg(
+  grepl('"cell_type_vs_opposite"', app_src, fixed = TRUE) &&
+    grepl('"vs_opposite_tail"', app_src, fixed = TRUE),
+  "run_markers maps cell_type_vs_opposite -> vs_opposite_tail in app.R"
+)
+
+## --- 2c. Stringency-based ordering of the three marker_scope options ------
+## The radioButtons should list the three options in order of *increasing
+## stringency*: cohort-wide -> cell-type x opposite-tail -> cell-type
+## within phenotype groups. This is the order users encounter when reading
+## the sidebar top-to-bottom and matches the "About markers" card text.
+v_phenotype <- regexpr('"phenotype_groups"',      slice, fixed = TRUE)
+v_opposite  <- regexpr('"cell_type_vs_opposite"', slice, fixed = TRUE)
+v_specific  <- regexpr('"cell_type_specific"',    slice, fixed = TRUE)
+stopifnot_msg(
+  v_phenotype > 0 && v_opposite > 0 && v_specific > 0,
+  "all three marker_scope values are present in the sidebar slice"
+)
+stopifnot_msg(
+  v_phenotype < v_opposite,
+  "stringency order: 'phenotype_groups' precedes 'cell_type_vs_opposite'"
+)
+stopifnot_msg(
+  v_opposite < v_specific,
+  paste0("stringency order: 'cell_type_vs_opposite' (mid) precedes ",
+         "'cell_type_specific' (most stringent)")
+)
+## And the "About markers" card mirrors that ordering: the
+## cell_type_vs_opposite description ("opposite-tail cells") appears
+## before the within-phenotype-groups description in the markdown.
+about_idx <- regexpr("About markers", app_src, fixed = TRUE)
+stopifnot(about_idx > 0L)
+about_window <- substr(app_src, about_idx,
+                       min(nchar(app_src), about_idx + 4000L))
+a_opposite <- regexpr("opposite-tail cells", about_window, fixed = TRUE)
+a_specific <- regexpr("within phenotype groups",
+                      about_window, fixed = TRUE)
+stopifnot_msg(
+  a_opposite > 0 && a_specific > 0,
+  "About markers card describes both per-cell-type contrasts"
+)
+stopifnot_msg(
+  a_opposite < a_specific,
+  paste0("About markers card mirrors the sidebar ordering: ",
+         "opposite-tail (mid) before within-phenotype-groups (most stringent)")
+)
+
+## --- 4. Live block-border toggle plumbing --------------------------------
+## renderImage / download paths consult input$hm_block_borders and
+## override outline_marker_blocks + block_outline_color before
+## delegating to plot_phenotype_markers(). The checkbox flip therefore
+## immediately re-renders the heatmap with thick black outlines around
+## each cell-type x phenotype block, without rebuilding the cached
+## expression matrix.
+stopifnot_msg(
+  grepl("input\\$hm_block_borders", app_src),
+  "app.R reads input$hm_block_borders to drive the live border toggle"
+)
+stopifnot_msg(
+  grepl("block_outline_color", app_src, fixed = TRUE),
+  "app.R passes block_outline_color through to plot_phenotype_markers()"
+)
+stopifnot_msg(
+  grepl("outline_marker_blocks", app_src, fixed = TRUE),
+  "app.R passes outline_marker_blocks through to plot_phenotype_markers()"
+)
 
 ## --- 4. CSS supplementary rules exist --------------------------------------
 for (sel in c(
