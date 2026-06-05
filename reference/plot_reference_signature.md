@@ -1,4 +1,4 @@
-# Plot reference signature z-scores as a 1×N heatmap
+# Plot reference signature z-scores as a 1xN heatmap
 
 Takes the gene z-score data.frame returned by
 [`derive_reference_from_bulk`](https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.md)

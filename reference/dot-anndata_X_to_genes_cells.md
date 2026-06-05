@@ -1,8 +1,8 @@
-# Convert AnnData.X into a genes × cells Matrix
+# Convert AnnData.X into a genes x cells Matrix
 
 Returns a `dgCMatrix` (sparse) when `adata.X` is a scipy sparse matrix,
-or a regular dense matrix otherwise. Always genes × cells (i.e. the
-transpose of AnnData's native cells × genes layout) with
+or a regular dense matrix otherwise. Always genes x cells (i.e. the
+transpose of AnnData's native cells x genes layout) with
 `rownames = var_names` and `colnames = obs_names`.
 
 ## Usage
@@ -21,8 +21,8 @@ Two memory optimisations versus the naive `as.matrix(adata$X)` approach:
     objects: only the genes that actually contribute to the score are
     transferred.
 
-2.  For scipy-sparse `.X`, the AnnData native CSR storage of a (n_obs ×
+2.  For scipy-sparse `.X`, the AnnData native CSR storage of a (n_obs x
     n_vars) matrix is the same as the CSC storage of the transposed
-    (n_vars × n_obs) matrix. We reuse `indices`, `indptr` and `data`
-    arrays directly to build a `dgCMatrix` in genes × cells orientation,
+    (n_vars x n_obs) matrix. We reuse `indices`, `indptr` and `data`
+    arrays directly to build a `dgCMatrix` in genes x cells orientation,
     with no extra allocation for a transpose pass.

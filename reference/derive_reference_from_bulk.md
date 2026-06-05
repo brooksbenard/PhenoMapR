@@ -29,7 +29,7 @@ derive_reference_from_bulk(
 - bulk_expression:
 
   Matrix or data.frame. Bulk expression with **genes as rows** and
-  **samples as columns**. If the matrix appears to be samples × genes
+  **samples as columns**. If the matrix appears to be samples x genes
   (e.g. fewer rows than columns), the function will transpose and
   message the user.
 
@@ -55,8 +55,8 @@ derive_reference_from_bulk(
 
   One of `"auto"`, `"survival"`, `"binary"`, `"continuous"`. If
   `"auto"`, inferred from the phenotype column (numeric with \>2 unique
-  → continuous; 2 unique → binary; or use survival if `survival_time`
-  and `survival_event` are provided).
+  -\> continuous; 2 unique -\> binary; or use survival if
+  `survival_time` and `survival_event` are provided).
 
 - survival_time:
 
@@ -109,8 +109,8 @@ entire reference after the fact.
 
 ## Details
 
-Steps: (1) ensure genes × samples format (transpose with message if
-heuristic suggests the matrix was provided as samples × genes), (2)
+Steps: (1) ensure genes x samples format (transpose with message if
+heuristic suggests the matrix was provided as samples x genes), (2)
 clean gene names to approved HUGO symbols, (3) check if expression is
 normalized and normalize if needed, (4) compute phenotype association
 z-scores per gene (Cox for survival, logistic regression for binary,

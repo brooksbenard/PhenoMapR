@@ -69,7 +69,7 @@ Derive reference z-scores from bulk expression and phenotype.
 - [`derive_reference_from_bulk()`](https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.md)
   : Derive Reference Z-Scores from Bulk Expression and Phenotype
 - [`plot_reference_signature()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_reference_signature.md)
-  : Plot reference signature z-scores as a 1×N heatmap
+  : Plot reference signature z-scores as a 1xN heatmap
 
 ## Phenotype group analysis
 

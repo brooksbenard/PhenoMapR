@@ -78,7 +78,7 @@ association z-scores that can be used as a custom reference in <code><a href="Ph
 
 <dl><dt id="arg-bulk-expression">bulk_expression<a class="anchor" aria-label="anchor" href="#arg-bulk-expression"></a></dt>
 <dd><p>Matrix or data.frame. Bulk expression with <strong>genes as
-rows</strong> and <strong>samples as columns</strong>. If the matrix appears to be samples ×
+rows</strong> and <strong>samples as columns</strong>. If the matrix appears to be samples x
 genes (e.g. fewer rows than columns), the function will transpose and
 message the user.</p></dd>
 
@@ -104,7 +104,7 @@ outcome. For <code>phenotype_type = "survival"</code> this is ignored; use
 <dt id="arg-phenotype-type">phenotype_type<a class="anchor" aria-label="anchor" href="#arg-phenotype-type"></a></dt>
 <dd><p>One of <code>"auto"</code>, <code>"survival"</code>, <code>"binary"</code>,
 <code>"continuous"</code>. If <code>"auto"</code>, inferred from the phenotype column
-(numeric with &gt;2 unique → continuous; 2 unique → binary; or use survival
+(numeric with &gt;2 unique -&gt; continuous; 2 unique -&gt; binary; or use survival
 if <code>survival_time</code> and <code>survival_event</code> are provided).</p></dd>
 
 
@@ -159,8 +159,8 @@ the entire reference after the fact.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Steps: (1) ensure genes × samples format (transpose with message if heuristic
-suggests the matrix was provided as samples × genes), (2) clean gene names to
+    <p>Steps: (1) ensure genes x samples format (transpose with message if heuristic
+suggests the matrix was provided as samples x genes), (2) clean gene names to
 approved HUGO symbols, (3) check if expression is normalized and normalize
 if needed, (4) compute phenotype association z-scores per gene (Cox for
 survival, logistic regression for binary, correlation for continuous).</p>

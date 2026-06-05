@@ -27,7 +27,7 @@ find_phenotype_markers(
   max_cells_per_ident = 5000L,
   validate_expression_axes = TRUE,
   celltype_unique_genes = TRUE,
-  celltype_contrast = c("within_cell_type", "vs_cohort_rest"),
+  celltype_contrast = c("within_cell_type", "vs_cohort_rest", "vs_opposite_tail"),
   ...
 )
 ```
@@ -67,9 +67,10 @@ find_phenotype_markers(
 
   - `"cell_type_specific"`: for each cell type, find markers for cells
     of that type in the adverse (or favorable) tail vs a reference group
-    controlled by `celltype_contrast` (default: same cell type, not in
-    that tail; use `"vs_cohort_rest"` for the original cohort-wide
-    contrast).
+    controlled by `celltype_contrast` (default `"within_cell_type"`; see
+    that argument for the full set of reference-cell strategies,
+    including `"vs_opposite_tail"` for cell types that exist in only one
+    tail).
 
 - cell_type_column:
 
@@ -132,12 +133,27 @@ find_phenotype_markers(
 
 - celltype_contrast:
 
-  When `marker_scope = "cell_type_specific"`: `"within_cell_type"`
-  (default) compares each phenotype tail within a cell type to other
-  phenotype groups in the **same** cell type only. `"vs_cohort_rest"`
-  restores the original behaviour: (cell type \\\cap\\ tail) vs **all
-  other cells** in the dataset (other cell types and other phenotype
-  groups).
+  When `marker_scope = "cell_type_specific"`, selects the reference cell
+  population for each (cell type, phenotype tail) block. Three modes are
+  available:
+
+  - `"within_cell_type"` (default): reference is the **same cell type**
+    but in a different phenotype group. Most stringent – isolates
+    phenotype-driven signal within a single cell-type identity. Returns
+    empty for a (cell type, tail) pair when the same cell type does not
+    exist outside that tail.
+
+  - `"vs_cohort_rest"`: reference is **every other cell** in the dataset
+    with a non-missing phenotype label (other cell types AND the
+    opposite tail). Most permissive; markers reflect both phenotype- and
+    cell-type-driven differences.
+
+  - `"vs_opposite_tail"`: reference is **all cells in the opposite
+    phenotype tail**, regardless of cell type. Useful when one tail has
+    no cells of a given cell type (e.g. only adverse ductal cells, no
+    favorable ductal cells) – `"within_cell_type"` would return empty
+    for ductal here; this contrast still surfaces the phenotype signal
+    by comparing against the entire opposite tail.
 
 - ...:
 
@@ -159,10 +175,10 @@ Each data.frame has columns: `gene`, `avg_log2FC`, `pct_in_group`,
 `pct_rest`, `p_val`, `p_adj`. When
 `marker_scope = "cell_type_specific"`, each row is one gene for one cell
 type; the `cell_type` column identifies which type the in-group was
-anchored on. If `celltype_contrast = "within_cell_type"` (default), the
-reference is other phenotype groups within that cell type; if
-`"vs_cohort_rest"`, the reference is all other cells with a phenotype
-label (original behaviour).
+anchored on. The reference set depends on `celltype_contrast` (see
+above): same cell type / different tail (`"within_cell_type"`), all
+other cells with a phenotype label (`"vs_cohort_rest"`), or all cells in
+the opposite tail (`"vs_opposite_tail"`).
 
 ## Details
 

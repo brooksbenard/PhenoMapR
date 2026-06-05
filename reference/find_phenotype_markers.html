@@ -80,7 +80,7 @@ available, else base R) and does not require Seurat.</p>
 <span>  max_cells_per_ident <span class="op">=</span> <span class="fl">5000L</span>,</span>
 <span>  validate_expression_axes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  celltype_unique_genes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  celltype_contrast <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"within_cell_type"</span>, <span class="st">"vs_cohort_rest"</span><span class="op">)</span>,</span>
+<span>  celltype_contrast <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"within_cell_type"</span>, <span class="st">"vs_cohort_rest"</span>, <span class="st">"vs_opposite_tail"</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -117,9 +117,10 @@ name for cell/sample IDs (default <code>"cell_id"</code>).</p></dd>
 phenotype groups globally (cell type agnostic; default).</p></li>
 <li><p><code>"cell_type_specific"</code>: for each cell type, find markers for
 cells of that type in the adverse (or favorable) tail vs a reference
-group controlled by <code>celltype_contrast</code> (default: same cell type,
-not in that tail; use <code>"vs_cohort_rest"</code> for the original cohort-wide
-contrast).</p></li>
+group controlled by <code>celltype_contrast</code> (default
+<code>"within_cell_type"</code>; see that argument for the full set of
+reference-cell strategies, including <code>"vs_opposite_tail"</code> for
+cell types that exist in only one tail).</p></li>
 </ul></dd>
 
 
@@ -183,11 +184,24 @@ blocks. Set to <code>FALSE</code> to retain all significant hits per block.</p><
 
 
 <dt id="arg-celltype-contrast">celltype_contrast<a class="anchor" aria-label="anchor" href="#arg-celltype-contrast"></a></dt>
-<dd><p>When <code>marker_scope = "cell_type_specific"</code>: <code>"within_cell_type"</code>
-(default) compares each phenotype tail within a cell type to other phenotype
-groups in the <strong>same</strong> cell type only. <code>"vs_cohort_rest"</code> restores the
-original behaviour: (cell type \(\cap\) tail) vs <strong>all other cells</strong> in
-the dataset (other cell types and other phenotype groups).</p></dd>
+<dd><p>When <code>marker_scope = "cell_type_specific"</code>,
+selects the reference cell population for each (cell type, phenotype tail)
+block. Three modes are available:</p><ul><li><p><code>"within_cell_type"</code> (default): reference is the <strong>same
+cell type</strong> but in a different phenotype group. Most stringent –
+isolates phenotype-driven signal within a single cell-type identity.
+Returns empty for a (cell type, tail) pair when the same cell type
+does not exist outside that tail.</p></li>
+<li><p><code>"vs_cohort_rest"</code>: reference is <strong>every other cell</strong>
+in the dataset with a non-missing phenotype label (other cell types
+AND the opposite tail). Most permissive; markers reflect both
+phenotype- and cell-type-driven differences.</p></li>
+<li><p><code>"vs_opposite_tail"</code>: reference is <strong>all cells in the
+opposite phenotype tail</strong>, regardless of cell type. Useful when one
+tail has no cells of a given cell type (e.g. only adverse ductal
+cells, no favorable ductal cells) – <code>"within_cell_type"</code> would
+return empty for ductal here; this contrast still surfaces the
+phenotype signal by comparing against the entire opposite tail.</p></li>
+</ul></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
@@ -204,10 +218,11 @@ the favorable (bottom score) group (vs rest).</p></li>
 <code>pct_in_group</code>, <code>pct_rest</code>, <code>p_val</code>, <code>p_adj</code>.
 When <code>marker_scope = "cell_type_specific"</code>, each row is one gene for
 one cell type; the <code>cell_type</code> column identifies which type the
-in-group was anchored on. If <code>celltype_contrast = "within_cell_type"</code>
-(default), the reference is other phenotype groups within that cell type; if
-<code>"vs_cohort_rest"</code>, the reference is all other cells with a phenotype
-label (original behaviour).</p>
+in-group was anchored on. The reference set depends on
+<code>celltype_contrast</code> (see above): same cell type / different tail
+(<code>"within_cell_type"</code>), all other cells with a phenotype label
+(<code>"vs_cohort_rest"</code>), or all cells in the opposite tail
+(<code>"vs_opposite_tail"</code>).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

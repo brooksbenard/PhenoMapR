@@ -1,6 +1,6 @@
 # Process AnnData Object
 
-Convert a Python anndata object into a genes × cells expression matrix
+Convert a Python anndata object into a genes x cells expression matrix
 that the rest of PhenoMapR understands. Optimized for very large
 objects:
 
@@ -13,8 +13,8 @@ objects:
   cutoff, so we transfer ~1-3\\ it.
 
 - scipy-sparse `.X` is reinterpreted directly as a `dgCMatrix` in genes
-  × cells orientation by treating the native CSR-of-(cells×genes)
-  storage as CSC-of-(genes×cells); this avoids `Matrix::t()` and the
+  x cells orientation by treating the native CSR-of-(cellsxgenes)
+  storage as CSC-of-(genesxcells); this avoids `Matrix::t()` and the
   doubling of memory it would otherwise cause.
 
 ## Usage

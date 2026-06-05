@@ -30,7 +30,9 @@ plot_phenotype_markers(
   column_title = NULL,
   draw = TRUE,
   use_raster = FALSE,
-  outline_marker_blocks = TRUE
+  outline_marker_blocks = TRUE,
+  block_outline_color = "white",
+  block_outline_lwd = 1
 )
 ```
 
@@ -141,8 +143,21 @@ plot_phenotype_markers(
 - outline_marker_blocks:
 
   If `TRUE` (default) and `heatmap_type = "cell_type_specific"`, draws
-  white outline boxes around each marker-gene block after `draw()`. Set
-  `FALSE` to omit them.
+  outline boxes around each marker-gene block (one per cell-type
+  \\\times\\ phenotype-bin slice) after `draw()`. Set `FALSE` to omit
+  them.
+
+- block_outline_color:
+
+  Outline colour used when `outline_marker_blocks = TRUE` (default
+  `"white"`). Set to `"black"` for stronger visual separation between
+  cell-type \\\times\\ phenotype-bin blocks.
+
+- block_outline_lwd:
+
+  Outline line width used when `outline_marker_blocks = TRUE` (default
+  `1`). Slightly thicker widths (e.g. `1.5` or `2`) read better with
+  darker `block_outline_color`.
 
 ## Value
 
