@@ -116,6 +116,7 @@ reference:
   - define_phenotype_groups
   - find_phenotype_markers
   - plot_phenotype_markers
+  - list_marker_heatmap_color_palettes
 - title: Visualization
   contents:
   - plot_score_distribution

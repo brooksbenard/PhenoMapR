@@ -450,6 +450,20 @@ clean_matrix_input <- function(x,
     stop("Matrix must have rownames (gene IDs)")
   }
 
+  # Preserve PhenoMapR-side metadata attributes (set by the Shiny h5ad
+  # loader and similar) so that downstream code can still recover the
+  # AnnData /obs and /obsm groups after cleaning. The internal cleaning
+  # steps -- HUGO renaming, duplicate collapse via rowsum/sweep,
+  # normalization via sweep -- create new matrix objects that don't
+  # carry over user attributes, so we capture them up front and
+  # re-attach to the cleaned matrix on return.
+  preserved_attrs <- list(
+    phenomapr_obs  = attr(x, "phenomapr_obs",  exact = TRUE),
+    phenomapr_obsm = attr(x, "phenomapr_obsm", exact = TRUE)
+  )
+  preserved_attrs <- preserved_attrs[!vapply(preserved_attrs, is.null, logical(1L))]
+  n_cells_in <- ncol(x)
+
   steps <- character(0)
   n_collapsed <- 0L
   detection <- detect_expression_format(x, verbose = FALSE)
@@ -553,6 +567,17 @@ clean_matrix_input <- function(x,
     } else {
       steps <- c(steps,
                  "Normalization skipped: format could not be confidently detected")
+    }
+  }
+
+  # Re-attach preserved phenomapr_* attributes if the cell axis is
+  # intact. Cleaning never adds/removes columns today (HUGO + collapse
+  # are row-only, normalize is per-column scaling), so this guard is
+  # really a safety net against future row/col-touching steps that
+  # could invalidate the cell-aligned obs/obsm tables.
+  if (length(preserved_attrs) && ncol(x) == n_cells_in) {
+    for (an in names(preserved_attrs)) {
+      attr(x, an) <- preserved_attrs[[an]]
     }
   }
 

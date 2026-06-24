@@ -238,7 +238,7 @@ if (nrow(dat_sc) > 0) {
 ## 4. Survival anlaysis by PhenoMapR score assignment
 **`PhenoMapR`** scores samples based on the weighted-sum of a sample's gene expression levels and the weights from the phenotype reference signature. Because the signature used to score samples in the dataset was derived from the expression associations with survival across the datasets, the **`PhenoMapR`** score should stratify outcomes. We perform Kaplan–Meier analysis using a **`PhenoMapR`** median split.
 
-```{r km-custom, fig.width=4.5, fig.height=3.5, fig.align='center'}
+```{r km-custom, fig.width=4, fig.height=3.5, fig.align='center'}
 suppressPackageStartupMessages(library(survival))
 pheno$survival_time <- pheno$OS_Time
 pheno$survival_event <- pheno$OS_Censor
@@ -276,12 +276,12 @@ dat_os <- subset(pheno, !is.na(survival_time) & !is.na(survival_event) & !is.na(
       ylab = "Survival probability",
       legend.title = "Custom score",
       legend.labs = c("Low", "High"),
-      legend = "right",
+      legend = c(.75,.5),
       palette = unname(pal_km[c("Low", "High")]),
       risk.table = FALSE,
       pval = label,
-      pval.coord = c(max_t * 0.4, 0.95),
-      pval.size = 3
+      pval.coord = c(max_t * 0.25, 0.95),
+      pval.size = 5
     ) 
     
     p_surv$plot + theme(plot.title = element_text(hjust = 0.5))

@@ -16,7 +16,7 @@
 # =============================================================================
 
 suppressPackageStartupMessages({
-  required <- c("shiny", "bslib", "DT", "ggplot2", "dplyr")
+  required <- c("shiny", "bslib", "DT", "ggplot2", "dplyr", "colourpicker")
   missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing)) {
     stop(
@@ -1217,13 +1217,21 @@ ui <- page_navbar(
               "AnnData object are picked up automatically. Spatial inputs ",
               "(Seurat with @images, SpatialExperiment, AnnData with ",
               "obsm['spatial']) also surface tissue coordinates as a ",
-              "\"spatial\" reduction in the dropdown above. For matrix ",
-              "uploads, the app additionally auto-detects 2D coordinate ",
-              "column pairs (e.g. UMAP_1/UMAP_2, tSNE_1/tSNE_2, ",
-              "X_umap_0/X_umap_1) on the metadata table from the Data tab ",
-              "\u2014 no second upload needed. Use the file picker below ",
-              "to supply a separate embedding file if you don't have one ",
-              "in your metadata."
+              "\"spatial\" reduction in the dropdown above. Imaging-based ",
+              "spatial datasets that carry a cell-segmentation mask ",
+              "(Seurat 5 FOV objects from Xenium / CosMx / MERSCOPE / ",
+              "Visium HD; AnnData with obsm['segmentation']) additionally ",
+              "expose a \"segmentation\" reduction \u2014 the per-cell ",
+              "segmentation centroids drawn in their tissue frame, which ",
+              "lines up 1:1 with the segmented cells in the underlying ",
+              "image (whereas \"spatial\" plots the upstream pipeline's ",
+              "canonical xy, often a spot grid). For matrix uploads, the ",
+              "app additionally auto-detects 2D coordinate column pairs ",
+              "(e.g. UMAP_1/UMAP_2, tSNE_1/tSNE_2, X_umap_0/X_umap_1) on ",
+              "the metadata table from the Data tab \u2014 no second ",
+              "upload needed. Use the file picker below to supply a ",
+              "separate embedding file if you don't have one in your ",
+              "metadata."
             )
           ),
           tags$details(
@@ -1446,6 +1454,9 @@ ui <- page_navbar(
                        min = 5, max = 200, step = 5),
           numericInput("hm_n_labels", "Gene labels per block", value = 5,
                        min = 0, max = 50, step = 1),
+          checkboxInput("hm_color_mark_labels",
+                        "Color gene labels by cell type",
+                        value = TRUE),
           # Block-outline controls. Only meaningful for
           # heatmap_type = "cell_type_specific" (the per-cell-type
           # heatmap is already split into one row slice per
@@ -1461,6 +1472,63 @@ ui <- page_navbar(
           checkboxInput("hm_block_borders",
                         "Black borders around cell-type \u00D7 phenotype blocks",
                         value = FALSE),
+          tags$details(
+            class = "phenomapr-hm-colors-details",
+            tags$summary(
+              tags$strong("Color schemes"),
+              tags$span(class = "phenomapr-hm-colors-summary-hint",
+                        " \u2014 phenotype, score, cell types, heatmap")
+            ),
+            marker_heatmap_color_controls(
+              "phenotype",
+              "Phenotype groups",
+              brewer_kind = "both",
+              default_brewer = "RdBu",
+              manual_ui = tagList(
+                colourInput("hm_colors_phenotype_fav", "Most Phenotype -",
+                            "#2166AC"),
+                colourInput("hm_colors_phenotype_other", "Other", "#F7F7F7"),
+                colourInput("hm_colors_phenotype_adv", "Most Phenotype +",
+                            "#B2182B")
+              )
+            ),
+            marker_heatmap_color_controls(
+              "score",
+              "PhenoMapR score bar",
+              brewer_kind = "diverging",
+              default_brewer = "RdBu",
+              manual_ui = tagList(
+                colourInput("hm_colors_score_low", "Low score", "#2166AC"),
+                colourInput("hm_colors_score_mid", "Zero / midpoint", "#FFFFFF"),
+                colourInput("hm_colors_score_high", "High score", "#B2182B")
+              )
+            ),
+            marker_heatmap_color_controls(
+              "celltype",
+              "Cell types",
+              brewer_kind = "qualitative",
+              default_brewer = "Set2",
+              manual_ui = textInput(
+                "hm_colors_celltype_manual",
+                "Cell type colors (comma-separated hex)",
+                value = "",
+                placeholder = "#2A9D8F, #E76F51, #264653, ..."
+              )
+            ),
+            marker_heatmap_color_controls(
+              "expr",
+              "Scaled expression heatmap",
+              brewer_kind = "diverging",
+              default_brewer = "RdGy",
+              manual_ui = tagList(
+                colourInput("hm_colors_expr_low", "Low scaled expression",
+                            "#1A1A1A"),
+                colourInput("hm_colors_expr_mid", "Midpoint", "#FFFFFF"),
+                colourInput("hm_colors_expr_high", "High scaled expression",
+                            "#67001F")
+              )
+            )
+          ),
           actionButton("draw_marker_heatmap", "Draw heatmap",
                        icon = icon("th"), class = "btn-primary")
         )
@@ -1472,33 +1540,71 @@ ui <- page_navbar(
         # layout. Without it, bslib's default flex behavior leaves a
         # large empty band beneath the markdown blurb.
         fill = FALSE,
-        card_header(icon("circle-info"), " About markers"),
+        # Wrap the entire card body in <details>/<summary> so the user
+        # gets the chip-style "About markers" header to click into when
+        # they want a refresher, but the marker tables / heatmap below
+        # take precedence in the default vertical real estate. Class
+        # mirrors `.embedding-help-details` (sidebar's spiritual cousin)
+        # so the chevron / spacing already feel native.
         card_body(
-          markdown(
-            "Wilcoxon-based differential expression between the adverse /
-            favorable tails and the rest of the data (via `presto` when
-            installed, base R otherwise; Seurat's `FindMarkers` is used for
-            Seurat inputs in cohort-wide mode).
+          padding = 0,
+          tags$details(
+            class = "phenomapr-about-markers-details",
+            tags$summary(
+              icon("circle-info"),
+              tags$span(class = "phenomapr-about-markers-summary-label",
+                        " About markers"),
+              tags$span(
+                class = "phenomapr-about-markers-summary-hint",
+                " \u2014 click to expand"
+              )
+            ),
+            layout_columns(
+              col_widths = c(7, 5),
+              gap = "1.25rem",
+              # ---- Left column: simplified copy mapped to the schematic
+              tags$div(
+                class = "phenomapr-about-markers-text",
+                markdown(
+                  "Wilcoxon DE (via `presto` when installed, otherwise base
+                  R; `Seurat::FindMarkers` for Seurat inputs in cohort-wide
+                  mode) between the **most-adverse** (red, phenotype +) and
+                  **most-favorable** (blue, phenotype \u2212) tails, listed
+                  here from broadest to most stringent.
 
-            The three scopes are listed below in order of *increasing
-            stringency* \u2014 the same order as the sidebar radio buttons
-            \u2014 so reading top-to-bottom moves from the broadest contrast
-            (no cell-type partitioning) to the narrowest (matched cell type
-            in both tails required).
+                  **(1) Cohort-wide.** Whole adverse tail vs whole favorable
+                  tail \u2014 no cell-type partitioning.
 
-            **Cell-type \u00D7 phenotype vs all opposite-tail cells**
-            contrasts each phenotype tail \u00D7 cell type against *every
-            cell* in the opposite phenotype group regardless of cell type.
-            Mid-stringency: still surfaces phenotype-driven markers when a
-            cell type is present in only one tail \u2014 e.g. only adverse
-            ductal cells, no favorable ductal cells \u2014 which is exactly
-            the situation where the next mode returns empty.
+                  **(2) Cell-type \u00D7 phenotype vs all opposite-tail
+                  cells.** One cell type in one tail vs *every* cell in the
+                  opposite tail. Still works when a cell type exists in only
+                  one tail (where mode 3 returns empty).
 
-            **Cell-type specific (within phenotype groups)** contrasts each
-            phenotype tail \u00D7 cell type against the *same cell type* in
-            the opposite phenotype group. Most stringent, but returns nothing
-            for a cell type that exists in only one tail (e.g. only adverse
-            ductal cells, no favorable ductal cells)."
+                  **(3) Cell-type specific (within phenotype groups).** One
+                  cell type in the adverse tail vs the *same* cell type in
+                  the favorable tail. Most stringent, but requires the cell
+                  type to be present in both tails."
+                )
+              ),
+              # ---- Right column: matched schematic figure
+              # Sourced from inst/figures/PhenoMapR_marker_schematic.png
+              # and copied into inst/shiny/www/ on package build so Shiny
+              # serves it with no addResourcePath() plumbing.
+              tags$div(
+                class = "phenomapr-about-markers-figure",
+                tags$img(
+                  src = "PhenoMapR_marker_schematic.png",
+                  alt = paste(
+                    "Schematic of the three marker-gene contrast scopes:",
+                    "(1) cohort-wide adverse vs favorable,",
+                    "(2) cell-type x phenotype vs all opposite-tail cells,",
+                    "(3) cell-type specific within phenotype groups."
+                  ),
+                  loading = "lazy",
+                  class = "phenomapr-about-markers-img"
+                )
+              )
+            )
           )
         )
       ),
@@ -2012,6 +2118,8 @@ server <- function(input, output, session) {
         # Use a slightly slimmer line (~1.5pt) so the borders read as
         # clean dividers rather than thick chrome around each block.
         args$block_outline_lwd     <- if (borders_on) 1.5 else 1
+        args$color_mark_labels_by_celltype <- isTRUE(isolate(input$hm_color_mark_labels))
+        args$color_schemes <- marker_heatmap_color_schemes_from_input(isolate(input))
         fmt_lc <- tolower(fmt)
         ok <- tryCatch({
           switch(fmt_lc,
@@ -5038,12 +5146,27 @@ server <- function(input, output, session) {
     }, delay = 0)
   })
 
+  # The adverse / favorable marker tables can run into the hundreds of
+  # rows for cell-type-specific or large-cohort panels. Without a
+  # vertical scroll cap, the DT widget renders at full content height
+  # and pushes through (visually overlapping) the Marker-gene heatmap
+  # card directly below it. Bound each table to ~480px of vertical
+  # space and let DataTables' native scroller handle scrolling within
+  # that window -- pagination + filter / search controls remain in the
+  # toolbar above so users can still page through long result sets.
+  .markers_dt_options <- list(
+    pageLength = 15,
+    scrollX = TRUE,
+    scrollY = "480px",
+    scrollCollapse = TRUE
+  )
+
   output$adverse_markers_tbl <- renderDT({
     req(state$markers)
     df <- state$markers$adverse_markers
     panel_objects$adverse_markers_tbl <- df
     if (!nrow(df)) return(datatable(df, options = list(dom = "t")))
-    datatable(df, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+    datatable(df, rownames = FALSE, options = .markers_dt_options)
   })
   phenomapr_register_table_download(output, "adverse_markers_tbl",
     function() isolate(panel_objects$adverse_markers_tbl))
@@ -5052,7 +5175,7 @@ server <- function(input, output, session) {
     df <- state$markers$favorable_markers
     panel_objects$favorable_markers_tbl <- df
     if (!nrow(df)) return(datatable(df, options = list(dom = "t")))
-    datatable(df, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE))
+    datatable(df, rownames = FALSE, options = .markers_dt_options)
   })
   phenomapr_register_table_download(output, "favorable_markers_tbl",
     function() isolate(panel_objects$favorable_markers_tbl))
@@ -5109,6 +5232,8 @@ server <- function(input, output, session) {
     hm_top_n_input      <- input$hm_top_n     %||% 20L
     hm_n_labels_input   <- input$hm_n_labels  %||% 5L
     hm_block_borders_in <- isTRUE(input$hm_block_borders)
+    hm_color_mark_labels_in <- isTRUE(input$hm_color_mark_labels)
+    hm_color_schemes_in <- marker_heatmap_color_schemes_from_input(input)
     sess <- session
     later::later(function() {
       # For AnnData inputs, the marker heatmap only needs the marker genes,
@@ -5200,6 +5325,7 @@ server <- function(input, output, session) {
           heatmap_type = heatmap_type,
           top_n_markers = hm_top_n_input,
           n_mark_labels = hm_n_labels_input,
+          color_mark_labels_by_celltype = hm_color_mark_labels_in,
           # Block-outline parameters captured at draw time. The
           # renderImage handler also consults the live
           # `input$hm_block_borders` value, so toggling the
@@ -5212,6 +5338,7 @@ server <- function(input, output, session) {
           # so the borders read as clean dividers instead of heavy
           # chrome around each block.
           block_outline_lwd = if (hm_block_borders_in) 1.5 else 1,
+          color_schemes = hm_color_schemes_in,
           use_raster = FALSE
         ))
         showNotification("Heatmap ready -- drawing...", type = "message",
@@ -5235,6 +5362,8 @@ server <- function(input, output, session) {
       args$block_outline_color   <- if (borders_on) "black" else "white"
       # Slightly slimmer line (1.5pt) than the original 2pt default.
       args$block_outline_lwd     <- if (borders_on) 1.5 else 1
+      args$color_mark_labels_by_celltype <- isTRUE(input$hm_color_mark_labels)
+      args$color_schemes <- marker_heatmap_color_schemes_from_input(input)
 
       # Render to a real PNG at fixed pixel size + DPI. ComplexHeatmap +
       # anno_mark are notoriously fragile under Shiny's renderPlot()
@@ -5308,6 +5437,8 @@ server <- function(input, output, session) {
       args$block_outline_color   <- if (borders_on) "black" else "white"
       # Slightly slimmer line (1.5pt) than the original 2pt default.
       args$block_outline_lwd     <- if (borders_on) 1.5 else 1
+      args$color_mark_labels_by_celltype <- isTRUE(isolate(input$hm_color_mark_labels))
+      args$color_schemes <- marker_heatmap_color_schemes_from_input(isolate(input))
       ok <- tryCatch({
         grDevices::png(file, width = width, height = height, res = 110)
         on.exit(if (grDevices::dev.cur() > 1L) try(grDevices::dev.off(),

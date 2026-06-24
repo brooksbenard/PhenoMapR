@@ -18,7 +18,16 @@
 #' @param score_col Column with continuous phenotype scores for the top color bar.
 #' @param celltype_col Column with cell type labels.
 #' @param celltype_palette Named vector of colors for cell types. If \code{NULL},
-#'   \code{\link{get_celltype_palette}()} is used.
+#'   cell-type colors come from \code{color_schemes$celltype} (default:
+#'   \code{\link{get_celltype_palette}()}).
+#' @param color_schemes Optional named list controlling heatmap colors. Each
+#'   element may be \code{"default"}, a shorthand string like
+#'   \code{"brewer:RdBu"} or \code{"viridis:plasma"}, or a list with
+#'   \code{source} (\code{"default"}, \code{"brewer"}, \code{"viridis"}, or
+#'   \code{"manual"}) plus \code{name} and/or \code{colors}. Supported names:
+#'   \code{phenotype} (discrete groups), \code{score} (PhenoMapR score bar),
+#'   \code{expression} (scaled-expression heatmap body), and \code{celltype}.
+#'   See \code{\link{list_marker_heatmap_color_palettes}()} for built-in options.
 #' @param heatmap_type \code{"global"} (cell-type agnostic markers) or
 #'   \code{"cell_type_specific"} (markers per cell type from
 #'   \code{marker_scope = "cell_type_specific"}).
@@ -32,6 +41,13 @@
 #'   purely due to sample size.
 #' @param n_mark_labels Number of row labels to draw per block via
 #'   \code{ComplexHeatmap::anno_mark} (top genes by \code{avg_log2FC} within each block).
+#' @param mark_label_fontsize Font size (points) for \code{anno_mark} gene labels.
+#'   Default \code{7}. Decrease when many labels are drawn in a compact heatmap.
+#' @param color_mark_labels_by_celltype If \code{TRUE}, \code{anno_mark} gene labels
+#'   are colored with \code{celltype_palette} according to each gene's cell type.
+#'   Applies to \code{heatmap_type = "cell_type_specific"} (and to \code{"global"}
+#'   when marker tables include a \code{cell_type} column). Default \code{FALSE}
+#'   keeps labels black.
 #' @param p_adj_threshold Only genes with \code{p_adj} below this value (and positive
 #'   \code{avg_log2FC}) are candidates before ordering by log fold change.
 #' @param scale_clip Length-2 numeric vector \code{c(lo, hi)} applied after row scaling
@@ -110,10 +126,13 @@ plot_phenotype_markers <- function(markers,
                                    score_col,
                                    celltype_col = "celltype_original",
                                    celltype_palette = NULL,
+                                   color_schemes = NULL,
                                    heatmap_type = c("global", "cell_type_specific"),
                                    top_n_markers = 20L,
                                    rank_by = c("lfc", "p_adj"),
                                    n_mark_labels = 5L,
+                                   mark_label_fontsize = 7,
+                                   color_mark_labels_by_celltype = FALSE,
                                    p_adj_threshold = 0.05,
                                    scale_clip = NULL,
                                    heatmap_width = NULL,
@@ -180,6 +199,26 @@ plot_phenotype_markers <- function(markers,
   n_mark_labels <- as.integer(n_mark_labels)[1L]
   if (top_n_markers < 1L) stop("'top_n_markers' must be >= 1.")
   if (n_mark_labels < 1L) stop("'n_mark_labels' must be >= 1.")
+  mark_label_fontsize <- as.numeric(mark_label_fontsize)[1L]
+  if (!is.finite(mark_label_fontsize) || mark_label_fontsize <= 0) {
+    mark_label_fontsize <- 7
+  }
+  color_mark_labels_by_celltype <- isTRUE(color_mark_labels_by_celltype)
+
+  hm_draw_marks_at <- integer(0)
+  hm_draw_n_rows <- 0L
+  hm_mark_anno_width_mm <- 18
+  decorate_pairs <- list()
+
+  # Strip thickness: row annotations use `width`, column annotations
+  # use `height` (ComplexHeatmap convention). Previously the top
+  # strips passed `width`, which column anno_simple ignores, so they
+  # fell back to ht_opt$simple_anno_size (5 mm) and looked ~2x thicker
+  # than the 3 mm row strips.
+  strip_mm <- 3
+  row_anno_strip_u  <- grid::unit(strip_mm, "mm")
+  col_anno_strip_u  <- grid::unit(strip_mm, "mm")
+  col_anno_name_gp  <- grid::gpar(fontsize = 7)
 
   # celltype_col is mandatory for cell-type-specific heatmaps (every block
   # is keyed by a cell type) but only decorative for the global heatmap (used
@@ -265,13 +304,17 @@ plot_phenotype_markers <- function(markers,
   cell_order_hm <- ord$cell_order
   meta_idx_hm <- ord$meta_idx
 
-  pal_group <- c(`Most Adverse` = "#B2182B", Other = "#F7F7F7", `Most Favorable` = "#2166AC")
+  schemes <- .normalize_marker_heatmap_color_schemes(color_schemes)
+  pal_group <- .resolve_phenotype_palette(schemes$phenotype)
+  score_colors <- .resolve_score_colors(schemes$score)
+  expr_colors <- .resolve_expression_colors(schemes$expression, n = 11L)
 
   if (has_celltype) {
-    if (is.null(celltype_palette)) {
-      celltype_palette <- get_celltype_palette(hm_celltype_levels)
-    }
-    pal_celltype <- celltype_palette[hm_celltype_levels]
+    pal_celltype <- .resolve_celltype_palette_from_spec(
+      schemes$celltype,
+      hm_celltype_levels,
+      override = celltype_palette
+    )
     pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
   } else {
     pal_celltype <- character(0)
@@ -303,7 +346,7 @@ plot_phenotype_markers <- function(markers,
     smin <- -1
     smax <- 1
   }
-  score_col_fun <- .phenomap_score_col_fun(smin, smax)
+  score_col_fun <- .phenomap_score_col_fun_from_colors(smin, smax, score_colors)
 
   # Initialise the (row_slice, column_slice) decoration pair list to
   # empty so the post-render block-outline loop is a no-op for the
@@ -348,7 +391,7 @@ plot_phenotype_markers <- function(markers,
       `Phenotype group` = ComplexHeatmap::anno_simple(
         as.character(meta[[group_col]][meta_idx_hm]),
         col = pal_group,
-        width = grid::unit(3, "mm")
+        height = col_anno_strip_u
       )
     )
     if (show_celltype_strip) {
@@ -359,24 +402,26 @@ plot_phenotype_markers <- function(markers,
       top_anno_args[["Cell type"]] <- ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
-        width = grid::unit(3, "mm")
+        height = col_anno_strip_u
       )
     }
     top_anno_args[["PhenoMapR score"]] <- ComplexHeatmap::anno_simple(
       score_ann,
-      col = score_col_fun
+      col = score_col_fun,
+      height = col_anno_strip_u
     )
     ha_top <- do.call(
       ComplexHeatmap::HeatmapAnnotation,
       c(top_anno_args, list(
         annotation_name_side = "right",
+        annotation_name_gp = col_anno_name_gp,
         show_annotation_name = TRUE,
         show_legend = FALSE,
         gap = grid::unit(0, "mm")
       ))
     )
 
-    pal_marker_row <- c(`Most Favorable` = "#2166AC", `Most Adverse` = "#B2182B")
+    pal_marker_row <- pal_group[c("Most Favorable", "Most Adverse")]
     # Left = favorable; right = adverse.
     strip_l <- rep(NA_character_, nrow(mat_plot))
     if (n_fav > 0L) {
@@ -398,6 +443,31 @@ plot_phenotype_markers <- function(markers,
     } else {
       character(0)
     }
+    marks_ct_fav <- if (color_mark_labels_by_celltype && length(marks_lab_fav) > 0L) {
+      .lookup_mark_gene_celltypes(marks_lab_fav, favorable_df)
+    } else {
+      character(0)
+    }
+    marks_ct_adv <- if (color_mark_labels_by_celltype && length(marks_lab_adv) > 0L) {
+      .lookup_mark_gene_celltypes(marks_lab_adv, adverse_df)
+    } else {
+      character(0)
+    }
+    mark_labels_gp_fav <- .anno_mark_labels_gp(
+      marks_ct_fav, color_mark_labels_by_celltype, pal_celltype,
+      fontsize = mark_label_fontsize
+    )
+    mark_labels_gp_adv <- .anno_mark_labels_gp(
+      marks_ct_adv, color_mark_labels_by_celltype, pal_celltype,
+      fontsize = mark_label_fontsize
+    )
+    all_mark_labels <- c(marks_lab_fav, marks_lab_adv)
+    mark_anno_width_mm <- .phenomap_mark_anno_width_mm(
+      all_mark_labels, mark_label_fontsize
+    )
+    hm_draw_marks_at <- c(marks_at_fav, marks_at_adv)
+    hm_draw_n_rows <- nrow(mat_plot)
+    hm_mark_anno_width_mm <- mark_anno_width_mm
 
     # Left (favorable): marks leftmost, strip next to heatmap. Only built when
     # we actually have favorable rows -- `anno_mark(at = integer(0))` triggers
@@ -409,14 +479,14 @@ plot_phenotype_markers <- function(markers,
           at = marks_at_fav,
           labels = marks_lab_fav,
           side = "left",
-          labels_gp = grid::gpar(fontsize = 7),
+          labels_gp = mark_labels_gp_fav,
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
         ),
         `Phenotype` = ComplexHeatmap::anno_simple(
           strip_l,
           col = pal_marker_row,
-          width = grid::unit(3, "mm"),
+          width = row_anno_strip_u,
           na_col = "transparent"
         ),
         # Suppress auto-legends from this rowAnnotation. The manual
@@ -430,7 +500,7 @@ plot_phenotype_markers <- function(markers,
         show_legend = FALSE,
         show_annotation_name = FALSE,
         gap = grid::unit(0, "mm"),
-        annotation_width = grid::unit(c(18, 3), c("mm", "mm"))
+        annotation_width = grid::unit(c(mark_anno_width_mm, 3), c("mm", "mm"))
       )
     }
 
@@ -441,14 +511,14 @@ plot_phenotype_markers <- function(markers,
         `Phenotype` = ComplexHeatmap::anno_simple(
           strip_r,
           col = pal_marker_row,
-          width = grid::unit(3, "mm"),
+          width = row_anno_strip_u,
           na_col = "transparent"
         ),
         marks = ComplexHeatmap::anno_mark(
           at = marks_at_adv,
           labels = marks_lab_adv,
           side = "right",
-          labels_gp = grid::gpar(fontsize = 7),
+          labels_gp = mark_labels_gp_adv,
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
         ),
@@ -456,7 +526,7 @@ plot_phenotype_markers <- function(markers,
         show_legend = FALSE,
         show_annotation_name = FALSE,
         gap = grid::unit(0, "mm"),
-        annotation_width = grid::unit(c(3, 18), c("mm", "mm"))
+        annotation_width = grid::unit(c(3, mark_anno_width_mm), c("mm", "mm"))
       )
     }
 
@@ -464,7 +534,7 @@ plot_phenotype_markers <- function(markers,
     # with zero rows (another way to surface "select less than one element").
     present_tails <- intersect(c("Most Favorable", "Most Adverse"), unique(marker_tail))
     row_split_g <- factor(marker_tail, levels = present_tails)
-    hm_col_fun <- .scaled_expr_col_fun_rdgy11(scale_clip)
+    hm_col_fun <- .scaled_expr_col_fun_from_colors(scale_clip, expr_colors)
 
     ct <- column_title %||% "Global phenotype marker genes (favorable vs adverse)"
 
@@ -547,8 +617,10 @@ plot_phenotype_markers <- function(markers,
 
     marks_at_fav <- integer(0)
     marks_lab_fav <- character(0)
+    marks_ct_fav <- character(0)
     marks_at_adv <- integer(0)
     marks_lab_adv <- character(0)
+    marks_ct_adv <- character(0)
     start <- 1L
     for (bk in unique(block_key)) {
       ii <- which(block_key == bk)
@@ -557,16 +629,34 @@ plot_phenotype_markers <- function(markers,
       nm <- min(n_mark_labels, n)
       at <- start + seq_len(nm) - 1L
       lab <- as.character(gene_info$gene[ii[seq_len(nm)]])
+      lab_ct <- as.character(gene_info$cell_type[ii[seq_len(nm)]])
       bin <- as.character(gene_info$phenotype_bin[ii[1L]])
       if (identical(bin, "Most Favorable")) {
         marks_at_fav <- c(marks_at_fav, at)
         marks_lab_fav <- c(marks_lab_fav, lab)
+        marks_ct_fav <- c(marks_ct_fav, lab_ct)
       } else if (identical(bin, "Most Adverse")) {
         marks_at_adv <- c(marks_at_adv, at)
         marks_lab_adv <- c(marks_lab_adv, lab)
+        marks_ct_adv <- c(marks_ct_adv, lab_ct)
       }
       start <- start + n
     }
+    mark_labels_gp_fav <- .anno_mark_labels_gp(
+      marks_ct_fav, color_mark_labels_by_celltype, pal_celltype,
+      fontsize = mark_label_fontsize
+    )
+    mark_labels_gp_adv <- .anno_mark_labels_gp(
+      marks_ct_adv, color_mark_labels_by_celltype, pal_celltype,
+      fontsize = mark_label_fontsize
+    )
+    all_mark_labels <- c(marks_lab_fav, marks_lab_adv)
+    mark_anno_width_mm <- .phenomap_mark_anno_width_mm(
+      all_mark_labels, mark_label_fontsize
+    )
+    hm_draw_marks_at <- c(marks_at_fav, marks_at_adv)
+    hm_draw_n_rows <- nrow(mat_plot)
+    hm_mark_anno_width_mm <- mark_anno_width_mm
 
     # Build the top annotation as a named list so the cell-type
     # strip can be inserted conditionally. When the cell-type
@@ -578,24 +668,26 @@ plot_phenotype_markers <- function(markers,
       `Phenotype group` = ComplexHeatmap::anno_simple(
         as.character(meta[[group_col]][meta_idx_hm]),
         col = pal_group,
-        width = grid::unit(3, "mm")
+        height = col_anno_strip_u
       )
     )
     if (show_celltype_strip) {
       top_anno_args_ct[["Cell type"]] <- ComplexHeatmap::anno_simple(
         as.character(meta[[celltype_col]][meta_idx_hm]),
         col = pal_celltype,
-        width = grid::unit(3, "mm")
+        height = col_anno_strip_u
       )
     }
     top_anno_args_ct[["PhenoMapR score"]] <- ComplexHeatmap::anno_simple(
       score_ann,
-      col = score_col_fun
+      col = score_col_fun,
+      height = col_anno_strip_u
     )
     ha_top <- do.call(
       ComplexHeatmap::HeatmapAnnotation,
       c(top_anno_args_ct, list(
         annotation_name_side = "right",
+        annotation_name_gp = col_anno_name_gp,
         show_annotation_name = TRUE,
         show_legend = FALSE,
         gap = grid::unit(0, "mm")
@@ -640,7 +732,7 @@ plot_phenotype_markers <- function(markers,
           labels = marks_lab_fav,
           which = "row",
           side = "left",
-          labels_gp = grid::gpar(fontsize = 7),
+          labels_gp = mark_labels_gp_fav,
           link_gp = grid::gpar(col = "grey50", lwd = 0.6),
           padding = grid::unit(0.5, "mm")
         )
@@ -656,7 +748,7 @@ plot_phenotype_markers <- function(markers,
           strip_l_ct,
           col = pal_celltype,
           which = "row",
-          width = grid::unit(3, "mm"),
+          width = row_anno_strip_u,
           na_col = "transparent"
         )
       }
@@ -664,7 +756,7 @@ plot_phenotype_markers <- function(markers,
         strip_l_pheno,
         col = pal_group,
         which = "row",
-        width = grid::unit(3, "mm"),
+        width = row_anno_strip_u,
         na_col = "transparent"
       )
       # Annotation widths track the actual entries in `left_args`:
@@ -672,9 +764,9 @@ plot_phenotype_markers <- function(markers,
       # included when show_celltype_strip is TRUE; phenotype strip
       # is always present.
       left_widths <- if (show_celltype_strip) {
-        grid::unit(c(18, 3, 3), c("mm", "mm", "mm"))
+        grid::unit(c(mark_anno_width_mm, 3, 3), c("mm", "mm", "mm"))
       } else {
-        grid::unit(c(18, 3), c("mm", "mm"))
+        grid::unit(c(mark_anno_width_mm, 3), c("mm", "mm"))
       }
       ha_left <- do.call(
         ComplexHeatmap::rowAnnotation,
@@ -697,7 +789,7 @@ plot_phenotype_markers <- function(markers,
           # `which = "row"` is required on every anno_simple
           # constructed for a do.call(rowAnnotation, ...) build.
           which = "row",
-          width = grid::unit(3, "mm"),
+          width = row_anno_strip_u,
           na_col = "transparent"
         )
       )
@@ -706,7 +798,7 @@ plot_phenotype_markers <- function(markers,
           strip_r_ct,
           col = pal_celltype,
           which = "row",
-          width = grid::unit(3, "mm"),
+          width = row_anno_strip_u,
           na_col = "transparent"
         )
       }
@@ -718,14 +810,14 @@ plot_phenotype_markers <- function(markers,
         # so we set it explicitly.
         which = "row",
         side = "right",
-        labels_gp = grid::gpar(fontsize = 7),
+        labels_gp = mark_labels_gp_adv,
         link_gp = grid::gpar(col = "grey50", lwd = 0.6),
         padding = grid::unit(0.5, "mm")
       )
       right_widths <- if (show_celltype_strip) {
-        grid::unit(c(3, 3, 18), c("mm", "mm", "mm"))
+        grid::unit(c(3, 3, mark_anno_width_mm), c("mm", "mm", "mm"))
       } else {
-        grid::unit(c(3, 18), c("mm", "mm"))
+        grid::unit(c(3, mark_anno_width_mm), c("mm", "mm"))
       }
       ha_right <- do.call(
         ComplexHeatmap::rowAnnotation,
@@ -738,7 +830,7 @@ plot_phenotype_markers <- function(markers,
       )
     }
 
-    hm_col_fun <- .scaled_expr_col_fun_rdgy11(scale_clip)
+    hm_col_fun <- .scaled_expr_col_fun_from_colors(scale_clip, expr_colors)
 
     ct <- column_title %||% "Cell-type-specific phenotype marker genes"
 
@@ -884,10 +976,20 @@ plot_phenotype_markers <- function(markers,
     # leaving `at` (and the colour mapping) untouched is the
     # ComplexHeatmap-supported way to do this without re-encoding
     # the metadata.
+    #
+    # Convention (must match the rest of the package, including the
+    # Shiny app and downstream score-by-cell-type plots):
+    #   "Most Adverse"   (red,  #B2182B) -> "Most Phenotype +"
+    #   "Most Favorable" (blue, #2166AC) -> "Most Phenotype -"
+    # i.e. higher PhenoMapR z-scores = "Most Phenotype +" = red,
+    # lower z-scores = "Most Phenotype -" = blue. The labels vector
+    # below is paired position-by-position with `at`, so flipping
+    # the labels (NOT the `at` order or the `pal_group` fill order)
+    # is what gets the +/- assigned to the correct colours.
     lgd_group <- ComplexHeatmap::Legend(
       title = "Phenotype group",
       at = c("Most Favorable", "Other", "Most Adverse"),
-      labels = c("Most Phenotype +", "Other", "Most Phenotype -"),
+      labels = c("Most Phenotype -", "Other", "Most Phenotype +"),
       legend_gp = grid::gpar(
         fill = pal_group[c("Most Favorable", "Other", "Most Adverse")]
       )
@@ -913,7 +1015,16 @@ plot_phenotype_markers <- function(markers,
       show_annotation_legend = TRUE,
       annotation_legend_list = annotation_legend_list,
       merge_legends = TRUE,
-      padding = grid::unit(c(4, 4, 4, 50), "mm")
+      padding = grid::unit(
+        .phenomap_draw_padding_mm(
+          n_rows = hm_draw_n_rows,
+          marks_at = hm_draw_marks_at,
+          fontsize = mark_label_fontsize,
+          mark_anno_width_mm = hm_mark_anno_width_mm,
+          heatmap_type = heatmap_type
+        ),
+        "mm"
+      )
     )
     if (isTRUE(outline_marker_blocks) && length(decorate_pairs) > 0L) {
       # EcoTyper-style block outlines. Because we column_split on the
@@ -953,24 +1064,6 @@ plot_phenotype_markers <- function(markers,
   invisible(ht)
 }
 
-
-#' ColorBrewer diverging \code{RdGy} palette, 11 classes (standard order:
-#' low = red \ldots high = gray). Reversed when mapping so \strong{high} = red,
-#' \strong{low} = black.
-#'
-#' @noRd
-#' @keywords internal
-.rdgy11_brewer <- c(
-  "#67001F", "#B2182B", "#D6604D", "#F4A582", "#FDDBC7", "#FFFFFF",
-  "#E0E0E0", "#BABABA", "#878787", "#4D4D4D", "#1A1A1A"
-)
-
-#' @noRd
-#' @keywords internal
-.scaled_expr_col_fun_rdgy11 <- function(scale_clip) {
-  breaks <- seq(scale_clip[1], scale_clip[2], length.out = 11L)
-  circlize::colorRamp2(breaks, rev(.rdgy11_brewer))
-}
 
 #' Coerce \code{meta[[score_col]]} to a length-\code{nrow(meta)} numeric vector.
 #' Handles 1-column matrices (e.g. \code{scale()} bound into a data.frame).
@@ -1019,33 +1112,6 @@ plot_phenotype_markers <- function(markers,
   ok <- !is.na(meta_idx_hm) & meta_idx_hm >= 1L & meta_idx_hm <= length(scv)
   out[ok] <- scv[as.integer(meta_idx_hm[ok])]
   out
-}
-
-#' Diverging PhenoMapR score colors: blue (\eqn{< 0}), white at 0, red (\eqn{> 0}).
-#'
-#' Breakpoints use \code{smin} and \code{smax} supplied by the caller (typically
-#' the range of scores on heatmap columns). When the range crosses zero,
-#' breakpoints are \code{c(smin, 0, smax)}.
-#'
-#' @noRd
-#' @keywords internal
-.phenomap_score_col_fun <- function(smin, smax) {
-  if (!is.finite(smin) || !is.finite(smax) || smin == smax) {
-    smin <- -1
-    smax <- 1
-  }
-  if (smin < 0 && smax > 0) {
-    circlize::colorRamp2(
-      c(smin, 0, smax),
-      c("#2166AC", "#FFFFFF", "#B2182B")
-    )
-  } else if (smax <= 0) {
-    circlize::colorRamp2(c(smin, 0), c("#2166AC", "#FFFFFF"))
-  } else if (smin >= 0) {
-    circlize::colorRamp2(c(0, smax), c("#FFFFFF", "#B2182B"))
-  } else {
-    circlize::colorRamp2(c(smin, smax), c("#2166AC", "#B2182B"))
-  }
 }
 
 #' Column and row spans for white boxes around each cell-type-specific marker block.
@@ -1097,6 +1163,115 @@ plot_phenotype_markers <- function(markers,
     r2 = r2,
     stringsAsFactors = FALSE
   )
+}
+
+
+#' @keywords internal
+.lookup_mark_gene_celltypes <- function(genes, df) {
+  if (is.null(genes) || length(genes) == 0L || is.null(df) ||
+      !"cell_type" %in% names(df)) {
+    return(rep(NA_character_, length(genes)))
+  }
+  as.character(df$cell_type[match(genes, df$gene)])
+}
+
+
+#' Build `labels_gp` for ComplexHeatmap::anno_mark().
+#'
+#' When `color_by_celltype` is TRUE and `cell_types` is parallel to the
+#' labels, text is colored from `pal_celltype`; otherwise labels use
+#' `default_col`.
+#' @keywords internal
+.phenomap_mark_anno_width_mm <- function(labels,
+                                         fontsize = 7,
+                                         min_mm = 18,
+                                         max_mm = 44) {
+  if (is.null(labels) || length(labels) == 0L) {
+    return(min_mm)
+  }
+  nch <- max(nchar(as.character(labels)), na.rm = TRUE)
+  if (!is.finite(nch) || nch < 1L) {
+    return(min_mm)
+  }
+  mm_per_char <- 0.28 * (fontsize / 7)
+  w <- nch * mm_per_char + 5
+  max(min_mm, min(max_mm, w))
+}
+
+
+#' Default heatmap body height (mm) from row count.
+#' @keywords internal
+.phenomap_hm_height_mm <- function(n_rows, heatmap_type, n_splits = 1L) {
+  if (n_rows <= 0L) {
+    return(if (heatmap_type == "global") 42 else 58)
+  }
+  row_mm <- if (heatmap_type == "global") 3.2 else 3.8
+  h <- n_rows * row_mm
+  min_h <- if (heatmap_type == "global") 42 else 58
+  max(h, min_h)
+}
+
+
+#' Top/right/bottom/left draw() padding (mm) for anno_mark label headroom.
+#' Kept modest so draw() margins do not blow up the layout; prefer
+#' `heatmap_height` / knitr `fig.height` for tall matrices.
+#' @keywords internal
+.phenomap_draw_padding_mm <- function(n_rows,
+                                      marks_at,
+                                      fontsize = 7,
+                                      mark_anno_width_mm = 18,
+                                      heatmap_type = c("global", "cell_type_specific")) {
+  heatmap_type <- match.arg(heatmap_type)
+  top <- 6
+  right <- 50
+  bottom <- 6
+  left <- 4
+
+  if (identical(heatmap_type, "cell_type_specific")) {
+    top <- top + 2
+    bottom <- bottom + 2
+  }
+
+  if (length(marks_at) > 0L && n_rows > 0L) {
+    marks_at <- marks_at[marks_at >= 1L & marks_at <= n_rows]
+    if (length(marks_at) > 0L) {
+      if (any(marks_at <= 2L)) {
+        top <- top + 3
+      }
+      if (any(marks_at >= n_rows - 1L)) {
+        bottom <- bottom + 3
+      }
+    }
+  }
+
+  c(top, right, bottom, left)
+}
+
+
+#' Build `labels_gp` for ComplexHeatmap::anno_mark().
+#'
+#' When `color_by_celltype` is TRUE and `cell_types` is parallel to the
+#' labels, text is colored from `pal_celltype`; otherwise labels use
+#' `default_col`.
+#' @keywords internal
+.anno_mark_labels_gp <- function(cell_types,
+                                 color_by_celltype,
+                                 pal_celltype,
+                                 fontsize = 7,
+                                 default_col = "black") {
+  if (!isTRUE(color_by_celltype)) {
+    return(grid::gpar(fontsize = fontsize, col = default_col))
+  }
+  if (is.null(cell_types) || length(cell_types) == 0L) {
+    return(grid::gpar(fontsize = fontsize, col = default_col))
+  }
+  ct <- trimws(as.character(cell_types))
+  cols <- unname(pal_celltype[ct])
+  missing <- is.na(cols) | !nzchar(cols)
+  if (any(missing)) {
+    cols[missing] <- default_col
+  }
+  grid::gpar(fontsize = fontsize, col = cols)
 }
 
 

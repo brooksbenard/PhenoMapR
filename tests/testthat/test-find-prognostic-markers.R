@@ -405,6 +405,54 @@ test_that("find_phenotype_markers with invalid group labels returns empty marker
   expect_equal(nrow(out$favorable_markers), 0)
 })
 
+test_that("find_phenotype_markers accepts an in-memory Python anndata.AnnData", {
+  # Regression test for the user-reported error
+  #   "find_phenotype_markers failed: 'expression' must be a matrix, ..."
+  # Before the fix `process_expression_for_markers()` only handled
+  # matrix / Matrix / data.frame / Seurat / SCE -- so a Python
+  # AnnData (python.builtin.object) returned by reticulate fell off
+  # the end and triggered the catch-all stop(). The fix adds a
+  # python.builtin.object branch that calls .anndata_X_to_genes_cells()
+  # to pull /X back into R as a (genes x cells) Matrix.
+  skip_if_not_installed("reticulate")
+  skip_if_not_installed("Matrix")
+  ad <- tryCatch(reticulate::import("anndata", convert = FALSE),
+                 error = function(e) NULL)
+  skip_if(is.null(ad),
+          "Python anndata module not reachable through reticulate")
+
+  set.seed(11)
+  n_cells <- 30L; n_genes <- 25L
+  X <- matrix(pmax(0, rnorm(n_cells * n_genes, 1, 0.5)),
+              nrow = n_cells, ncol = n_genes)
+  scipy_sparse <- reticulate::import("scipy.sparse", convert = FALSE)
+  np <- reticulate::import("numpy", convert = FALSE)
+  pd <- reticulate::import("pandas", convert = FALSE)
+  Xpy <- scipy_sparse$csr_matrix(np$asarray(X, dtype = "float32"))
+  obs_idx <- paste0("Cell_", seq_len(n_cells))
+  var_idx <- paste0("GENE", seq_len(n_genes))
+  obs_df <- pd$DataFrame(list(
+    cell_type = rep(c("TypeA", "TypeB"), length.out = n_cells)
+  ), index = obs_idx)
+  var_df <- pd$DataFrame(list(), index = var_idx)
+  adata  <- ad$AnnData(X = Xpy, obs = obs_df, var = var_df)
+
+  groups <- rep(c("Most Adverse", "Most Favorable", "Other"),
+                length.out = n_cells)
+  out <- find_phenotype_markers(
+    adata,
+    group_labels = groups,
+    min_pct = 0.05,
+    logfc_threshold = 0.05,
+    p_adj_threshold = 0.5,
+    verbose = FALSE
+  )
+  expect_type(out, "list")
+  expect_named(out, c("adverse_markers", "favorable_markers"))
+  expect_s3_class(out$adverse_markers,   "data.frame")
+  expect_s3_class(out$favorable_markers, "data.frame")
+})
+
 test_that("find_phenotype_markers with Seurat object uses FindMarkers path", {
   skip_if_not_installed("Seurat")
   set.seed(42)

@@ -1255,7 +1255,42 @@ process_expression_for_markers <- function(expression,
     ))
   }
   # nocov end
-  stop("'expression' must be a matrix, Matrix, data.frame, Seurat, or SingleCellExperiment")
+  # nocov start - AnnData branch is exercised at runtime when reticulate
+  # users open a .h5ad outside the Shiny app's hdf5r-first reader.
+  if (inherits(expression, "python.builtin.object")) {
+    # AnnData (python.builtin.object). Mirror the SCE branch:
+    # pull X out of the AnnData via the same helper the score
+    # pipeline uses, so users who load a .h5ad through reticulate
+    # (or pass an in-memory anndata.AnnData object directly) can
+    # find markers without the previous "expression must be a
+    # matrix..." error. The Shiny app's own h5ad loader prefers
+    # hdf5r and returns a dgCMatrix instead, but we still want
+    # find_phenotype_markers() to handle the Python AnnData case
+    # for callers who pass one in directly from R.
+    if (!requireNamespace("reticulate", quietly = TRUE)) {
+      stop("reticulate package required for AnnData input")
+    }
+    mat <- .anndata_X_to_genes_cells(expression)
+    if (isTRUE(validate_axes)) {
+      mat <- validate_expression_axes_and_ids(mat, verbose = verbose)
+    }
+    if (!is.null(colnames(mat))) {
+      colnames(mat) <- sanitize_cell_ids_vec(colnames(mat))
+    }
+    if (!is.null(rownames(mat))) {
+      rownames(mat) <- as.character(rownames(mat))
+    }
+    return(list(
+      matrix = mat,
+      cell_names = colnames(mat),
+      gene_names = rownames(mat)
+    ))
+  }
+  # nocov end
+  stop(
+    "'expression' must be a matrix, Matrix, data.frame, Seurat, ",
+    "SingleCellExperiment, or AnnData (python.builtin.object)."
+  )
 }
 
 

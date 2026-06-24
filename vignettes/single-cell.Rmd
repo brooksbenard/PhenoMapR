@@ -10,6 +10,38 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+
+# When knit from inside the PhenoMapR source tree, load the in-tree
+# dev package instead of a stale system install (knitr spawns a fresh R
+# process, so an interactive devtools::load_all() does not carry over).
+.try_load_phenomapr_dev <- function(max_walk = 6L) {
+  start_dir <- tryCatch(
+    normalizePath(knitr::opts_knit$get("output.dir") %||% getwd(),
+                  mustWork = FALSE),
+    error = function(e) getwd()
+  )
+  if (is.null(start_dir) || !nzchar(start_dir)) start_dir <- getwd()
+  cur <- start_dir
+  for (i in seq_len(max_walk)) {
+    desc <- file.path(cur, "DESCRIPTION")
+    if (file.exists(desc)) {
+      pkg <- tryCatch(unname(read.dcf(desc, fields = "Package")[[1, 1]]),
+                      error = function(e) NA_character_)
+      if (identical(pkg, "PhenoMapR") &&
+          requireNamespace("pkgload", quietly = TRUE)) {
+        pkgload::load_all(cur, quiet = TRUE, helpers = FALSE,
+                          export_all = FALSE)
+        message("Loaded PhenoMapR (dev) from ", cur)
+        return(TRUE)
+      }
+    }
+    parent <- dirname(cur)
+    if (identical(parent, cur)) break
+    cur <- parent
+  }
+  FALSE
+}
+`%||%` <- function(x, y) if (is.null(x)) y else x
 ```
 
 ## Overview
@@ -22,7 +54,9 @@ We will use pre-processed expression and annotation files from TISCH2 for the CR
 
 ```{r load-data, fig.align='center'}
 suppressPackageStartupMessages({
-  library(PhenoMapR)
+  if (!isTRUE(.try_load_phenomapr_dev())) {
+    library(PhenoMapR)
+  }
   library(googledrive)
   library(ggplot2)
   library(ggpubr)
@@ -49,6 +83,11 @@ meta <- read.delim("PAAD_CRA001160_CellMetainfo_table.tsv", stringsAsFactors = F
          celltype_original = `Celltype (original)`)
 
 # visuals for cohort
+paad_vs_ctrl_clors <- c(
+  "Normal" = "#b35806",
+  "Tumor" = "#8073ac"
+)
+
 pal_cells <- PhenoMapR::get_celltype_palette(meta$celltype_original)
 
 malignant_colors <- c(
@@ -59,9 +98,21 @@ malignant_colors <- c(
 )
 
 # UMAPS for the cell type clustering
+# PDAC vs control
+umap_1 <- ggscatter(meta, 
+          x = "UMAP_1", 
+          y = "UMAP_2",
+          size = .5,
+          color = "Source",
+          palette = paad_vs_ctrl_clors,
+          legend = "right"
+) + guides(color = guide_legend(override.aes = list(size = 2))) +
+    labs(color = "Source") +
+  theme_void()
+
 
 # Broad cell group labels
-umap_1 <- ggscatter(meta, 
+umap_2 <- ggscatter(meta, 
           x = "UMAP_1", 
           y = "UMAP_2",
           size = .5,
@@ -73,7 +124,7 @@ umap_1 <- ggscatter(meta,
   theme_void()
 
 # Original cell type labels from the authors
-umap_2 <- ggscatter(meta,
+umap_3 <- ggscatter(meta,
           x = "UMAP_1", 
           y = "UMAP_2",
           size = .5,
@@ -81,8 +132,12 @@ umap_2 <- ggscatter(meta,
           palette = pal_cells,
           legend = "right"
 ) + guides(color = guide_legend(override.aes = list(size = 2), legend.spacing.x = unit(0.5, 'cm')))+
-  labs(color = "Cell Type") +
-  theme_void()
+  labs(color = "Cell Type", ) +
+  theme_void() +
+   theme(
+    legend.spacing.y = unit(0.1, "cm"),  # reduce vertical spacing
+    legend.key.height = unit(0.3, "cm")  # reduce key height
+  )
 
 
 # MALIGNANT PLOT 
@@ -153,7 +208,7 @@ meta$Patient <- factor(meta$Patient, levels = sample_order)
 p_num <- ggplot(meta, aes(x = Patient)) +
   # geom_bar(fill = "grey55", color = "white", linewidth = 0.2) +
     ggchicklet2::geom_chicklet_bar(
-                                   radius = grid::unit(1, "pt"), 
+                                   radius = grid::unit(.5, "pt"), 
                                    color = "white", linewidth = 0.2,
                                    fill = "grey55") +
   theme_pubclean(base_size = 8) +
@@ -171,12 +226,12 @@ left_plots <- (p_num / p_mal / p_cell) +
   plot_layout(heights = c(1, 1, 5), guides = "collect")
 
 # Right column with specific heights for UMAPs
-right_plots <- (umap_1 / umap_2) + 
-  plot_layout(heights = c(1, 1), guides = "collect")
+right_plots <- (umap_1 / umap_2 / umap_3) + 
+  plot_layout(heights = c(1, 1, 1), guides = "collect")
 
 # Combine
 (left_plots | right_plots) + 
-  plot_layout(widths = c(1, 0.75))
+  plot_layout(widths = c(1, 0.5))
 
 ```
 
@@ -224,6 +279,26 @@ ggpubr::ggscatter(df_scatter, x = "x", y = "y", color = "Cell_Type", palette = m
   scale_fill_manual(values = malignant_colors) +
     scale_x_continuous("PRECOG score") +
     scale_y_continuous("TCGA score") +
+    labs(title = "TCGA vs. PRECOG PhenoMapR scores by broad cell type") +
+    theme_pubr(base_size = 10) +
+    theme(legend.position = "right", legend.title = element_text(size = 12), legend.text = element_text(size = 10))
+
+```
+
+```{r scatter-tcga-precog-detailed, fig.align='center'}
+df_scatter <- data.frame(
+  x = meta[[score_precog_col]],
+  y = meta[[score_tcga_col]],
+  Cell_Type = factor(meta$celltype_original)
+)
+
+ggpubr::ggscatter(df_scatter, x = "x", y = "y", color = "Cell_Type", palette = pal_cells,
+    add = "reg.line", conf.int = TRUE, size = 0.5, alpha = 0.3) +
+    ggpubr::stat_cor(aes(color = Cell_Type), label.x.npc = "left", size = 3.5, show.legend = F) +
+  scale_color_manual(values = pal_cells) +
+  scale_fill_manual(values = pal_cells) +
+    scale_x_continuous("PRECOG score") +
+    scale_y_continuous("TCGA score") +
     labs(title = "TCGA vs. PRECOG PhenoMapR scores by cell type") +
     theme_pubr(base_size = 10) +
     theme(legend.position = "right", legend.title = element_text(size = 12), legend.text = element_text(size = 10))
@@ -235,7 +310,7 @@ As expected, **`PhenoMapR`** scores are strongly correlated between TCGA and PRE
 
 ## PhenoMapR score UMAP
 
-```{r PhenoMapR-UMAP, fig.height=3, fig.align='center'}
+```{r PhenoMapR-UMAP, fig.height=2.5, fig.align='center'}
 
 # PRECOG
 meta_ordered <- meta %>%
@@ -273,7 +348,7 @@ It seems like the most adversely scoring cells are enriched in several of the Du
 
 The qualitative assessment of PhenoMapR score enrichment across UMAP clusters nominated some cell types as potentially more associated with the phenotypic signature than others. Here, we plot the absolute PhenoMapR score (PRECOG and TCGA scores) across all cell types in the dataset.
 
-```{r score-distribution-boxplots, fig.align='center'}
+```{r score-distribution-boxplots, fig.align='center', fig.height=3.5, fig.width=5.5}
 med_precog <- setNames(
   tapply(meta[[score_precog_col]], meta$celltype_malignancy, median, na.rm = TRUE),
   levels(factor(meta$celltype_malignancy))
@@ -295,7 +370,10 @@ ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
   facet_wrap(~ Reference, ncol = 2) +
   scale_fill_manual(values = malignant_colors, name = "Cell Type (Broad)") +
   theme_pubr(base_size = 10) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right", strip.text = element_text(size = 12)) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right", 
+        strip.text = element_text(size = 12)) +
   labs(x = NULL, y = "PhenoMapR score", title = "Score distribution by reference and cell type")
 ```
 
@@ -305,7 +383,7 @@ ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
 
 To see if the **`PhenoMapR`** score assignment is enriched in more granular cell types, we use the original cell type labels provided by the authors (*Peng et al.* 2019).
 
-```{r score-distribution-celltype-original, fig.align='center'}
+```{r score-distribution-celltype-original, fig.align='center', fig.height=3.5, fig.width=7}
 med_precog <- setNames(
   tapply(meta[[score_precog_col]], meta$celltype_original, median, na.rm = TRUE),
   levels(factor(meta$celltype_original))
@@ -326,7 +404,7 @@ ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
                  outlier.fill = NULL,
                  outlier.color = NULL, outlier.shape = 21) +
   facet_wrap(~ Reference, ncol = 2) +
-  scale_fill_manual(values = pal_cells, name = "Cell Type (Original)") +
+  scale_fill_manual(values = pal_cells, name = "Cell Type") +
   theme_pubr(base_size = 10) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right", strip.text = element_text(size = 12)) +
   labs(x = NULL, y = "PhenoMapR score", title = "Score distribution by reference and cell type")
@@ -423,7 +501,7 @@ Indeed, tumor samples are significantly enriched for more adverse scores across 
 
 Cell type counts in the top 5% (Most Adverse) and bottom 5% (Most Favorable) of cells by PRECOG score.
 
-```{r celltype-in-extreme-percentiles, fig.align='center'}
+```{r celltype-in-extreme-percentiles, fig.align='center', fig.height=2, fig.width=4}
 q_lo <- quantile(meta[[score_precog_col]], 0.05, na.rm = TRUE)
 q_hi <- quantile(meta[[score_precog_col]], 0.95, na.rm = TRUE)
 pg_tmp <- ifelse(meta[[score_precog_col]] >= q_hi, "Most Adverse", ifelse(meta[[score_precog_col]] <= q_lo, "Most Favorable", NA))
@@ -444,21 +522,23 @@ ct_long <- rbind(
 ct_long$pg <- factor(ct_long$pg, levels = c("Most Favorable", "Most Adverse"))
 max_n <- max(abs(ct_long$n), 1)
 ggplot(ct_long, aes(x = Cell_type, y = n, fill = pg)) +
-  # geom_col() +
-  ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(1, "pt")) +
+  ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(0, "pt")) +
   coord_flip() +
   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
   scale_y_continuous(breaks = seq(-max_n, max_n, length.out = 5), labels = abs(seq(-max_n, max_n, length.out = 5))) +
   theme_pubr(base_size = 10) +
-  theme(axis.text.y = element_text(size = 9), legend.position = c(.8,.75)) +
-  labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell type abundance in adverse vs favorable extremes")
+  theme(
+  axis.text.y = element_text(size = 9),
+  legend.position = c(.8, .7),
+  plot.title = element_text(hjust = 0.5, size = 10)) +
+  labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Broad cell type abundance in \nadverse vs. favorable extremes")
 ```
 At a broad cell type level, PhenoMapR assigns the vast majority of the top 5% of adverse cells to the malignant compartment, however the immune, stromal, and other cell types do contain some of the most adversely scoring cells.
 
 
 We then use the original cell type annotations from the authors to provide a more refined understanding of the prognostic score assignment across cell types.
 
-```{r celltype-original-in-extreme-percentiles, fig.align='center'}
+```{r celltype-original-in-extreme-percentiles, fig.align='center', fig.height=3, fig.width=4}
   ct_orig_in_extreme <- meta[idx_extreme, ]
   ct_orig_in_extreme$pg <- pg_tmp[idx_extreme]
   ct_orig_counts <- as.data.frame(table(Cell_type_original = ct_orig_in_extreme$celltype_original, pg = ct_orig_in_extreme$pg))
@@ -475,14 +555,21 @@ We then use the original cell type annotations from the authors to provide a mor
   ct_orig_long$pg <- factor(ct_orig_long$pg, levels = c("Most Favorable", "Most Adverse"))
   max_n_orig <- max(abs(ct_orig_long$n), 1)
   print(ggplot(ct_orig_long, aes(x = Cell_type_original, y = n, fill = pg)) +
-    # geom_col() +
-        ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(1, "pt")) +
+
+        ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(0, "pt")) +
     coord_flip() +
     scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-    scale_y_continuous(breaks = seq(-max_n_orig, max_n_orig, length.out = 5), labels = abs(seq(-max_n_orig, max_n_orig, length.out = 5))) +
-  theme_pubr(base_size = 10) +
-    theme(axis.text.y = element_text(size = 9), legend.position = c(.8,.75)) +
-    labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell Type (original) abundance in adverse vs favorable extremes"))
+scale_y_continuous(
+  breaks = round(seq(-max_n_orig, max_n_orig, length.out = 5)),
+  labels = abs(round(seq(-max_n_orig, max_n_orig, length.out = 5)))
+) +
+theme_pubr(base_size = 10) +
+      theme(
+  axis.text.y = element_text(size = 9),
+  legend.position = c(.8, .75),
+  plot.title = element_text(hjust = 0.5, size = 10)
+) +
+    labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell Type abundance in adverse\nvs. favorable extremes"))
 
 ```
 Here, we see that the vase majority of the top 5th percentile of adverse PhenoMapR cells are from the Ductal type 2 cells, in line with the results of [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2). The majority of favorably scoring cells were Acinar and B cell populations. 
@@ -517,7 +604,7 @@ meta[[group_col]] <- groups[rownames(meta), group_col]
 
 After identifying marker genes for the adverse and favorable **`PhenoMapR`** populations, we take up to **10** positive markers per tail with **FDR < 0.05** and the **largest `avg_log2FC`** (same thresholds as the cell-type–specific heatmap). The helper **`plot_phenotype_markers()`** subsets the expression matrix to those genes and the ordered cells, then applies **row-wise `scale`** only to that submatrix. **ComplexHeatmap** shows favorable-marker rows, then adverse-marker rows, with **`anno_mark`** for the top five genes in each block.
 
-```{r heatmap-markers, fig.align='center', fig.width=12, fig.height=5}
+```{r heatmap-markers, fig.align='center', fig.width=12, fig.height=4}
 plot_phenotype_markers(
     markers = markers,
     expr_mat = expr_mat,
@@ -541,7 +628,7 @@ The `find_phenotype_markers()` function can also identify marker genes **for eac
 2) cell type, then
 3) phenotype score.
 
-For the heatmap, we take up to **20** positive markers per cell type and phenotype tail with the **largest `avg_log2FC`**, restricting to genes that are **FDR-significant** (`p_adj` from Benjamini–Hochberg `< 0.05`). Rows follow the same column order: **Most Favorable** (each cell type), **Other** cells, **Most Adverse** (each cell type). **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** draws row splits between blocks; **`anno_mark`** labels the **top five** genes (by log2FC) within each (phenotype tail × cell type) group, with **cell type** and **phenotype** strips on the left.
+For the heatmap, we take up to **20** positive markers per cell type and phenotype tail with the **largest `avg_log2FC`**, restricting to genes that are **FDR-significant** (`p_adj` from Benjamini–Hochberg `< 0.05`). Rows follow the same column order: **Most Favorable** (each cell type), **Other** cells, **Most Adverse** (each cell type). **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** draws row splits between blocks; **`anno_mark`** labels the **top five** genes (by log2FC) within each (phenotype tail × cell type) group, with **cell type** and **phenotype** strips on the left. Setting **`color_mark_labels_by_celltype = TRUE`** colors each labeled gene with its cell-type palette so markers are easier to read against the strips.
 
 ```{r celltype-specific-phenotype-markers, fig.width=15, fig.height=7}
 group_df <- data.frame(
@@ -575,12 +662,52 @@ plot_phenotype_markers(
   heatmap_type = "cell_type_specific",
   top_n_markers = 10L,
   n_mark_labels = 5L,
-  p_adj_threshold = 0.05
+  color_mark_labels_by_celltype = TRUE,
+  p_adj_threshold = 0.05, outline_marker_blocks = T
 )
 
 ```
 
+```{r celltype-specific-against-tail-phenotype-markers, fig.width=12, fig.height=6}
+group_df <- data.frame(
+  cell_id = meta$Cell,
+  phenotype_group = meta[[group_col]],
+  cell_type = meta$celltype_original,
+  stringsAsFactors = FALSE
+)
 
+markers_ct <- find_phenotype_markers(
+  expr_mat,
+  group_labels = group_df,
+  group_column = "phenotype_group",
+  cell_id_column = "cell_id",
+  cell_type_column = "cell_type",
+  marker_scope = "cell_type_specific",
+  celltype_contrast = "vs_opposite_tail",
+  pval_threshold = 0.05,
+  max_cells_per_ident = 5000L,
+  verbose = FALSE
+)
+
+plot_phenotype_markers(
+  markers = markers_ct,
+  expr_mat = expr_mat,
+  meta = meta,
+  cell_id_col = "Cell",
+  group_col = group_col,
+  score_col = score_precog_col,
+  celltype_col = "celltype_original",
+  celltype_palette = pal_cells,
+  heatmap_type = "cell_type_specific",
+  outline_marker_blocks = TRUE,
+  block_outline_color = "black",
+  top_n_markers = 5L,
+  n_mark_labels = 5L,
+  color_mark_labels_by_celltype = TRUE,
+  p_adj_threshold = 0.05,
+)
+
+```
 
 ## Dataset summary of PhenoMapR results
 
@@ -672,7 +799,7 @@ pb_df <- data.frame(
 )
 p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled, fill = .data$pb_score_scaled)) +
   # geom_col(width = 0.65) +
-  ggchicklet2::geom_chicklet(width = 0.65, radius = grid::unit(1.5, "pt")) +
+  ggchicklet2::geom_chicklet(width = 0.9, radius = grid::unit(1, "pt")) +
   scale_fill_gradient2(
     low = "#2166AC",
     mid = "#FFFFFF",
@@ -722,25 +849,12 @@ bar_long <- rbind(
   data.frame(sample = bar_stack$sample, pg = "Most Adverse", y_min = bar_stack$p_fav, y_max = bar_stack$p_fav + bar_stack$p_adv)
 )
 bar_long$pg <- factor(bar_long$pg, levels = c("Most Favorable", "Most Adverse"))
-# p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
-#   geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
-#     # ggchicklet2::geom_chicklet_bar(width = 0.65, radius = grid::unit(1.5, "pt")) +
-#   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-#   scale_x_continuous(
-#     breaks = seq_along(sample_lev),
-#     labels = sample_lev,
-#     limits = c(0.5, length(sample_lev) + 0.5),
-#     expand = c(0, 0)
-#   ) +
-#   scale_y_continuous(expand = c(0, 0)) +
-#   theme_minimal() +
-#   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
-#   labs(y = "Proportion\n(5th %)", title = NULL)
+
 p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
                                ymin = y_min, ymax = y_max,
                                xmin = as.numeric(sample) - 0.4,
                                xmax = as.numeric(sample) + 0.4)) +
-  ggchicklet2::geom_rrect(radius = grid::unit(1, "pt")) +
+  ggchicklet2::geom_rrect(radius = grid::unit(0, "pt")) +
   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), 
                     name = "Prognostic group") +
   scale_x_continuous(
@@ -757,7 +871,7 @@ p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
     axis.title.x = element_blank(),
     legend.position = "none"
   ) +
-  labs(y = "Proportion\n(5th %)", title = NULL)
+  labs(y = "Proportion\nof cells\n(in 5th %)", title = NULL)
 
 meta_plot_dots <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
 p_dots <- NULL
@@ -778,7 +892,7 @@ if (nrow(meta_plot_dots) > 0) {
   p_dots <- ggplot(counts, aes(x = x_num, y = cell_type, size = proportion, color = pg)) +
     geom_point(alpha = 0.85) +
     scale_color_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-    scale_size_continuous(range = c(0, 5), name = "Proportion") +
+    scale_size_continuous(range = c(0, 5), name = "Proportion of cell type\nper sample in\nprognostic groups") +
     scale_x_continuous(
       breaks = seq_along(sample_lev),
       labels = sample_lev,
@@ -786,7 +900,16 @@ if (nrow(meta_plot_dots) > 0) {
       expand = c(0, 0)
     ) +
     theme_minimal() +
-    theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
+    theme(panel.grid.major.y = element_line(color = "grey90"), 
+          axis.title = element_text(size = 10), 
+          axis.text.x = element_blank(), 
+          axis.ticks.x = element_blank(), 
+          legend.title = element_text(hjust = 0.5),
+          legend.position = "right") +
+    guides(
+  color = guide_legend(override.aes = list(size = 3)),
+  # size  = guide_legend(override.aes = list(size = c(2, 3, 4, 5, 6)))
+) +
     labs(x = NULL, y = "Cell type\n(broad)", title = NULL)
 
   if (!all(is.na(meta_plot_dots$cell_type_original))) {

@@ -545,6 +545,28 @@ table.dataTable thead th {
   margin-top: 0.15rem;
 }
 
+.phenomapr-hm-colors-details {
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #e3e8ee;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+.phenomapr-hm-colors-details > summary {
+  cursor: pointer;
+  color: #264653;
+  font-size: 0.92rem;
+  margin-bottom: 0.25rem;
+}
+.phenomapr-hm-colors-summary-hint {
+  color: #6c7a82;
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+.phenomapr-hm-colors-details .form-group {
+  margin-bottom: 0.45rem;
+}
+
 /* Data tab "Expression input" sub-section in the sidebar.
  * Tightens spacing around the "Use a tiny demo matrix instead"
  * actionLink and the matrix-diagnostics renderUI directly below it.
@@ -2337,4 +2359,87 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
   color: #94a3b8;
   margin-top: 0.5rem;
   font-style: italic;
+}
+
+/* ---- "About markers" collapsible card -----------------------------------
+ *
+ * The Markers tab's About card was previously a static markdown blob that
+ * permanently consumed ~30 % of the column height. Switching it to a
+ * <details> disclosure (collapsed by default) lets the marker tables and
+ * heatmap card own the default fold while still giving users a one-click
+ * refresher on the three contrast scopes.
+ *
+ * The <summary> is styled to mimic a `card_header` so users recognise it
+ * as a clickable header even though it now lives inside `card_body` (we
+ * had to demote the header to make room for native disclosure semantics).
+ */
+.phenomapr-about-markers-details {
+  margin: 0;
+}
+.phenomapr-about-markers-details > summary {
+  cursor: pointer;
+  list-style: revert;
+  padding: 0.55rem 0.85rem;
+  background-color: rgba(38, 70, 83, 0.04);
+  border-bottom: 1px solid transparent;
+  font-size: 0.95rem;
+  color: #264653;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 6px 6px 0 0;
+  user-select: none;
+  transition: background-color 0.18s ease;
+}
+.phenomapr-about-markers-details > summary:hover,
+.phenomapr-about-markers-details > summary:focus {
+  background-color: rgba(38, 70, 83, 0.09);
+  outline: none;
+}
+.phenomapr-about-markers-details[open] > summary {
+  border-bottom: 1px solid rgba(38, 70, 83, 0.12);
+  border-radius: 6px 6px 0 0;
+}
+/* Subtle "click to expand" caption, hidden once the panel is open so the
+ * summary doesn't read as a permanent instruction once it's already
+ * served its purpose. */
+.phenomapr-about-markers-summary-hint {
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: #6b7c8a;
+}
+.phenomapr-about-markers-details[open] .phenomapr-about-markers-summary-hint {
+  display: none;
+}
+/* Two-column layout: text left, schematic right. layout_columns() emits
+ * a CSS-grid wrapper -- we just bound the figure column's image and add
+ * breathing room around the content body. */
+.phenomapr-about-markers-details > .grid {
+  padding: 0.85rem 1rem 0.95rem;
+}
+.phenomapr-about-markers-text > p:first-child {
+  margin-top: 0;
+}
+.phenomapr-about-markers-text > p:last-child {
+  margin-bottom: 0;
+}
+.phenomapr-about-markers-figure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.phenomapr-about-markers-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+/* On narrow viewports (single-column stacked layout from layout_columns)
+ * keep the figure visually subordinate to the text rather than blowing
+ * up to the full container width. */
+@media (max-width: 768px) {
+  .phenomapr-about-markers-img {
+    max-width: 480px;
+  }
 }

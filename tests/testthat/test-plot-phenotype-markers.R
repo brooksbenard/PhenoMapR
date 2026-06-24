@@ -122,6 +122,67 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
   expect_s4_class(ht, "Heatmap")
 })
 
+test_that(".anno_mark_labels_gp colors labels from cell-type palette", {
+  pal <- c(T1 = "#111111", T2 = "#222222")
+  gp_off <- PhenoMapR:::.anno_mark_labels_gp(c("T1", "T2"), FALSE, pal)
+  expect_equal(gp_off$col, "black")
+  gp_on <- PhenoMapR:::.anno_mark_labels_gp(c("T1", "T2"), TRUE, pal)
+  expect_equal(unname(gp_on$col), c("#111111", "#222222"))
+})
+
+test_that("plot_phenotype_markers accepts color_mark_labels_by_celltype", {
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  genes <- paste0("G", 1:15)
+  cells <- paste0("C", 1:24)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells))),
+    length(genes),
+    length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 8),
+    score = rnorm(24),
+    celltype_original = rep(c("T1", "T2"), 12),
+    stringsAsFactors = FALSE
+  )
+
+  markers <- list(
+    adverse_markers = data.frame(
+      gene = c("G1", "G2"),
+      cell_type = c("T1", "T1"),
+      avg_log2FC = c(1.2, 1.0),
+      p_adj = c(0.01, 0.02),
+      stringsAsFactors = FALSE
+    ),
+    favorable_markers = data.frame(
+      gene = c("G3", "G4"),
+      cell_type = c("T2", "T2"),
+      avg_log2FC = c(1.1, 0.9),
+      p_adj = c(0.01, 0.03),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  ht <- plot_phenotype_markers(
+    markers = markers,
+    expr_mat = expr,
+    meta = meta,
+    group_col = "phenotype_group",
+    score_col = "score",
+    heatmap_type = "cell_type_specific",
+    top_n_markers = 5L,
+    n_mark_labels = 2L,
+    color_mark_labels_by_celltype = TRUE,
+    p_adj_threshold = 0.05,
+    draw = FALSE
+  )
+  expect_s4_class(ht, "Heatmap")
+})
+
 test_that("plot_phenotype_markers cell_type_specific accepts block_outline_color and lwd args", {
   skip_if_not_installed("ComplexHeatmap")
   skip_if_not_installed("circlize")
@@ -182,8 +243,31 @@ test_that("plot_phenotype_markers cell_type_specific accepts block_outline_color
   fmls <- formals(plot_phenotype_markers)
   expect_true("block_outline_color" %in% names(fmls))
   expect_true("block_outline_lwd"   %in% names(fmls))
+  expect_true("mark_label_fontsize" %in% names(fmls))
   expect_identical(eval(fmls$block_outline_color), "white")
   expect_equal(eval(fmls$block_outline_lwd), 1)
+  expect_equal(eval(fmls$mark_label_fontsize), 7)
+})
+
+test_that(".phenomap_draw_padding_mm adds headroom for edge marks", {
+  pad <- PhenoMapR:::.phenomap_draw_padding_mm(
+    n_rows = 20L,
+    marks_at = c(1L, 20L),
+    fontsize = 7,
+    mark_anno_width_mm = 24,
+    heatmap_type = "cell_type_specific"
+  )
+  expect_length(pad, 4L)
+  expect_gt(pad[1], 6)
+  expect_gt(pad[3], 6)
+})
+
+test_that(".phenomap_mark_anno_width_mm scales with label length", {
+  w_short <- PhenoMapR:::.phenomap_mark_anno_width_mm("GENE")
+  w_long <- PhenoMapR:::.phenomap_mark_anno_width_mm(
+    paste(rep("A", 50), collapse = "")
+  )
+  expect_gt(w_long, w_short)
 })
 
 test_that("plot_phenotype_markers global mode runs with celltype_col = NULL (no cell-type strip)", {
@@ -446,7 +530,12 @@ test_that("plot_phenotype_markers legend uses Most Phenotype +/- labels", {
   # "Most Adverse" (so every pipeline that pattern-matches on those
   # exact strings keeps working). We assert the source of
   # plot_phenotype_markers builds a Legend whose `at` keeps the
-  # data values and whose `labels` uses the new "+/-" wording.
+  # data values and whose `labels` uses the new "+/-" wording, with
+  # the directional convention enforced by the rest of the package:
+  #   "Most Adverse"   (red,  #B2182B) -> "Most Phenotype +"
+  #   "Most Favorable" (blue, #2166AC) -> "Most Phenotype -"
+  # so the labels vector reads "Most Phenotype -", "Other",
+  # "Most Phenotype +" (paired position-by-position with `at`).
   # Introspect the installed function body rather than the on-disk
   # R/*.R file: the latter is not shipped in the installed package
   # (only the compiled .rdb/.rdx are) and the dev fallback path is
@@ -460,7 +549,7 @@ test_that("plot_phenotype_markers legend uses Most Phenotype +/- labels", {
     paste0(
       'at\\s*=\\s*c\\(\\s*"Most Favorable",\\s*"Other",\\s*"Most Adverse"\\s*\\)',
       '[\\s\\S]*?',
-      'labels\\s*=\\s*c\\(\\s*"Most Phenotype \\+",\\s*"Other",\\s*"Most Phenotype -"\\s*\\)'
+      'labels\\s*=\\s*c\\(\\s*"Most Phenotype -",\\s*"Other",\\s*"Most Phenotype \\+"\\s*\\)'
     ),
     perl = TRUE
   )

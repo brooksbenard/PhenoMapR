@@ -322,37 +322,44 @@ summarize_expression_object <- function(obj) {
 
 .read_h5ad <- function(path) {
   # Two-stage strategy:
-  #   1) PREFER the Python anndata route (via reticulate). It returns
-  #      a fully-fledged AnnData object that downstream PhenoMapR
-  #      helpers (process_anndata, .anndata_X_to_genes_cells, the
-  #      obsm UMAP detection, etc.) consume directly. This is the
-  #      richest path -- preserves obsm, layers, sparse layouts, etc.
-  #   2) FALL BACK to a pure-R hdf5r read when reticulate / Python's
-  #      anndata is not available. h5ad files are plain HDF5, so we
-  #      can pull the X matrix + obs / var index columns ourselves
-  #      and return a Matrix / matrix with HUGO-style rownames and
-  #      cell-id colnames -- that flows straight into the matrix
-  #      path that the rest of the app already handles. This means
-  #      users on a Python-less workstation can still open .h5ad
-  #      files (no more "Upload failed. Could not import the Python
-  #      `anndata` module" errors), they just lose the obsm /
-  #      multi-layer extras unique to the Python AnnData route.
+  #   1) PREFER the pure-R hdf5r route. h5ad files are plain HDF5,
+  #      so hdf5r can pull the X matrix and the obs / var index
+  #      columns out itself and return a (genes x cells) dgCMatrix
+  #      with HUGO-style rownames and cell-id colnames, plus an
+  #      attached `phenomapr_obs` data.frame (read out of /obs via
+  #      hdf5r as well). This flows straight into the matrix path
+  #      the rest of the app already handles AND keeps cell-level
+  #      metadata available without ever touching Python -- which
+  #      is what most users actually want (no reticulate / Python
+  #      install, no "Could not import anndata" errors, no
+  #      "find_phenotype_markers failed: 'expression' must be a
+  #      matrix" downstream because the markers path doesn't accept
+  #      python.builtin.object directly).
+  #   2) FALL BACK to the Python anndata route (via reticulate)
+  #      only when hdf5r is NOT installed. Returns a fully-fledged
+  #      AnnData object that the AnnData-aware helpers
+  #      (process_anndata, .anndata_X_to_genes_cells, the obsm UMAP
+  #      detection, etc.) consume. Slightly richer (obsm /
+  #      additional layers) but requires a Python toolchain.
+  if (requireNamespace("hdf5r", quietly = TRUE)) {
+    return(.read_h5ad_hdf5r(path))
+  }
   if (requireNamespace("reticulate", quietly = TRUE)) {
     ad <- tryCatch(reticulate::import("anndata", convert = FALSE),
                    error = function(e) NULL)
     if (!is.null(ad)) {
       return(tryCatch(ad$read_h5ad(path),
                       error = function(e) {
-                        warning(
-                          "Python anndata.read_h5ad failed (",
+                        stop(
+                          "Reading .h5ad via Python anndata failed (",
                           conditionMessage(e),
-                          "); falling back to hdf5r-only read."
+                          "). Install the `hdf5r` R package for a ",
+                          "Python-free reader: install.packages(\"hdf5r\")."
                         )
-                        .read_h5ad_hdf5r(path)
                       }))
     }
   }
-  .read_h5ad_hdf5r(path)
+  .read_h5ad_hdf5r(path)  # triggers a clean "install hdf5r" error.
 }
 
 # Python-free h5ad reader. Pulls the (cells x genes) X matrix out of
@@ -366,10 +373,8 @@ summarize_expression_object <- function(obj) {
 .read_h5ad_hdf5r <- function(path) {
   if (!requireNamespace("hdf5r", quietly = TRUE)) {
     stop(
-      "Reading .h5ad without Python requires the `hdf5r` package. ",
-      "Install with: install.packages(\"hdf5r\"). ",
-      "Alternatively install Python `anndata` (reticulate::py_install('anndata')) ",
-      "for the full AnnData feature set."
+      "Reading .h5ad files requires the `hdf5r` R package. ",
+      "Install with: install.packages(\"hdf5r\")."
     )
   }
   if (!requireNamespace("Matrix", quietly = TRUE)) {
@@ -383,11 +388,30 @@ summarize_expression_object <- function(obj) {
   }
   X_node <- h5[["X"]]
 
-  # ---- 1) Read X (cells x genes per AnnData convention) -----------------
-  X_cells_x_genes <- if (inherits(X_node, "H5Group")) {
-    # Sparse layout. AnnData stores both CSR (encoding-type = "csr_matrix",
-    # shape = c(n_obs, n_vars)) and CSC (encoding-type = "csc_matrix").
-    # We read data/indices/indptr/shape and reconstruct.
+  # ---- 1) Read X and build a genes x cells matrix directly ------------
+  #
+  # We always end up wanting a (n_vars x n_obs) = (genes x cells)
+  # matrix to match PhenoMapR's convention. AnnData stores X on disk
+  # as (n_obs x n_vars), in one of three layouts:
+  #
+  #   * CSR (encoding-type = "csr_matrix", default for sparse):
+  #       indices are column indices into n_vars,
+  #       indptr  partitions rows of n_obs.
+  #     The same data/indices/indptr arrays interpreted as a CSC of the
+  #     TRANSPOSED matrix give us a genes x cells dgCMatrix directly,
+  #     with no triplet/CsparseMatrix intermediate. This is the same
+  #     CSR-as-CSC-of-transpose trick used in
+  #     .anndata_X_to_genes_cells() and avoids the ~3x peak-RAM blow-up
+  #     of the previous repr = "T" -> CsparseMatrix path (which was
+  #     blowing past R's default 16 GB limit for a 2.6 GB h5ad).
+  #
+  #   * CSC (encoding-type = "csc_matrix"): build the (n_obs x n_vars)
+  #     dgCMatrix as-is and Matrix::t() it. The transpose is O(nnz)
+  #     and doesn't need a triplet intermediate.
+  #
+  #   * Dense H5D dataset: hdf5r reads it as a regular matrix in
+  #     (n_obs, n_vars) orientation; t() to get genes x cells.
+  X_genes_x_cells <- if (inherits(X_node, "H5Group")) {
     data    <- X_node[["data"]]$read()
     indices <- as.integer(X_node[["indices"]]$read())
     indptr  <- as.integer(X_node[["indptr"]]$read())
@@ -405,33 +429,34 @@ summarize_expression_object <- function(obj) {
     if (is.null(shape) || length(shape) != 2L) {
       stop("h5ad sparse /X has no readable `shape` attribute.")
     }
-    if (identical(as.character(enc), "csr_matrix") || is.na(enc) ||
-        is.null(enc)) {
-      # CSR with dims (n_obs, n_vars). Build directly via i/p indexing
-      # in CSR-friendly way: convert to dgCMatrix by transposing.
-      m_csr <- Matrix::sparseMatrix(
-        j = indices + 1L, p = indptr, x = data,
-        dims = c(shape[1L], shape[2L]),
-        index1 = TRUE, repr = "T"
-      )
-      methods::as(m_csr, "CsparseMatrix")
-    } else {
-      # CSC with dims (n_obs, n_vars). indices index into rows (cells),
-      # indptr partitions columns (genes). We build this and transpose
-      # back to the (cells x genes) orientation we promise above.
+    if (identical(as.character(enc), "csc_matrix")) {
+      # CSC of (n_obs x n_vars). Build as cells x genes, then transpose
+      # to genes x cells. dgCMatrix transpose is cheap (O(nnz)).
       m_csc <- Matrix::sparseMatrix(
         i = indices + 1L, p = indptr, x = data,
         dims = c(shape[1L], shape[2L]),
         index1 = TRUE
       )
-      m_csc
+      Matrix::t(m_csc)
+    } else {
+      # CSR of (n_obs x n_vars) -- same arrays are CSC of the
+      # transposed (n_vars x n_obs) matrix, which is exactly what we
+      # want for genes x cells. Treat unspecified encoding the same
+      # way (CSR is AnnData's default).
+      Matrix::sparseMatrix(
+        i = indices + 1L,        # column indices in the original CSR
+                                 #   == row indices in the CSC of transpose
+        p = indptr,
+        x = data,
+        dims = c(shape[2L], shape[1L]),  # n_vars x n_obs = genes x cells
+        index1 = TRUE
+      )
     }
   } else {
-    # Dense layout: H5D dataset. AnnData writes (n_obs, n_vars) as
-    # rows x cols on disk; hdf5r returns it in that same orientation.
+    # Dense H5D dataset in (n_obs, n_vars) orientation.
     arr <- X_node$read()
     if (!is.matrix(arr)) arr <- as.matrix(arr)
-    arr
+    t(arr)
   }
 
   # ---- 2) Extract gene names from /var --------------------------------
@@ -453,19 +478,167 @@ summarize_expression_object <- function(obj) {
   var_names <- read_index("var")
   obs_names <- read_index("obs")
 
-  if (!is.null(var_names) && length(var_names) == ncol(X_cells_x_genes)) {
-    colnames(X_cells_x_genes) <- var_names
+  # X_genes_x_cells is already in (n_vars x n_obs) = genes x cells
+  # orientation -- so var_names go onto rows, obs_names onto columns.
+  if (!is.null(var_names) && length(var_names) == nrow(X_genes_x_cells)) {
+    rownames(X_genes_x_cells) <- var_names
   }
-  if (!is.null(obs_names) && length(obs_names) == nrow(X_cells_x_genes)) {
-    rownames(X_cells_x_genes) <- obs_names
+  if (!is.null(obs_names) && length(obs_names) == ncol(X_genes_x_cells)) {
+    colnames(X_genes_x_cells) <- obs_names
   }
 
-  # ---- 3) Transpose to genes x cells (PhenoMapR convention) -----------
-  if (inherits(X_cells_x_genes, "Matrix")) {
-    Matrix::t(X_cells_x_genes)
-  } else {
-    t(X_cells_x_genes)
+  # ---- 3) Read /obs columns (cell-level metadata) ---------------------
+  # Pull obs out via hdf5r so users get the AnnData metadata without
+  # ever touching Python. Quietly skip on any failure -- the matrix
+  # itself is the load-bearing return value, metadata is a bonus.
+  obs_df <- tryCatch(
+    .read_h5ad_obs_hdf5r(h5, expected_n = ncol(X_genes_x_cells)),
+    error = function(e) NULL
+  )
+  if (!is.null(obs_df) && nrow(obs_df) == ncol(X_genes_x_cells)) {
+    # Always replace the synthetic 1:N rownames `as.data.frame()`
+    # auto-generates with the real cell IDs from /obs/_index, so
+    # downstream extract_object_metadata() can populate `.cell_id`
+    # correctly.
+    if (!is.null(obs_names) && length(obs_names) == nrow(obs_df)) {
+      rownames(obs_df) <- obs_names
+    }
   }
+
+  # Stash the obs data.frame on the returned matrix so
+  # extract_object_metadata() can surface it back to the Shiny app
+  # without re-opening the .h5ad file. attr<- works on both regular
+  # matrices and dgCMatrix (it attaches via the S4 slot, but Matrix's
+  # print/operator methods don't choke on the extra attribute).
+  if (!is.null(obs_df)) {
+    attr(X_genes_x_cells, "phenomapr_obs") <- obs_df
+  }
+
+  # ---- 4) Read /obsm entries (cell-level embeddings) ------------------
+  # When we switched the default loader to hdf5r (Python-free), we
+  # stopped going through the Python AnnData object that previously
+  # provided list_available_embeddings()/extract_embedding() with live
+  # access to obsm["X_umap"], obsm["spatial"], obsm["segmentation"],
+  # etc. Without this step the Visualization tab would show an empty
+  # Reduction dropdown for every h5ad upload -- a silent regression
+  # that lost UMAP / spatial / segmentation views for users.
+  #
+  # We pre-extract every 2D obsm array into a named list and stash it
+  # as the `phenomapr_obsm` attribute. list_available_embeddings()
+  # surfaces those keys for plain matrices, and extract_embedding()
+  # round-trips the corresponding cells x 2 matrix back as a tidy
+  # data.frame for plotting. Quietly skip on any failure -- losing an
+  # obsm entry should never break the matrix itself.
+  obsm_list <- tryCatch(
+    .read_h5ad_obsm_hdf5r(h5, expected_n = ncol(X_genes_x_cells),
+                          obs_names = obs_names),
+    error = function(e) NULL
+  )
+  if (!is.null(obsm_list) && length(obsm_list)) {
+    attr(X_genes_x_cells, "phenomapr_obsm") <- obsm_list
+  }
+
+  X_genes_x_cells
+}
+
+# Pure-R reader for /obsm in an open hdf5r::H5File. Returns a named
+# list of (n_obs x k) numeric matrices for every entry under /obsm
+# whose second dimension is at least 2 (we only need 2D embeddings;
+# higher-rank arrays like obsm["X_pca"] of width 50 also pass through
+# with their full width, leaving the first two columns to be picked up
+# by extract_embedding()). Rownames on each matrix are populated from
+# /obs/_index when available so cell IDs round-trip through the
+# Visualization tab. Quietly returns NULL when /obsm is missing or
+# unreadable so the matrix path keeps working in stripped-down h5ads.
+.read_h5ad_obsm_hdf5r <- function(h5, expected_n, obs_names = NULL) {
+  if (!"obsm" %in% names(h5)) return(NULL)
+  grp <- h5[["obsm"]]
+  if (!inherits(grp, "H5Group")) return(NULL)
+  keys <- names(grp)
+  if (!length(keys)) return(NULL)
+  out <- list()
+  for (k in keys) {
+    arr <- tryCatch(grp[[k]]$read(), error = function(e) NULL)
+    if (is.null(arr)) next
+    if (!is.numeric(arr) && !is.integer(arr)) next
+    if (!is.matrix(arr)) {
+      # 1D obsm entries (rare but legal) aren't useful as 2D embeddings.
+      arr <- tryCatch(as.matrix(arr), error = function(e) NULL)
+      if (is.null(arr)) next
+    }
+    # AnnData stores obsm as (n_obs, k); hdf5r reads HDF5 row-major
+    # arrays back as transposed, so we end up with a (k, n_obs)
+    # matrix. Detect-and-flip rather than blindly transposing so we
+    # don't break any writer that already lays its arrays out the
+    # R-friendly way.
+    if (nrow(arr) != expected_n && ncol(arr) == expected_n) {
+      arr <- t(arr)
+    }
+    if (nrow(arr) != expected_n || ncol(arr) < 2L) next
+    if (!is.null(obs_names) && length(obs_names) == nrow(arr)) {
+      rownames(arr) <- obs_names
+    }
+    if (is.null(colnames(arr)) || !length(colnames(arr))) {
+      colnames(arr) <- paste0(k, "_", seq_len(ncol(arr)))
+    }
+    out[[k]] <- arr
+  }
+  if (!length(out)) NULL else out
+}
+
+# Pure-R reader for /obs in an open hdf5r::H5File. Walks every column
+# entry under /obs (excluding _index / index, which we already use for
+# rownames) and converts it into a data.frame column. AnnData v0.8+
+# encodes most columns as plain HDF5 datasets, but categorical columns
+# arrive as a sub-group with /categories + /codes. We handle both.
+.read_h5ad_obs_hdf5r <- function(h5, expected_n) {
+  if (!"obs" %in% names(h5)) return(NULL)
+  grp <- h5[["obs"]]
+  if (!inherits(grp, "H5Group")) return(NULL)
+
+  # Skip the index dataset(s) used elsewhere for rownames.
+  idx_attr <- tryCatch(hdf5r::h5attr(grp, "_index"),
+                       error = function(e) NULL)
+  skip <- unique(c("_index", "index", idx_attr))
+  cols <- setdiff(names(grp), skip)
+  if (!length(cols)) return(NULL)
+
+  decode_col <- function(name) {
+    node <- grp[[name]]
+    if (inherits(node, "H5Group")) {
+      # Categorical: AnnData stores `categories` (the levels) and
+      # `codes` (0-based integer indices into categories, with -1
+      # meaning NA). Older / non-anndataR writers also use a
+      # `values` dataset for the integer codes.
+      if (all(c("categories", "codes") %in% names(node))) {
+        cats  <- as.character(node[["categories"]]$read())
+        codes <- as.integer(node[["codes"]]$read())
+        x <- ifelse(codes < 0L, NA_character_, cats[codes + 1L])
+        return(factor(x, levels = cats))
+      }
+      return(NULL)
+    }
+    if (inherits(node, "H5D")) {
+      v <- tryCatch(node$read(), error = function(e) NULL)
+      if (is.null(v)) return(NULL)
+      # hdf5r returns variable-length strings as a list-of-character
+      # in some encodings; collapse to a plain character vector.
+      if (is.list(v) && all(vapply(v, is.character, logical(1)))) {
+        v <- vapply(v, function(z) if (length(z)) z[[1L]] else NA_character_,
+                    character(1))
+      }
+      return(v)
+    }
+    NULL
+  }
+
+  parts <- lapply(cols, decode_col)
+  names(parts) <- cols
+  parts <- parts[vapply(parts,
+                        function(v) !is.null(v) && length(v) == expected_n,
+                        logical(1))]
+  if (!length(parts)) return(NULL)
+  as.data.frame(parts, stringsAsFactors = FALSE)
 }
 
 # Cell metadata parser (optional). Returns data.frame with cell IDs in 1st col
@@ -520,6 +693,23 @@ extract_object_metadata <- function(obj) {
     if (!requireNamespace("SummarizedExperiment", quietly = TRUE)) return(NULL)
     md <- as.data.frame(SummarizedExperiment::colData(obj))
     md$.cell_id <- colnames(obj)
+    return(md)
+  }
+  # Matrix / dgCMatrix / data.frame returned by .read_h5ad_hdf5r() and
+  # similar HDF5-driven loaders carry the AnnData /obs frame on a
+  # `phenomapr_obs` attribute. Surface it as the cell-metadata table so
+  # users get the exact same column set they would have gotten via the
+  # Python reticulate/anndata path -- without needing Python.
+  obs_attr <- attr(obj, "phenomapr_obs")
+  if (is.data.frame(obs_attr) && nrow(obs_attr) > 0L) {
+    md <- obs_attr
+    if (is.null(rownames(md)) || any(is.na(rownames(md)))) {
+      cn <- if (is.null(colnames(obj))) NULL else colnames(obj)
+      if (!is.null(cn) && length(cn) == nrow(md)) rownames(md) <- cn
+    }
+    md$.cell_id <- rownames(md) %||% (
+      if (!is.null(colnames(obj))) colnames(obj) else NULL
+    )
     return(md)
   }
   if (inherits(obj, "python.builtin.object")) {
@@ -747,14 +937,51 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
 
 # Return the names of available 2D embeddings on a single-cell object.
 # Returns a character vector ("umap", "tsne", "pca", ...) or character(0).
+# obsm key conventions for AnnData cell-segmentation centroids. The first
+# match wins. We accept the bare name plus the Scanpy / Squidpy "X_*"
+# variants so users don't have to rename their AnnData obsm just to get
+# the segmentation embedding into the dropdown.
+.anndata_segmentation_obsm_keys <- c(
+  "segmentation",
+  "X_segmentation",
+  "X_segmentation_centroid",
+  "segmentation_centroid",
+  "segmentation_centroids"
+)
+
+# True iff the Seurat image carries a non-empty Seurat 5 Boundaries() set
+# (Xenium / CosMx / MERSCOPE / Visium HD FOV objects). VisiumV1 spot
+# grids and any pre-Seurat-5 image classes return character(0), so this
+# test cleanly distinguishes "real cell-segmentation" from the legacy
+# spot-lattice we already surface as the "spatial" reduction.
+.has_segmentation_boundaries <- function(img) {
+  b <- tryCatch(Seurat::Boundaries(img), error = function(e) character(0))
+  length(b) > 0L
+}
+
 list_available_embeddings <- function(obj) {
   if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
     nms <- names(obj@reductions)
+    imgs <- methods::slot(obj, "images") %||% list()
     # Surface tissue / spot coordinates from spatial Seurat objects (Visium
     # etc.) as a synthetic "spatial" reduction so the Visualization tab can
     # overlay PhenoMapR scores on the tissue without any extra UI plumbing.
-    if (length(methods::slot(obj, "images") %||% list()) > 0L) {
+    if (length(imgs) > 0L) {
       nms <- c(nms, "spatial")
+      # Add a sibling "segmentation" reduction whenever any image slot
+      # carries cell-level segmentation boundaries (Seurat 5 FOV: Xenium,
+      # CosMx, MERSCOPE, Visium HD). We keep "spatial" and "segmentation"
+      # as separate dropdown entries because they answer different
+      # questions: "spatial" plots whatever the upstream pipeline calls
+      # the canonical spot/cell xy (often the spot grid or registered
+      # centroid) while "segmentation" plots the cell-segmentation
+      # centroids directly out of @boundaries$centroids -- this is the
+      # only embedding that lines up 1:1 with the segmented cells in the
+      # tissue image, so it's the right view for inspecting per-cell
+      # phenotype scores in their morphological context.
+      if (any(vapply(imgs, .has_segmentation_boundaries, logical(1L)))) {
+        nms <- c(nms, "segmentation")
+      }
     }
     return(nms %||% character(0))
   }
@@ -774,15 +1001,39 @@ list_available_embeddings <- function(obj) {
   if (inherits(obj, "python.builtin.object")) {
     keys <- tryCatch(PhenoMapR:::.anndata_obsm_keys(obj),
                      error = function(e) character(0))
-    # AnnData spatial coordinates conventionally live in obsm["spatial"];
-    # if present, expose them under the same "spatial" label as Seurat /
-    # SpatialExperiment so the UI is consistent across object kinds.
-    if ("spatial" %in% keys) {
-      keys <- unique(c(setdiff(keys, "spatial"), "spatial"))
+    return(.collapse_anndata_embedding_keys(keys))
+  }
+  # Plain matrix / Matrix / dgCMatrix: typically the result of an h5ad
+  # loaded via .read_h5ad_hdf5r(). The obsm entries live on the
+  # `phenomapr_obsm` attribute -- expose them with the same key
+  # transformations as the live-AnnData branch above, so a "spatial"
+  # entry stays "spatial" and "X_segmentation" / "X_segmentation_centroid"
+  # collapse to a single "segmentation" choice.
+  if (is.matrix(obj) || inherits(obj, "Matrix")) {
+    obsm_attr <- attr(obj, "phenomapr_obsm")
+    if (is.list(obsm_attr) && length(obsm_attr)) {
+      return(.collapse_anndata_embedding_keys(names(obsm_attr)))
     }
-    return(keys)
   }
   character(0)
+}
+
+# Both the live-AnnData branch and the hdf5r-loaded-matrix branch want
+# the same dropdown-friendly transforms applied to the raw obsm keys:
+# bring "spatial" to the end of the list, and collapse the various
+# "X_segmentation" variants into a single "segmentation" entry. Pulled
+# out into a helper so both branches stay in lock-step.
+.collapse_anndata_embedding_keys <- function(keys) {
+  if (!length(keys)) return(character(0))
+  if ("spatial" %in% keys) {
+    keys <- unique(c(setdiff(keys, "spatial"), "spatial"))
+  }
+  seg_hit <- intersect(.anndata_segmentation_obsm_keys, keys)
+  if (length(seg_hit)) {
+    keys <- unique(c(setdiff(keys, .anndata_segmentation_obsm_keys),
+                     "segmentation"))
+  }
+  keys
 }
 
 # Pull a 2D embedding off of obj. Returns a data.frame with columns
@@ -798,9 +1049,77 @@ list_available_embeddings <- function(obj) {
 extract_embedding <- function(obj, name) {
   emb <- NULL
   is_spatial <- identical(name, "spatial")
+  # Treat "segmentation" as a sibling spatial-style embedding: same
+  # plotting frame (tissue coords, fixed aspect ratio, reversed Y), same
+  # per-section sample tagging. The only difference is *which* per-cell
+  # xy table we read off the object.
+  is_segmentation <- identical(name, "segmentation")
   sample_vec <- NULL   # length = nrow(emb), labels each spot's section
   if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
-    if (is_spatial) {
+    if (is_segmentation) {
+      # Walk every image slot and harvest per-cell centroids straight
+      # out of @boundaries$centroids (Xenium / CosMx / MERSCOPE) or the
+      # `centroids` boundary on Visium HD FOV objects. We use
+      # `which = "centroids"` rather than `which = "segmentation"`
+      # because the latter returns polygon vertices (one row per
+      # vertex per cell) and we want one row per cell. If a particular
+      # image only has the polygon boundary, we collapse polygons to
+      # their per-cell median coordinate so the dropdown still
+      # produces a usable per-cell embedding.
+      imgs <- methods::slot(obj, "images") %||% list()
+      img_names <- names(imgs)
+      if (is.null(img_names) || any(!nzchar(img_names))) {
+        img_names <- ifelse(nzchar(img_names %||% ""),
+                            img_names,
+                            paste0("image_", seq_along(imgs)))
+      }
+      parts <- lapply(seq_along(imgs), function(i) {
+        img <- imgs[[i]]
+        if (!.has_segmentation_boundaries(img)) return(NULL)
+        bnames <- tryCatch(Seurat::Boundaries(img), error = function(e) character(0))
+        coords <- NULL
+        if ("centroids" %in% bnames) {
+          coords <- tryCatch(
+            Seurat::GetTissueCoordinates(obj, image = img_names[i],
+                                          which = "centroids"),
+            error = function(e) NULL
+          )
+        }
+        if (is.null(coords) && length(bnames)) {
+          # Fall back to polygon segmentation: median xy per cell so we
+          # still get a per-cell point cloud for the dropdown.
+          poly <- tryCatch(
+            Seurat::GetTissueCoordinates(obj, image = img_names[i],
+                                          which = bnames[1L]),
+            error = function(e) NULL
+          )
+          if (!is.null(poly) && all(c("x", "y", "cell") %in% colnames(poly))) {
+            coords <- stats::aggregate(
+              cbind(x = poly$x, y = poly$y) ~ cell, data = poly,
+              FUN = function(z) stats::median(as.numeric(z))
+            )
+            coords <- data.frame(
+              x    = as.numeric(coords$x),
+              y    = as.numeric(coords$y),
+              cell = as.character(coords$cell),
+              stringsAsFactors = FALSE
+            )
+          }
+        }
+        if (is.null(coords)) return(NULL)
+        if (!all(c("x", "y") %in% colnames(coords))) return(NULL)
+        m <- as.matrix(coords[, c("x", "y"), drop = FALSE])
+        if ("cell" %in% colnames(coords)) {
+          rownames(m) <- as.character(coords$cell)
+        }
+        list(emb = m, sample = rep(img_names[i], nrow(m)))
+      })
+      parts <- parts[!vapply(parts, is.null, logical(1L))]
+      if (length(parts)) {
+        emb <- do.call(rbind, lapply(parts, `[[`, "emb"))
+        sample_vec <- unlist(lapply(parts, `[[`, "sample"), use.names = FALSE)
+      }
+    } else if (is_spatial) {
       # Visium / Slide-seq Seurat objects store one entry per tissue
       # section in @images, each carrying its own coords frame. We stack
       # ALL of them and tag each spot with its image name so the UI can
@@ -864,18 +1183,65 @@ extract_embedding <- function(obj, name) {
       emb <- SingleCellExperiment::reducedDim(obj, name)
     }
   } else if (inherits(obj, "python.builtin.object")) {
-    emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, name),
-                    error = function(e) NULL)
-    if (is_spatial) {
+    if (is_segmentation) {
+      # The dropdown collapses several conventional obsm keys
+      # (segmentation, X_segmentation, X_segmentation_centroid, ...)
+      # into a single "segmentation" entry. Resolve back to the actual
+      # obsm key by trying them in order; first hit wins.
+      keys <- tryCatch(PhenoMapR:::.anndata_obsm_keys(obj),
+                       error = function(e) character(0))
+      seg_hit <- intersect(.anndata_segmentation_obsm_keys, keys)
+      if (length(seg_hit)) {
+        emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, seg_hit[1L]),
+                        error = function(e) NULL)
+      }
+    } else {
+      emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, name),
+                      error = function(e) NULL)
+    }
+    if (is_spatial || is_segmentation) {
       # AnnData multi-section spatial datasets keep one big obsm["spatial"]
-      # but disambiguate sections via an obs column (Squidpy convention
-      # is `library_id`; Scanpy users sometimes use `sample_id` /
-      # `sample` / `slide_id` / `section`). We sniff for any of those and
-      # ride along on the resulting vector.
+      # (and similarly one obsm["segmentation"]) but disambiguate sections
+      # via an obs column (Squidpy convention is `library_id`; Scanpy
+      # users sometimes use `sample_id` / `sample` / `slide_id` /
+      # `section`). We sniff for any of those and ride along on the
+      # resulting vector so the section switcher works for segmentation
+      # the same way it does for spatial.
       sample_vec <- tryCatch(
         .anndata_spatial_sample_vec(obj),
         error = function(e) NULL
       )
+    }
+  } else if (is.matrix(obj) || inherits(obj, "Matrix")) {
+    # h5ads loaded via .read_h5ad_hdf5r() return a plain dgCMatrix
+    # (genes x cells) with the original /obsm group stashed on the
+    # `phenomapr_obsm` attribute. We resolve `name` against that list
+    # the same way we do for live AnnData, including the segmentation
+    # alias collapsing.
+    obsm_attr <- attr(obj, "phenomapr_obsm")
+    if (is.list(obsm_attr) && length(obsm_attr)) {
+      pick <- if (is_segmentation) {
+        seg_hit <- intersect(.anndata_segmentation_obsm_keys, names(obsm_attr))
+        if (length(seg_hit)) seg_hit[1L] else NA_character_
+      } else if (name %in% names(obsm_attr)) {
+        name
+      } else {
+        NA_character_
+      }
+      if (!is.na(pick)) emb <- obsm_attr[[pick]]
+    }
+    if (is_spatial || is_segmentation) {
+      # The hdf5r loader doesn't currently surface a per-cell tissue
+      # section vector, but the obs data.frame is on `phenomapr_obs` -
+      # sniff the same column conventions the AnnData branch uses so
+      # multi-library spatial h5ads still get the section switcher.
+      obs_attr <- attr(obj, "phenomapr_obs")
+      if (is.data.frame(obs_attr)) {
+        candidates <- c("library_id", "sample_id", "sample", "slide_id",
+                        "section", "section_id", "core", "core_id")
+        hit <- intersect(candidates, colnames(obs_attr))
+        if (length(hit)) sample_vec <- as.character(obs_attr[[hit[1L]]])
+      }
     }
   }
   if (is.null(emb)) return(NULL)
@@ -896,21 +1262,29 @@ extract_embedding <- function(obj, name) {
   # `sample` column of the right length. NULL or wrong-length -> single
   # synthetic section.
   if (is.null(sample_vec) || length(sample_vec) != nrow(emb)) {
-    sample_vec <- rep(if (is_spatial) "section_1" else NA_character_,
-                      nrow(emb))
+    sample_vec <- rep(
+      if (is_spatial || is_segmentation) "section_1" else NA_character_,
+      nrow(emb)
+    )
   } else {
     # Promote anything non-character (factor / pandas categorical) to
     # plain character so the select input choices stay clean.
     sample_vec <- as.character(sample_vec)
     sample_vec[is.na(sample_vec) | !nzchar(sample_vec)] <- "(unknown)"
   }
+  # Segmentation centroids live in the same tissue coordinate frame as
+  # the "spatial" reduction, so the Visualization tab needs the same
+  # coord_fixed() + reversed-Y layout. We therefore mark segmentation
+  # rows as `is_spatial = TRUE`. The original embedding name is
+  # preserved verbatim (dim1_name / dim2_name) so plot titles and
+  # downloads still differentiate "spatial" from "segmentation".
   data.frame(
     cell_id = as.character(ids),
     dim1 = as.numeric(emb[, 1L]),
     dim2 = as.numeric(emb[, 2L]),
     dim1_name = d1_name,
     dim2_name = d2_name,
-    is_spatial = is_spatial,
+    is_spatial = is_spatial || is_segmentation,
     sample = sample_vec,
     stringsAsFactors = FALSE
   )
@@ -1309,6 +1683,136 @@ scale_color_phenomapr_d <- function(..., na.value = "#BBBBBB") {
     palette = function(n) pm_brand_palette(n),
     na.value = na.value,
     ...
+  )
+}
+
+# ---- Marker heatmap color schemes (Shiny + plot_phenotype_markers) ---------
+
+#' @keywords internal
+marker_heatmap_color_mode_choices <- function() {
+  c(
+    "Package default" = "default",
+    "ColorBrewer" = "brewer",
+    "Viridis" = "viridis",
+    "Custom colors" = "manual"
+  )
+}
+
+#' @keywords internal
+marker_heatmap_brewer_choices <- function(kind = c("diverging", "qualitative", "both")) {
+  kind <- match.arg(kind)
+  pal <- PhenoMapR::list_marker_heatmap_color_palettes()
+  names <- switch(
+    kind,
+    diverging = pal$brewer$diverging,
+    qualitative = pal$brewer$qualitative,
+    both = c(pal$brewer$diverging, pal$brewer$qualitative)
+  )
+  if (!length(names)) return(c("(RColorBrewer unavailable)" = ""))
+  stats::setNames(names, names)
+}
+
+#' @keywords internal
+marker_heatmap_viridis_choices <- function() {
+  pal <- PhenoMapR::list_marker_heatmap_color_palettes()
+  if (!length(pal$viridis)) return(c("(viridis unavailable)" = ""))
+  stats::setNames(pal$viridis, pal$viridis)
+}
+
+#' @keywords internal
+.marker_heatmap_resolve_color_spec <- function(input, component, manual_colors_fn) {
+  mode <- input[[paste0("hm_colors_", component, "_mode")]] %||% "default"
+  if (identical(mode, "default")) return("default")
+  if (identical(mode, "brewer")) {
+    name <- input[[paste0("hm_colors_", component, "_brewer")]] %||% ""
+    if (!nzchar(name)) return("default")
+    return(paste0("brewer:", name))
+  }
+  if (identical(mode, "viridis")) {
+    name <- input[[paste0("hm_colors_", component, "_viridis")]] %||% ""
+    if (!nzchar(name)) return("default")
+    return(paste0("viridis:", name))
+  }
+  list(source = "manual", colors = manual_colors_fn(input))
+}
+
+#' Build `color_schemes` list for plot_phenotype_markers() from Shiny inputs.
+#' @keywords internal
+marker_heatmap_color_schemes_from_input <- function(input) {
+  list(
+    phenotype = .marker_heatmap_resolve_color_spec(input, "phenotype", function(inp) {
+      c(
+        inp$hm_colors_phenotype_fav %||% "#2166AC",
+        inp$hm_colors_phenotype_other %||% "#F7F7F7",
+        inp$hm_colors_phenotype_adv %||% "#B2182B"
+      )
+    }),
+    score = .marker_heatmap_resolve_color_spec(input, "score", function(inp) {
+      c(
+        inp$hm_colors_score_low %||% "#2166AC",
+        inp$hm_colors_score_mid %||% "#FFFFFF",
+        inp$hm_colors_score_high %||% "#B2182B"
+      )
+    }),
+    expression = .marker_heatmap_resolve_color_spec(input, "expr", function(inp) {
+      c(
+        inp$hm_colors_expr_low %||% "#1A1A1A",
+        inp$hm_colors_expr_mid %||% "#FFFFFF",
+        inp$hm_colors_expr_high %||% "#67001F"
+      )
+    }),
+    celltype = .marker_heatmap_resolve_color_spec(input, "celltype", function(inp) {
+      txt <- inp$hm_colors_celltype_manual %||% ""
+      cols <- trimws(unlist(strsplit(txt, "[,;\\s]+")))
+      cols <- cols[nzchar(cols)]
+      if (!length(cols)) {
+        cols <- c("#2A9D8F", "#E76F51", "#264653", "#6A4C93", "#3A86FF")
+      }
+      cols
+    })
+  )
+}
+
+#' UI builder for one marker-heatmap color component (mode + palette pickers).
+#' @keywords internal
+marker_heatmap_color_controls <- function(component,
+                                          label,
+                                          brewer_kind = c("diverging", "qualitative", "both"),
+                                          default_brewer = "RdBu",
+                                          default_viridis = "viridis",
+                                          manual_ui = NULL) {
+  brewer_kind <- match.arg(brewer_kind)
+  brewer_choices <- marker_heatmap_brewer_choices(brewer_kind)
+  viridis_choices <- marker_heatmap_viridis_choices()
+  tagList(
+    selectInput(
+      paste0("hm_colors_", component, "_mode"),
+      label,
+      choices = marker_heatmap_color_mode_choices(),
+      selected = "default"
+    ),
+    conditionalPanel(
+      sprintf("input.hm_colors_%s_mode == 'brewer'", component),
+      selectInput(
+        paste0("hm_colors_", component, "_brewer"),
+        paste(label, "(ColorBrewer palette)"),
+        choices = brewer_choices,
+        selected = if (default_brewer %in% brewer_choices) default_brewer else brewer_choices[1L]
+      )
+    ),
+    conditionalPanel(
+      sprintf("input.hm_colors_%s_mode == 'viridis'", component),
+      selectInput(
+        paste0("hm_colors_", component, "_viridis"),
+        paste(label, "(viridis palette)"),
+        choices = viridis_choices,
+        selected = if (default_viridis %in% viridis_choices) default_viridis else viridis_choices[1L]
+      )
+    ),
+    conditionalPanel(
+      sprintf("input.hm_colors_%s_mode == 'manual'", component),
+      manual_ui
+    )
   )
 }
 

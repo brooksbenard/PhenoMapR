@@ -10,6 +10,38 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
+
+# When knit from inside the PhenoMapR source tree, load the in-tree
+# dev package instead of a stale system install.
+.try_load_phenomapr_dev <- function(max_walk = 6L) {
+  start_dir <- tryCatch(
+    normalizePath(knitr::opts_knit$get("output.dir") %||% getwd(),
+                  mustWork = FALSE),
+    error = function(e) getwd()
+  )
+  if (is.null(start_dir) || !nzchar(start_dir)) start_dir <- getwd()
+  cur <- start_dir
+  for (i in seq_len(max_walk)) {
+    desc <- file.path(cur, "DESCRIPTION")
+    if (file.exists(desc)) {
+      pkg <- tryCatch(unname(read.dcf(desc, fields = "Package")[[1, 1]]),
+                      error = function(e) NA_character_)
+      if (identical(pkg, "PhenoMapR") &&
+          requireNamespace("pkgload", quietly = TRUE)) {
+        pkgload::load_all(cur, quiet = TRUE, helpers = FALSE,
+                          export_all = FALSE)
+        message("Loaded PhenoMapR (dev) from ", cur)
+        return(TRUE)
+      }
+    }
+    parent <- dirname(cur)
+    if (identical(parent, cur)) break
+    cur <- parent
+  }
+  FALSE
+}
+`%||%` <- function(x, y) if (is.null(x)) y else x
+.try_load_phenomapr_dev()
 ```
 
 ## Overview
@@ -748,19 +780,21 @@ ComplexHeatmap::draw(
 
 ## Prognostic markers
 
-`find_phenotype_markers()` supports the same **marker scopes** on spatial data (cells or spots mapped to spots) as in the single-cell vignette:
+`find_phenotype_markers()` supports the same **marker scopes** on spatial data (cells mapped to spots) as in the single-cell vignette:
 
-- **Cell type agnostic** — `marker_scope = "phenotype_groups"` (**default**): **Most Adverse** vs all other cells with a phenotype label, and **Most Favorable** vs all other cells, **ignoring** cell type. This asks which genes distinguish the prognostic extremes in the whole mixture on the slide.
-- **Cell type specific** — `marker_scope = "cell_type_specific"`: for each cell type in metadata (here, CytoSPACE-mapped types), contrasts that type in the adverse or favorable tail vs a reference set controlled by `celltype_contrast`. **Default** `celltype_contrast = "within_cell_type"` compares to other phenotype bins **within the same type** (reduces housekeeping genes repeating across type × tail blocks). **`celltype_contrast = "vs_cohort_rest"`** restores the **original** cohort-wide contrast: (type ∩ tail) vs **every other cell**. With **`celltype_unique_genes = TRUE`** (default), each gene is kept in at most one adverse/favorable row (strongest `avg_log2FC`).
+- **Cell type agnostic** — `marker_scope = "phenotype_groups"`: **Most Adverse** vs all other labeled cells and **Most Favorable** vs all other labeled cells, **ignoring** cell type.
+- **Cell type × phenotype vs all opposite-tail cells** — `marker_scope = "cell_type_specific"`, `celltype_contrast = "vs_opposite_tail"`: for each cell type, that type in one tail vs **every cell in the opposite tail** (works when a type exists in only one tail).
+- **Cell type specific (within cell type)** — `marker_scope = "cell_type_specific"`, default `celltype_contrast = "within_cell_type"`: that type in one tail vs **other phenotype bins within the same type**.
 
-Below, **Step 1–2** use **cell-type-agnostic** markers; **Step 2** draws **`plot_phenotype_markers(..., heatmap_type = "global")`** when **ComplexHeatmap** and **circlize** are installed (same helper as the **single-cell** vignette), with a **pheatmap** fallback otherwise. **Step 3** runs **cell-type-specific** markers and **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when those packages are available.
+Below we run all three contrasts and draw **`plot_phenotype_markers()`** heatmaps with **five genes per block** and **five `anno_mark` labels per block** (`top_n_markers = 5`, `n_mark_labels = 5`). Gene labels are colored by cell type (`color_mark_labels_by_celltype = TRUE`) on the cell-type-specific heatmaps.
 
-### Step 1: Markers for adverse vs. favorable cells (cell type agnostic)
+### Step 1: Phenotype groups and marker discovery
 
 ```{r markers-spatial, cache = FALSE}
-markers <- NULL
-assay_markers <- NULL
-## Tail labels on the Seurat object (5th / 95th percentiles via define_phenotype_groups).
+markers_global <- NULL
+markers_ct_within <- NULL
+markers_ct_opp <- NULL
+
 cells <- colnames(seurat)
 scores_df_markers <- seurat@meta.data[cells, score_col, drop = FALSE]
 rownames(scores_df_markers) <- cells
@@ -770,9 +804,17 @@ groups_markers <- PhenoMapR::define_phenotype_groups(
   score_columns = score_col
 )
 group_col <- grep("phenotype_group", names(groups_markers), value = TRUE)[1]
-
 seurat@meta.data[[group_col]] <-
   groups_markers[rownames(seurat@meta.data), group_col, drop = TRUE]
+
+ct_col_markers <- NULL
+if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) &&
+    spatial_df_celltype_col %in% names(seurat@meta.data)) {
+  ct_col_markers <- spatial_df_celltype_col
+} else if (exists("celltype_col") && !is.null(celltype_col) &&
+           celltype_col %in% names(seurat@meta.data)) {
+  ct_col_markers <- celltype_col
+}
 
 group_vec <- seurat@meta.data[cells, group_col]
 group_df <- data.frame(
@@ -780,7 +822,11 @@ group_df <- data.frame(
   phenotype_group = as.character(group_vec),
   stringsAsFactors = FALSE
 )
-markers <- PhenoMapR::find_phenotype_markers(
+if (!is.null(ct_col_markers)) {
+  group_df$cell_type <- as.character(seurat@meta.data[cells, ct_col_markers])
+}
+
+markers_global <- PhenoMapR::find_phenotype_markers(
   seurat,
   group_labels = group_df,
   group_column = "phenotype_group",
@@ -788,42 +834,87 @@ markers <- PhenoMapR::find_phenotype_markers(
   marker_scope = "phenotype_groups",
   assay = "Spatial",
   slot = "data",
-  # max_cells_per_ident = spatial_max_cells,
   verbose = FALSE
 )
+
+if (!is.null(ct_col_markers)) {
+  markers_ct_opp <- PhenoMapR::find_phenotype_markers(
+    seurat,
+    group_labels = group_df,
+    group_column = "phenotype_group",
+    cell_id_column = "cell_id",
+    cell_type_column = "cell_type",
+    marker_scope = "cell_type_specific",
+    celltype_contrast = "vs_opposite_tail",
+    assay = "Spatial",
+    slot = "data",
+    verbose = FALSE
+  )
+  markers_ct_within <- PhenoMapR::find_phenotype_markers(
+    seurat,
+    group_labels = group_df,
+    group_column = "phenotype_group",
+    cell_id_column = "cell_id",
+    cell_type_column = "cell_type",
+    marker_scope = "cell_type_specific",
+    celltype_contrast = "within_cell_type",
+    assay = "Spatial",
+    slot = "data",
+    verbose = FALSE
+  )
+}
 ```
 
-### Step 2: Heatmap of adverse vs. favorable markers (global phenotype groups)
+### Step 2: Heatmap prep (expression matrix + metadata)
 
-**`plot_phenotype_markers(..., heatmap_type = "global")`** matches the single-cell vignette: favorable- then adverse-marker rows, column order by PhenoMapR score, and **pheatmap** only if ComplexHeatmap is unavailable or marker tables are incomplete.
+```{r heatmap-prep-spatial, cache = FALSE}
+expr_pm <- NULL
+meta_pm <- NULL
+group_col_hm <- NULL
+ct_col_hm <- NULL
+pal_ct <- NULL
 
-```{r heatmap-markers-spatial, fig.align='center', fig.width=10, fig.height=4}
-  n_top <- 15L
-  expr <- NULL
-  assay_use_hm <- if (exists("assay_use") && !is.null(assay_use)) as.character(assay_use)[1] else "Spatial"
-  assay_order <- unique(c(
-    if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0),
-    assay_use_hm, "RNA", "SCT"
-  ))
-  for (a in assay_order) {
-    if (!a %in% names(seurat@assays)) next
-    expr <- tryCatch(
-      Seurat::GetAssayData(seurat, layer = "data", assay = a),
-      error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL)
-    )
-    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
-    expr <- tryCatch(
-      SeuratObject::LayerData(seurat, layer = "data", assay = a),
+.get_seurat_layer <- function(obj, assay, layer) {
+  mat <- tryCatch(
+    Seurat::GetAssayData(obj, layer = layer, assay = assay),
+    error = function(e) tryCatch(Seurat::GetAssayData(obj, slot = layer, assay = assay), error = function(e2) NULL)
+  )
+  if (is.null(mat) || nrow(mat) == 0L || ncol(mat) == 0L) {
+    mat <- tryCatch(
+      SeuratObject::LayerData(obj, layer = layer, assay = assay),
       error = function(e) NULL
     )
-    if (is.null(expr) || ncol(expr) == 0) {
-      expr <- tryCatch(
-        SeuratObject::LayerData(seurat, layer = "counts", assay = a),
-        error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = NULL, assay = a), error = function(e2) NULL)
-      )
-    }
-    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
   }
+  if (is.null(mat) || nrow(mat) == 0L || ncol(mat) == 0L) NULL else mat
+}
+
+if (requireNamespace("ComplexHeatmap", quietly = TRUE) &&
+    requireNamespace("circlize", quietly = TRUE)) {
+  genes_hm <- character(0)
+  for (m in list(markers_global, markers_ct_opp, markers_ct_within)) {
+    if (is.null(m)) next
+    for (df in list(m$adverse_markers, m$favorable_markers)) {
+      if (!is.null(df) && nrow(df) > 0L && "gene" %in% names(df)) {
+        genes_hm <- union(genes_hm, df$gene)
+      }
+    }
+  }
+
+  expr <- NULL
+  layer_used <- "data"
+  assay_use_hm <- if (exists("assay_use") && !is.null(assay_use)) as.character(assay_use)[1] else "Spatial"
+  assay_order <- unique(c(assay_use_hm, "Spatial", "RNA", "SCT"))
+  for (a in assay_order) {
+    if (!a %in% names(seurat@assays)) next
+    expr <- .get_seurat_layer(seurat, a, "data")
+    layer_used <- "data"
+    if (is.null(expr)) {
+      expr <- .get_seurat_layer(seurat, a, "counts")
+      layer_used <- "counts"
+    }
+    if (!is.null(expr)) break
+  }
+
   if (!is.null(expr) && ncol(expr) > 0) {
     cells_expr <- colnames(expr)
     if (is.null(cells_expr)) cells_expr <- character(0)
@@ -844,56 +935,124 @@ markers <- PhenoMapR::find_phenotype_markers(
       }
     }
     if (length(cells_use) == 0) {
-      message("No overlapping cells between expression and metadata; skipping heatmap. ",
-              "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj),
-              if (length(cells_expr) > 0) paste0("; expr sample: ", head(cells_expr, 2)) else ""
+      message(
+        "No overlapping cells between expression and metadata; skipping marker heatmaps. ",
+        "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj)
       )
     } else {
-      expr_pm <- as.matrix(expr[, cells_use, drop = FALSE])
+      expr_sub <- expr[, cells_use, drop = FALSE]
+      if (length(genes_hm) > 0) {
+        genes_use <- intersect(genes_hm, rownames(expr_sub))
+        if (length(genes_use) > 0) {
+          expr_sub <- expr_sub[genes_use, , drop = FALSE]
+        }
+      }
+      if (identical(layer_used, "counts")) {
+        if (requireNamespace("Matrix", quietly = TRUE) &&
+            (inherits(expr_sub, "Matrix") || inherits(expr_sub, "sparseMatrix"))) {
+          cs <- Matrix::colSums(expr_sub)
+          expr_sub <- Matrix::t(Matrix::t(expr_sub) / pmax(cs, 1) * 10000)
+          expr_sub <- log1p(expr_sub)
+        } else {
+          cs <- colSums(expr_sub)
+          expr_sub <- t(t(expr_sub) / pmax(cs, 1) * 10000)
+          expr_sub <- log1p(expr_sub)
+        }
+      }
+      expr_pm <- as.matrix(expr_sub)
       meta_pm <- seurat@meta.data[cells_use, , drop = FALSE]
       meta_pm$cell_id_plot <- cells_use
       group_col_hm <- paste0("phenotype_group_", score_col)
       if (!group_col_hm %in% names(meta_pm)) group_col_hm <- group_col
-
-      ct_col_hm <- NULL
-      if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) &&
-          spatial_df_celltype_col %in% names(meta_pm)) {
-        ct_col_hm <- spatial_df_celltype_col
-      } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(meta_pm)) {
-        ct_col_hm <- celltype_col
-      }
-      if (is.null(ct_col_hm)) {
+      ct_col_hm <- ct_col_markers
+      if (is.null(ct_col_hm) || !ct_col_hm %in% names(meta_pm)) {
         meta_pm$celltype_plot <- factor(rep("Cell", nrow(meta_pm)))
         ct_col_hm <- "celltype_plot"
       } else {
         meta_pm[[ct_col_hm]] <- factor(as.character(meta_pm[[ct_col_hm]]))
       }
       pal_ct <- PhenoMapR::get_celltype_palette(levels(meta_pm[[ct_col_hm]]))
-
-      drew_ch <- FALSE
-      if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
-        adv_ok <- !is.null(markers$adverse_markers) && nrow(markers$adverse_markers) > 0L
-        fav_ok <- !is.null(markers$favorable_markers) && nrow(markers$favorable_markers) > 0L
-        if (adv_ok && fav_ok) {
-          PhenoMapR::plot_phenotype_markers(
-            markers = markers,
-            expr_mat = expr_pm,
-            meta = meta_pm,
-            cell_id_col = "cell_id_plot",
-            group_col = group_col_hm,
-            score_col = score_col,
-            celltype_col = ct_col_hm,
-            celltype_palette = pal_ct,
-            heatmap_type = "global",
-            top_n_markers = 100L,
-            n_mark_labels = 15L,
-            p_adj_threshold = 0.05,
-            column_title = ""
-          )
-        }
-      }
     }
+  } else {
+    message("Could not extract a non-empty expression matrix for marker heatmaps.")
   }
+}
+```
+
+### Step 3: Cell-type-agnostic marker heatmap
+
+```{r heatmap-markers-global-spatial, fig.align='center', fig.width=10, fig.height=3}
+if (!is.null(expr_pm) && !is.null(markers_global)) {
+  adv_ok <- !is.null(markers_global$adverse_markers) && nrow(markers_global$adverse_markers) > 0L
+  fav_ok <- !is.null(markers_global$favorable_markers) && nrow(markers_global$favorable_markers) > 0L
+  if (adv_ok && fav_ok) {
+    PhenoMapR::plot_phenotype_markers(
+      markers = markers_global,
+      expr_mat = expr_pm,
+      meta = meta_pm,
+      cell_id_col = "cell_id_plot",
+      group_col = group_col_hm,
+      score_col = score_col,
+      celltype_col = ct_col_hm,
+      celltype_palette = pal_ct,
+      heatmap_type = "global",
+      top_n_markers = 5L,
+      n_mark_labels = 5L,
+      p_adj_threshold = 0.05,
+      column_title = "Global phenotype marker genes (CytoSPACE cells)"
+    )
+  }
+}
+```
+
+### Step 4: Cell-type × phenotype vs all opposite-tail cells
+
+```{r heatmap-markers-opp-tail-spatial, fig.align='center', fig.width=12, fig.height=4.5}
+if (!is.null(expr_pm) && !is.null(markers_ct_opp)) {
+  PhenoMapR::plot_phenotype_markers(
+    markers = markers_ct_opp,
+    expr_mat = expr_pm,
+    meta = meta_pm,
+    cell_id_col = "cell_id_plot",
+    group_col = group_col_hm,
+    score_col = score_col,
+    celltype_col = ct_col_hm,
+    celltype_palette = pal_ct,
+    heatmap_type = "cell_type_specific",
+    top_n_markers = 5L,
+    n_mark_labels = 5L,
+    color_mark_labels_by_celltype = TRUE,
+    outline_marker_blocks = TRUE,
+    block_outline_color = "black",
+    p_adj_threshold = 0.05,
+    column_title = "Cell-type markers vs all opposite-tail cells (CytoSPACE cells)"
+  )
+}
+```
+
+### Step 5: Cell-type-specific markers (within cell type)
+
+```{r heatmap-markers-within-spatial, fig.align='center', fig.width=12, fig.height=4.5}
+if (!is.null(expr_pm) && !is.null(markers_ct_within)) {
+  PhenoMapR::plot_phenotype_markers(
+    markers = markers_ct_within,
+    expr_mat = expr_pm,
+    meta = meta_pm,
+    cell_id_col = "cell_id_plot",
+    group_col = group_col_hm,
+    score_col = score_col,
+    celltype_col = ct_col_hm,
+    celltype_palette = pal_ct,
+    heatmap_type = "cell_type_specific",
+    top_n_markers = 5L,
+    n_mark_labels = 5L,
+    color_mark_labels_by_celltype = TRUE,
+    outline_marker_blocks = TRUE,
+    block_outline_color = "black",
+    p_adj_threshold = 0.05,
+    column_title = "Cell-type-specific phenotype marker genes (CytoSPACE cells)"
+  )
+}
 ```
 
 ### Stacked barplot: adverse vs. favorable by cell type
@@ -965,7 +1124,7 @@ In line with the other Pancreatic cancer vignettes, PhenoMapR identifies ductal 
 - **Part 1 (spots)**: Spot-level object `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds`; **H&E** via `SpatialPlot`; PhenoMapR scoring; **hex** summary of z-scaled scores plus **point** map of 5th-percentile groups (**same `coord_fixed` / limits as H&E**; no jitter).
 - **Part 2 (CytoSPACE)**: `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`; same PRECOG **Pancreatic** reference at **cell** resolution; score distribution, score by cell type, prognostic groups, and spatial maps (jittered cells per spot).
 - **Co-localization**: **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** **`nhood_enrichment()`** and **`cooccur_local()`** on Visium coordinates and prognostic groups (Part 2 only; install from GitHub).
-- **Markers**: (1) **Cell-type-agnostic** `find_phenotype_markers(..., marker_scope = "phenotype_groups")` with **`plot_phenotype_markers(..., heatmap_type = "global")`** (or **pheatmap** fallback); (2) **Cell-type-specific** `marker_scope = "cell_type_specific"` with **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** when **ComplexHeatmap** is available.
+- **Markers**: three **`plot_phenotype_markers()`** heatmaps on CytoSPACE cells — (1) **cell-type agnostic** (`heatmap_type = "global"`), (2) **cell type × phenotype vs all opposite-tail cells** (`celltype_contrast = "vs_opposite_tail"`), (3) **within cell type** (`celltype_contrast = "within_cell_type"`); each uses **five genes and five `anno_mark` labels per block**.
 
 ## References
 

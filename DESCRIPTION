@@ -41,7 +41,9 @@ Suggests:
     patchwork,
     pheatmap,
     presto,
+    RColorBrewer,
     viridis,
+    viridisLite,
     Seurat (>= 4.0.0),
     SeuratObject,
     SingleCellExperiment,
@@ -62,11 +64,14 @@ Suggests:
     peakRAM,
     shiny,
     bslib,
+    colourpicker,
     DT,
     htmltools,
     ggsignif,
+    ggh4x,
     ggchicklet2,
-    shinyFiles
+    shinyFiles,
+    svglite
 Remotes:
     immunogenomics/presto,
     barkasn/fastSave,

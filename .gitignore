@@ -23,6 +23,7 @@ inst/benchmarks/.venv-bench-py312/
 
 # pkgdown build (site is deployed to gh-pages by GitHub Actions)
 docs/
+pkgdown/favicon/
 Rplots.pdf
 /doc/
 /Meta/
@@ -37,12 +38,20 @@ data/datasets_info.rda
 
 # Large vignette/data files in vignettes/ (users download from GEO/PRECOG)
 vignettes/PAAD_*.rds
+vignettes/PAAD_*.h5
+vignettes/PAAD_*.tsv
 vignettes/*cytospace*.rds
 vignettes/*_processed.rds
 vignettes/expression_*.rds
 vignettes/clinical_*.rds
 vignettes/HT270*.rds
 vignettes/*.hgnc.rds
+vignettes/.geo_cache/
+vignettes/FSHD_*.rds
+vignettes/FSHD_*.rda
+vignettes/FSHD_validation_*.rds
+vignettes/GSE*_expression.rds
+vignettes/GSE*_info.rds
 data-raw/
 
 # Generated article outputs (pkgdown builds from .Rmd in CI)

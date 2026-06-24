@@ -13,10 +13,13 @@ plot_phenotype_markers(
   score_col,
   celltype_col = "celltype_original",
   celltype_palette = NULL,
+  color_schemes = NULL,
   heatmap_type = c("global", "cell_type_specific"),
   top_n_markers = 20L,
   rank_by = c("lfc", "p_adj"),
   n_mark_labels = 5L,
+  mark_label_fontsize = 7,
+  color_mark_labels_by_celltype = FALSE,
   p_adj_threshold = 0.05,
   scale_clip = NULL,
   heatmap_width = NULL,
@@ -48,7 +51,17 @@ plot_phenotype_markers(
 \item{celltype_col}{Column with cell type labels.}
 
 \item{celltype_palette}{Named vector of colors for cell types. If \code{NULL},
-\code{\link{get_celltype_palette}()} is used.}
+cell-type colors come from \code{color_schemes$celltype} (default:
+\code{\link{get_celltype_palette}()}).}
+
+\item{color_schemes}{Optional named list controlling heatmap colors. Each
+element may be \code{"default"}, a shorthand string like
+\code{"brewer:RdBu"} or \code{"viridis:plasma"}, or a list with
+\code{source} (\code{"default"}, \code{"brewer"}, \code{"viridis"}, or
+\code{"manual"}) plus \code{name} and/or \code{colors}. Supported names:
+\code{phenotype} (discrete groups), \code{score} (PhenoMapR score bar),
+\code{expression} (scaled-expression heatmap body), and \code{celltype}.
+See \code{\link{list_marker_heatmap_color_palettes}()} for built-in options.}
 
 \item{heatmap_type}{\code{"global"} (cell-type agnostic markers) or
 \code{"cell_type_specific"} (markers per cell type from
@@ -66,6 +79,15 @@ purely due to sample size.}
 
 \item{n_mark_labels}{Number of row labels to draw per block via
 \code{ComplexHeatmap::anno_mark} (top genes by \code{avg_log2FC} within each block).}
+
+\item{mark_label_fontsize}{Font size (points) for \code{anno_mark} gene labels.
+Default \code{7}. Decrease when many labels are drawn in a compact heatmap.}
+
+\item{color_mark_labels_by_celltype}{If \code{TRUE}, \code{anno_mark} gene labels
+are colored with \code{celltype_palette} according to each gene's cell type.
+Applies to \code{heatmap_type = "cell_type_specific"} (and to \code{"global"}
+when marker tables include a \code{cell_type} column). Default \code{FALSE}
+keeps labels black.}
 
 \item{p_adj_threshold}{Only genes with \code{p_adj} below this value (and positive
 \code{avg_log2FC}) are candidates before ordering by log fold change.}
