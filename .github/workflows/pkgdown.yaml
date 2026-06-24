@@ -69,7 +69,7 @@ jobs:
 
       - name: Build pkgdown site
         run: |
-          Rscript -e "pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)"
+          Rscript -e "pkgdown::build_site_github_pages(new_process = TRUE, install = FALSE)"
         env:
           PKGDOWN_DEV_MODE: release
           PHENOMAPR_GSE111672_RDS_URL: ${{ secrets.PHENOMAPR_GSE111672_RDS_URL }}

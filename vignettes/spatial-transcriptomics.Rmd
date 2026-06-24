@@ -45,6 +45,9 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
   nzchar(Sys.getenv("CI", unset = "")) ||
     nzchar(Sys.getenv("GITHUB_ACTIONS", unset = ""))
 }
+# Full spatial marker pipeline (3 contrasts + 3 heatmaps) is memory-heavy; CI builds
+# the global contrast only (matches pre-0.1.0 pkgdown behaviour).
+.spatial_run_full_markers <- !.is_vignette_ci()
 .try_load_phenomapr_dev()
 ```
 
@@ -757,7 +760,7 @@ nhood_hm_ready <- exists("mat", inherits = FALSE) &&
   exists("mat_p_adj", inherits = FALSE) &&
   requireNamespace("ComplexHeatmap", quietly = TRUE)
 
-if (nhood_hm_ready) {
+if (nhood_hm_ready && .spatial_run_full_markers) {
   ht_clustered <- ComplexHeatmap::Heatmap(
     mat,
     name = "Z",
@@ -795,6 +798,8 @@ if (nhood_hm_ready) {
     heatmap_legend_side = "right",
     annotation_legend_side = "right"
   )
+} else if (nhood_hm_ready && !.spatial_run_full_markers) {
+  message("Skipping clustered neighborhood enrichment heatmap on CI (memory budget).")
 } else {
   message("Skipping clustered neighborhood enrichment heatmap (z-score matrix not available).")
 }
@@ -809,7 +814,7 @@ if (nhood_hm_ready) {
 - **Cell type × phenotype vs all opposite-tail cells** — `marker_scope = "cell_type_specific"`, `celltype_contrast = "vs_opposite_tail"`: for each cell type, that type in one tail vs **every cell in the opposite tail** (works when a type exists in only one tail).
 - **Cell type specific (within cell type)** — `marker_scope = "cell_type_specific"`, default `celltype_contrast = "within_cell_type"`: that type in one tail vs **other phenotype bins within the same type**.
 
-Below we run all three contrasts and draw **`plot_phenotype_markers()`** heatmaps with **five genes per block** and **five `anno_mark` labels per block** (`top_n_markers = 5`, `n_mark_labels = 5`). Gene labels are colored by cell type (`color_mark_labels_by_celltype = TRUE`) on the cell-type-specific heatmaps.
+Below we run all three contrasts and draw **`plot_phenotype_markers()`** heatmaps with **five genes per block** and **five `anno_mark` labels per block** (`top_n_markers = 5`, `n_mark_labels = 5`). Gene labels are colored by cell type (`color_mark_labels_by_celltype = TRUE`) on the cell-type-specific heatmaps. On CI/pkgdown builds, only the **global** contrast is rendered to stay within memory limits; run locally for all three heatmaps.
 
 ### Step 1: Phenotype groups and marker discovery
 
@@ -863,7 +868,7 @@ markers_global <- PhenoMapR::find_phenotype_markers(
   verbose = FALSE
 )
 
-if (!is.null(ct_col_markers)) {
+if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
   markers_ct_opp <- PhenoMapR::find_phenotype_markers(
     seurat,
     group_labels = group_df,
@@ -993,6 +998,8 @@ if (requireNamespace("ComplexHeatmap", quietly = TRUE) &&
         }
       }
       expr_pm <- as.matrix(expr_sub)
+      if (exists("expr", inherits = FALSE)) rm(expr)
+      gc(verbose = FALSE)
       meta_pm <- seurat@meta.data[cells_use, , drop = FALSE]
       meta_pm$cell_id_plot <- cells_use
       group_col_hm <- paste0("phenotype_group_", score_col)
@@ -1041,7 +1048,7 @@ if (!is.null(expr_pm) && !is.null(markers_global)) {
 ### Step 4: Cell-type × phenotype vs all opposite-tail cells
 
 ```{r heatmap-markers-opp-tail-spatial, fig.align='center', fig.width=12, fig.height=4.5}
-if (!is.null(expr_pm) && !is.null(markers_ct_opp)) {
+if (.spatial_run_full_markers && !is.null(expr_pm) && !is.null(markers_ct_opp)) {
   PhenoMapR::plot_phenotype_markers(
     markers = markers_ct_opp,
     expr_mat = expr_pm,
@@ -1066,7 +1073,7 @@ if (!is.null(expr_pm) && !is.null(markers_ct_opp)) {
 ### Step 5: Cell-type-specific markers (within cell type)
 
 ```{r heatmap-markers-within-spatial, fig.align='center', fig.width=12, fig.height=4.5}
-if (!is.null(expr_pm) && !is.null(markers_ct_within)) {
+if (.spatial_run_full_markers && !is.null(expr_pm) && !is.null(markers_ct_within)) {
   PhenoMapR::plot_phenotype_markers(
     markers = markers_ct_within,
     expr_mat = expr_pm,
