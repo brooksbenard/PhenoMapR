@@ -19,10 +19,13 @@ plot_phenotype_markers(
   score_col,
   celltype_col = "celltype_original",
   celltype_palette = NULL,
+  color_schemes = NULL,
   heatmap_type = c("global", "cell_type_specific"),
   top_n_markers = 20L,
   rank_by = c("lfc", "p_adj"),
   n_mark_labels = 5L,
+  mark_label_fontsize = 7,
+  color_mark_labels_by_celltype = FALSE,
   p_adj_threshold = 0.05,
   scale_clip = NULL,
   heatmap_width = NULL,
@@ -72,9 +75,20 @@ plot_phenotype_markers(
 
 - celltype_palette:
 
-  Named vector of colors for cell types. If `NULL`,
-  [`get_celltype_palette()`](https://brooksbenard.github.io/PhenoMapR/reference/get_celltype_palette.md)
-  is used.
+  Named vector of colors for cell types. If `NULL`, cell-type colors
+  come from `color_schemes$celltype` (default:
+  [`get_celltype_palette()`](https://brooksbenard.github.io/PhenoMapR/reference/get_celltype_palette.md)).
+
+- color_schemes:
+
+  Optional named list controlling heatmap colors. Each element may be
+  `"default"`, a shorthand string like `"brewer:RdBu"` or
+  `"viridis:plasma"`, or a list with `source` (`"default"`, `"brewer"`,
+  `"viridis"`, or `"manual"`) plus `name` and/or `colors`. Supported
+  names: `phenotype` (discrete groups), `score` (PhenoMapR score bar),
+  `expression` (scaled-expression heatmap body), and `celltype`. See
+  [`list_marker_heatmap_color_palettes()`](https://brooksbenard.github.io/PhenoMapR/reference/list_marker_heatmap_color_palettes.md)
+  for built-in options.
 
 - heatmap_type:
 
@@ -100,6 +114,19 @@ plot_phenotype_markers(
   Number of row labels to draw per block via
   [`ComplexHeatmap::anno_mark`](https://rdrr.io/pkg/ComplexHeatmap/man/anno_mark.html)
   (top genes by `avg_log2FC` within each block).
+
+- mark_label_fontsize:
+
+  Font size (points) for `anno_mark` gene labels. Default `7`. Decrease
+  when many labels are drawn in a compact heatmap.
+
+- color_mark_labels_by_celltype:
+
+  If `TRUE`, `anno_mark` gene labels are colored with `celltype_palette`
+  according to each gene's cell type. Applies to
+  `heatmap_type = "cell_type_specific"` (and to `"global"` when marker
+  tables include a `cell_type` column). Default `FALSE` keeps labels
+  black.
 
 - p_adj_threshold:
 

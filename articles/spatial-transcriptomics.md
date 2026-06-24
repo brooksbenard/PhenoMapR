@@ -205,6 +205,20 @@ maped.
 
 ``` r
 
+# Part 1 spot object is no longer needed; free memory before loading CytoSPACE cells.
+for (nm in c("seurat_spot", "scores_spot", "h_and_e", "hex_phenomapr",
+             "hex_phenomapr_groups", "df", "groups_spot", "p")) {
+  if (exists(nm, inherits = FALSE)) rm(list = nm, inherits = FALSE)
+}
+gc(verbose = FALSE)
+```
+
+    ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
+    ## Ncells  4381155 234.0    7832468 418.3   7832468 418.3
+    ## Vcells 11228523  85.7  126567057 965.7 126220747 963.0
+
+``` r
+
 # Load the **CytoSPACE** object (single cells placed on Visium coordinates).
 rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 gd_id_cyto <- "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
@@ -522,12 +536,12 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   # spatialCooccur::cooccur_local expects the label column to be named `cell_type`
   scoc_df$cell_type <- scoc_df$ct_pg
 
-  # Keep runtime bounded while preserving enough cells for stable permutation nulls.
-  # max_cells_sc <- 4000L
-  # if (nrow(scoc_df) > max_cells_sc) {
-  #   set.seed(3L)
-  #   scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
-  # }
+  # Keep runtime and memory bounded for pkgdown / CI (full data locally).
+  max_cells_sc <- if (.is_vignette_ci()) 3000L else 4000L
+  if (nrow(scoc_df) > max_cells_sc) {
+    set.seed(3L)
+    scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
+  }
 
   # Many CytoSPACE cells share identical spot coordinates; jitter to avoid duplicates in kNN/radius logic.
   xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
@@ -544,7 +558,7 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   }
 
   k_sc <- min(20L, max(5L, nrow(scoc_df) - 1L))
-  n_perm_sc <- 100L
+  n_perm_sc <- if (.is_vignette_ci()) 30L else 100L
 
   n_grp <- length(unique(scoc_df$ct_pg))
   if (nrow(scoc_df) >= (k_sc + 3L) && n_grp >= 2L) {
@@ -787,85 +801,95 @@ Stars use Benjamini–Hochberg FDR on two-sided p(\|Z\|): \*\*\* q\<0.001,
 
 ``` r
 
-ht <- ComplexHeatmap::Heatmap(
-  mat,
-  name = "Z",
-  col = col_fun,
-  cluster_rows    = T,
-  cluster_columns = T,
-  show_row_names    = FALSE,
-  show_column_names = FALSE,
-  show_row_dend    = FALSE,
-  show_column_dend = FALSE,
-  row_names_gp    = grid::gpar(fontsize = 7),
-  column_names_gp = grid::gpar(fontsize = 7),
-  left_annotation = row_ha,
-  top_annotation  = col_ha,
-  row_title    = "Reference Cell Type",    
-  column_title = "Neighborhood Cell Type",  
-  row_title_gp    = grid::gpar(fontsize = 12),
-  column_title_gp = grid::gpar(fontsize = 12),
-    row_title_side    = "left",       
-  column_title_side = "bottom", 
-  heatmap_legend_param = list(title = "Z-score"),
-  border = TRUE,
-  cell_fun = function(j, i, x, y, w, h, fill) {
-    qv <- mat_p_adj[i, j]
-    if (!is.finite(qv)) return(invisible(NULL))
-    sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
-    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
-  }
-)
+nhood_hm_ready <- exists("mat", inherits = FALSE) &&
+  is.matrix(mat) && nrow(mat) >= 2L && ncol(mat) >= 2L &&
+  exists("col_fun", inherits = FALSE) &&
+  exists("row_ha", inherits = FALSE) &&
+  exists("col_ha", inherits = FALSE) &&
+  exists("mat_p_adj", inherits = FALSE) &&
+  requireNamespace("ComplexHeatmap", quietly = TRUE)
 
-# Draw with main title separately
-ComplexHeatmap::draw(
-  ht,
-  column_title     = "Neighborhood Enrichment of Prognostic Cell Types",
-  column_title_gp  = grid::gpar(fontsize = 14, fontface = "bold"),
-  heatmap_legend_side = "right", annotation_legend_side = "right"
-)
+if (nhood_hm_ready && .spatial_run_full_markers) {
+  ht_clustered <- ComplexHeatmap::Heatmap(
+    mat,
+    name = "Z",
+    col = col_fun,
+    cluster_rows = TRUE,
+    cluster_columns = TRUE,
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    row_names_gp = grid::gpar(fontsize = 7),
+    column_names_gp = grid::gpar(fontsize = 7),
+    left_annotation = row_ha,
+    top_annotation = col_ha,
+    row_title = "Reference Cell Type",
+    column_title = "Neighborhood Cell Type",
+    row_title_gp = grid::gpar(fontsize = 12),
+    column_title_gp = grid::gpar(fontsize = 12),
+    row_title_side = "left",
+    column_title_side = "bottom",
+    heatmap_legend_param = list(title = "Z-score"),
+    border = TRUE,
+    cell_fun = function(j, i, x, y, w, h, fill) {
+      qv <- mat_p_adj[i, j]
+      if (!is.finite(qv)) return(invisible(NULL))
+      sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
+      grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+    }
+  )
+
+  ComplexHeatmap::draw(
+    ht_clustered,
+    column_title = "Neighborhood Enrichment of Prognostic Cell Types (clustered)",
+    column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+    heatmap_legend_side = "right",
+    annotation_legend_side = "right"
+  )
+} else if (nhood_hm_ready && !.spatial_run_full_markers) {
+  message("Skipping clustered neighborhood enrichment heatmap on CI (memory budget).")
+} else {
+  message("Skipping clustered neighborhood enrichment heatmap (z-score matrix not available).")
+}
 ```
-
-![](spatial-transcriptomics_files/figure-html/unnamed-chunk-5-1.png)
 
 ### Prognostic markers
 
 [`find_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/find_phenotype_markers.md)
-supports the same **marker scopes** on spatial data (cells or spots
-mapped to spots) as in the single-cell vignette:
+supports the same **marker scopes** on spatial data (cells mapped to
+spots) as in the single-cell vignette:
 
-- **Cell type agnostic** — `marker_scope = "phenotype_groups"`
-  (**default**): **Most Adverse** vs all other cells with a phenotype
-  label, and **Most Favorable** vs all other cells, **ignoring** cell
-  type. This asks which genes distinguish the prognostic extremes in the
-  whole mixture on the slide.
-- **Cell type specific** — `marker_scope = "cell_type_specific"`: for
-  each cell type in metadata (here, CytoSPACE-mapped types), contrasts
-  that type in the adverse or favorable tail vs a reference set
-  controlled by `celltype_contrast`. **Default**
-  `celltype_contrast = "within_cell_type"` compares to other phenotype
-  bins **within the same type** (reduces housekeeping genes repeating
-  across type × tail blocks). **`celltype_contrast = "vs_cohort_rest"`**
-  restores the **original** cohort-wide contrast: (type ∩ tail) vs
-  **every other cell**. With **`celltype_unique_genes = TRUE`**
-  (default), each gene is kept in at most one adverse/favorable row
-  (strongest `avg_log2FC`).
+- **Cell type agnostic** — `marker_scope = "phenotype_groups"`: **Most
+  Adverse** vs all other labeled cells and **Most Favorable** vs all
+  other labeled cells, **ignoring** cell type.
+- **Cell type × phenotype vs all opposite-tail cells** —
+  `marker_scope = "cell_type_specific"`,
+  `celltype_contrast = "vs_opposite_tail"`: for each cell type, that
+  type in one tail vs **every cell in the opposite tail** (works when a
+  type exists in only one tail).
+- **Cell type specific (within cell type)** —
+  `marker_scope = "cell_type_specific"`, default
+  `celltype_contrast = "within_cell_type"`: that type in one tail vs
+  **other phenotype bins within the same type**.
 
-Below, **Step 1–2** use **cell-type-agnostic** markers; **Step 2** draws
-**`plot_phenotype_markers(..., heatmap_type = "global")`** when
-**ComplexHeatmap** and **circlize** are installed (same helper as the
-**single-cell** vignette), with a **pheatmap** fallback otherwise.
-**Step 3** runs **cell-type-specific** markers and
-**`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`**
-when those packages are available.
+Below we run all three contrasts and draw
+**[`plot_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_phenotype_markers.md)**
+heatmaps with **five genes per block** and **five `anno_mark` labels per
+block** (`top_n_markers = 5`, `n_mark_labels = 5`). Gene labels are
+colored by cell type (`color_mark_labels_by_celltype = TRUE`) on the
+cell-type-specific heatmaps. On CI/pkgdown builds, only the **global**
+contrast is rendered to stay within memory limits; run locally for all
+three heatmaps.
 
-#### Step 1: Markers for adverse vs. favorable cells (cell type agnostic)
+#### Step 1: Phenotype groups and marker discovery
 
 ``` r
 
-markers <- NULL
-assay_markers <- NULL
-## Tail labels on the Seurat object (5th / 95th percentiles via define_phenotype_groups).
+markers_global <- NULL
+markers_ct_within <- NULL
+markers_ct_opp <- NULL
+
 cells <- colnames(seurat)
 scores_df_markers <- seurat@meta.data[cells, score_col, drop = FALSE]
 rownames(scores_df_markers) <- cells
@@ -875,9 +899,17 @@ groups_markers <- PhenoMapR::define_phenotype_groups(
   score_columns = score_col
 )
 group_col <- grep("phenotype_group", names(groups_markers), value = TRUE)[1]
-
 seurat@meta.data[[group_col]] <-
   groups_markers[rownames(seurat@meta.data), group_col, drop = TRUE]
+
+ct_col_markers <- NULL
+if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) &&
+    spatial_df_celltype_col %in% names(seurat@meta.data)) {
+  ct_col_markers <- spatial_df_celltype_col
+} else if (exists("celltype_col") && !is.null(celltype_col) &&
+           celltype_col %in% names(seurat@meta.data)) {
+  ct_col_markers <- celltype_col
+}
 
 group_vec <- seurat@meta.data[cells, group_col]
 group_df <- data.frame(
@@ -885,7 +917,13 @@ group_df <- data.frame(
   phenotype_group = as.character(group_vec),
   stringsAsFactors = FALSE
 )
-markers <- PhenoMapR::find_phenotype_markers(
+if (!is.null(ct_col_markers)) {
+  group_df$cell_type <- as.character(seurat@meta.data[cells, ct_col_markers])
+}
+
+max_cells_markers <- if (.is_vignette_ci()) 2500L else 5000L
+
+markers_global <- PhenoMapR::find_phenotype_markers(
   seurat,
   group_labels = group_df,
   group_column = "phenotype_group",
@@ -893,46 +931,91 @@ markers <- PhenoMapR::find_phenotype_markers(
   marker_scope = "phenotype_groups",
   assay = "Spatial",
   slot = "data",
-  # max_cells_per_ident = spatial_max_cells,
+  max_cells_per_ident = max_cells_markers,
   verbose = FALSE
 )
+
+if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
+  markers_ct_opp <- PhenoMapR::find_phenotype_markers(
+    seurat,
+    group_labels = group_df,
+    group_column = "phenotype_group",
+    cell_id_column = "cell_id",
+    cell_type_column = "cell_type",
+    marker_scope = "cell_type_specific",
+    celltype_contrast = "vs_opposite_tail",
+    assay = "Spatial",
+    slot = "data",
+    max_cells_per_ident = max_cells_markers,
+    verbose = FALSE
+  )
+  markers_ct_within <- PhenoMapR::find_phenotype_markers(
+    seurat,
+    group_labels = group_df,
+    group_column = "phenotype_group",
+    cell_id_column = "cell_id",
+    cell_type_column = "cell_type",
+    marker_scope = "cell_type_specific",
+    celltype_contrast = "within_cell_type",
+    assay = "Spatial",
+    slot = "data",
+    max_cells_per_ident = max_cells_markers,
+    verbose = FALSE
+  )
+}
 ```
 
-#### Step 2: Heatmap of adverse vs. favorable markers (global phenotype groups)
-
-**`plot_phenotype_markers(..., heatmap_type = "global")`** matches the
-single-cell vignette: favorable- then adverse-marker rows, column order
-by PhenoMapR score, and **pheatmap** only if ComplexHeatmap is
-unavailable or marker tables are incomplete.
+#### Step 2: Heatmap prep (expression matrix + metadata)
 
 ``` r
 
-  n_top <- 15L
-  expr <- NULL
-  assay_use_hm <- if (exists("assay_use") && !is.null(assay_use)) as.character(assay_use)[1] else "Spatial"
-  assay_order <- unique(c(
-    if (exists("assay_markers") && !is.null(assay_markers)) assay_markers else character(0),
-    assay_use_hm, "RNA", "SCT"
-  ))
-  for (a in assay_order) {
-    if (!a %in% names(seurat@assays)) next
-    expr <- tryCatch(
-      Seurat::GetAssayData(seurat, layer = "data", assay = a),
-      error = function(e) tryCatch(Seurat::GetAssayData(seurat, slot = "data", assay = a), error = function(e2) NULL)
-    )
-    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
-    expr <- tryCatch(
-      SeuratObject::LayerData(seurat, layer = "data", assay = a),
+expr_pm <- NULL
+meta_pm <- NULL
+group_col_hm <- NULL
+ct_col_hm <- NULL
+pal_ct <- NULL
+
+.get_seurat_layer <- function(obj, assay, layer) {
+  mat <- tryCatch(
+    Seurat::GetAssayData(obj, layer = layer, assay = assay),
+    error = function(e) tryCatch(Seurat::GetAssayData(obj, slot = layer, assay = assay), error = function(e2) NULL)
+  )
+  if (is.null(mat) || nrow(mat) == 0L || ncol(mat) == 0L) {
+    mat <- tryCatch(
+      SeuratObject::LayerData(obj, layer = layer, assay = assay),
       error = function(e) NULL
     )
-    if (is.null(expr) || ncol(expr) == 0) {
-      expr <- tryCatch(
-        SeuratObject::LayerData(seurat, layer = "counts", assay = a),
-        error = function(e) tryCatch(SeuratObject::LayerData(seurat, layer = NULL, assay = a), error = function(e2) NULL)
-      )
-    }
-    if (!is.null(expr) && nrow(expr) > 0 && ncol(expr) > 0) break
   }
+  if (is.null(mat) || nrow(mat) == 0L || ncol(mat) == 0L) NULL else mat
+}
+
+if (requireNamespace("ComplexHeatmap", quietly = TRUE) &&
+    requireNamespace("circlize", quietly = TRUE)) {
+  genes_hm <- character(0)
+  for (m in list(markers_global, markers_ct_opp, markers_ct_within)) {
+    if (is.null(m)) next
+    for (df in list(m$adverse_markers, m$favorable_markers)) {
+      if (!is.null(df) && nrow(df) > 0L && "gene" %in% names(df)) {
+        genes_hm <- union(genes_hm, df$gene)
+      }
+    }
+  }
+
+  expr <- NULL
+  layer_used <- "data"
+  assay_use_hm <- if (exists("assay_use") && !is.null(assay_use)) as.character(assay_use)[1] else "Spatial"
+  assay_order <- unique(c(assay_use_hm, "Spatial", "RNA", "SCT"))
+  for (a in assay_order) {
+    if (!a %in% names(seurat@assays)) next
+    expr <- .get_seurat_layer(seurat, a, "data")
+    layer_used <- "data"
+    if (is.null(expr)) {
+      expr <- .get_seurat_layer(seurat, a, "counts")
+      layer_used <- "counts"
+    }
+    if (!is.null(expr)) break
+  }
+
   if (!is.null(expr) && ncol(expr) > 0) {
     cells_expr <- colnames(expr)
     if (is.null(cells_expr)) cells_expr <- character(0)
@@ -953,59 +1036,137 @@ unavailable or marker tables are incomplete.
       }
     }
     if (length(cells_use) == 0) {
-      message("No overlapping cells between expression and metadata; skipping heatmap. ",
-              "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj),
-              if (length(cells_expr) > 0) paste0("; expr sample: ", head(cells_expr, 2)) else ""
+      message(
+        "No overlapping cells between expression and metadata; skipping marker heatmaps. ",
+        "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj)
       )
     } else {
-      expr_pm <- as.matrix(expr[, cells_use, drop = FALSE])
+      max_cells_hm <- if (.is_vignette_ci()) 2000L else 4000L
+      if (length(cells_use) > max_cells_hm) {
+        set.seed(5L)
+        cells_use <- sample(cells_use, max_cells_hm)
+      }
+      expr_sub <- expr[, cells_use, drop = FALSE]
+      if (length(genes_hm) > 0) {
+        genes_use <- intersect(genes_hm, rownames(expr_sub))
+        if (length(genes_use) > 0) {
+          expr_sub <- expr_sub[genes_use, , drop = FALSE]
+        }
+      }
+      if (identical(layer_used, "counts")) {
+        if (requireNamespace("Matrix", quietly = TRUE) &&
+            (inherits(expr_sub, "Matrix") || inherits(expr_sub, "sparseMatrix"))) {
+          cs <- Matrix::colSums(expr_sub)
+          expr_sub <- Matrix::t(Matrix::t(expr_sub) / pmax(cs, 1) * 10000)
+          expr_sub <- log1p(expr_sub)
+        } else {
+          cs <- colSums(expr_sub)
+          expr_sub <- t(t(expr_sub) / pmax(cs, 1) * 10000)
+          expr_sub <- log1p(expr_sub)
+        }
+      }
+      expr_pm <- as.matrix(expr_sub)
+      if (exists("expr", inherits = FALSE)) rm(expr)
+      gc(verbose = FALSE)
       meta_pm <- seurat@meta.data[cells_use, , drop = FALSE]
       meta_pm$cell_id_plot <- cells_use
       group_col_hm <- paste0("phenotype_group_", score_col)
       if (!group_col_hm %in% names(meta_pm)) group_col_hm <- group_col
-
-      ct_col_hm <- NULL
-      if (exists("spatial_df_celltype_col") && !is.null(spatial_df_celltype_col) &&
-          spatial_df_celltype_col %in% names(meta_pm)) {
-        ct_col_hm <- spatial_df_celltype_col
-      } else if (exists("celltype_col") && !is.null(celltype_col) && celltype_col %in% names(meta_pm)) {
-        ct_col_hm <- celltype_col
-      }
-      if (is.null(ct_col_hm)) {
+      ct_col_hm <- ct_col_markers
+      if (is.null(ct_col_hm) || !ct_col_hm %in% names(meta_pm)) {
         meta_pm$celltype_plot <- factor(rep("Cell", nrow(meta_pm)))
         ct_col_hm <- "celltype_plot"
       } else {
         meta_pm[[ct_col_hm]] <- factor(as.character(meta_pm[[ct_col_hm]]))
       }
       pal_ct <- PhenoMapR::get_celltype_palette(levels(meta_pm[[ct_col_hm]]))
-
-      drew_ch <- FALSE
-      if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
-        adv_ok <- !is.null(markers$adverse_markers) && nrow(markers$adverse_markers) > 0L
-        fav_ok <- !is.null(markers$favorable_markers) && nrow(markers$favorable_markers) > 0L
-        if (adv_ok && fav_ok) {
-          PhenoMapR::plot_phenotype_markers(
-            markers = markers,
-            expr_mat = expr_pm,
-            meta = meta_pm,
-            cell_id_col = "cell_id_plot",
-            group_col = group_col_hm,
-            score_col = score_col,
-            celltype_col = ct_col_hm,
-            celltype_palette = pal_ct,
-            heatmap_type = "global",
-            top_n_markers = 100L,
-            n_mark_labels = 15L,
-            p_adj_threshold = 0.05,
-            column_title = ""
-          )
-        }
-      }
     }
+  } else {
+    message("Could not extract a non-empty expression matrix for marker heatmaps.")
   }
+}
 ```
 
-![](spatial-transcriptomics_files/figure-html/heatmap-markers-spatial-1.png)
+#### Step 3: Cell-type-agnostic marker heatmap
+
+``` r
+
+if (!is.null(expr_pm) && !is.null(markers_global)) {
+  adv_ok <- !is.null(markers_global$adverse_markers) && nrow(markers_global$adverse_markers) > 0L
+  fav_ok <- !is.null(markers_global$favorable_markers) && nrow(markers_global$favorable_markers) > 0L
+  if (adv_ok && fav_ok) {
+    PhenoMapR::plot_phenotype_markers(
+      markers = markers_global,
+      expr_mat = expr_pm,
+      meta = meta_pm,
+      cell_id_col = "cell_id_plot",
+      group_col = group_col_hm,
+      score_col = score_col,
+      celltype_col = ct_col_hm,
+      celltype_palette = pal_ct,
+      heatmap_type = "global",
+      top_n_markers = 5L,
+      n_mark_labels = 5L,
+      p_adj_threshold = 0.05,
+      column_title = "Global phenotype marker genes (CytoSPACE cells)"
+    )
+  }
+}
+```
+
+![](spatial-transcriptomics_files/figure-html/heatmap-markers-global-spatial-1.png)
+
+#### Step 4: Cell-type × phenotype vs all opposite-tail cells
+
+``` r
+
+if (.spatial_run_full_markers && !is.null(expr_pm) && !is.null(markers_ct_opp)) {
+  PhenoMapR::plot_phenotype_markers(
+    markers = markers_ct_opp,
+    expr_mat = expr_pm,
+    meta = meta_pm,
+    cell_id_col = "cell_id_plot",
+    group_col = group_col_hm,
+    score_col = score_col,
+    celltype_col = ct_col_hm,
+    celltype_palette = pal_ct,
+    heatmap_type = "cell_type_specific",
+    top_n_markers = 5L,
+    n_mark_labels = 5L,
+    color_mark_labels_by_celltype = TRUE,
+    outline_marker_blocks = TRUE,
+    block_outline_color = "black",
+    p_adj_threshold = 0.05,
+    column_title = "Cell-type markers vs all opposite-tail cells (CytoSPACE cells)"
+  )
+}
+```
+
+#### Step 5: Cell-type-specific markers (within cell type)
+
+``` r
+
+if (.spatial_run_full_markers && !is.null(expr_pm) && !is.null(markers_ct_within)) {
+  PhenoMapR::plot_phenotype_markers(
+    markers = markers_ct_within,
+    expr_mat = expr_pm,
+    meta = meta_pm,
+    cell_id_col = "cell_id_plot",
+    group_col = group_col_hm,
+    score_col = score_col,
+    celltype_col = ct_col_hm,
+    celltype_palette = pal_ct,
+    heatmap_type = "cell_type_specific",
+    top_n_markers = 5L,
+    n_mark_labels = 5L,
+    color_mark_labels_by_celltype = TRUE,
+    outline_marker_blocks = TRUE,
+    block_outline_color = "black",
+    p_adj_threshold = 0.05,
+    column_title = "Cell-type-specific phenotype marker genes (CytoSPACE cells)"
+  )
+}
+```
 
 #### Stacked barplot: adverse vs. favorable by cell type
 
@@ -1095,13 +1256,13 @@ phenotypes.
   **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)**
   **`nhood_enrichment()`** and **`cooccur_local()`** on Visium
   coordinates and prognostic groups (Part 2 only; install from GitHub).
-- **Markers**: (1) **Cell-type-agnostic**
-  `find_phenotype_markers(..., marker_scope = "phenotype_groups")` with
-  **`plot_phenotype_markers(..., heatmap_type = "global")`** (or
-  **pheatmap** fallback); (2) **Cell-type-specific**
-  `marker_scope = "cell_type_specific"` with
-  **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`**
-  when **ComplexHeatmap** is available.
+- **Markers**: three
+  **[`plot_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_phenotype_markers.md)**
+  heatmaps on CytoSPACE cells — (1) **cell-type agnostic**
+  (`heatmap_type = "global"`), (2) **cell type × phenotype vs all
+  opposite-tail cells** (`celltype_contrast = "vs_opposite_tail"`), (3)
+  **within cell type** (`celltype_contrast = "within_cell_type"`); each
+  uses **five genes and five `anno_mark` labels per block**.
 
 ### References
 
@@ -1137,9 +1298,9 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] future_1.70.0      ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1       
-    ## [5] ggplot2_4.0.3      Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1          
-    ## [9] PhenoMapR_0.1.0   
+    ##  [1] future_1.70.0      ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1       
+    ##  [5] ggplot2_4.0.3      Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1          
+    ##  [9] PhenoMapR_0.1.0    testthat_3.3.2    
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        
@@ -1147,45 +1308,48 @@ sessionInfo()
     ##   [7] farver_2.1.2           rmarkdown_2.31         GlobalOptions_0.1.4   
     ##  [10] fs_2.1.0               ragg_1.5.2             vctrs_0.7.3           
     ##  [13] ROCR_1.0-12            spatstat.explore_3.8-1 htmltools_0.5.9       
-    ##  [16] curl_7.1.0             spatialCooccur_0.99.0  sass_0.4.10           
-    ##  [19] sctransform_0.4.3      parallelly_1.47.0      KernSmooth_2.23-26    
-    ##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            
-    ##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         
-    ##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.2          
-    ##  [31] iterators_1.0.14       mime_0.13              lifecycle_1.0.5       
-    ##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              
-    ##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    
-    ##  [40] shiny_1.13.0           digest_0.6.39          colorspace_2.1-2      
-    ##  [43] S4Vectors_0.50.1       tensor_1.5.1           RSpectra_0.16-2       
-    ##  [46] irlba_2.3.7            textshaping_1.0.5      labeling_0.4.3        
-    ##  [49] progressr_0.19.0       spatstat.sparse_3.2-0  httr_1.4.8            
-    ##  [52] polyclip_1.10-7        abind_1.4-8            compiler_4.6.0        
-    ##  [55] gargle_1.6.1           doParallel_1.0.17      withr_3.0.2           
-    ##  [58] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         
-    ##  [61] MASS_7.3-65            rjson_0.2.23           tools_4.6.0           
-    ##  [64] lmtest_0.9-40          otel_0.2.0             googledrive_2.1.2     
-    ##  [67] httpuv_1.6.17          future.apply_1.20.2    goftest_1.2-3         
-    ##  [70] glue_1.8.1             nlme_3.1-169           promises_1.5.0        
-    ##  [73] grid_4.6.0             Rtsne_0.17             cluster_2.1.8.2       
-    ##  [76] reshape2_1.4.5         generics_0.1.4         gtable_0.3.6          
-    ##  [79] spatstat.data_3.1-9    tidyr_1.3.2            data.table_1.18.4     
-    ##  [82] BiocGenerics_0.58.1    spatstat.geom_3.8-1    RcppAnnoy_0.0.23      
-    ##  [85] foreach_1.5.2          ggrepel_0.9.8          RANN_2.6.2            
-    ##  [88] pillar_1.11.1          stringr_1.6.0          limma_3.68.4          
-    ##  [91] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           
-    ##  [94] circlize_0.4.18        splines_4.6.0          moments_0.14.1        
-    ##  [97] lattice_0.22-9         survival_3.8-6         deldir_2.0-4          
-    ## [100] tidyselect_1.2.1       ComplexHeatmap_2.28.0  miniUI_0.1.2          
-    ## [103] pbapply_1.7-4          knitr_1.51             gridExtra_2.3         
-    ## [106] IRanges_2.46.0         scattermore_1.2        stats4_4.6.0          
-    ## [109] xfun_0.58              statmod_1.5.2          matrixStats_1.5.0     
-    ## [112] stringi_1.8.7          lazyeval_0.2.3         yaml_2.3.12           
-    ## [115] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          
-    ## [118] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          
-    ## [121] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       
-    ## [124] Rcpp_1.1.1-1.1         globals_0.19.1         spatstat.random_3.5-0 
-    ## [127] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.0        
-    ## [130] pkgdown_2.2.0          presto_1.0.0           dotCall64_1.2         
-    ## [133] listenv_0.10.1         viridisLite_0.4.3      scales_1.4.0          
-    ## [136] ggridges_0.5.7         crayon_1.5.3           purrr_1.2.2           
-    ## [139] GetoptLong_1.1.1       rlang_1.2.0            cowplot_1.2.0
+    ##  [16] progress_1.2.3         curl_7.1.0             spatialCooccur_0.99.1 
+    ##  [19] sass_0.4.10            sctransform_0.4.3      parallelly_1.47.0     
+    ##  [22] KernSmooth_2.23-26     bslib_0.11.0           htmlwidgets_1.6.4     
+    ##  [25] desc_1.4.3             ica_1.0-3              plyr_1.8.9            
+    ##  [28] plotly_4.12.0          zoo_1.8-15             cachem_1.1.0          
+    ##  [31] igraph_2.3.2           iterators_1.0.14       mime_0.13             
+    ##  [34] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-5          
+    ##  [37] R6_2.6.1               fastmap_1.2.0          clue_0.3-68           
+    ##  [40] fitdistrplus_1.2-6     shiny_1.14.0           digest_0.6.39         
+    ##  [43] colorspace_2.1-2       S4Vectors_0.50.1       rprojroot_2.1.1       
+    ##  [46] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           
+    ##  [49] pkgload_1.5.3          textshaping_1.0.5      labeling_0.4.3        
+    ##  [52] progressr_0.19.0       spatstat.sparse_3.2-0  httr_1.4.8            
+    ##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.0        
+    ##  [58] gargle_1.6.1           doParallel_1.0.17      withr_3.0.3           
+    ##  [61] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         
+    ##  [64] pkgbuild_1.4.8         MASS_7.3-65            rjson_0.2.23          
+    ##  [67] tools_4.6.0            lmtest_0.9-40          otel_0.2.0            
+    ##  [70] googledrive_2.1.2      httpuv_1.6.17          future.apply_1.20.2   
+    ##  [73] goftest_1.2-3          glue_1.8.1             nlme_3.1-169          
+    ##  [76] promises_1.5.0         grid_4.6.0             Rtsne_0.17            
+    ##  [79] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        
+    ##  [82] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           
+    ##  [85] data.table_1.18.4      hms_1.1.4              BiocGenerics_0.58.1   
+    ##  [88] spatstat.geom_3.8-1    RcppAnnoy_0.0.23       foreach_1.5.2         
+    ##  [91] ggrepel_0.9.8          RANN_2.6.2             pillar_1.11.1         
+    ##  [94] stringr_1.6.0          limma_3.68.4           spam_2.11-4           
+    ##  [97] RcppHNSW_0.7.0         later_1.4.8            circlize_0.4.18       
+    ## [100] splines_4.6.0          moments_0.14.1         lattice_0.22-9        
+    ## [103] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      
+    ## [106] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         
+    ## [109] knitr_1.51             gridExtra_2.3          IRanges_2.46.0        
+    ## [112] scattermore_1.2        stats4_4.6.0           xfun_0.59             
+    ## [115] statmod_1.5.2          brio_1.1.5             matrixStats_1.5.0     
+    ## [118] stringi_1.8.7          lazyeval_0.2.3         yaml_2.3.12           
+    ## [121] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          
+    ## [124] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          
+    ## [127] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       
+    ## [130] Rcpp_1.1.1-1.1         globals_0.19.1         spatstat.random_3.5-0 
+    ## [133] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.0        
+    ## [136] pkgdown_2.2.0          presto_1.0.0           prettyunits_1.2.0     
+    ## [139] dotCall64_1.2          listenv_1.0.0          viridisLite_0.4.3     
+    ## [142] scales_1.4.0           ggridges_0.5.7         purrr_1.2.2           
+    ## [145] crayon_1.5.3           GetoptLong_1.1.1       rlang_1.2.0           
+    ## [148] cowplot_1.2.0

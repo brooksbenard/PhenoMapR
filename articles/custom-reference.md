@@ -330,12 +330,12 @@ dat_os <- subset(pheno, !is.na(survival_time) & !is.na(survival_event) & !is.na(
       ylab = "Survival probability",
       legend.title = "Custom score",
       legend.labs = c("Low", "High"),
-      legend = "right",
+      legend = c(.75,.5),
       palette = unname(pal_km[c("Low", "High")]),
       risk.table = FALSE,
       pval = label,
-      pval.coord = c(max_t * 0.4, 0.95),
-      pval.size = 3
+      pval.coord = c(max_t * 0.25, 0.95),
+      pval.size = 5
     ) 
     
     p_surv$plot + theme(plot.title = element_text(hjust = 0.5))
@@ -828,7 +828,7 @@ sessionInfo()
     ## [13] yaml_2.3.12             data.table_1.18.4       knitr_1.51             
     ## [16] labeling_0.4.3          htmlwidgets_1.6.4       curl_7.1.0             
     ## [19] splitstackshape_1.4.8.1 RColorBrewer_1.1-3      abind_1.4-8            
-    ## [22] withr_3.0.2             purrr_1.2.2             BiocGenerics_0.58.1    
+    ## [22] withr_3.0.3             purrr_1.2.2             BiocGenerics_0.58.1    
     ## [25] desc_1.4.3              stats4_4.6.0            googledrive_2.1.2      
     ## [28] colorspace_2.1-2        scales_1.4.0            iterators_1.0.14       
     ## [31] cli_3.6.6               rmarkdown_2.31          crayon_1.5.3           
@@ -847,5 +847,5 @@ sessionInfo()
     ## [70] evaluate_1.0.5          lattice_0.22-9          png_0.1-9              
     ## [73] backports_1.5.1         broom_1.0.13            gargle_1.6.1           
     ## [76] bslib_0.11.0            Rcpp_1.1.1-1.1          gridExtra_2.3          
-    ## [79] HGNChelper_0.8.15       xfun_0.58               fs_2.1.0               
+    ## [79] HGNChelper_0.8.15       xfun_0.59               fs_2.1.0               
     ## [82] pkgconfig_2.0.3         GlobalOptions_0.1.4

@@ -69,10 +69,13 @@ transpose/scale costs small on large matrices.</p>
 <span>  <span class="va">score_col</span>,</span>
 <span>  celltype_col <span class="op">=</span> <span class="st">"celltype_original"</span>,</span>
 <span>  celltype_palette <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  color_schemes <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  heatmap_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"global"</span>, <span class="st">"cell_type_specific"</span><span class="op">)</span>,</span>
 <span>  top_n_markers <span class="op">=</span> <span class="fl">20L</span>,</span>
 <span>  rank_by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lfc"</span>, <span class="st">"p_adj"</span><span class="op">)</span>,</span>
 <span>  n_mark_labels <span class="op">=</span> <span class="fl">5L</span>,</span>
+<span>  mark_label_fontsize <span class="op">=</span> <span class="fl">7</span>,</span>
+<span>  color_mark_labels_by_celltype <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  p_adj_threshold <span class="op">=</span> <span class="fl">0.05</span>,</span>
 <span>  scale_clip <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  heatmap_width <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -123,7 +126,19 @@ transpose/scale costs small on large matrices.</p>
 
 <dt id="arg-celltype-palette">celltype_palette<a class="anchor" aria-label="anchor" href="#arg-celltype-palette"></a></dt>
 <dd><p>Named vector of colors for cell types. If <code>NULL</code>,
-<code><a href="get_celltype_palette.html">get_celltype_palette()</a></code> is used.</p></dd>
+cell-type colors come from <code>color_schemes$celltype</code> (default:
+<code><a href="get_celltype_palette.html">get_celltype_palette()</a></code>).</p></dd>
+
+
+<dt id="arg-color-schemes">color_schemes<a class="anchor" aria-label="anchor" href="#arg-color-schemes"></a></dt>
+<dd><p>Optional named list controlling heatmap colors. Each
+element may be <code>"default"</code>, a shorthand string like
+<code>"brewer:RdBu"</code> or <code>"viridis:plasma"</code>, or a list with
+<code>source</code> (<code>"default"</code>, <code>"brewer"</code>, <code>"viridis"</code>, or
+<code>"manual"</code>) plus <code>name</code> and/or <code>colors</code>. Supported names:
+<code>phenotype</code> (discrete groups), <code>score</code> (PhenoMapR score bar),
+<code>expression</code> (scaled-expression heatmap body), and <code>celltype</code>.
+See <code><a href="list_marker_heatmap_color_palettes.html">list_marker_heatmap_color_palettes()</a></code> for built-in options.</p></dd>
 
 
 <dt id="arg-heatmap-type">heatmap_type<a class="anchor" aria-label="anchor" href="#arg-heatmap-type"></a></dt>
@@ -149,6 +164,19 @@ purely due to sample size.</p></dd>
 <dt id="arg-n-mark-labels">n_mark_labels<a class="anchor" aria-label="anchor" href="#arg-n-mark-labels"></a></dt>
 <dd><p>Number of row labels to draw per block via
 <code><a href="https://rdrr.io/pkg/ComplexHeatmap/man/anno_mark.html" class="external-link">ComplexHeatmap::anno_mark</a></code> (top genes by <code>avg_log2FC</code> within each block).</p></dd>
+
+
+<dt id="arg-mark-label-fontsize">mark_label_fontsize<a class="anchor" aria-label="anchor" href="#arg-mark-label-fontsize"></a></dt>
+<dd><p>Font size (points) for <code>anno_mark</code> gene labels.
+Default <code>7</code>. Decrease when many labels are drawn in a compact heatmap.</p></dd>
+
+
+<dt id="arg-color-mark-labels-by-celltype">color_mark_labels_by_celltype<a class="anchor" aria-label="anchor" href="#arg-color-mark-labels-by-celltype"></a></dt>
+<dd><p>If <code>TRUE</code>, <code>anno_mark</code> gene labels
+are colored with <code>celltype_palette</code> according to each gene's cell type.
+Applies to <code>heatmap_type = "cell_type_specific"</code> (and to <code>"global"</code>
+when marker tables include a <code>cell_type</code> column). Default <code>FALSE</code>
+keeps labels black.</p></dd>
 
 
 <dt id="arg-p-adj-threshold">p_adj_threshold<a class="anchor" aria-label="anchor" href="#arg-p-adj-threshold"></a></dt>

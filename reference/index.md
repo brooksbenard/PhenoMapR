@@ -81,6 +81,8 @@ Define adverse/favorable groups and find marker genes.
   : Find Unique Marker Genes for Adverse and Favorable Phenotype Groups
 - [`plot_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_phenotype_markers.md)
   : Plot phenotype marker gene heatmaps (ComplexHeatmap)
+- [`list_marker_heatmap_color_palettes()`](https://brooksbenard.github.io/PhenoMapR/reference/list_marker_heatmap_color_palettes.md)
+  : List built-in marker heatmap color palette options
 
 ## Visualization
 

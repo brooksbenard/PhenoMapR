@@ -28,7 +28,9 @@ all samples in the dataset.
 ``` r
 
 suppressPackageStartupMessages({
-  library(PhenoMapR)
+  if (!isTRUE(.try_load_phenomapr_dev())) {
+    library(PhenoMapR)
+  }
   library(googledrive)
   library(ggplot2)
   library(ggpubr)
@@ -55,6 +57,11 @@ meta <- read.delim("PAAD_CRA001160_CellMetainfo_table.tsv", stringsAsFactors = F
          celltype_original = `Celltype (original)`)
 
 # visuals for cohort
+paad_vs_ctrl_clors <- c(
+  "Normal" = "#b35806",
+  "Tumor" = "#8073ac"
+)
+
 pal_cells <- PhenoMapR::get_celltype_palette(meta$celltype_original)
 
 malignant_colors <- c(
@@ -65,9 +72,21 @@ malignant_colors <- c(
 )
 
 # UMAPS for the cell type clustering
+# PDAC vs control
+umap_1 <- ggscatter(meta, 
+          x = "UMAP_1", 
+          y = "UMAP_2",
+          size = .5,
+          color = "Source",
+          palette = paad_vs_ctrl_clors,
+          legend = "right"
+) + guides(color = guide_legend(override.aes = list(size = 2))) +
+    labs(color = "Source") +
+  theme_void()
+
 
 # Broad cell group labels
-umap_1 <- ggscatter(meta, 
+umap_2 <- ggscatter(meta, 
           x = "UMAP_1", 
           y = "UMAP_2",
           size = .5,
@@ -79,7 +98,7 @@ umap_1 <- ggscatter(meta,
   theme_void()
 
 # Original cell type labels from the authors
-umap_2 <- ggscatter(meta,
+umap_3 <- ggscatter(meta,
           x = "UMAP_1", 
           y = "UMAP_2",
           size = .5,
@@ -87,8 +106,12 @@ umap_2 <- ggscatter(meta,
           palette = pal_cells,
           legend = "right"
 ) + guides(color = guide_legend(override.aes = list(size = 2), legend.spacing.x = unit(0.5, 'cm')))+
-  labs(color = "Cell Type") +
-  theme_void()
+  labs(color = "Cell Type", ) +
+  theme_void() +
+   theme(
+    legend.spacing.y = unit(0.1, "cm"),  # reduce vertical spacing
+    legend.key.height = unit(0.3, "cm")  # reduce key height
+  )
 
 
 # MALIGNANT PLOT 
@@ -159,7 +182,7 @@ meta$Patient <- factor(meta$Patient, levels = sample_order)
 p_num <- ggplot(meta, aes(x = Patient)) +
   # geom_bar(fill = "grey55", color = "white", linewidth = 0.2) +
     ggchicklet2::geom_chicklet_bar(
-                                   radius = grid::unit(1, "pt"), 
+                                   radius = grid::unit(.5, "pt"), 
                                    color = "white", linewidth = 0.2,
                                    fill = "grey55") +
   theme_pubclean(base_size = 8) +
@@ -177,12 +200,12 @@ left_plots <- (p_num / p_mal / p_cell) +
   plot_layout(heights = c(1, 1, 5), guides = "collect")
 
 # Right column with specific heights for UMAPs
-right_plots <- (umap_1 / umap_2) + 
-  plot_layout(heights = c(1, 1), guides = "collect")
+right_plots <- (umap_1 / umap_2 / umap_3) + 
+  plot_layout(heights = c(1, 1, 1), guides = "collect")
 
 # Combine
 (left_plots | right_plots) + 
-  plot_layout(widths = c(1, 0.75))
+  plot_layout(widths = c(1, 0.5))
 ```
 
 ![](single-cell_files/figure-html/load-data-1.png)
@@ -252,12 +275,34 @@ ggpubr::ggscatter(df_scatter, x = "x", y = "y", color = "Cell_Type", palette = m
   scale_fill_manual(values = malignant_colors) +
     scale_x_continuous("PRECOG score") +
     scale_y_continuous("TCGA score") +
-    labs(title = "TCGA vs. PRECOG PhenoMapR scores by cell type") +
+    labs(title = "TCGA vs. PRECOG PhenoMapR scores by broad cell type") +
     theme_pubr(base_size = 10) +
     theme(legend.position = "right", legend.title = element_text(size = 12), legend.text = element_text(size = 10))
 ```
 
 ![](single-cell_files/figure-html/scatter-tcga-precog-1.png)
+
+``` r
+
+df_scatter <- data.frame(
+  x = meta[[score_precog_col]],
+  y = meta[[score_tcga_col]],
+  Cell_Type = factor(meta$celltype_original)
+)
+
+ggpubr::ggscatter(df_scatter, x = "x", y = "y", color = "Cell_Type", palette = pal_cells,
+    add = "reg.line", conf.int = TRUE, size = 0.5, alpha = 0.3) +
+    ggpubr::stat_cor(aes(color = Cell_Type), label.x.npc = "left", size = 3.5, show.legend = F) +
+  scale_color_manual(values = pal_cells) +
+  scale_fill_manual(values = pal_cells) +
+    scale_x_continuous("PRECOG score") +
+    scale_y_continuous("TCGA score") +
+    labs(title = "TCGA vs. PRECOG PhenoMapR scores by cell type") +
+    theme_pubr(base_size = 10) +
+    theme(legend.position = "right", legend.title = element_text(size = 12), legend.text = element_text(size = 10))
+```
+
+![](single-cell_files/figure-html/scatter-tcga-precog-detailed-1.png)
 
 As expected, **`PhenoMapR`** scores are strongly correlated between TCGA
 and PRECOG references across all major cell types.
@@ -332,7 +377,10 @@ ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
   facet_wrap(~ Reference, ncol = 2) +
   scale_fill_manual(values = malignant_colors, name = "Cell Type (Broad)") +
   theme_pubr(base_size = 10) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right", strip.text = element_text(size = 12)) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right", 
+        strip.text = element_text(size = 12)) +
   labs(x = NULL, y = "PhenoMapR score", title = "Score distribution by reference and cell type")
 ```
 
@@ -370,7 +418,7 @@ ggplot(dl, aes(x = Cell_type, y = Score, fill = Cell_type)) +
                  outlier.fill = NULL,
                  outlier.color = NULL, outlier.shape = 21) +
   facet_wrap(~ Reference, ncol = 2) +
-  scale_fill_manual(values = pal_cells, name = "Cell Type (Original)") +
+  scale_fill_manual(values = pal_cells, name = "Cell Type") +
   theme_pubr(base_size = 10) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "right", strip.text = element_text(size = 12)) +
   labs(x = NULL, y = "PhenoMapR score", title = "Score distribution by reference and cell type")
@@ -501,14 +549,16 @@ ct_long <- rbind(
 ct_long$pg <- factor(ct_long$pg, levels = c("Most Favorable", "Most Adverse"))
 max_n <- max(abs(ct_long$n), 1)
 ggplot(ct_long, aes(x = Cell_type, y = n, fill = pg)) +
-  # geom_col() +
-  ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(1, "pt")) +
+  ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(0, "pt")) +
   coord_flip() +
   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
   scale_y_continuous(breaks = seq(-max_n, max_n, length.out = 5), labels = abs(seq(-max_n, max_n, length.out = 5))) +
   theme_pubr(base_size = 10) +
-  theme(axis.text.y = element_text(size = 9), legend.position = c(.8,.75)) +
-  labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell type abundance in adverse vs favorable extremes")
+  theme(
+  axis.text.y = element_text(size = 9),
+  legend.position = c(.8, .7),
+  plot.title = element_text(hjust = 0.5, size = 10)) +
+  labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Broad cell type abundance in \nadverse vs. favorable extremes")
 ```
 
 ![](single-cell_files/figure-html/celltype-in-extreme-percentiles-1.png)
@@ -539,14 +589,21 @@ across cell types.
   ct_orig_long$pg <- factor(ct_orig_long$pg, levels = c("Most Favorable", "Most Adverse"))
   max_n_orig <- max(abs(ct_orig_long$n), 1)
   print(ggplot(ct_orig_long, aes(x = Cell_type_original, y = n, fill = pg)) +
-    # geom_col() +
-        ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(1, "pt")) +
+
+        ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(0, "pt")) +
     coord_flip() +
     scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-    scale_y_continuous(breaks = seq(-max_n_orig, max_n_orig, length.out = 5), labels = abs(seq(-max_n_orig, max_n_orig, length.out = 5))) +
-  theme_pubr(base_size = 10) +
-    theme(axis.text.y = element_text(size = 9), legend.position = c(.8,.75)) +
-    labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell Type (original) abundance in adverse vs favorable extremes"))
+scale_y_continuous(
+  breaks = round(seq(-max_n_orig, max_n_orig, length.out = 5)),
+  labels = abs(round(seq(-max_n_orig, max_n_orig, length.out = 5)))
+) +
+theme_pubr(base_size = 10) +
+      theme(
+  axis.text.y = element_text(size = 9),
+  legend.position = c(.8, .75),
+  plot.title = element_text(hjust = 0.5, size = 10)
+) +
+    labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell Type abundance in adverse\nvs. favorable extremes"))
 ```
 
 ![](single-cell_files/figure-html/celltype-original-in-extreme-percentiles-1.png)
@@ -662,7 +719,9 @@ Rows follow the same column order: **Most Favorable** (each cell type),
 **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`**
 draws row splits between blocks; **`anno_mark`** labels the **top five**
 genes (by log2FC) within each (phenotype tail × cell type) group, with
-**cell type** and **phenotype** strips on the left.
+**cell type** and **phenotype** strips on the left. Setting
+**`color_mark_labels_by_celltype = TRUE`** colors each labeled gene with
+its cell-type palette so markers are easier to read against the strips.
 
 ``` r
 
@@ -697,11 +756,55 @@ plot_phenotype_markers(
   heatmap_type = "cell_type_specific",
   top_n_markers = 10L,
   n_mark_labels = 5L,
-  p_adj_threshold = 0.05
+  color_mark_labels_by_celltype = TRUE,
+  p_adj_threshold = 0.05, outline_marker_blocks = T
 )
 ```
 
 ![](single-cell_files/figure-html/celltype-specific-phenotype-markers-1.png)
+
+``` r
+
+group_df <- data.frame(
+  cell_id = meta$Cell,
+  phenotype_group = meta[[group_col]],
+  cell_type = meta$celltype_original,
+  stringsAsFactors = FALSE
+)
+
+markers_ct <- find_phenotype_markers(
+  expr_mat,
+  group_labels = group_df,
+  group_column = "phenotype_group",
+  cell_id_column = "cell_id",
+  cell_type_column = "cell_type",
+  marker_scope = "cell_type_specific",
+  celltype_contrast = "vs_opposite_tail",
+  pval_threshold = 0.05,
+  max_cells_per_ident = 5000L,
+  verbose = FALSE
+)
+
+plot_phenotype_markers(
+  markers = markers_ct,
+  expr_mat = expr_mat,
+  meta = meta,
+  cell_id_col = "Cell",
+  group_col = group_col,
+  score_col = score_precog_col,
+  celltype_col = "celltype_original",
+  celltype_palette = pal_cells,
+  heatmap_type = "cell_type_specific",
+  outline_marker_blocks = TRUE,
+  block_outline_color = "black",
+  top_n_markers = 5L,
+  n_mark_labels = 5L,
+  color_mark_labels_by_celltype = TRUE,
+  p_adj_threshold = 0.05,
+)
+```
+
+![](single-cell_files/figure-html/celltype-specific-against-tail-phenotype-markers-1.png)
 
 ## Dataset summary of PhenoMapR results
 
@@ -822,7 +925,7 @@ pb_df <- data.frame(
 )
 p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled, fill = .data$pb_score_scaled)) +
   # geom_col(width = 0.65) +
-  ggchicklet2::geom_chicklet(width = 0.65, radius = grid::unit(1.5, "pt")) +
+  ggchicklet2::geom_chicklet(width = 0.9, radius = grid::unit(1, "pt")) +
   scale_fill_gradient2(
     low = "#2166AC",
     mid = "#FFFFFF",
@@ -872,25 +975,12 @@ bar_long <- rbind(
   data.frame(sample = bar_stack$sample, pg = "Most Adverse", y_min = bar_stack$p_fav, y_max = bar_stack$p_fav + bar_stack$p_adv)
 )
 bar_long$pg <- factor(bar_long$pg, levels = c("Most Favorable", "Most Adverse"))
-# p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg)) +
-#   geom_rect(aes(xmin = as.numeric(sample) - 0.4, xmax = as.numeric(sample) + 0.4, ymin = y_min, ymax = y_max)) +
-#     # ggchicklet2::geom_chicklet_bar(width = 0.65, radius = grid::unit(1.5, "pt")) +
-#   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-#   scale_x_continuous(
-#     breaks = seq_along(sample_lev),
-#     labels = sample_lev,
-#     limits = c(0.5, length(sample_lev) + 0.5),
-#     expand = c(0, 0)
-#   ) +
-#   scale_y_continuous(expand = c(0, 0)) +
-#   theme_minimal() +
-#   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(), legend.position = "none") +
-#   labs(y = "Proportion\n(5th %)", title = NULL)
+
 p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
                                ymin = y_min, ymax = y_max,
                                xmin = as.numeric(sample) - 0.4,
                                xmax = as.numeric(sample) + 0.4)) +
-  ggchicklet2::geom_rrect(radius = grid::unit(1, "pt")) +
+  ggchicklet2::geom_rrect(radius = grid::unit(0, "pt")) +
   scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), 
                     name = "Prognostic group") +
   scale_x_continuous(
@@ -907,7 +997,7 @@ p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
     axis.title.x = element_blank(),
     legend.position = "none"
   ) +
-  labs(y = "Proportion\n(5th %)", title = NULL)
+  labs(y = "Proportion\nof cells\n(in 5th %)", title = NULL)
 
 meta_plot_dots <- meta_plot[meta_plot$prognostic_grp %in% c("Most Adverse", "Most Favorable"), ]
 p_dots <- NULL
@@ -928,7 +1018,7 @@ if (nrow(meta_plot_dots) > 0) {
   p_dots <- ggplot(counts, aes(x = x_num, y = cell_type, size = proportion, color = pg)) +
     geom_point(alpha = 0.85) +
     scale_color_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-    scale_size_continuous(range = c(0, 5), name = "Proportion") +
+    scale_size_continuous(range = c(0, 5), name = "Proportion of cell type\nper sample in\nprognostic groups") +
     scale_x_continuous(
       breaks = seq_along(sample_lev),
       labels = sample_lev,
@@ -936,7 +1026,16 @@ if (nrow(meta_plot_dots) > 0) {
       expand = c(0, 0)
     ) +
     theme_minimal() +
-    theme(panel.grid.major.y = element_line(color = "grey90"), axis.title = element_text(size = 10), axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "right") +
+    theme(panel.grid.major.y = element_line(color = "grey90"), 
+          axis.title = element_text(size = 10), 
+          axis.text.x = element_blank(), 
+          axis.ticks.x = element_blank(), 
+          legend.title = element_text(hjust = 0.5),
+          legend.position = "right") +
+    guides(
+  color = guide_legend(override.aes = list(size = 3)),
+  # size  = guide_legend(override.aes = list(size = c(2, 3, 4, 5, 6)))
+) +
     labs(x = NULL, y = "Cell type\n(broad)", title = NULL)
 
   if (!all(is.na(meta_plot_dots$cell_type_original))) {
@@ -1058,54 +1157,56 @@ sessionInfo()
     ##  [4] circlize_0.4.18       ComplexHeatmap_2.28.0 patchwork_1.3.2      
     ##  [7] Seurat_5.5.0          SeuratObject_5.4.0    sp_2.2-1             
     ## [10] dplyr_1.2.1           ggpubr_0.6.3          ggplot2_4.0.3        
-    ## [13] googledrive_2.1.2     PhenoMapR_0.1.0      
+    ## [13] googledrive_2.1.2     PhenoMapR_0.1.0       testthat_3.3.2       
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RcppAnnoy_0.0.23       splines_4.6.0          later_1.4.8           
     ##   [4] tibble_3.3.1           polyclip_1.10-7        fastDummies_1.7.6     
     ##   [7] lifecycle_1.0.5        rstatix_0.7.3          doParallel_1.0.17     
-    ##  [10] globals_0.19.1         lattice_0.22-9         hdf5r_1.3.12          
-    ##  [13] MASS_7.3-65            backports_1.5.1        magrittr_2.0.5        
-    ##  [16] plotly_4.12.0          sass_0.4.10            rmarkdown_2.31        
-    ##  [19] jquerylib_0.1.4        yaml_2.3.12            httpuv_1.6.17         
-    ##  [22] otel_0.2.0             sctransform_0.4.3      spam_2.11-4           
-    ##  [25] spatstat.sparse_3.2-0  reticulate_1.46.0      cowplot_1.2.0         
-    ##  [28] pbapply_1.7-4          RColorBrewer_1.1-3     abind_1.4-8           
-    ##  [31] Rtsne_0.17             presto_1.0.0           BiocGenerics_0.58.1   
-    ##  [34] IRanges_2.46.0         S4Vectors_0.50.1       ggrepel_0.9.8         
-    ##  [37] irlba_2.3.7            listenv_0.10.1         spatstat.utils_3.2-3  
-    ##  [40] goftest_1.2-3          RSpectra_0.16-2        spatstat.random_3.5-0 
-    ##  [43] fitdistrplus_1.2-6     parallelly_1.47.0      pkgdown_2.2.0         
-    ##  [46] codetools_0.2-20       tidyselect_1.2.1       shape_1.4.6.1         
-    ##  [49] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.0          
-    ##  [52] spatstat.explore_3.8-1 jsonlite_2.0.0         GetoptLong_1.1.1      
-    ##  [55] progressr_0.19.0       Formula_1.2-5          ggridges_0.5.7        
-    ##  [58] survival_3.8-6         iterators_1.0.14       systemfonts_1.3.2     
-    ##  [61] foreach_1.5.2          tools_4.6.0            ragg_1.5.2            
-    ##  [64] ica_1.0-3              Rcpp_1.1.1-1.1         glue_1.8.1            
-    ##  [67] gridExtra_2.3          mgcv_1.9-4             xfun_0.58             
-    ##  [70] withr_3.0.2            fastmap_1.2.0          digest_0.6.39         
-    ##  [73] R6_2.6.1               mime_0.13              textshaping_1.0.5     
-    ##  [76] colorspace_2.1-2       scattermore_1.2        tensor_1.5.1          
-    ##  [79] spatstat.data_3.1-9    tidyr_1.3.2            generics_0.1.4        
-    ##  [82] data.table_1.18.4      httr_1.4.8             htmlwidgets_1.6.4     
-    ##  [85] uwot_0.2.4             pkgconfig_2.0.3        gtable_0.3.6          
-    ##  [88] lmtest_0.9-40          S7_0.2.2               htmltools_0.5.9       
-    ##  [91] carData_3.0-6          dotCall64_1.2          clue_0.3-68           
-    ##  [94] scales_1.4.0           png_0.1-9              spatstat.univar_3.2-0 
-    ##  [97] knitr_1.51             reshape2_1.4.5         rjson_0.2.23          
-    ## [100] nlme_3.1-169           curl_7.1.0             cachem_1.1.0          
-    ## [103] zoo_1.8-15             GlobalOptions_0.1.4    stringr_1.6.0         
-    ## [106] KernSmooth_2.23-26     parallel_4.6.0         miniUI_0.1.2          
-    ## [109] desc_1.4.3             pillar_1.11.1          vctrs_0.7.3           
-    ## [112] RANN_2.6.2             promises_1.5.0         car_3.1-5             
-    ## [115] xtable_1.8-8           cluster_2.1.8.2        evaluate_1.0.5        
-    ## [118] magick_2.9.1           cli_3.6.6              compiler_4.6.0        
-    ## [121] rlang_1.2.0            crayon_1.5.3           future.apply_1.20.2   
-    ## [124] labeling_0.4.3         plyr_1.8.9             fs_2.1.0              
-    ## [127] stringi_1.8.7          viridisLite_0.4.3      deldir_2.0-4          
-    ## [130] lazyeval_0.2.3         spatstat.geom_3.8-1    Matrix_1.7-5          
-    ## [133] RcppHNSW_0.7.0         bit64_4.8.2            future_1.70.0         
-    ## [136] shiny_1.13.0           ROCR_1.0-12            gargle_1.6.1          
-    ## [139] igraph_2.3.2           broom_1.0.13           bslib_0.11.0          
-    ## [142] bit_4.6.0
+    ##  [10] rprojroot_2.1.1        hdf5r_1.3.12           globals_0.19.1        
+    ##  [13] lattice_0.22-9         MASS_7.3-65            backports_1.5.1       
+    ##  [16] magrittr_2.0.5         plotly_4.12.0          sass_0.4.10           
+    ##  [19] rmarkdown_2.31         jquerylib_0.1.4        yaml_2.3.12           
+    ##  [22] httpuv_1.6.17          otel_0.2.0             sctransform_0.4.3     
+    ##  [25] spam_2.11-4            pkgbuild_1.4.8         spatstat.sparse_3.2-0 
+    ##  [28] reticulate_1.46.0      cowplot_1.2.0          pbapply_1.7-4         
+    ##  [31] RColorBrewer_1.1-3     abind_1.4-8            pkgload_1.5.3         
+    ##  [34] Rtsne_0.17             presto_1.0.0           BiocGenerics_0.58.1   
+    ##  [37] IRanges_2.46.0         S4Vectors_0.50.1       ggrepel_0.9.8         
+    ##  [40] irlba_2.3.7            listenv_1.0.0          spatstat.utils_3.2-3  
+    ##  [43] goftest_1.2-3          RSpectra_0.16-2        spatstat.random_3.5-0 
+    ##  [46] fitdistrplus_1.2-6     parallelly_1.47.0      pkgdown_2.2.0         
+    ##  [49] codetools_0.2-20       shape_1.4.6.1          tidyselect_1.2.1      
+    ##  [52] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.0          
+    ##  [55] spatstat.explore_3.8-1 jsonlite_2.0.0         GetoptLong_1.1.1      
+    ##  [58] progressr_0.19.0       Formula_1.2-5          ggridges_0.5.7        
+    ##  [61] survival_3.8-6         iterators_1.0.14       systemfonts_1.3.2     
+    ##  [64] foreach_1.5.2          tools_4.6.0            progress_1.2.3        
+    ##  [67] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.1-1.1        
+    ##  [70] glue_1.8.1             gridExtra_2.3          mgcv_1.9-4            
+    ##  [73] xfun_0.59              withr_3.0.3            fastmap_1.2.0         
+    ##  [76] digest_0.6.39          R6_2.6.1               mime_0.13             
+    ##  [79] colorspace_2.1-2       textshaping_1.0.5      scattermore_1.2       
+    ##  [82] tensor_1.5.1           spatstat.data_3.1-9    tidyr_1.3.2           
+    ##  [85] generics_0.1.4         data.table_1.18.4      prettyunits_1.2.0     
+    ##  [88] httr_1.4.8             htmlwidgets_1.6.4      uwot_0.2.4            
+    ##  [91] pkgconfig_2.0.3        gtable_0.3.6           lmtest_0.9-40         
+    ##  [94] S7_0.2.2               brio_1.1.5             htmltools_0.5.9       
+    ##  [97] carData_3.0-6          dotCall64_1.2          clue_0.3-68           
+    ## [100] scales_1.4.0           png_0.1-9              spatstat.univar_3.2-0 
+    ## [103] knitr_1.51             reshape2_1.4.5         rjson_0.2.23          
+    ## [106] nlme_3.1-169           curl_7.1.0             cachem_1.1.0          
+    ## [109] zoo_1.8-15             GlobalOptions_0.1.4    stringr_1.6.0         
+    ## [112] KernSmooth_2.23-26     parallel_4.6.0         miniUI_0.1.2          
+    ## [115] desc_1.4.3             pillar_1.11.1          vctrs_0.7.3           
+    ## [118] RANN_2.6.2             promises_1.5.0         car_3.1-5             
+    ## [121] xtable_1.8-8           cluster_2.1.8.2        evaluate_1.0.5        
+    ## [124] magick_2.9.1           cli_3.6.6              compiler_4.6.0        
+    ## [127] rlang_1.2.0            crayon_1.5.3           future.apply_1.20.2   
+    ## [130] labeling_0.4.3         plyr_1.8.9             fs_2.1.0              
+    ## [133] stringi_1.8.7          viridisLite_0.4.3      deldir_2.0-4          
+    ## [136] lazyeval_0.2.3         spatstat.geom_3.8-1    Matrix_1.7-5          
+    ## [139] RcppHNSW_0.7.0         hms_1.1.4              bit64_4.8.2           
+    ## [142] future_1.70.0          shiny_1.14.0           ROCR_1.0-12           
+    ## [145] gargle_1.6.1           igraph_2.3.2           broom_1.0.13          
+    ## [148] bslib_0.11.0           bit_4.6.0
