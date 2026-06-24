@@ -737,44 +737,56 @@ if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
 Stars use Benjamini–Hochberg FDR on two-sided p(|Z|): *** q<0.001, ** q<0.01, * q<0.05
 
 ## Now, we cluster to find broader patterns
-```{r, fig.width=7, fig.height=6, out.width=NULL}
-ht <- ComplexHeatmap::Heatmap(
-  mat,
-  name = "Z",
-  col = col_fun,
-  cluster_rows    = T,
-  cluster_columns = T,
-  show_row_names    = FALSE,
-  show_column_names = FALSE,
-  show_row_dend    = FALSE,
-  show_column_dend = FALSE,
-  row_names_gp    = grid::gpar(fontsize = 7),
-  column_names_gp = grid::gpar(fontsize = 7),
-  left_annotation = row_ha,
-  top_annotation  = col_ha,
-  row_title    = "Reference Cell Type",    
-  column_title = "Neighborhood Cell Type",  
-  row_title_gp    = grid::gpar(fontsize = 12),
-  column_title_gp = grid::gpar(fontsize = 12),
-    row_title_side    = "left",       
-  column_title_side = "bottom", 
-  heatmap_legend_param = list(title = "Z-score"),
-  border = TRUE,
-  cell_fun = function(j, i, x, y, w, h, fill) {
-    qv <- mat_p_adj[i, j]
-    if (!is.finite(qv)) return(invisible(NULL))
-    sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
-    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
-  }
-)
+```{r clustered-nhood-heatmap, fig.width=7, fig.height=6, out.width=NULL, dependson = "cytospace-spatialcooccur"}
+nhood_hm_ready <- exists("mat", inherits = FALSE) &&
+  is.matrix(mat) && nrow(mat) >= 2L && ncol(mat) >= 2L &&
+  exists("col_fun", inherits = FALSE) &&
+  exists("row_ha", inherits = FALSE) &&
+  exists("col_ha", inherits = FALSE) &&
+  exists("mat_p_adj", inherits = FALSE) &&
+  requireNamespace("ComplexHeatmap", quietly = TRUE)
 
-# Draw with main title separately
-ComplexHeatmap::draw(
-  ht,
-  column_title     = "Neighborhood Enrichment of Prognostic Cell Types",
-  column_title_gp  = grid::gpar(fontsize = 14, fontface = "bold"),
-  heatmap_legend_side = "right", annotation_legend_side = "right"
-)
+if (nhood_hm_ready) {
+  ht_clustered <- ComplexHeatmap::Heatmap(
+    mat,
+    name = "Z",
+    col = col_fun,
+    cluster_rows = TRUE,
+    cluster_columns = TRUE,
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    row_names_gp = grid::gpar(fontsize = 7),
+    column_names_gp = grid::gpar(fontsize = 7),
+    left_annotation = row_ha,
+    top_annotation = col_ha,
+    row_title = "Reference Cell Type",
+    column_title = "Neighborhood Cell Type",
+    row_title_gp = grid::gpar(fontsize = 12),
+    column_title_gp = grid::gpar(fontsize = 12),
+    row_title_side = "left",
+    column_title_side = "bottom",
+    heatmap_legend_param = list(title = "Z-score"),
+    border = TRUE,
+    cell_fun = function(j, i, x, y, w, h, fill) {
+      qv <- mat_p_adj[i, j]
+      if (!is.finite(qv)) return(invisible(NULL))
+      sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
+      grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+    }
+  )
+
+  ComplexHeatmap::draw(
+    ht_clustered,
+    column_title = "Neighborhood Enrichment of Prognostic Cell Types (clustered)",
+    column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+    heatmap_legend_side = "right",
+    annotation_legend_side = "right"
+  )
+} else {
+  message("Skipping clustered neighborhood enrichment heatmap (z-score matrix not available).")
+}
 ```
 
 
