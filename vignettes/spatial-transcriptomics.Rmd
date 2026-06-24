@@ -41,6 +41,10 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
   FALSE
 }
 `%||%` <- function(x, y) if (is.null(x)) y else x
+.is_vignette_ci <- function() {
+  nzchar(Sys.getenv("CI", unset = "")) ||
+    nzchar(Sys.getenv("GITHUB_ACTIONS", unset = ""))
+}
 .try_load_phenomapr_dev()
 ```
 
@@ -216,6 +220,13 @@ This sample from HTAN contains a paired single-cell sample from the same tissue 
 ## Load and score sample with PhenoMapR (CytoSPACE)
 Here, we load the pre-processed Seurat object with the cells already maped.
 ```{r score-spots}
+# Part 1 spot object is no longer needed; free memory before loading CytoSPACE cells.
+for (nm in c("seurat_spot", "scores_spot", "h_and_e", "hex_phenomapr",
+             "hex_phenomapr_groups", "df", "groups_spot", "p")) {
+  if (exists(nm, inherits = FALSE)) rm(list = nm, inherits = FALSE)
+}
+gc(verbose = FALSE)
+
 # Load the **CytoSPACE** object (single cells placed on Visium coordinates).
 rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 gd_id_cyto <- "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
@@ -482,12 +493,12 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   # spatialCooccur::cooccur_local expects the label column to be named `cell_type`
   scoc_df$cell_type <- scoc_df$ct_pg
 
-  # Keep runtime bounded while preserving enough cells for stable permutation nulls.
-  # max_cells_sc <- 4000L
-  # if (nrow(scoc_df) > max_cells_sc) {
-  #   set.seed(3L)
-  #   scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
-  # }
+  # Keep runtime and memory bounded for pkgdown / CI (full data locally).
+  max_cells_sc <- if (.is_vignette_ci()) 3000L else 4000L
+  if (nrow(scoc_df) > max_cells_sc) {
+    set.seed(3L)
+    scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
+  }
 
   # Many CytoSPACE cells share identical spot coordinates; jitter to avoid duplicates in kNN/radius logic.
   xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
@@ -504,7 +515,7 @@ if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
   }
 
   k_sc <- min(20L, max(5L, nrow(scoc_df) - 1L))
-  n_perm_sc <- 100L
+  n_perm_sc <- if (.is_vignette_ci()) 30L else 100L
 
   n_grp <- length(unique(scoc_df$ct_pg))
   if (nrow(scoc_df) >= (k_sc + 3L) && n_grp >= 2L) {
@@ -838,6 +849,8 @@ if (!is.null(ct_col_markers)) {
   group_df$cell_type <- as.character(seurat@meta.data[cells, ct_col_markers])
 }
 
+max_cells_markers <- if (.is_vignette_ci()) 2500L else 5000L
+
 markers_global <- PhenoMapR::find_phenotype_markers(
   seurat,
   group_labels = group_df,
@@ -846,6 +859,7 @@ markers_global <- PhenoMapR::find_phenotype_markers(
   marker_scope = "phenotype_groups",
   assay = "Spatial",
   slot = "data",
+  max_cells_per_ident = max_cells_markers,
   verbose = FALSE
 )
 
@@ -860,6 +874,7 @@ if (!is.null(ct_col_markers)) {
     celltype_contrast = "vs_opposite_tail",
     assay = "Spatial",
     slot = "data",
+    max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )
   markers_ct_within <- PhenoMapR::find_phenotype_markers(
@@ -872,6 +887,7 @@ if (!is.null(ct_col_markers)) {
     celltype_contrast = "within_cell_type",
     assay = "Spatial",
     slot = "data",
+    max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )
 }
@@ -952,6 +968,11 @@ if (requireNamespace("ComplexHeatmap", quietly = TRUE) &&
         "expr ncol=", length(cells_expr), ", obj ncol=", length(cells_obj)
       )
     } else {
+      max_cells_hm <- if (.is_vignette_ci()) 2000L else 4000L
+      if (length(cells_use) > max_cells_hm) {
+        set.seed(5L)
+        cells_use <- sample(cells_use, max_cells_hm)
+      }
       expr_sub <- expr[, cells_use, drop = FALSE]
       if (length(genes_hm) > 0) {
         genes_use <- intersect(genes_hm, rownames(expr_sub))
