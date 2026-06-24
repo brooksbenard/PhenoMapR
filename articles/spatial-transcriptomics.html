@@ -277,8 +277,8 @@ maped.</p>
 <span><span class="op">}</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/gc.html" class="external-link">gc</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">##            used  (Mb) gc trigger  (Mb)  max used  (Mb)</span></span>
-<span><span class="co">## Ncells  4381155 234.0    7832468 418.3   7832468 418.3</span></span>
-<span><span class="co">## Vcells 11228523  85.7  126567057 965.7 126220747 963.0</span></span></code></pre>
+<span><span class="co">## Ncells  4380533 234.0    7847892 419.2   7847892 419.2</span></span>
+<span><span class="co">## Vcells 11224509  85.7  126562432 965.6 126219433 963.0</span></span></code></pre>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load the **CytoSPACE** object (single cells placed on Visium coordinates).</span></span>
 <span><span class="va">rds_cyto</span> <span class="op">&lt;-</span> <span class="st">"HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"</span></span>
@@ -524,7 +524,7 @@ than <strong>favorable ductal cells</strong>.</p>
 <p>Install <strong><code>spatialCooccur</code></strong> from GitHub if
 needed:
 <code>remotes::install_github("juninamo/spatialCooccur")</code>.</p>
-<p><strong><code><a href="https://rdrr.io/pkg/spatialCooccur/man/nhood_enrichment.html" class="external-link">spatialCooccur::nhood_enrichment()</a></code></strong>
+<p><strong><code>spatialCooccur::nhood_enrichment()</code></strong>
 builds a <strong>kNN graph</strong>
 (<strong><code><a href="https://satijalab.org/seurat/reference/FindNeighbors.html" class="external-link">Seurat::FindNeighbors()</a></code></strong> inside the
 package), optionally normalizes adjacency, aggregates
@@ -533,369 +533,20 @@ observed matrix to <strong>permutation</strong> nulls to produce a
 <strong>z-score</strong> matrix. We use
 <strong><code>n_jobs = 1</code></strong> so the vignette runs on a
 single core (set higher locally if you install the package).
-<strong><code><a href="https://rdrr.io/pkg/spatialCooccur/man/cooccur_local.html" class="external-link">spatialCooccur::cooccur_local()</a></code></strong> scores
+<strong><code>spatialCooccur::cooccur_local()</code></strong> scores
 each cell by whether its <strong>radius</strong> neighborhood contains
 both <strong>Adverse</strong> and <strong>Favorable</strong> labels,
 then applies a short diffusion-style step when
 <strong><code>maxnsteps &gt; 0</code></strong>. Duplicate spot
 coordinates (many CytoSPACE cells per spot) get a small jitter.</p>
-<p>The neighborhood <strong>Z-score</strong> matrix is shown with
-<strong>ComplexHeatmap</strong> when available: <strong>row and column
-annotations</strong> split <strong><code>CellType</code></strong> and
-<strong><code>Adverse</code> / <code>Favorable</code> /
-<code>Other</code></strong> (combined labels remain
-<code>CellType_prognostic_group</code>). If
-<strong>ComplexHeatmap</strong> is not installed, a
-<strong>ggplot</strong> tile heatmap is used instead.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">scoc_nhood</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
-<span><span class="va">scoc_local_by_ct</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
-<span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"spatialCooccur"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Install spatialCooccur for co-localization: remotes::install_github(\"juninamo/spatialCooccur\")"</span><span class="op">)</span></span>
-<span><span class="op">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"cell_locations"</span><span class="op">)</span> <span class="op">||</span></span>
-<span>           <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/all.html" class="external-link">all</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Cell"</span>, <span class="st">"row"</span>, <span class="st">"col"</span>, <span class="st">"CellType"</span>, <span class="st">"prognostic_group"</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">cell_locations</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Co-localization skipped: expected `cell_locations` with columns Cell, row, col, CellType, prognostic_group."</span><span class="op">)</span></span>
-<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>  <span class="va">dfb</span> <span class="op">&lt;-</span> <span class="va">cell_locations</span><span class="op">[</span></span>
-<span>    <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/complete.cases.html" class="external-link">complete.cases</a></span><span class="op">(</span><span class="va">cell_locations</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Cell"</span>, <span class="st">"row"</span>, <span class="st">"col"</span>, <span class="st">"CellType"</span>, <span class="st">"prognostic_group"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span>,</span>
-<span>    ,</span>
-<span>    drop <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span>  <span class="op">]</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">Cell</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">Cell</span><span class="op">)</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">row</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">row</span><span class="op">)</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">col</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">col</span><span class="op">)</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">CellType</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">CellType</span><span class="op">)</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">prognostic_group</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">prognostic_group</span><span class="op">)</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">prognostic_group</span> <span class="op">&lt;-</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/recode.html" class="external-link">recode</a></span><span class="op">(</span></span>
-<span>    <span class="va">dfb</span><span class="op">$</span><span class="va">prognostic_group</span>,</span>
-<span>    `Most Adverse` <span class="op">=</span> <span class="st">"Adverse"</span>,</span>
-<span>    `Most Favorable` <span class="op">=</span> <span class="st">"Favorable"</span></span>
-<span>  <span class="op">)</span></span>
-<span>  <span class="va">dfb</span> <span class="op">&lt;-</span> <span class="va">dfb</span><span class="op">[</span><span class="va">dfb</span><span class="op">$</span><span class="va">prognostic_group</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Adverse"</span>, <span class="st">"Favorable"</span>, <span class="st">"Other"</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>  <span class="va">dfb</span> <span class="op">&lt;-</span> <span class="va">dfb</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">CellType</span><span class="op">)</span> <span class="op">&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/trimws.html" class="external-link">trimws</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">CellType</span><span class="op">)</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>  <span class="va">dfb</span><span class="op">$</span><span class="va">ct_pg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">dfb</span><span class="op">$</span><span class="va">CellType</span>, <span class="st">"_"</span>, <span class="va">dfb</span><span class="op">$</span><span class="va">prognostic_group</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="va">scoc_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>    x <span class="op">=</span> <span class="va">dfb</span><span class="op">$</span><span class="va">row</span>,</span>
-<span>    y <span class="op">=</span> <span class="va">dfb</span><span class="op">$</span><span class="va">col</span>,</span>
-<span>    ct_pg <span class="op">=</span> <span class="va">dfb</span><span class="op">$</span><span class="va">ct_pg</span>,</span>
-<span>    stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span>  <span class="op">)</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">dfb</span><span class="op">$</span><span class="va">Cell</span></span>
-<span>  <span class="co"># spatialCooccur::cooccur_local expects the label column to be named `cell_type`</span></span>
-<span>  <span class="va">scoc_df</span><span class="op">$</span><span class="va">cell_type</span> <span class="op">&lt;-</span> <span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span></span>
-<span></span>
-<span>  <span class="co"># Keep runtime and memory bounded for pkgdown / CI (full data locally).</span></span>
-<span>  <span class="va">max_cells_sc</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu">.is_vignette_ci</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="fl">3000L</span> <span class="kw">else</span> <span class="fl">4000L</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span> <span class="op">&gt;</span> <span class="va">max_cells_sc</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">3L</span><span class="op">)</span></span>
-<span>    <span class="va">scoc_df</span> <span class="op">&lt;-</span> <span class="va">scoc_df</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample.int</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span>, <span class="va">max_cells_sc</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>  <span class="op">}</span></span>
-<span></span>
-<span>  <span class="co"># Many CytoSPACE cells share identical spot coordinates; jitter to avoid duplicates in kNN/radius logic.</span></span>
-<span>  <span class="va">xy_mat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"x"</span>, <span class="st">"y"</span><span class="op">)</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span><span class="op">)</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/any.html" class="external-link">any</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/duplicated.html" class="external-link">duplicated</a></span><span class="op">(</span><span class="va">xy_mat</span><span class="op">)</span> <span class="op">|</span> <span class="fu"><a href="https://rdrr.io/r/base/duplicated.html" class="external-link">duplicated</a></span><span class="op">(</span><span class="va">xy_mat</span>, fromLast <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">rng</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span></span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/base/diff.html" class="external-link">diff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">xy_mat</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/base/diff.html" class="external-link">diff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">xy_mat</span><span class="op">[</span>, <span class="fl">2</span><span class="op">]</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>      na.rm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span>    <span class="op">)</span></span>
-<span>    <span class="va">eps</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">rng</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">rng</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="va">rng</span> <span class="op">*</span> <span class="fl">1e-5</span> <span class="kw">else</span> <span class="fl">1e-6</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">4L</span><span class="op">)</span></span>
-<span>    <span class="va">scoc_df</span><span class="op">$</span><span class="va">x</span> <span class="op">&lt;-</span> <span class="va">scoc_df</span><span class="op">$</span><span class="va">x</span> <span class="op">+</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span>, <span class="fl">0</span>, <span class="va">eps</span><span class="op">)</span></span>
-<span>    <span class="va">scoc_df</span><span class="op">$</span><span class="va">y</span> <span class="op">&lt;-</span> <span class="va">scoc_df</span><span class="op">$</span><span class="va">y</span> <span class="op">+</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span>, <span class="fl">0</span>, <span class="va">eps</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span></span>
-<span>  <span class="va">k_sc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">20L</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fl">5L</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1L</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">n_perm_sc</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu">.is_vignette_ci</span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="fl">30L</span> <span class="kw">else</span> <span class="fl">100L</span></span>
-<span></span>
-<span>  <span class="va">n_grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="op">(</span><span class="va">k_sc</span> <span class="op">+</span> <span class="fl">3L</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">n_grp</span> <span class="op">&gt;=</span> <span class="fl">2L</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">scoc_nhood</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
-<span>      <span class="fu">spatialCooccur</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/spatialCooccur/man/nhood_enrichment.html" class="external-link">nhood_enrichment</a></span><span class="op">(</span></span>
-<span>        <span class="va">scoc_df</span>,</span>
-<span>        cluster_key <span class="op">=</span> <span class="st">"ct_pg"</span>,</span>
-<span>        neighbors.k <span class="op">=</span> <span class="va">k_sc</span>,</span>
-<span>        connectivity_key <span class="op">=</span> <span class="st">"nn"</span>,</span>
-<span>        transformation <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>        n_perms <span class="op">=</span> <span class="va">n_perm_sc</span>,</span>
-<span>        seed <span class="op">=</span> <span class="fl">42L</span>,</span>
-<span>        n_jobs <span class="op">=</span> <span class="fl">1L</span></span>
-<span>      <span class="op">)</span>,</span>
-<span>      error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
-<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"spatialCooccur::nhood_enrichment failed: "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
-<span>        <span class="cn">NULL</span></span>
-<span>      <span class="op">}</span></span>
-<span>    <span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span></span>
-<span>  <span class="va">rad_sc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">0.04</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/diff.html" class="external-link">diff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">x</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/diff.html" class="external-link">diff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">y</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>    na.rm <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span>  <span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="co"># Local co-occurrence within each cell type:</span></span>
-<span>  <span class="co"># compare CellType_Adverse neighborhoods for presence of CellType_Favorable (and vice versa).</span></span>
-<span>  <span class="va">df_local_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span>
-<span>  <span class="va">cell_types</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">sub</a></span><span class="op">(</span><span class="st">"_(Adverse|Favorable|Other)$"</span>, <span class="st">""</span>, <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">ct</span> <span class="kw">in</span> <span class="va">cell_types</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">xlab</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">ct</span>, <span class="st">"_Adverse"</span><span class="op">)</span></span>
-<span>    <span class="va">ylab</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">ct</span>, <span class="st">"_Favorable"</span><span class="op">)</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="op">(</span><span class="va">xlab</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span> <span class="op">&amp;&amp;</span> <span class="va">ylab</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span><span class="op">)</span><span class="op">)</span> <span class="kw">next</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span> <span class="op">==</span> <span class="va">xlab</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">3L</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span> <span class="op">==</span> <span class="va">ylab</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">3L</span><span class="op">)</span> <span class="kw">next</span></span>
-<span></span>
-<span>    <span class="va">loc_one</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
-<span>      <span class="fu">spatialCooccur</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/spatialCooccur/man/cooccur_local.html" class="external-link">cooccur_local</a></span><span class="op">(</span></span>
-<span>        <span class="va">scoc_df</span>,</span>
-<span>        cluster_x <span class="op">=</span> <span class="va">xlab</span>,</span>
-<span>        cluster_y <span class="op">=</span> <span class="va">ylab</span>,</span>
-<span>        connectivity_key <span class="op">=</span> <span class="st">"nn"</span>,</span>
-<span>        neighbors.k <span class="op">=</span> <span class="va">k_sc</span>,</span>
-<span>        radius <span class="op">=</span> <span class="va">rad_sc</span>,</span>
-<span>        maxnsteps <span class="op">=</span> <span class="fl">3L</span></span>
-<span>      <span class="op">)</span>,</span>
-<span>      error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
-<span>        <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"spatialCooccur::cooccur_local failed for "</span>, <span class="va">ct</span>, <span class="st">": "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
-<span>        <span class="cn">NULL</span></span>
-<span>      <span class="op">}</span></span>
-<span>    <span class="op">)</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">loc_one</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">loc_one</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">1L</span><span class="op">)</span> <span class="kw">next</span></span>
-<span></span>
-<span>    <span class="va">cn</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">loc_one</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span>    <span class="va">v</span> <span class="op">&lt;-</span> <span class="va">loc_one</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
-<span>    <span class="va">ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">loc_one</span><span class="op">)</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span> <span class="op">!=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span><span class="op">)</span> <span class="va">ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span> <span class="op">||</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span> <span class="op">!=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span><span class="op">)</span> <span class="va">ids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>    <span class="va">df_local_list</span><span class="op">[[</span><span class="va">ct</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>      cell <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span>,</span>
-<span>      cell_type <span class="op">=</span> <span class="va">ct</span>,</span>
-<span>      score <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span>,</span>
-<span>      metric <span class="op">=</span> <span class="va">cn</span>,</span>
-<span>      stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span>    <span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">df_local_list</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">scoc_local_by_ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">df_local_list</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">scoc_nhood</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">scoc_nhood</span><span class="op">$</span><span class="va">zscore</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="co"># print(scoc_nhood$count)</span></span>
-<span></span>
-<span>  <span class="va">zm</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">as.matrix</a></span><span class="op">(</span><span class="va">scoc_nhood</span><span class="op">$</span><span class="va">zscore</span><span class="op">)</span></span>
-<span>  <span class="va">lab_clean</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">nm</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gsub</a></span><span class="op">(</span><span class="st">"^Cluster"</span>, <span class="st">""</span>, <span class="va">nm</span><span class="op">)</span></span>
-<span>  <span class="va">rn</span> <span class="op">&lt;-</span> <span class="fu">lab_clean</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">zm</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">cn</span> <span class="op">&lt;-</span> <span class="fu">lab_clean</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">zm</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="va">suffix_pg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Adverse"</span>, <span class="st">"Favorable"</span>, <span class="st">"Other"</span><span class="op">)</span></span>
-<span>  <span class="va">.parse_ct_pg</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">lab</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="kw">for</span> <span class="op">(</span><span class="va">s</span> <span class="kw">in</span> <span class="va">suffix_pg</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="va">suff</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"_"</span>, <span class="va">s</span><span class="op">)</span></span>
-<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">lab</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/startsWith.html" class="external-link">endsWith</a></span><span class="op">(</span><span class="va">lab</span>, <span class="va">suff</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>        <span class="va">ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/substr.html" class="external-link">substr</a></span><span class="op">(</span><span class="va">lab</span>, <span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar</a></span><span class="op">(</span><span class="va">lab</span><span class="op">)</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar</a></span><span class="op">(</span><span class="va">suff</span><span class="op">)</span><span class="op">)</span></span>
-<span>        <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>ct <span class="op">=</span> <span class="va">ct</span>, pg <span class="op">=</span> <span class="va">s</span><span class="op">)</span><span class="op">)</span></span>
-<span>      <span class="op">}</span></span>
-<span>    <span class="op">}</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>ct <span class="op">=</span> <span class="va">lab</span>, pg <span class="op">=</span> <span class="cn">NA_character_</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span></span>
-<span>  <span class="va">all_labs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">rn</span>, <span class="va">cn</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="va">meta_labs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">all_labs</span>, <span class="kw">function</span><span class="op">(</span><span class="va">l</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="va">p</span> <span class="op">&lt;-</span> <span class="fu">.parse_ct_pg</span><span class="op">(</span><span class="va">l</span><span class="op">)</span></span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>label <span class="op">=</span> <span class="va">l</span>, CellType <span class="op">=</span> <span class="va">p</span><span class="op">[[</span><span class="st">"ct"</span><span class="op">]</span><span class="op">]</span>, Prognostic <span class="op">=</span> <span class="va">p</span><span class="op">[[</span><span class="st">"pg"</span><span class="op">]</span><span class="op">]</span>, stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
-<span>    <span class="op">}</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>    stringsAsFactors <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span>  <span class="op">)</span></span>
-<span>  <span class="va">meta_labs</span><span class="op">$</span><span class="va">Prognostic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">Prognostic</span>, levels <span class="op">=</span> <span class="va">suffix_pg</span><span class="op">)</span></span>
-<span>  <span class="va">meta_labs</span> <span class="op">&lt;-</span> <span class="va">meta_labs</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">Prognostic</span><span class="op">)</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>  <span class="va">ord</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/order.html" class="external-link">order</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">CellType</span>, <span class="va">meta_labs</span><span class="op">$</span><span class="va">Prognostic</span><span class="op">)</span></span>
-<span>  <span class="va">labs_ord</span> <span class="op">&lt;-</span> <span class="va">meta_labs</span><span class="op">$</span><span class="va">label</span><span class="op">[</span><span class="va">ord</span><span class="op">]</span></span>
-<span>  <span class="va">labs_ord</span> <span class="op">&lt;-</span> <span class="va">labs_ord</span><span class="op">[</span><span class="va">labs_ord</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">rn</span> <span class="op">&amp;</span> <span class="va">labs_ord</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="va">cn</span><span class="op">]</span></span>
-<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">labs_ord</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">2L</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Not enough overlapping labels in zscore matrix for heatmap."</span><span class="op">)</span></span>
-<span>  <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>    <span class="va">mat</span> <span class="op">&lt;-</span> <span class="va">zm</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">labs_ord</span>, <span class="va">rn</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="va">labs_ord</span>, <span class="va">cn</span><span class="op">)</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/dimnames.html" class="external-link">dimnames</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">labs_ord</span>, <span class="va">labs_ord</span><span class="op">)</span></span>
-<span></span>
-<span>    <span class="va">row_ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">CellType</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span>, <span class="va">meta_labs</span><span class="op">$</span><span class="va">label</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
-<span>    <span class="va">row_pg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">Prognostic</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span>, <span class="va">meta_labs</span><span class="op">$</span><span class="va">label</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
-<span>    <span class="va">col_ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">CellType</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span>, <span class="va">meta_labs</span><span class="op">$</span><span class="va">label</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
-<span>    <span class="va">col_pg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character</a></span><span class="op">(</span><span class="va">meta_labs</span><span class="op">$</span><span class="va">Prognostic</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/match.html" class="external-link">match</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span>, <span class="va">meta_labs</span><span class="op">$</span><span class="va">label</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
-<span></span>
-<span>    <span class="va">pal_pg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>Adverse <span class="op">=</span> <span class="st">"#B2182B"</span>, Favorable <span class="op">=</span> <span class="st">"#2166AC"</span>, Other <span class="op">=</span> <span class="st">"#f7f7f7"</span><span class="op">)</span></span>
-<span>    <span class="va">uct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sort.html" class="external-link">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">row_ct</span>, <span class="va">col_ct</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="va">pal_ct</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/get_celltype_palette.html">get_celltype_palette</a></span><span class="op">(</span><span class="va">uct</span><span class="op">)</span></span>
-<span></span>
-<span>    <span class="co">## Cell counts per combined label (cells entering nhood_enrichment, same order as heatmap columns).</span></span>
-<span>    <span class="va">col_ncells</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">0L</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">col_ncells</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"scoc_df"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">is.data.frame</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="st">"ct_pg"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="va">tab_ct</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">scoc_df</span><span class="op">$</span><span class="va">ct_pg</span><span class="op">)</span></span>
-<span>      <span class="va">hit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">col_ncells</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">tab_ct</span><span class="op">)</span></span>
-<span>      <span class="va">col_ncells</span><span class="op">[</span><span class="va">hit</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer</a></span><span class="op">(</span><span class="va">tab_ct</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">col_ncells</span><span class="op">)</span><span class="op">[</span><span class="va">hit</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
-<span>    <span class="op">}</span></span>
-<span></span>
-<span>    <span class="co">## Two-sided p-values from |Z| (normal approximation; spatialCooccur returns zscore + count only).</span></span>
-<span>    <span class="va">mat_p</span> <span class="op">&lt;-</span> <span class="fl">2</span> <span class="op">*</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">pnorm</a></span><span class="op">(</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="va">mat_p</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA_real_</span></span>
-<span>    <span class="co">## Benjamini–Hochberg FDR across all matrix cells (multiple pairwise label comparisons).</span></span>
-<span>    <span class="va">mat_p_adj</span> <span class="op">&lt;-</span> <span class="va">mat_p</span></span>
-<span>    <span class="va">pv_flat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">mat_p</span><span class="op">)</span></span>
-<span>    <span class="va">ok_flat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">pv_flat</span><span class="op">)</span></span>
-<span>    <span class="va">mat_p_adj</span><span class="op">[</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA_real_</span></span>
-<span>    <span class="va">mat_p_adj</span><span class="op">[</span><span class="va">ok_flat</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/p.adjust.html" class="external-link">p.adjust</a></span><span class="op">(</span><span class="va">pv_flat</span><span class="op">[</span><span class="va">ok_flat</span><span class="op">]</span>, method <span class="op">=</span> <span class="st">"BH"</span><span class="op">)</span></span>
-<span></span>
-<span>    <span class="va">drew_ch</span> <span class="op">&lt;-</span> <span class="cn">FALSE</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"ComplexHeatmap"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"circlize"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="va">mabs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/warning.html" class="external-link">suppressWarnings</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
-<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">mabs</span><span class="op">)</span> <span class="op">||</span> <span class="va">mabs</span> <span class="op">&lt;=</span> <span class="fl">0</span><span class="op">)</span> <span class="va">mabs</span> <span class="op">&lt;-</span> <span class="fl">1</span></span>
-<span>      </span>
-<span>      <span class="co"># "#7F312FFF", "#BE4A47FF", "#FD817EFF", "#FEA19EFF", "#FEC0BFFF", "#F5F5F5FF", "#99E3DDFF", "#66D4CCFF", "#33C6BBFF", "#008A80FF", "#005C55FF"</span></span>
-<span>      </span>
-<span>      <span class="va">col_fun</span> <span class="op">&lt;-</span> <span class="fu">circlize</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/circlize/man/colorRamp2.html" class="external-link">colorRamp2</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="va">mabs</span>, <span class="fl">0</span>, <span class="va">mabs</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#7F312FFF"</span>, <span class="st">"#f7f7f7"</span>, <span class="st">"#005C55FF"</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span>      <span class="va">row_ha</span> <span class="op">&lt;-</span> <span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/rowAnnotation.html" class="external-link">rowAnnotation</a></span><span class="op">(</span></span>
-<span>        CellType <span class="op">=</span> <span class="va">row_ct</span>,</span>
-<span>        `Prognostic Group` <span class="op">=</span> <span class="va">row_pg</span>,</span>
-<span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>CellType <span class="op">=</span> <span class="va">pal_ct</span>, `Prognostic Group` <span class="op">=</span> <span class="va">pal_pg</span><span class="op">)</span>,</span>
-<span>        <span class="co"># annotation_name_side = NULL,</span></span>
-<span>        show_annotation_name <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>        simple_anno_size <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="fl">4</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>        show_legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span></span>
-<span>      <span class="op">)</span></span>
-<span>      <span class="va">col_ha</span> <span class="op">&lt;-</span> <span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/HeatmapAnnotation.html" class="external-link">HeatmapAnnotation</a></span><span class="op">(</span></span>
-<span>                `# cells` <span class="op">=</span> <span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/anno_barplot.html" class="external-link">anno_barplot</a></span><span class="op">(</span></span>
-<span>          <span class="va">col_ncells</span>,</span>
-<span>          gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#666666"</span><span class="op">)</span>,</span>
-<span>          border <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>          height <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="fl">14</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>          ylim <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">col_ncells</span>, <span class="fl">1L</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
-<span>        <span class="op">)</span>,</span>
-<span>        CellType <span class="op">=</span> <span class="va">col_ct</span>,</span>
-<span>        `Prognostic Group` <span class="op">=</span> <span class="va">col_pg</span>,</span>
-<span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>CellType <span class="op">=</span> <span class="va">pal_ct</span>, `Prognostic Group` <span class="op">=</span> <span class="va">pal_pg</span><span class="op">)</span>,</span>
-<span>        annotation_name_side <span class="op">=</span> <span class="st">"right"</span>,</span>
-<span>        simple_anno_size <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="fl">4</span>, <span class="st">"mm"</span><span class="op">)</span></span>
-<span>      <span class="op">)</span></span>
-<span></span>
-<span><span class="va">ht</span> <span class="op">&lt;-</span> <span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/Heatmap.html" class="external-link">Heatmap</a></span><span class="op">(</span></span>
-<span>  <span class="va">mat</span>,</span>
-<span>  name <span class="op">=</span> <span class="st">"Z"</span>,</span>
-<span>  col <span class="op">=</span> <span class="va">col_fun</span>,</span>
-<span>  cluster_rows    <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  cluster_columns <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  show_row_names    <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  show_column_names <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  show_row_dend    <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  show_column_dend <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  row_names_gp    <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">7</span><span class="op">)</span>,</span>
-<span>  column_names_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">7</span><span class="op">)</span>,</span>
-<span>  left_annotation <span class="op">=</span> <span class="va">row_ha</span>,</span>
-<span>  top_annotation  <span class="op">=</span> <span class="va">col_ha</span>,</span>
-<span>  row_title    <span class="op">=</span> <span class="st">"Reference Cell Type"</span>,    </span>
-<span>  column_title <span class="op">=</span> <span class="st">"Neighborhood Cell Type"</span>,  </span>
-<span>  row_title_gp    <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>,</span>
-<span>  column_title_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>,</span>
-<span>    row_title_side    <span class="op">=</span> <span class="st">"left"</span>,       </span>
-<span>  column_title_side <span class="op">=</span> <span class="st">"bottom"</span>, </span>
-<span>  heatmap_legend_param <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Z-score"</span><span class="op">)</span>,</span>
-<span>  border <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  cell_fun <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">j</span>, <span class="va">i</span>, <span class="va">x</span>, <span class="va">y</span>, <span class="va">w</span>, <span class="va">h</span>, <span class="va">fill</span><span class="op">)</span> <span class="op">{</span></span>
-<span>    <span class="va">qv</span> <span class="op">&lt;-</span> <span class="va">mat_p_adj</span><span class="op">[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span></span>
-<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">qv</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="va">sym</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="va">qv</span> <span class="op">&lt;</span> <span class="fl">0.001</span><span class="op">)</span> <span class="st">"***"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="va">qv</span> <span class="op">&lt;</span> <span class="fl">0.01</span><span class="op">)</span> <span class="st">"**"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="va">qv</span> <span class="op">&lt;</span> <span class="fl">0.05</span><span class="op">)</span> <span class="st">"*"</span> <span class="kw">else</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/grid.text.html" class="external-link">grid.text</a></span><span class="op">(</span><span class="va">sym</span>, <span class="va">x</span>, <span class="va">y</span>, gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span></span>
-<span>  <span class="op">}</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Draw with main title separately</span></span>
-<span><span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/draw-dispatch.html" class="external-link">draw</a></span><span class="op">(</span></span>
-<span>  <span class="va">ht</span>,</span>
-<span>  column_title     <span class="op">=</span> <span class="st">"Neighborhood Enrichment of Prognostic Cell Types"</span>,</span>
-<span>  column_title_gp  <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">14</span>, fontface <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span>,</span>
-<span>  heatmap_legend_side <span class="op">=</span> <span class="st">"right"</span>, annotation_legend_side <span class="op">=</span> <span class="st">"right"</span></span>
-<span><span class="op">)</span></span>
-<span>      <span class="va">drew_ch</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span>
-<span>    <span class="op">}</span></span>
-<span>  <span class="op">}</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-<p><img src="spatial-transcriptomics_files/figure-html/cytospace-spatialcooccur-1.png" class="r-plt" alt="" width="672"></p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">scoc_local_by_ct</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">scoc_local_by_ct</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0L</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">p_loc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">scoc_local_by_ct</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/reorder.factor.html" class="external-link">reorder</a></span><span class="op">(</span><span class="va">.data</span><span class="op">$</span><span class="va">cell_type</span>, <span class="va">.data</span><span class="op">$</span><span class="va">score</span>, <span class="va">median</span><span class="op">)</span>, y <span class="op">=</span> <span class="va">.data</span><span class="op">$</span><span class="va">score</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_boxplot.html" class="external-link">geom_boxplot</a></span><span class="op">(</span>outlier.alpha <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span> <span class="op">+</span></span>
-<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/coord_flip.html" class="external-link">coord_flip</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span></span>
-<span>      title <span class="op">=</span> <span class="st">"Local co-occurrence score (spatialCooccur::cooccur_local)"</span>,</span>
-<span>      subtitle <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Within-cell-type neighborhoods (radius ≈ "</span>, <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">signif</a></span><span class="op">(</span><span class="va">rad_sc</span>, <span class="fl">3</span><span class="op">)</span>, <span class="st">"): adverse vs favorable"</span><span class="op">)</span>,</span>
-<span>      x <span class="op">=</span> <span class="st">"Cell type"</span>,</span>
-<span>      y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">scoc_local_by_ct</span><span class="op">$</span><span class="va">metric</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
-<span>    <span class="op">)</span> <span class="op">+</span></span>
-<span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span>base_size <span class="op">=</span> <span class="fl">11</span><span class="op">)</span></span>
-<span>  <span class="co"># print(p_loc)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-<p>Stars use Benjamini–Hochberg FDR on two-sided p(|Z|): *** q&lt;0.001,
-** q&lt;0.01, * q&lt;0.05</p>
-</div>
-<div class="section level3">
-<h3 id="now-we-cluster-to-find-broader-patterns">Now, we cluster to find broader patterns<a class="anchor" aria-label="anchor" href="#now-we-cluster-to-find-broader-patterns"></a>
-</h3>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">nhood_hm_ready</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"mat"</span>, inherits <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">is.matrix</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">2L</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">ncol</a></span><span class="op">(</span><span class="va">mat</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">2L</span> <span class="op">&amp;&amp;</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"col_fun"</span>, inherits <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"row_ha"</span>, inherits <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"col_ha"</span>, inherits <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"mat_p_adj"</span>, inherits <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">&amp;&amp;</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"ComplexHeatmap"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="va">nhood_hm_ready</span> <span class="op">&amp;&amp;</span> <span class="va">.spatial_run_full_markers</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="va">ht_clustered</span> <span class="op">&lt;-</span> <span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/Heatmap.html" class="external-link">Heatmap</a></span><span class="op">(</span></span>
-<span>    <span class="va">mat</span>,</span>
-<span>    name <span class="op">=</span> <span class="st">"Z"</span>,</span>
-<span>    col <span class="op">=</span> <span class="va">col_fun</span>,</span>
-<span>    cluster_rows <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>    cluster_columns <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>    show_row_names <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>    show_column_names <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>    show_row_dend <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>    show_column_dend <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>    row_names_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">7</span><span class="op">)</span>,</span>
-<span>    column_names_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">7</span><span class="op">)</span>,</span>
-<span>    left_annotation <span class="op">=</span> <span class="va">row_ha</span>,</span>
-<span>    top_annotation <span class="op">=</span> <span class="va">col_ha</span>,</span>
-<span>    row_title <span class="op">=</span> <span class="st">"Reference Cell Type"</span>,</span>
-<span>    column_title <span class="op">=</span> <span class="st">"Neighborhood Cell Type"</span>,</span>
-<span>    row_title_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>,</span>
-<span>    column_title_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>,</span>
-<span>    row_title_side <span class="op">=</span> <span class="st">"left"</span>,</span>
-<span>    column_title_side <span class="op">=</span> <span class="st">"bottom"</span>,</span>
-<span>    heatmap_legend_param <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Z-score"</span><span class="op">)</span>,</span>
-<span>    border <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>    cell_fun <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">j</span>, <span class="va">i</span>, <span class="va">x</span>, <span class="va">y</span>, <span class="va">w</span>, <span class="va">h</span>, <span class="va">fill</span><span class="op">)</span> <span class="op">{</span></span>
-<span>      <span class="va">qv</span> <span class="op">&lt;-</span> <span class="va">mat_p_adj</span><span class="op">[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span></span>
-<span>      <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite</a></span><span class="op">(</span><span class="va">qv</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span><span class="op">)</span></span>
-<span>      <span class="va">sym</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="va">qv</span> <span class="op">&lt;</span> <span class="fl">0.001</span><span class="op">)</span> <span class="st">"***"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="va">qv</span> <span class="op">&lt;</span> <span class="fl">0.01</span><span class="op">)</span> <span class="st">"**"</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="va">qv</span> <span class="op">&lt;</span> <span class="fl">0.05</span><span class="op">)</span> <span class="st">"*"</span> <span class="kw">else</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span><span class="op">)</span></span>
-<span>      <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/grid.text.html" class="external-link">grid.text</a></span><span class="op">(</span><span class="va">sym</span>, <span class="va">x</span>, <span class="va">y</span>, gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span></span>
-<span>    <span class="op">}</span></span>
-<span>  <span class="op">)</span></span>
-<span></span>
-<span>  <span class="fu">ComplexHeatmap</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ComplexHeatmap/man/draw-dispatch.html" class="external-link">draw</a></span><span class="op">(</span></span>
-<span>    <span class="va">ht_clustered</span>,</span>
-<span>    column_title <span class="op">=</span> <span class="st">"Neighborhood Enrichment of Prognostic Cell Types (clustered)"</span>,</span>
-<span>    column_title_gp <span class="op">=</span> <span class="fu">grid</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">14</span>, fontface <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span>,</span>
-<span>    heatmap_legend_side <span class="op">=</span> <span class="st">"right"</span>,</span>
-<span>    annotation_legend_side <span class="op">=</span> <span class="st">"right"</span></span>
-<span>  <span class="op">)</span></span>
-<span><span class="op">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="op">(</span><span class="va">nhood_hm_ready</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="va">.spatial_run_full_markers</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Skipping clustered neighborhood enrichment heatmap on CI (memory budget)."</span><span class="op">)</span></span>
-<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Skipping clustered neighborhood enrichment heatmap (z-score matrix not available)."</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
+<p>The neighborhood <strong>Z-score</strong> matrix is shown below as a
+<strong>pre-rendered figure</strong> (full CytoSPACE cell set, no
+subsampling). Stars use Benjamini–Hochberg FDR on two-sided p(|Z|): ***
+q&lt;0.001, ** q&lt;0.01, * q&lt;0.05. To regenerate after changing
+labels or <code>spatialCooccur</code> settings, run
+<code>Rscript scripts/render_spatial_colocalization_heatmap.R</code>
+from the package root.</p>
+<p><img src="../inst/figures/spatial_colocalization_nhood_enrichment.png" class="r-plt" alt="" width="100%"></p>
 </div>
 <div class="section level3">
 <h3 id="prognostic-markers">Prognostic markers<a class="anchor" aria-label="anchor" href="#prognostic-markers"></a>
@@ -935,7 +586,7 @@ limits; run locally for all three heatmaps.</p>
 <div class="section level4">
 <h4 id="step-1-phenotype-groups-and-marker-discovery">Step 1: Phenotype groups and marker discovery<a class="anchor" aria-label="anchor" href="#step-1-phenotype-groups-and-marker-discovery"></a>
 </h4>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">markers_global</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
 <span><span class="va">markers_ct_within</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
 <span><span class="va">markers_ct_opp</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
@@ -1017,7 +668,7 @@ limits; run locally for all three heatmaps.</p>
 <div class="section level4">
 <h4 id="step-2-heatmap-prep-expression-matrix-metadata">Step 2: Heatmap prep (expression matrix + metadata)<a class="anchor" aria-label="anchor" href="#step-2-heatmap-prep-expression-matrix-metadata"></a>
 </h4>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">expr_pm</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
 <span><span class="va">meta_pm</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
 <span><span class="va">group_col_hm</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
@@ -1138,7 +789,7 @@ limits; run locally for all three heatmaps.</p>
 <div class="section level4">
 <h4 id="step-3-cell-type-agnostic-marker-heatmap">Step 3: Cell-type-agnostic marker heatmap<a class="anchor" aria-label="anchor" href="#step-3-cell-type-agnostic-marker-heatmap"></a>
 </h4>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_global</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">adv_ok</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_global</span><span class="op">$</span><span class="va">adverse_markers</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">markers_global</span><span class="op">$</span><span class="va">adverse_markers</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0L</span></span>
 <span>  <span class="va">fav_ok</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_global</span><span class="op">$</span><span class="va">favorable_markers</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">markers_global</span><span class="op">$</span><span class="va">favorable_markers</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0L</span></span>
@@ -1165,7 +816,7 @@ limits; run locally for all three heatmaps.</p>
 <div class="section level4">
 <h4 id="step-4-cell-type-phenotype-vs-all-opposite-tail-cells">Step 4: Cell-type × phenotype vs all opposite-tail cells<a class="anchor" aria-label="anchor" href="#step-4-cell-type-phenotype-vs-all-opposite-tail-cells"></a>
 </h4>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">.spatial_run_full_markers</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_ct_opp</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/plot_phenotype_markers.html">plot_phenotype_markers</a></span><span class="op">(</span></span>
 <span>    markers <span class="op">=</span> <span class="va">markers_ct_opp</span>,</span>
@@ -1190,7 +841,7 @@ limits; run locally for all three heatmaps.</p>
 <div class="section level4">
 <h4 id="step-5-cell-type-specific-markers-within-cell-type">Step 5: Cell-type-specific markers (within cell type)<a class="anchor" aria-label="anchor" href="#step-5-cell-type-specific-markers-within-cell-type"></a>
 </h4>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">.spatial_run_full_markers</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">expr_pm</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">markers_ct_within</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/plot_phenotype_markers.html">plot_phenotype_markers</a></span><span class="op">(</span></span>
 <span>    markers <span class="op">=</span> <span class="va">markers_ct_within</span>,</span>
@@ -1217,7 +868,7 @@ limits; run locally for all three heatmaps.</p>
 </h4>
 <p>Each column is a cell type; the height is filled by the number of
 adverse (5th percentile) or favorable (5th percentile) cells.</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">group_col</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">ct_col_bar</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
 <span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/exists.html" class="external-link">exists</a></span><span class="op">(</span><span class="st">"spatial_df_celltype_col"</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">spatial_df_celltype_col</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="va">spatial_df_celltype_col</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
@@ -1300,10 +951,11 @@ PRECOG <strong>Pancreatic</strong> reference at <strong>cell</strong>
 resolution; score distribution, score by cell type, prognostic groups,
 and spatial maps (jittered cells per spot).</li>
 <li>
-<strong>Co-localization</strong>: <strong><a href="https://github.com/juninamo/spatialCooccur" class="external-link"><code>spatialCooccur</code></a></strong>
-<strong><code>nhood_enrichment()</code></strong> and
-<strong><code>cooccur_local()</code></strong> on Visium coordinates and
-prognostic groups (Part 2 only; install from GitHub).</li>
+<strong>Co-localization</strong>: pre-rendered
+<strong><code>spatialCooccur::nhood_enrichment()</code></strong> heatmap
+on full CytoSPACE cells (<code>CellType</code> × prognostic group
+labels); regenerate with
+<code>scripts/render_spatial_colocalization_heatmap.R</code>.</li>
 <li>
 <strong>Markers</strong>: three
 <strong><code><a href="../reference/plot_phenotype_markers.html">plot_phenotype_markers()</a></code></strong> heatmaps on
@@ -1328,9 +980,9 @@ Acids Res. 54, D1579–D1589 (2026).</p>
 <div class="section level3">
 <h3 id="session-info">Session Info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h3>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<pre><code><span><span class="co">## R version 4.6.0 (2026-04-24)</span></span>
+<pre><code><span><span class="co">## R version 4.6.1 (2026-06-24)</span></span>
 <span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
 <span><span class="co">## Running under: Ubuntu 24.04.4 LTS</span></span>
 <span><span class="co">## </span></span>
@@ -1351,9 +1003,9 @@ Acids Res. 54, D1579–D1589 (2026).</p>
 <span><span class="co">## [1] stats     graphics  grDevices utils     datasets  methods   base     </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## other attached packages:</span></span>
-<span><span class="co">##  [1] future_1.70.0      ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1       </span></span>
-<span><span class="co">##  [5] ggplot2_4.0.3      Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1          </span></span>
-<span><span class="co">##  [9] PhenoMapR_0.1.0    testthat_3.3.2    </span></span>
+<span><span class="co">## [1] ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1        ggplot2_4.0.3     </span></span>
+<span><span class="co">## [5] Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1           PhenoMapR_0.1.0   </span></span>
+<span><span class="co">## [9] testthat_3.3.2    </span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
 <span><span class="co">##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        </span></span>
@@ -1361,27 +1013,27 @@ Acids Res. 54, D1579–D1589 (2026).</p>
 <span><span class="co">##   [7] farver_2.1.2           rmarkdown_2.31         GlobalOptions_0.1.4   </span></span>
 <span><span class="co">##  [10] fs_2.1.0               ragg_1.5.2             vctrs_0.7.3           </span></span>
 <span><span class="co">##  [13] ROCR_1.0-12            spatstat.explore_3.8-1 htmltools_0.5.9       </span></span>
-<span><span class="co">##  [16] progress_1.2.3         curl_7.1.0             spatialCooccur_0.99.1 </span></span>
-<span><span class="co">##  [19] sass_0.4.10            sctransform_0.4.3      parallelly_1.47.0     </span></span>
-<span><span class="co">##  [22] KernSmooth_2.23-26     bslib_0.11.0           htmlwidgets_1.6.4     </span></span>
-<span><span class="co">##  [25] desc_1.4.3             ica_1.0-3              plyr_1.8.9            </span></span>
-<span><span class="co">##  [28] plotly_4.12.0          zoo_1.8-15             cachem_1.1.0          </span></span>
-<span><span class="co">##  [31] igraph_2.3.2           iterators_1.0.14       mime_0.13             </span></span>
-<span><span class="co">##  [34] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-5          </span></span>
-<span><span class="co">##  [37] R6_2.6.1               fastmap_1.2.0          clue_0.3-68           </span></span>
-<span><span class="co">##  [40] fitdistrplus_1.2-6     shiny_1.14.0           digest_0.6.39         </span></span>
+<span><span class="co">##  [16] progress_1.2.3         curl_7.1.0             sass_0.4.10           </span></span>
+<span><span class="co">##  [19] sctransform_0.4.3      parallelly_1.47.0      KernSmooth_2.23-26    </span></span>
+<span><span class="co">##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            </span></span>
+<span><span class="co">##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         </span></span>
+<span><span class="co">##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.2          </span></span>
+<span><span class="co">##  [31] iterators_1.0.14       mime_0.13              lifecycle_1.0.5       </span></span>
+<span><span class="co">##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              </span></span>
+<span><span class="co">##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    </span></span>
+<span><span class="co">##  [40] future_1.70.0          shiny_1.14.0           digest_0.6.39         </span></span>
 <span><span class="co">##  [43] colorspace_2.1-2       S4Vectors_0.50.1       rprojroot_2.1.1       </span></span>
 <span><span class="co">##  [46] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           </span></span>
 <span><span class="co">##  [49] pkgload_1.5.3          textshaping_1.0.5      labeling_0.4.3        </span></span>
 <span><span class="co">##  [52] progressr_0.19.0       spatstat.sparse_3.2-0  httr_1.4.8            </span></span>
-<span><span class="co">##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.0        </span></span>
+<span><span class="co">##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.1        </span></span>
 <span><span class="co">##  [58] gargle_1.6.1           doParallel_1.0.17      withr_3.0.3           </span></span>
 <span><span class="co">##  [61] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         </span></span>
 <span><span class="co">##  [64] pkgbuild_1.4.8         MASS_7.3-65            rjson_0.2.23          </span></span>
-<span><span class="co">##  [67] tools_4.6.0            lmtest_0.9-40          otel_0.2.0            </span></span>
+<span><span class="co">##  [67] tools_4.6.1            lmtest_0.9-40          otel_0.2.0            </span></span>
 <span><span class="co">##  [70] googledrive_2.1.2      httpuv_1.6.17          future.apply_1.20.2   </span></span>
 <span><span class="co">##  [73] goftest_1.2-3          glue_1.8.1             nlme_3.1-169          </span></span>
-<span><span class="co">##  [76] promises_1.5.0         grid_4.6.0             Rtsne_0.17            </span></span>
+<span><span class="co">##  [76] promises_1.5.0         grid_4.6.1             Rtsne_0.17            </span></span>
 <span><span class="co">##  [79] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        </span></span>
 <span><span class="co">##  [82] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           </span></span>
 <span><span class="co">##  [85] data.table_1.18.4      hms_1.1.4              BiocGenerics_0.58.1   </span></span>
@@ -1389,23 +1041,22 @@ Acids Res. 54, D1579–D1589 (2026).</p>
 <span><span class="co">##  [91] ggrepel_0.9.8          RANN_2.6.2             pillar_1.11.1         </span></span>
 <span><span class="co">##  [94] stringr_1.6.0          limma_3.68.4           spam_2.11-4           </span></span>
 <span><span class="co">##  [97] RcppHNSW_0.7.0         later_1.4.8            circlize_0.4.18       </span></span>
-<span><span class="co">## [100] splines_4.6.0          moments_0.14.1         lattice_0.22-9        </span></span>
-<span><span class="co">## [103] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      </span></span>
-<span><span class="co">## [106] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         </span></span>
-<span><span class="co">## [109] knitr_1.51             gridExtra_2.3          IRanges_2.46.0        </span></span>
-<span><span class="co">## [112] scattermore_1.2        stats4_4.6.0           xfun_0.59             </span></span>
-<span><span class="co">## [115] statmod_1.5.2          brio_1.1.5             matrixStats_1.5.0     </span></span>
-<span><span class="co">## [118] stringi_1.8.7          lazyeval_0.2.3         yaml_2.3.12           </span></span>
-<span><span class="co">## [121] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          </span></span>
-<span><span class="co">## [124] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          </span></span>
-<span><span class="co">## [127] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       </span></span>
-<span><span class="co">## [130] Rcpp_1.1.1-1.1         globals_0.19.1         spatstat.random_3.5-0 </span></span>
-<span><span class="co">## [133] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.0        </span></span>
-<span><span class="co">## [136] pkgdown_2.2.0          presto_1.0.0           prettyunits_1.2.0     </span></span>
-<span><span class="co">## [139] dotCall64_1.2          listenv_1.0.0          viridisLite_0.4.3     </span></span>
-<span><span class="co">## [142] scales_1.4.0           ggridges_0.5.7         purrr_1.2.2           </span></span>
-<span><span class="co">## [145] crayon_1.5.3           GetoptLong_1.1.1       rlang_1.2.0           </span></span>
-<span><span class="co">## [148] cowplot_1.2.0</span></span></code></pre>
+<span><span class="co">## [100] splines_4.6.1          lattice_0.22-9         survival_3.8-6        </span></span>
+<span><span class="co">## [103] deldir_2.0-4           tidyselect_1.2.1       ComplexHeatmap_2.28.0 </span></span>
+<span><span class="co">## [106] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            </span></span>
+<span><span class="co">## [109] gridExtra_2.3          IRanges_2.46.0         scattermore_1.2       </span></span>
+<span><span class="co">## [112] stats4_4.6.1           xfun_0.59              statmod_1.5.2         </span></span>
+<span><span class="co">## [115] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         </span></span>
+<span><span class="co">## [118] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        </span></span>
+<span><span class="co">## [121] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             </span></span>
+<span><span class="co">## [124] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     </span></span>
+<span><span class="co">## [127] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.1-1.1        </span></span>
+<span><span class="co">## [130] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             </span></span>
+<span><span class="co">## [133] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.0         </span></span>
+<span><span class="co">## [136] presto_1.0.0           prettyunits_1.2.0      dotCall64_1.2         </span></span>
+<span><span class="co">## [139] listenv_1.0.0          viridisLite_0.4.3      scales_1.4.0          </span></span>
+<span><span class="co">## [142] ggridges_0.5.7         purrr_1.2.2            crayon_1.5.3          </span></span>
+<span><span class="co">## [145] GetoptLong_1.1.1       rlang_1.2.0            cowplot_1.2.0</span></span></code></pre>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

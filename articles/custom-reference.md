@@ -793,7 +793,7 @@ multicentre study. EBioMedicine 108, 105339. (2024).
 sessionInfo()
 ```
 
-    ## R version 4.6.0 (2026-04-24)
+    ## R version 4.6.1 (2026-06-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -823,18 +823,18 @@ sessionInfo()
     ## loaded via a namespace (and not attached):
     ##  [1] tidyselect_1.2.1        farver_2.1.2            S7_0.2.2               
     ##  [4] fastmap_1.2.0           digest_0.6.39           lifecycle_1.0.5        
-    ##  [7] cluster_2.1.8.2         magrittr_2.0.5          compiler_4.6.0         
-    ## [10] rlang_1.2.0             sass_0.4.10             tools_4.6.0            
+    ##  [7] cluster_2.1.8.2         magrittr_2.0.5          compiler_4.6.1         
+    ## [10] rlang_1.2.0             sass_0.4.10             tools_4.6.1            
     ## [13] yaml_2.3.12             data.table_1.18.4       knitr_1.51             
     ## [16] labeling_0.4.3          htmlwidgets_1.6.4       curl_7.1.0             
     ## [19] splitstackshape_1.4.8.1 RColorBrewer_1.1-3      abind_1.4-8            
     ## [22] withr_3.0.3             purrr_1.2.2             BiocGenerics_0.58.1    
-    ## [25] desc_1.4.3              stats4_4.6.0            googledrive_2.1.2      
+    ## [25] desc_1.4.3              stats4_4.6.1            googledrive_2.1.2      
     ## [28] colorspace_2.1-2        scales_1.4.0            iterators_1.0.14       
     ## [31] cli_3.6.6               rmarkdown_2.31          crayon_1.5.3           
     ## [34] ragg_1.5.2              generics_0.1.4          otel_0.2.0             
     ## [37] httr_1.4.8              rjson_0.2.23            cachem_1.1.0           
-    ## [40] splines_4.6.0           parallel_4.6.0          matrixStats_1.5.0      
+    ## [40] splines_4.6.1           parallel_4.6.1          matrixStats_1.5.0      
     ## [43] vctrs_0.7.3             Matrix_1.7-5            carData_3.0-6          
     ## [46] jsonlite_2.0.0          car_3.1-5               IRanges_2.46.0         
     ## [49] GetoptLong_1.1.1        S4Vectors_0.50.1        rstatix_0.7.3          

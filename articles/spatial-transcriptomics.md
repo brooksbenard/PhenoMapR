@@ -214,8 +214,8 @@ gc(verbose = FALSE)
 ```
 
     ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells  4381155 234.0    7832468 418.3   7832468 418.3
-    ## Vcells 11228523  85.7  126567057 965.7 126220747 963.0
+    ## Ncells  4380533 234.0    7847892 419.2   7847892 419.2
+    ## Vcells 11224509  85.7  126562432 965.6 126219433 963.0
 
 ``` r
 
@@ -476,383 +476,28 @@ cells**.
 Install **`spatialCooccur`** from GitHub if needed:
 `remotes::install_github("juninamo/spatialCooccur")`.
 
-**[`spatialCooccur::nhood_enrichment()`](https://rdrr.io/pkg/spatialCooccur/man/nhood_enrichment.html)**
-builds a **kNN graph**
+**`spatialCooccur::nhood_enrichment()`** builds a **kNN graph**
 (**[`Seurat::FindNeighbors()`](https://satijalab.org/seurat/reference/FindNeighbors.html)**
 inside the package), optionally normalizes adjacency, aggregates
 **co-occurrence** between cluster pairs, and compares the observed
 matrix to **permutation** nulls to produce a **z-score** matrix. We use
 **`n_jobs = 1`** so the vignette runs on a single core (set higher
 locally if you install the package).
-**[`spatialCooccur::cooccur_local()`](https://rdrr.io/pkg/spatialCooccur/man/cooccur_local.html)**
-scores each cell by whether its **radius** neighborhood contains both
-**Adverse** and **Favorable** labels, then applies a short
-diffusion-style step when **`maxnsteps > 0`**. Duplicate spot
-coordinates (many CytoSPACE cells per spot) get a small jitter.
+**`spatialCooccur::cooccur_local()`** scores each cell by whether its
+**radius** neighborhood contains both **Adverse** and **Favorable**
+labels, then applies a short diffusion-style step when
+**`maxnsteps > 0`**. Duplicate spot coordinates (many CytoSPACE cells
+per spot) get a small jitter.
 
-The neighborhood **Z-score** matrix is shown with **ComplexHeatmap**
-when available: **row and column annotations** split **`CellType`** and
-**`Adverse` / `Favorable` / `Other`** (combined labels remain
-`CellType_prognostic_group`). If **ComplexHeatmap** is not installed, a
-**ggplot** tile heatmap is used instead.
+The neighborhood **Z-score** matrix is shown below as a **pre-rendered
+figure** (full CytoSPACE cell set, no subsampling). Stars use
+Benjamini–Hochberg FDR on two-sided p(\|Z\|): \*\*\* q\<0.001, \*\*
+q\<0.01, \* q\<0.05. To regenerate after changing labels or
+`spatialCooccur` settings, run
+`Rscript scripts/render_spatial_colocalization_heatmap.R` from the
+package root.
 
-``` r
-
-scoc_nhood <- NULL
-scoc_local_by_ct <- NULL
-
-if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
-  message("Install spatialCooccur for co-localization: remotes::install_github(\"juninamo/spatialCooccur\")")
-} else if (!exists("cell_locations") ||
-           !all(c("Cell", "row", "col", "CellType", "prognostic_group") %in% names(cell_locations))) {
-  message("Co-localization skipped: expected `cell_locations` with columns Cell, row, col, CellType, prognostic_group.")
-} else {
-  dfb <- cell_locations[
-    stats::complete.cases(cell_locations[, c("Cell", "row", "col", "CellType", "prognostic_group")]),
-    ,
-    drop = FALSE
-  ]
-  dfb$Cell <- as.character(dfb$Cell)
-  dfb$row <- as.numeric(dfb$row)
-  dfb$col <- as.numeric(dfb$col)
-  dfb$CellType <- as.character(dfb$CellType)
-  dfb$prognostic_group <- as.character(dfb$prognostic_group)
-  dfb$prognostic_group <- dplyr::recode(
-    dfb$prognostic_group,
-    `Most Adverse` = "Adverse",
-    `Most Favorable` = "Favorable"
-  )
-  dfb <- dfb[dfb$prognostic_group %in% c("Adverse", "Favorable", "Other"), , drop = FALSE]
-  dfb <- dfb[!is.na(dfb$CellType) & nzchar(trimws(dfb$CellType)), , drop = FALSE]
-  dfb$ct_pg <- paste0(dfb$CellType, "_", dfb$prognostic_group)
-
-  scoc_df <- data.frame(
-    x = dfb$row,
-    y = dfb$col,
-    ct_pg = dfb$ct_pg,
-    stringsAsFactors = FALSE
-  )
-  rownames(scoc_df) <- dfb$Cell
-  # spatialCooccur::cooccur_local expects the label column to be named `cell_type`
-  scoc_df$cell_type <- scoc_df$ct_pg
-
-  # Keep runtime and memory bounded for pkgdown / CI (full data locally).
-  max_cells_sc <- if (.is_vignette_ci()) 3000L else 4000L
-  if (nrow(scoc_df) > max_cells_sc) {
-    set.seed(3L)
-    scoc_df <- scoc_df[sample.int(nrow(scoc_df), max_cells_sc), , drop = FALSE]
-  }
-
-  # Many CytoSPACE cells share identical spot coordinates; jitter to avoid duplicates in kNN/radius logic.
-  xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
-  if (any(duplicated(xy_mat) | duplicated(xy_mat, fromLast = TRUE))) {
-    rng <- max(
-      diff(range(xy_mat[, 1], na.rm = TRUE)),
-      diff(range(xy_mat[, 2], na.rm = TRUE)),
-      na.rm = TRUE
-    )
-    eps <- if (is.finite(rng) && rng > 0) rng * 1e-5 else 1e-6
-    set.seed(4L)
-    scoc_df$x <- scoc_df$x + stats::runif(nrow(scoc_df), 0, eps)
-    scoc_df$y <- scoc_df$y + stats::runif(nrow(scoc_df), 0, eps)
-  }
-
-  k_sc <- min(20L, max(5L, nrow(scoc_df) - 1L))
-  n_perm_sc <- if (.is_vignette_ci()) 30L else 100L
-
-  n_grp <- length(unique(scoc_df$ct_pg))
-  if (nrow(scoc_df) >= (k_sc + 3L) && n_grp >= 2L) {
-    scoc_nhood <- tryCatch(
-      spatialCooccur::nhood_enrichment(
-        scoc_df,
-        cluster_key = "ct_pg",
-        neighbors.k = k_sc,
-        connectivity_key = "nn",
-        transformation = TRUE,
-        n_perms = n_perm_sc,
-        seed = 42L,
-        n_jobs = 1L
-      ),
-      error = function(e) {
-        message("spatialCooccur::nhood_enrichment failed: ", conditionMessage(e))
-        NULL
-      }
-    )
-  }
-
-  rad_sc <- max(3, 0.04 * max(
-    diff(range(scoc_df$x, na.rm = TRUE)),
-    diff(range(scoc_df$y, na.rm = TRUE)),
-    na.rm = TRUE
-  ))
-
-  # Local co-occurrence within each cell type:
-  # compare CellType_Adverse neighborhoods for presence of CellType_Favorable (and vice versa).
-  df_local_list <- list()
-  cell_types <- sort(unique(sub("_(Adverse|Favorable|Other)$", "", unique(scoc_df$ct_pg))))
-  for (ct in cell_types) {
-    xlab <- paste0(ct, "_Adverse")
-    ylab <- paste0(ct, "_Favorable")
-    if (!(xlab %in% scoc_df$ct_pg && ylab %in% scoc_df$ct_pg)) next
-    if (sum(scoc_df$ct_pg == xlab) < 3L || sum(scoc_df$ct_pg == ylab) < 3L) next
-
-    loc_one <- tryCatch(
-      spatialCooccur::cooccur_local(
-        scoc_df,
-        cluster_x = xlab,
-        cluster_y = ylab,
-        connectivity_key = "nn",
-        neighbors.k = k_sc,
-        radius = rad_sc,
-        maxnsteps = 3L
-      ),
-      error = function(e) {
-        message("spatialCooccur::cooccur_local failed for ", ct, ": ", conditionMessage(e))
-        NULL
-      }
-    )
-    if (is.null(loc_one) || ncol(loc_one) < 1L) next
-
-    cn <- colnames(loc_one)[1]
-    v <- loc_one[[1]]
-    ids <- rownames(loc_one)
-    if (is.null(ids) || length(ids) != length(v)) ids <- names(v)
-    if (is.null(ids) || length(ids) != length(v)) ids <- as.character(seq_len(length(v)))
-
-    df_local_list[[ct]] <- data.frame(
-      cell = as.character(ids),
-      cell_type = ct,
-      score = as.numeric(v),
-      metric = cn,
-      stringsAsFactors = FALSE
-    )
-  }
-  if (length(df_local_list) > 0) {
-    scoc_local_by_ct <- do.call(rbind, df_local_list)
-  }
-}
-
-if (!is.null(scoc_nhood) && !is.null(scoc_nhood$zscore)) {
-  # print(scoc_nhood$count)
-
-  zm <- as.matrix(scoc_nhood$zscore)
-  lab_clean <- function(nm) gsub("^Cluster", "", nm)
-  rn <- lab_clean(rownames(zm))
-  cn <- lab_clean(colnames(zm))
-
-  suffix_pg <- c("Adverse", "Favorable", "Other")
-  .parse_ct_pg <- function(lab) {
-    for (s in suffix_pg) {
-      suff <- paste0("_", s)
-      if (nzchar(lab) && endsWith(lab, suff)) {
-        ct <- substr(lab, 1L, nchar(lab) - nchar(suff))
-        return(c(ct = ct, pg = s))
-      }
-    }
-    c(ct = lab, pg = NA_character_)
-  }
-
-  all_labs <- sort(unique(c(rn, cn)))
-  meta_labs <- as.data.frame(
-    do.call(rbind, lapply(all_labs, function(l) {
-      p <- .parse_ct_pg(l)
-      data.frame(label = l, CellType = p[["ct"]], Prognostic = p[["pg"]], stringsAsFactors = FALSE)
-    })),
-    stringsAsFactors = FALSE
-  )
-  meta_labs$Prognostic <- factor(meta_labs$Prognostic, levels = suffix_pg)
-  meta_labs <- meta_labs[!is.na(meta_labs$Prognostic), , drop = FALSE]
-  ord <- order(meta_labs$CellType, meta_labs$Prognostic)
-  labs_ord <- meta_labs$label[ord]
-  labs_ord <- labs_ord[labs_ord %in% rn & labs_ord %in% cn]
-  if (length(labs_ord) < 2L) {
-    message("Not enough overlapping labels in zscore matrix for heatmap.")
-  } else {
-    mat <- zm[match(labs_ord, rn), match(labs_ord, cn), drop = FALSE]
-    dimnames(mat) <- list(labs_ord, labs_ord)
-
-    row_ct <- as.character(meta_labs$CellType[match(rownames(mat), meta_labs$label)])
-    row_pg <- as.character(meta_labs$Prognostic[match(rownames(mat), meta_labs$label)])
-    col_ct <- as.character(meta_labs$CellType[match(colnames(mat), meta_labs$label)])
-    col_pg <- as.character(meta_labs$Prognostic[match(colnames(mat), meta_labs$label)])
-
-    pal_pg <- c(Adverse = "#B2182B", Favorable = "#2166AC", Other = "#f7f7f7")
-    uct <- sort(unique(c(row_ct, col_ct)))
-    pal_ct <- PhenoMapR::get_celltype_palette(uct)
-
-    ## Cell counts per combined label (cells entering nhood_enrichment, same order as heatmap columns).
-    col_ncells <- rep(0L, ncol(mat))
-    names(col_ncells) <- colnames(mat)
-    if (exists("scoc_df") && is.data.frame(scoc_df) && "ct_pg" %in% names(scoc_df)) {
-      tab_ct <- table(scoc_df$ct_pg)
-      hit <- names(col_ncells) %in% names(tab_ct)
-      col_ncells[hit] <- as.integer(tab_ct[names(col_ncells)[hit]])
-    }
-
-    ## Two-sided p-values from |Z| (normal approximation; spatialCooccur returns zscore + count only).
-    mat_p <- 2 * stats::pnorm(-abs(mat))
-    mat_p[!is.finite(mat)] <- NA_real_
-    ## Benjamini–Hochberg FDR across all matrix cells (multiple pairwise label comparisons).
-    mat_p_adj <- mat_p
-    pv_flat <- as.vector(mat_p)
-    ok_flat <- is.finite(pv_flat)
-    mat_p_adj[] <- NA_real_
-    mat_p_adj[ok_flat] <- stats::p.adjust(pv_flat[ok_flat], method = "BH")
-
-    drew_ch <- FALSE
-    if (requireNamespace("ComplexHeatmap", quietly = TRUE) && requireNamespace("circlize", quietly = TRUE)) {
-      mabs <- suppressWarnings(max(abs(as.numeric(mat)), na.rm = TRUE))
-      if (!is.finite(mabs) || mabs <= 0) mabs <- 1
-      
-      # "#7F312FFF", "#BE4A47FF", "#FD817EFF", "#FEA19EFF", "#FEC0BFFF", "#F5F5F5FF", "#99E3DDFF", "#66D4CCFF", "#33C6BBFF", "#008A80FF", "#005C55FF"
-      
-      col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#7F312FFF", "#f7f7f7", "#005C55FF"))
-
-      row_ha <- ComplexHeatmap::rowAnnotation(
-        CellType = row_ct,
-        `Prognostic Group` = row_pg,
-        col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
-        # annotation_name_side = NULL,
-        show_annotation_name = FALSE,
-        simple_anno_size = grid::unit(4, "mm"),
-        show_legend = c(FALSE)
-      )
-      col_ha <- ComplexHeatmap::HeatmapAnnotation(
-                `# cells` = ComplexHeatmap::anno_barplot(
-          col_ncells,
-          gp = grid::gpar(fill = "#666666"),
-          border = FALSE,
-          height = grid::unit(14, "mm"),
-          ylim = c(0, max(col_ncells, 1L, na.rm = TRUE))
-        ),
-        CellType = col_ct,
-        `Prognostic Group` = col_pg,
-        col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
-        annotation_name_side = "right",
-        simple_anno_size = grid::unit(4, "mm")
-      )
-
-ht <- ComplexHeatmap::Heatmap(
-  mat,
-  name = "Z",
-  col = col_fun,
-  cluster_rows    = FALSE,
-  cluster_columns = FALSE,
-  show_row_names    = FALSE,
-  show_column_names = FALSE,
-  show_row_dend    = FALSE,
-  show_column_dend = FALSE,
-  row_names_gp    = grid::gpar(fontsize = 7),
-  column_names_gp = grid::gpar(fontsize = 7),
-  left_annotation = row_ha,
-  top_annotation  = col_ha,
-  row_title    = "Reference Cell Type",    
-  column_title = "Neighborhood Cell Type",  
-  row_title_gp    = grid::gpar(fontsize = 12),
-  column_title_gp = grid::gpar(fontsize = 12),
-    row_title_side    = "left",       
-  column_title_side = "bottom", 
-  heatmap_legend_param = list(title = "Z-score"),
-  border = TRUE,
-  cell_fun = function(j, i, x, y, w, h, fill) {
-    qv <- mat_p_adj[i, j]
-    if (!is.finite(qv)) return(invisible(NULL))
-    sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
-    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
-  }
-)
-
-# Draw with main title separately
-ComplexHeatmap::draw(
-  ht,
-  column_title     = "Neighborhood Enrichment of Prognostic Cell Types",
-  column_title_gp  = grid::gpar(fontsize = 14, fontface = "bold"),
-  heatmap_legend_side = "right", annotation_legend_side = "right"
-)
-      drew_ch <- TRUE
-    }
-  }
-}
-```
-
-![](spatial-transcriptomics_files/figure-html/cytospace-spatialcooccur-1.png)
-
-``` r
-
-if (!is.null(scoc_local_by_ct) && nrow(scoc_local_by_ct) > 0L) {
-  p_loc <- ggplot(scoc_local_by_ct, aes(x = stats::reorder(.data$cell_type, .data$score, median), y = .data$score)) +
-    geom_boxplot(outlier.alpha = 0.3) +
-    coord_flip() +
-    labs(
-      title = "Local co-occurrence score (spatialCooccur::cooccur_local)",
-      subtitle = paste0("Within-cell-type neighborhoods (radius ≈ ", signif(rad_sc, 3), "): adverse vs favorable"),
-      x = "Cell type",
-      y = unique(scoc_local_by_ct$metric)[1]
-    ) +
-    theme_minimal(base_size = 11)
-  # print(p_loc)
-}
-```
-
-Stars use Benjamini–Hochberg FDR on two-sided p(\|Z\|): \*\*\* q\<0.001,
-\*\* q\<0.01, \* q\<0.05
-
-### Now, we cluster to find broader patterns
-
-``` r
-
-nhood_hm_ready <- exists("mat", inherits = FALSE) &&
-  is.matrix(mat) && nrow(mat) >= 2L && ncol(mat) >= 2L &&
-  exists("col_fun", inherits = FALSE) &&
-  exists("row_ha", inherits = FALSE) &&
-  exists("col_ha", inherits = FALSE) &&
-  exists("mat_p_adj", inherits = FALSE) &&
-  requireNamespace("ComplexHeatmap", quietly = TRUE)
-
-if (nhood_hm_ready && .spatial_run_full_markers) {
-  ht_clustered <- ComplexHeatmap::Heatmap(
-    mat,
-    name = "Z",
-    col = col_fun,
-    cluster_rows = TRUE,
-    cluster_columns = TRUE,
-    show_row_names = FALSE,
-    show_column_names = FALSE,
-    show_row_dend = FALSE,
-    show_column_dend = FALSE,
-    row_names_gp = grid::gpar(fontsize = 7),
-    column_names_gp = grid::gpar(fontsize = 7),
-    left_annotation = row_ha,
-    top_annotation = col_ha,
-    row_title = "Reference Cell Type",
-    column_title = "Neighborhood Cell Type",
-    row_title_gp = grid::gpar(fontsize = 12),
-    column_title_gp = grid::gpar(fontsize = 12),
-    row_title_side = "left",
-    column_title_side = "bottom",
-    heatmap_legend_param = list(title = "Z-score"),
-    border = TRUE,
-    cell_fun = function(j, i, x, y, w, h, fill) {
-      qv <- mat_p_adj[i, j]
-      if (!is.finite(qv)) return(invisible(NULL))
-      sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
-      grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
-    }
-  )
-
-  ComplexHeatmap::draw(
-    ht_clustered,
-    column_title = "Neighborhood Enrichment of Prognostic Cell Types (clustered)",
-    column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
-    heatmap_legend_side = "right",
-    annotation_legend_side = "right"
-  )
-} else if (nhood_hm_ready && !.spatial_run_full_markers) {
-  message("Skipping clustered neighborhood enrichment heatmap on CI (memory budget).")
-} else {
-  message("Skipping clustered neighborhood enrichment heatmap (z-score matrix not available).")
-}
-```
+![](../inst/figures/spatial_colocalization_nhood_enrichment.png)
 
 ### Prognostic markers
 
@@ -1252,10 +897,10 @@ phenotypes.
   **Pancreatic** reference at **cell** resolution; score distribution,
   score by cell type, prognostic groups, and spatial maps (jittered
   cells per spot).
-- **Co-localization**:
-  **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)**
-  **`nhood_enrichment()`** and **`cooccur_local()`** on Visium
-  coordinates and prognostic groups (Part 2 only; install from GitHub).
+- **Co-localization**: pre-rendered
+  **`spatialCooccur::nhood_enrichment()`** heatmap on full CytoSPACE
+  cells (`CellType` × prognostic group labels); regenerate with
+  `scripts/render_spatial_colocalization_heatmap.R`.
 - **Markers**: three
   **[`plot_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_phenotype_markers.md)**
   heatmaps on CytoSPACE cells — (1) **cell-type agnostic**
@@ -1277,7 +922,7 @@ and immunotherapy cohorts. Nucleic Acids Res. 54, D1579–D1589 (2026).
 sessionInfo()
 ```
 
-    ## R version 4.6.0 (2026-04-24)
+    ## R version 4.6.1 (2026-06-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -1298,9 +943,9 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ##  [1] future_1.70.0      ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1       
-    ##  [5] ggplot2_4.0.3      Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1          
-    ##  [9] PhenoMapR_0.1.0    testthat_3.3.2    
+    ## [1] ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1        ggplot2_4.0.3     
+    ## [5] Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1           PhenoMapR_0.1.0   
+    ## [9] testthat_3.3.2    
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        
@@ -1308,27 +953,27 @@ sessionInfo()
     ##   [7] farver_2.1.2           rmarkdown_2.31         GlobalOptions_0.1.4   
     ##  [10] fs_2.1.0               ragg_1.5.2             vctrs_0.7.3           
     ##  [13] ROCR_1.0-12            spatstat.explore_3.8-1 htmltools_0.5.9       
-    ##  [16] progress_1.2.3         curl_7.1.0             spatialCooccur_0.99.1 
-    ##  [19] sass_0.4.10            sctransform_0.4.3      parallelly_1.47.0     
-    ##  [22] KernSmooth_2.23-26     bslib_0.11.0           htmlwidgets_1.6.4     
-    ##  [25] desc_1.4.3             ica_1.0-3              plyr_1.8.9            
-    ##  [28] plotly_4.12.0          zoo_1.8-15             cachem_1.1.0          
-    ##  [31] igraph_2.3.2           iterators_1.0.14       mime_0.13             
-    ##  [34] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-5          
-    ##  [37] R6_2.6.1               fastmap_1.2.0          clue_0.3-68           
-    ##  [40] fitdistrplus_1.2-6     shiny_1.14.0           digest_0.6.39         
+    ##  [16] progress_1.2.3         curl_7.1.0             sass_0.4.10           
+    ##  [19] sctransform_0.4.3      parallelly_1.47.0      KernSmooth_2.23-26    
+    ##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            
+    ##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         
+    ##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.2          
+    ##  [31] iterators_1.0.14       mime_0.13              lifecycle_1.0.5       
+    ##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              
+    ##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    
+    ##  [40] future_1.70.0          shiny_1.14.0           digest_0.6.39         
     ##  [43] colorspace_2.1-2       S4Vectors_0.50.1       rprojroot_2.1.1       
     ##  [46] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           
     ##  [49] pkgload_1.5.3          textshaping_1.0.5      labeling_0.4.3        
     ##  [52] progressr_0.19.0       spatstat.sparse_3.2-0  httr_1.4.8            
-    ##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.0        
+    ##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.1        
     ##  [58] gargle_1.6.1           doParallel_1.0.17      withr_3.0.3           
     ##  [61] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         
     ##  [64] pkgbuild_1.4.8         MASS_7.3-65            rjson_0.2.23          
-    ##  [67] tools_4.6.0            lmtest_0.9-40          otel_0.2.0            
+    ##  [67] tools_4.6.1            lmtest_0.9-40          otel_0.2.0            
     ##  [70] googledrive_2.1.2      httpuv_1.6.17          future.apply_1.20.2   
     ##  [73] goftest_1.2-3          glue_1.8.1             nlme_3.1-169          
-    ##  [76] promises_1.5.0         grid_4.6.0             Rtsne_0.17            
+    ##  [76] promises_1.5.0         grid_4.6.1             Rtsne_0.17            
     ##  [79] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        
     ##  [82] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           
     ##  [85] data.table_1.18.4      hms_1.1.4              BiocGenerics_0.58.1   
@@ -1336,20 +981,19 @@ sessionInfo()
     ##  [91] ggrepel_0.9.8          RANN_2.6.2             pillar_1.11.1         
     ##  [94] stringr_1.6.0          limma_3.68.4           spam_2.11-4           
     ##  [97] RcppHNSW_0.7.0         later_1.4.8            circlize_0.4.18       
-    ## [100] splines_4.6.0          moments_0.14.1         lattice_0.22-9        
-    ## [103] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      
-    ## [106] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         
-    ## [109] knitr_1.51             gridExtra_2.3          IRanges_2.46.0        
-    ## [112] scattermore_1.2        stats4_4.6.0           xfun_0.59             
-    ## [115] statmod_1.5.2          brio_1.1.5             matrixStats_1.5.0     
-    ## [118] stringi_1.8.7          lazyeval_0.2.3         yaml_2.3.12           
-    ## [121] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          
-    ## [124] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          
-    ## [127] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       
-    ## [130] Rcpp_1.1.1-1.1         globals_0.19.1         spatstat.random_3.5-0 
-    ## [133] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.0        
-    ## [136] pkgdown_2.2.0          presto_1.0.0           prettyunits_1.2.0     
-    ## [139] dotCall64_1.2          listenv_1.0.0          viridisLite_0.4.3     
-    ## [142] scales_1.4.0           ggridges_0.5.7         purrr_1.2.2           
-    ## [145] crayon_1.5.3           GetoptLong_1.1.1       rlang_1.2.0           
-    ## [148] cowplot_1.2.0
+    ## [100] splines_4.6.1          lattice_0.22-9         survival_3.8-6        
+    ## [103] deldir_2.0-4           tidyselect_1.2.1       ComplexHeatmap_2.28.0 
+    ## [106] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            
+    ## [109] gridExtra_2.3          IRanges_2.46.0         scattermore_1.2       
+    ## [112] stats4_4.6.1           xfun_0.59              statmod_1.5.2         
+    ## [115] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         
+    ## [118] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        
+    ## [121] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             
+    ## [124] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     
+    ## [127] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.1-1.1        
+    ## [130] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             
+    ## [133] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.0         
+    ## [136] presto_1.0.0           prettyunits_1.2.0      dotCall64_1.2         
+    ## [139] listenv_1.0.0          viridisLite_0.4.3      scales_1.4.0          
+    ## [142] ggridges_0.5.7         purrr_1.2.2            crayon_1.5.3          
+    ## [145] GetoptLong_1.1.1       rlang_1.2.0            cowplot_1.2.0

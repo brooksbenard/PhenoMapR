@@ -1131,7 +1131,7 @@ therapeutics through in silico perturbation. *Nat Commun* 16, 11271
 sessionInfo()
 ```
 
-    ## R version 4.6.0 (2026-04-24)
+    ## R version 4.6.1 (2026-06-24)
     ## Platform: x86_64-pc-linux-gnu
     ## Running under: Ubuntu 24.04.4 LTS
     ## 
@@ -1160,7 +1160,7 @@ sessionInfo()
     ## [13] googledrive_2.1.2     PhenoMapR_0.1.0       testthat_3.3.2       
     ## 
     ## loaded via a namespace (and not attached):
-    ##   [1] RcppAnnoy_0.0.23       splines_4.6.0          later_1.4.8           
+    ##   [1] RcppAnnoy_0.0.23       splines_4.6.1          later_1.4.8           
     ##   [4] tibble_3.3.1           polyclip_1.10-7        fastDummies_1.7.6     
     ##   [7] lifecycle_1.0.5        rstatix_0.7.3          doParallel_1.0.17     
     ##  [10] rprojroot_2.1.1        hdf5r_1.3.12           globals_0.19.1        
@@ -1177,11 +1177,11 @@ sessionInfo()
     ##  [43] goftest_1.2-3          RSpectra_0.16-2        spatstat.random_3.5-0 
     ##  [46] fitdistrplus_1.2-6     parallelly_1.47.0      pkgdown_2.2.0         
     ##  [49] codetools_0.2-20       shape_1.4.6.1          tidyselect_1.2.1      
-    ##  [52] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.0          
+    ##  [52] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.1          
     ##  [55] spatstat.explore_3.8-1 jsonlite_2.0.0         GetoptLong_1.1.1      
     ##  [58] progressr_0.19.0       Formula_1.2-5          ggridges_0.5.7        
     ##  [61] survival_3.8-6         iterators_1.0.14       systemfonts_1.3.2     
-    ##  [64] foreach_1.5.2          tools_4.6.0            progress_1.2.3        
+    ##  [64] foreach_1.5.2          tools_4.6.1            progress_1.2.3        
     ##  [67] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.1-1.1        
     ##  [70] glue_1.8.1             gridExtra_2.3          mgcv_1.9-4            
     ##  [73] xfun_0.59              withr_3.0.3            fastmap_1.2.0         
@@ -1197,11 +1197,11 @@ sessionInfo()
     ## [103] knitr_1.51             reshape2_1.4.5         rjson_0.2.23          
     ## [106] nlme_3.1-169           curl_7.1.0             cachem_1.1.0          
     ## [109] zoo_1.8-15             GlobalOptions_0.1.4    stringr_1.6.0         
-    ## [112] KernSmooth_2.23-26     parallel_4.6.0         miniUI_0.1.2          
+    ## [112] KernSmooth_2.23-26     parallel_4.6.1         miniUI_0.1.2          
     ## [115] desc_1.4.3             pillar_1.11.1          vctrs_0.7.3           
     ## [118] RANN_2.6.2             promises_1.5.0         car_3.1-5             
     ## [121] xtable_1.8-8           cluster_2.1.8.2        evaluate_1.0.5        
-    ## [124] magick_2.9.1           cli_3.6.6              compiler_4.6.0        
+    ## [124] magick_2.9.1           cli_3.6.6              compiler_4.6.1        
     ## [127] rlang_1.2.0            crayon_1.5.3           future.apply_1.20.2   
     ## [130] labeling_0.4.3         plyr_1.8.9             fs_2.1.0              
     ## [133] stringi_1.8.7          viridisLite_0.4.3      deldir_2.0-4          
