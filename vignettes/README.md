@@ -9,6 +9,8 @@ The vignettes use data files that are too large for GitHub. You can place them l
 | `PAAD_CRA001160_expression.h5` | `1PolTXggREz8XmhutCLTQJGCfKxFAzqMl` | Single-cell (CRA001160) |
 | `PAAD_CRA001160_CellMetainfo_table.tsv` | `17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu` | Single-cell (CRA001160) |
 | `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj` | Spatial transcriptomics |
+
+**Pre-rendered figure (tracked in git):** `inst/figures/spatial_colocalization_nhood_enrichment.png` — neighborhood co-localization heatmap for the spatial vignette. Regenerate with `Rscript scripts/render_spatial_colocalization_heatmap.R` (requires `spatialCooccur` from GitHub and the CytoSPACE RDS above).
 | `GSE205154.GPL20301.matrix.txt` | `1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN` | Bulk survival |
 | `GSE205154.info.txt` | `1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ` | Bulk survival |
 | `GSE253260_expression.rds` | `1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R` | Custom reference |
