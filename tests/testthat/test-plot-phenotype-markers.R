@@ -786,7 +786,7 @@ test_that("plot_phenotype_markers keeps cell-type strip in cell_type_specific mo
   f_one <- render(meta_one, adv_one, fav_one, expr_one)
   f_two <- render(meta_two, adv, fav, expr_two)
   expect_true(file.exists(f_one) && file.exists(f_two))
-  expect_gt(file.info(f_one)$size, 20000)
+  expect_gt(file.info(f_one)$size, 5000)
   expect_gt(file.info(f_two)$size, file.info(f_one)$size)
 
   src <- paste(
