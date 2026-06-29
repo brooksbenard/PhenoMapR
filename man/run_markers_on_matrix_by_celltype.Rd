@@ -14,7 +14,8 @@ run_markers_on_matrix_by_celltype(
   max_cells_per_ident = 5000L,
   verbose = TRUE,
   unique_genes_across_celltypes = TRUE,
-  celltype_contrast = c("within_cell_type", "vs_cohort_rest", "vs_opposite_tail")
+  celltype_contrast = c("within_cell_type", "vs_cohort_rest", "vs_opposite_tail"),
+  min_cells_per_tail = .MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS
 )
 }
 \description{

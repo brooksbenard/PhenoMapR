@@ -63,7 +63,11 @@ vignettes/*.html
 figure/
 ..Rcheck/
 PhenoMapR.Rcheck/
+Rplots.pdf
 inst/figures/~$*
+
+# Generated spatial analysis caches (not package data/)
+inst/data/
 
 # Local outputs / data next to draft vignettes (sources under inst/vignette-drafts/ are tracked)
 inst/vignette-drafts/*.html

@@ -66,6 +66,16 @@ local_dir <- if (nzchar(Sys.getenv("PHENOMAPR_SHINY_DIR"))) {
   system.file("shiny", package = "PhenoMapR")
 }
 source(file.path(local_dir, "helpers.R"), local = TRUE)
+if (!nzchar(Sys.getenv("PHENOMAPR_SHINY_DEMO_RDS", unset = ""))) {
+  demo_rds <- normalizePath(
+    file.path(local_dir, "..", "extdata", "shiny", "PAAD_CRA001160_demo_5000.rds"),
+    winslash = "/",
+    mustWork = FALSE
+  )
+  if (file.exists(demo_rds)) {
+    Sys.setenv(PHENOMAPR_SHINY_DEMO_RDS = demo_rds)
+  }
+}
 
 # Allow uploads of any size by default. Shiny's default 5 MB cap is too small
 # for sc / spatial RDS / h5ad files, and PhenoMapR users typically run this
@@ -189,12 +199,52 @@ ui <- page_navbar(
         layout_columns(
           col_widths = c(7, 5),
           tagList(
-            markdown(
-              "**PhenoMapR** maps phenotypic signal from bulk expression onto
-              single-cell, spatial, and pseudobulk transcriptomics data using
-              weighted-sum scoring against curated prognostic z-scores
-              (PRECOG, TCGA, Pediatric PRECOG, ICI PRECOG) or a custom
-              reference you supply."
+            tags$div(
+              class = "welcome-intro",
+              tags$p(
+                tags$strong("PhenoMapR"),
+                " is a scaleable approach to map sample phenotypes associated ",
+                "with bulk expression onto single-cell, spatial, bulk, and ",
+                "pseudobulk transcriptomics data. PhenoMapR comes pre-loaded ",
+                "with the largest database of pan-cancer prognostic meta ",
+                "z-scores (",
+                tags$strong(class = "ref-name ref-name-precog", "PRECOG"),
+                ", ",
+                tags$strong(class = "ref-name ref-name-pediatric",
+                            "Pediatric PRECOG"),
+                ", ",
+                tags$strong(class = "ref-name ref-name-ici", "ICI PRECOG"),
+                ", & ",
+                tags$strong(class = "ref-name ref-name-tcga", "TCGA"),
+                "). ",
+                tags$a(
+                  class = "welcome-intro-ref-link",
+                  href = "https://precog.stanford.edu/",
+                  target = "_blank",
+                  rel = "noopener noreferrer",
+                  icon("link"),
+                  " PRECOG database (precog.stanford.edu)"
+                ),
+                " ",
+                tags$a(
+                  class = "welcome-intro-ref-link",
+                  href = paste0(
+                    "https://academic.oup.com/nar/article/54/D1/D1579/",
+                    "8324954"
+                  ),
+                  target = "_blank",
+                  rel = "noopener noreferrer",
+                  icon("book-open"),
+                  " PRECOG paper (NAR 2026)"
+                )
+              ),
+              tags$p(
+                "If you are interested in mapping non-cancer phenotypes ",
+                "(e.g. Alzheimer's risk), PhenoMapR will take a custom bulk ",
+                "expression reference you supply and generate a phenotype ",
+                "signature. This signature can then be used to score bulk, ",
+                "single-cell, or spatial transcriptomics data."
+              )
             ),
 
             # "How to use this app" — card-style panel with a numbered
@@ -220,11 +270,13 @@ ui <- page_navbar(
                       tags$div(class = "welcome-step-title", "Upload data"),
                       tags$div(
                         class = "welcome-step-desc",
-                        HTML("RDS (Seurat / SCE / matrix), TSV/CSV ",
-                             "(genes &times; samples), or 10X HDF5 / ",
-                             "AnnData <code>.h5ad</code>. Add optional ",
-                             "cell metadata for cell-type-specific ",
-                             "analyses.")
+                        "PhenoMapR can process most of the common gene ",
+                        "expression file formats (e.g. RDS / Seurat object, ",
+                        "SingleCellExperiment, AnnData / h5ad, 10x HDF5 ",
+                        "(.h5), data.frame, matrix etc.). Additional tabular ",
+                        "cell metadata can be loaded as well (helpful when an ",
+                        "expression format does not contain, for example, ",
+                        "cell type annotations)."
                       )
                     )
                   ),
@@ -237,13 +289,21 @@ ui <- page_navbar(
                                "Choose a phenotype signature"),
                       tags$div(
                         class = "welcome-step-desc",
-                        HTML("Pick a built-in cohort meta-z ",
-                             "(PRECOG / TCGA / Pediatric / ICI), upload ",
-                             "a precomputed signature file, or ",
-                             "<em>derive</em> a custom signature from your ",
-                             "own bulk expression + phenotype on the ",
-                             "<strong>Phenotype</strong> tab (binary, ",
-                             "continuous, or survival outcomes).")
+                        "Pick a built-in cohort meta-z (",
+                        tags$strong(class = "ref-name ref-name-precog", "PRECOG"),
+                        " / ",
+                        tags$strong(class = "ref-name ref-name-tcga", "TCGA"),
+                        " / ",
+                        tags$strong(class = "ref-name ref-name-pediatric",
+                                    "Pediatric PRECOG"),
+                        " / ",
+                        tags$strong(class = "ref-name ref-name-ici", "ICI PRECOG"),
+                        "), upload a precomputed signature file, or ",
+                        tags$em("derive"),
+                        " a custom signature from your own bulk expression ",
+                        "+ phenotype on the ",
+                        tags$strong("Phenotype"),
+                        " tab (binary, continuous, or survival outcomes)."
                       )
                     )
                   ),
@@ -252,17 +312,13 @@ ui <- page_navbar(
                     tags$div(class = "welcome-step-num", "3"),
                     tags$div(
                       class = "welcome-step-text",
-                      tags$div(class = "welcome-step-title", "Score"),
+                      tags$div(class = "welcome-step-title",
+                               "Score samples, cells, or locations"),
                       tags$div(
                         class = "welcome-step-desc",
-                        HTML("Compute weighted-sum PhenoMapR scores for each ",
-                             "cell / sample / spot, view histograms, ",
-                             "score-rank plots, and per-cell-type &times; ",
-                             "source Wilcoxon comparisons, then immediately ",
-                             "tag the top / bottom <em>N</em>&nbsp;% of cells ",
-                             "as <strong>Most Phenotype +</strong> / ",
-                             "<strong>Most Phenotype &minus;</strong> ",
-                             "phenotype groups.")
+                        "Compute PhenoMapR scores for each cell / sample / ",
+                        "location and view high-level score distribution ",
+                        "statistics."
                       )
                     )
                   ),
@@ -275,12 +331,10 @@ ui <- page_navbar(
                                "Visualization"),
                       tags$div(
                         class = "welcome-step-desc",
-                        HTML("Overlay PhenoMapR score, cell type, source, ",
-                             "or phenotype-group label onto any 2D ",
-                             "embedding stored on your object (UMAP, tSNE, ",
-                             "PCA, or tissue / spot coordinates for ",
-                             "spatial inputs) or an uploaded coordinate ",
-                             "file.")
+                        "Overlay PhenoMapR score, cell type, source, or ",
+                        "phenotype-group label onto any 2D embedding stored ",
+                        "on your object (UMAP, tSNE, PCA, or tissue / spot ",
+                        "coordinates for spatial inputs)."
                       )
                     )
                   ),
@@ -292,10 +346,14 @@ ui <- page_navbar(
                       tags$div(class = "welcome-step-title", "Marker genes"),
                       tags$div(
                         class = "welcome-step-desc",
-                        HTML("Run differential expression for the adverse ",
-                             "vs. favorable tails (globally or per cell ",
-                             "type) and draw a ComplexHeatmap of the top ",
-                             "markers per block.")
+                        "Run differential expression for the ",
+                        tags$span(class = "phenomapr-phenotype-minus",
+                                  HTML("&ldquo;most phenotype &minus;&rdquo;")),
+                        " vs. ",
+                        tags$span(class = "phenomapr-phenotype-plus",
+                                  HTML("&ldquo;most phenotype +&rdquo;")),
+                        " tails (globally or per cell type) and draw a ",
+                        "ComplexHeatmap of the top markers per group."
                       )
                     )
                   )
@@ -354,14 +412,18 @@ ui <- page_navbar(
         tags$div(
           class = "phenomapr-compact-stack expression-compact-stack",
           h4("Expression input"),
+          helpText(
+            "Upload your bulk, single-cell, or spatial dataset that you want scored."
+          ),
           phenomapr_file_input(
             "expr_file",
             label = NULL,
             accept = c(".rds", ".h5", ".h5ad", ".tsv", ".csv", ".txt"),
             width = "100%"
           ),
-          actionLink("use_demo", "Use a tiny demo matrix instead",
+          actionLink("use_demo", "Use demo dataset instead",
                      icon = icon("flask")),
+          uiOutput("demo_source_panel"),
           # Matrix-only diagnostics panel: gene-ID style (HUGO / ENSG /
           # mixed), expression format (raw counts / CPM/TPM / log-norm /
           # z-scaled), and a single-cell vs bulk guess via sparsity. The
@@ -380,7 +442,7 @@ ui <- page_navbar(
         # helper UI (status, upload <details>, file picker) all share
         # the tightened sidebar rhythm. Without this wrapper the
         # default Shiny .form-group spacing leaves a large vertical
-        # gap between dropdowns that pushes the "About data input"
+        # gap between dropdowns that pushes the "About input data"
         # card below the fold on shorter viewports.
         tags$div(
           class = "phenomapr-compact-stack metadata-compact-stack",
@@ -439,48 +501,58 @@ ui <- page_navbar(
         )
       ),
       card(
-        card_header(icon("circle-info"), " About data input"),
+        fill = FALSE,
         card_body(
-          # Three peer callouts arranged horizontally. Each one has a
-          # subtle teal accent border and a translucent fill so they
-          # read as side-by-side reference notes rather than a wall
-          # of prose. All three live inside the same flex row, which
-          # bslib's layout_columns(c(4,4,4)) gives us on desktop and
-          # automatically stacks vertically on narrow viewports.
-          layout_columns(
-            col_widths = c(4, 4, 4),
-            tags$div(
-              class = "data-input-note",
-              tags$div(class = "data-input-note-title",
-                       icon("file-import"), " PhenoMapR accepts"),
-              markdown(
-                "* **Matrix / data.frame** \u2014 rows = genes, columns = cells/samples.
+          padding = 0,
+          tags$details(
+            class = "phenomapr-about-markers-details",
+            tags$summary(
+              icon("circle-info"),
+              tags$span(
+                class = "phenomapr-about-markers-summary-label",
+                " About input data"
+              ),
+              tags$span(
+                class = "phenomapr-about-markers-summary-hint",
+                " \u2014 click to expand"
+              )
+            ),
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              gap = "1rem",
+              tags$div(
+                class = "data-input-note",
+                tags$div(class = "data-input-note-title",
+                         icon("file-import"), " PhenoMapR accepts"),
+                markdown(
+                  "* **Matrix / data.frame** \u2014 rows = genes, columns = cells/samples.
                 * **Seurat** (v4 / v5; assays `RNA`, `Spatial`).
                 * **SingleCellExperiment** / **SpatialExperiment**.
                 * **AnnData** (via `reticulate`)."
-              )
-            ),
-            tags$div(
-              class = "data-input-note",
-              tags$div(class = "data-input-note-title",
-                       icon("dna"), " Gene IDs"),
-              markdown(
-                "For matrix uploads, gene IDs must be HUGO symbols
+                )
+              ),
+              tags$div(
+                class = "data-input-note",
+                tags$div(class = "data-input-note-title",
+                         icon("dna"), " Gene IDs"),
+                markdown(
+                  "For matrix uploads, gene IDs must be HUGO symbols
                 (e.g. `TP53`). ENSG IDs are detected and flagged;
                 convert with `biomaRt` / `AnnotationDbi` before
                 uploading."
-              )
-            ),
-            tags$div(
-              class = "data-input-note",
-              tags$div(class = "data-input-note-title",
-                       icon("server"), " Upload size"),
-              markdown(
-                "By default this app accepts uploads of any size \u2014
+                )
+              ),
+              tags$div(
+                class = "data-input-note",
+                tags$div(class = "data-input-note-title",
+                         icon("server"), " Upload size"),
+                markdown(
+                  "By default this app accepts uploads of any size \u2014
                 analyses should work as long as your machine has
                 enough RAM to process them. Cap the limit with
                 `options(shiny.maxRequestSize = <bytes>)` before
                 launching if needed."
+                )
               )
             )
           )
@@ -619,7 +691,7 @@ ui <- page_navbar(
                 "the package lightweight. The slider can only ",
                 "tighten this cutoff further; values below 2 are ",
                 "no-ops. (ICI PRECOG is the exception and ships at ",
-                "<strong>|z| &ge; 1</strong>.)"
+                "<strong>|z| &ge; 1</strong>)"
               ))
             )
           )
@@ -668,6 +740,51 @@ ui <- page_navbar(
               phenomapr_file_input("derive_bulk_file", "Bulk expression (genes × samples)",
                                    accept = c(".rds", ".tsv", ".csv", ".txt")),
               uiOutput("derive_bulk_summary"),
+              radioButtons(
+                "derive_platform", "Bulk expression platform",
+                choices = c("RNA-seq" = "rnaseq", "Microarray" = "microarray"),
+                selected = "rnaseq",
+                inline = TRUE
+              ),
+              conditionalPanel(
+                "input.derive_platform == 'microarray'",
+                phenomapr_file_input(
+                  "derive_probe_file",
+                  "GPL probe annotation (probes → genes)",
+                  accept = c(".tsv", ".csv", ".txt", ".rds")
+                ),
+                helpText(
+                  "Required when row names are platform probe IDs. The table ",
+                  "should include a probe ID column and a gene symbol column ",
+                  "(GEO GPL format). Expression is quantile-normalized and ",
+                  "gene-scaled following the original PRECOG microarray pipeline."
+                )
+              ),
+              checkboxInput(
+                "derive_meta_z_mode",
+                "Combine multiple bulk cohorts into one meta-z signature",
+                value = FALSE
+              ),
+              conditionalPanel(
+                "input.derive_meta_z_mode",
+                helpText(
+                  "Upload bulk + phenotype for each cohort, then click ",
+                  HTML('"Add cohort to meta-z list"'),
+                  " before uploading the next. When all cohorts are added, ",
+                  "click Derive phenotype signature to run a Stouffer ",
+                  "meta-analysis across studies (like built-in PRECOG meta-z ",
+                  "signatures)."
+                ),
+                actionButton(
+                  "derive_add_study", "Add cohort to meta-z list",
+                  icon = icon("plus"), class = "btn-outline-secondary"
+                ),
+                actionButton(
+                  "derive_clear_studies", "Clear meta-z cohort list",
+                  class = "btn-outline-secondary"
+                ),
+                verbatimTextOutput("derive_meta_z_study_status")
+              ),
               phenomapr_file_input("derive_phen_file", "Phenotype table (rows = samples)",
                                    accept = c(".rds", ".tsv", ".csv", ".txt")),
               selectInput("derive_id_col", "Sample ID column", choices = NULL),
@@ -913,14 +1030,22 @@ ui <- page_navbar(
               col_widths = c(6, 6),
               card(
                 phenomapr_card_header_dl(
-                  tags$strong("Top positive (adverse-direction) genes"),
+                  tagList(
+                    tags$strong("Top positive ("),
+                    phenomapr_phenotype_plus("phenotype +"),
+                    tags$strong(") genes")
+                  ),
                   download_id = "derived_top_pos_tbl_download"
                 ),
                 card_body(DTOutput("derived_top_pos_tbl"))
               ),
               card(
                 phenomapr_card_header_dl(
-                  tags$strong("Top negative (favorable-direction) genes"),
+                  tagList(
+                    tags$strong("Top negative ("),
+                    phenomapr_phenotype_minus("phenotype \u2212"),
+                    tags$strong(") genes")
+                  ),
                   download_id = "derived_top_neg_tbl_download"
                 ),
                 card_body(DTOutput("derived_top_neg_tbl"))
@@ -962,7 +1087,7 @@ ui <- page_navbar(
         # form-group margins around every input.
         tags$div(
           class = "phenomapr-compact-stack score-params-compact-stack",
-          h4("PhenoMap() parameters"),
+          h4("Scoring parameters"),
           # Slot / assay controls. Only rendered for object-typed inputs
           # (Seurat / SCE / SpatialExperiment / AnnData), since plain
           # matrices and data.frames have no concept of an assay or a
@@ -1002,33 +1127,36 @@ ui <- page_navbar(
                       "Assay (Seurat / SCE; blank = auto)",
                       value = "")
           ),
-          # For matrix / data.frame inputs we still want a one-line note
-          # so users know why the slot/assay controls aren't shown. (We
-          # use a conditionalPanel with the opposite condition so this
-          # text only appears for matrix-class inputs, never alongside
-          # the radio block above.)
           conditionalPanel(
-            condition = "!output.score_show_slot_block && output.score_have_matrix",
+            condition = "output.score_allow_pseudobulk",
             helpText(
               icon("info-circle"),
-              " Plain matrices are scored directly -- PhenoMapR expects ",
-              tags$strong("log-normalized expression"),
-              " (e.g. Seurat-style log-counts, log2(CPM+1), or log2(TPM+1)). ",
-              "Use the diagnostics block in 1. Data to normalize raw counts ",
-              "before scoring."
+              " For large single-cell or spatial datasets, enable ",
+              tags$strong("Aggregate to pseudobulk"),
+              " to sum expression within each patient, sample, cluster, or ",
+              "tissue section before scoring (one score per group instead of ",
+              "per cell/spot)."
+            ),
+            checkboxInput("pseudobulk", "Aggregate to pseudobulk", value = FALSE),
+            conditionalPanel(
+              "input.pseudobulk == true",
+              selectInput("pseudobulk_group_by",
+                          "Group cells by (metadata column)",
+                          choices = NULL),
+              helpText(
+                "Pick the column whose values define each pseudobulk sample ",
+                "(e.g. patient / donor / sample / cluster / tissue core / ",
+                "spatial slide). Cells sharing that value are summed into one ",
+                "pseudobulk profile before scoring."
+              )
             )
           ),
-          checkboxInput("pseudobulk", "Aggregate to pseudobulk", value = FALSE),
           conditionalPanel(
-            "input.pseudobulk == true",
-            selectInput("pseudobulk_group_by",
-                        "Group cells by (metadata column)",
-                        choices = NULL),
+            condition = "output.score_is_bulk_matrix",
             helpText(
-              "Pick the column whose values define each pseudobulk sample ",
-              "(e.g. patient / donor / sample / cluster / tissue core / ",
-              "spatial slide). Cells sharing that value are summed into one ",
-              "pseudobulk profile before scoring."
+              icon("info-circle"),
+              " Bulk expression is already one profile per sample; ",
+              "pseudobulking is not applicable."
             )
           ),
           actionButton("run_score", "Compute PhenoMapR scores",
@@ -1041,17 +1169,16 @@ ui <- page_navbar(
         helpText(
           HTML(paste0(
             "After scoring, the top / bottom percentile of cells are ",
-            "automatically tagged as <strong>Most Phenotype +</strong> ",
-            "and <strong>Most Phenotype &minus;</strong> as you drag the ",
-            "slider. These labels feed the marker-finding step and ",
-            "downstream visualizations."
+            "automatically tagged as ",
+            as.character(phenomapr_phenotype_plus()),
+            " and ",
+            as.character(phenomapr_phenotype_minus()),
+            " as you drag the slider. These labels feed the marker-finding ",
+            "step and downstream visualizations."
           ))
         ),
         sliderInput("percentile", "Tail percentile (top and bottom)",
                     min = 0.01, max = 0.40, value = 0.05, step = 0.01),
-        selectInput("groups_score_col",
-                    "Score column to tag (if multiple)",
-                    choices = NULL),
         downloadButton("download_groups", "Download labels (TSV)",
                        class = "btn-outline-primary")
       ),
@@ -1139,15 +1266,20 @@ ui <- page_navbar(
           fill = FALSE,
           card_header(icon("circle-info"), " About phenotype tails"),
           card_body(
-            markdown(
-              "PhenoMapR partitions cells into **Most Phenotype +** (top *N* %),
-              **Most Phenotype \u2212** (bottom *N* %), and **Other** based on the
-              chosen score column. These labels feed the marker-finding step
-              and any downstream visualizations.
-
-              Lower the percentile to make the tails tighter (more
-              discriminative but fewer cells); raise it to include more cells
-              (statistically more robust but biologically fuzzier)."
+            tags$p(
+              "PhenoMapR partitions cells into ",
+              phenomapr_phenotype_plus(),
+              " (top ", tags$em("N"), " %), ",
+              phenomapr_phenotype_minus(),
+              " (bottom ", tags$em("N"), " %), and ",
+              tags$strong("Other"),
+              " based on the chosen score column. These labels feed the ",
+              "marker-finding step and any downstream visualizations."
+            ),
+            tags$p(
+              "Lower the percentile to make the tails tighter (more ",
+              "discriminative but fewer cells); raise it to include more cells ",
+              "(statistically more robust but biologically fuzzier)."
             )
           )
         ),
@@ -1414,13 +1546,21 @@ ui <- page_navbar(
           #      favorable cells of the SAME cell type only. Most
           #      stringent. Returns nothing for a cell type when the
           #      same cell type does not exist in the opposite tail.
-          choices = c(
-            "Cohort-wide (phenotype + vs phenotype \u2212)"
-              = "phenotype_groups",
-            "Cell-type \u00D7 phenotype vs all opposite-tail cells"
-              = "cell_type_vs_opposite",
+          choiceNames = list(
+            tagList(
+              "Cohort-wide (",
+              phenomapr_phenotype_plus("phenotype +"),
+              " vs ",
+              phenomapr_phenotype_minus("phenotype \u2212"),
+              ")"
+            ),
+            "Cell-type \u00D7 phenotype vs all opposite-tail cells",
             "Cell-type specific (within phenotype groups)"
-              = "cell_type_specific"
+          ),
+          choiceValues = c(
+            "phenotype_groups",
+            "cell_type_vs_opposite",
+            "cell_type_specific"
           ),
           selected = "phenotype_groups"
         ),
@@ -1485,10 +1625,12 @@ ui <- page_navbar(
               brewer_kind = "both",
               default_brewer = "RdBu",
               manual_ui = tagList(
-                colourInput("hm_colors_phenotype_fav", "Most Phenotype -",
+                colourInput("hm_colors_phenotype_fav",
+                            label = phenomapr_phenotype_minus("Most Phenotype -"),
                             "#2166AC"),
                 colourInput("hm_colors_phenotype_other", "Other", "#F7F7F7"),
-                colourInput("hm_colors_phenotype_adv", "Most Phenotype +",
+                colourInput("hm_colors_phenotype_adv",
+                            label = phenomapr_phenotype_plus("Most Phenotype +"),
                             "#B2182B")
               )
             ),
@@ -1565,25 +1707,46 @@ ui <- page_navbar(
               # ---- Left column: simplified copy mapped to the schematic
               tags$div(
                 class = "phenomapr-about-markers-text",
-                markdown(
-                  "Wilcoxon DE (via `presto` when installed, otherwise base
-                  R; `Seurat::FindMarkers` for Seurat inputs in cohort-wide
-                  mode) between the **most-adverse** (red, phenotype +) and
-                  **most-favorable** (blue, phenotype \u2212) tails, listed
-                  here from broadest to most stringent.
-
-                  **(1) Cohort-wide.** Whole adverse tail vs whole favorable
-                  tail \u2014 no cell-type partitioning.
-
-                  **(2) Cell-type \u00D7 phenotype vs all opposite-tail
-                  cells.** One cell type in one tail vs *every* cell in the
-                  opposite tail. Still works when a cell type exists in only
-                  one tail (where mode 3 returns empty).
-
-                  **(3) Cell-type specific (within phenotype groups).** One
-                  cell type in the adverse tail vs the *same* cell type in
-                  the favorable tail. Most stringent, but requires the cell
-                  type to be present in both tails."
+                tags$p(
+                  "Wilcoxon DE (via ",
+                  tags$code("presto"),
+                  " when installed, otherwise base R; ",
+                  tags$code("Seurat::FindMarkers"),
+                  " for Seurat inputs in cohort-wide mode) between the ",
+                  phenomapr_phenotype_plus("most-adverse"),
+                  " (red) and ",
+                  phenomapr_phenotype_minus("most-favorable"),
+                  " (blue) tails, listed here from broadest to most ",
+                  "stringent."
+                ),
+                tags$p(
+                  tags$strong("(1) Cohort-wide."),
+                  " Whole ",
+                  phenomapr_phenotype_plus("adverse"),
+                  " tail vs whole ",
+                  phenomapr_phenotype_minus("favorable"),
+                  " tail \u2014 no cell-type partitioning."
+                ),
+                tags$p(
+                  tags$strong("(2) Cell-type \u00D7 phenotype vs all opposite-tail cells."),
+                  " One cell type in one tail vs ",
+                  tags$em("every"),
+                  " cell in the opposite tail. Still works when a cell type ",
+                  "exists in only one tail (where mode 3 returns empty)."
+                ),
+                tags$p(
+                  tags$strong("(3) Cell-type specific (within phenotype groups)."),
+                  " One cell type in the ",
+                  phenomapr_phenotype_plus("adverse"),
+                  " tail vs the ",
+                  tags$em("same"),
+                  " cell type in the ",
+                  phenomapr_phenotype_minus("favorable"),
+                  " tail. Requires at least ",
+                  tags$strong("5 cells"),
+                  " of that type in ",
+                  tags$strong("both"),
+                  " phenotype tails."
                 )
               ),
               # ---- Right column: matched schematic figure
@@ -1610,14 +1773,20 @@ ui <- page_navbar(
       ),
       navset_tab(
         nav_panel(
-          "Adverse markers",
+          title = tags$span(
+            class = "phenomapr-phenotype-plus",
+            "Phenotype + markers"
+          ),
           card_body(
             phenomapr_panel_banner_dl("adverse_markers_tbl_download"),
             DTOutput("adverse_markers_tbl")
           )
         ),
         nav_panel(
-          "Favorable markers",
+          title = tags$span(
+            class = "phenomapr-phenotype-minus",
+            "Phenotype \u2212 markers"
+          ),
           card_body(
             phenomapr_panel_banner_dl("favorable_markers_tbl_download"),
             DTOutput("favorable_markers_tbl")
@@ -1631,12 +1800,15 @@ ui <- page_navbar(
         ),
         card_body(
           helpText(
-            "Heatmap of the top markers from the adverse and favorable tails. ",
-            "When markers were computed with cell-type-specific scope, the ",
-            "heatmap shows one column slice per phenotype-group × cell-type ",
-            "block; otherwise it shows a cohort-wide view. Use the controls ",
-            "in the sidebar to set the number of genes per block, the number ",
-            "of labels, and to redraw."
+            "Heatmap of the top markers from the ",
+            phenomapr_phenotype_plus("phenotype +"),
+            " and ",
+            phenomapr_phenotype_minus("phenotype \u2212"),
+            " tails. When markers were computed with cell-type-specific ",
+            "scope, the heatmap shows one column slice per ",
+            "phenotype-group \u00D7 cell-type block; otherwise it shows a ",
+            "cohort-wide view. Use the controls in the sidebar to set the ",
+            "number of genes per block, the number of labels, and to redraw."
           ),
           # The imageOutput is only mounted *after* the user clicks "Draw
           # heatmap" in the sidebar. Mounting it lazily prevents Shiny /
@@ -1776,10 +1948,13 @@ server <- function(input, output, session) {
     metadata = NULL,           # data.frame with cell IDs
     meta_columns = character(0),
     metadata_source = "(none)", # "object" | "upload" | "demo" | "(none)"
+    demo_source = NULL,        # list describing CRA001160 subsample when demo loaded
     reference = NULL,          # "precog" / "tcga" / ... OR data.frame
     reference_label = "(none)",
     derive_bulk = NULL,
     derive_phen = NULL,
+    derive_probe_annot = NULL,
+    derive_meta_z_studies = list(),
     scores = NULL,
     groups = NULL,
     markers = NULL
@@ -2201,6 +2376,8 @@ server <- function(input, output, session) {
                                                accept = c(".rds", ".tsv", ".csv", ".txt"))
   derive_phen_file_pick <- phenomapr_file_pick("derive_phen_file", input, output, session, shiny_file_roots,
                                                accept = c(".rds", ".tsv", ".csv", ".txt"))
+  derive_probe_file_pick <- phenomapr_file_pick("derive_probe_file", input, output, session, shiny_file_roots,
+                                                accept = c(".rds", ".tsv", ".csv", ".txt"))
   umap_upload_pick     <- phenomapr_file_pick("umap_upload",     input, output, session, shiny_file_roots,
                                               accept = c(".tsv", ".csv", ".txt", ".rds"))
 
@@ -2219,6 +2396,7 @@ server <- function(input, output, session) {
     if (is.null(pick)) {
       state$expression <- NULL
       state$expr_summary <- NULL
+      state$demo_source <- NULL
       if (!identical(state$metadata_source %||% "", "upload")) {
         state$metadata <- NULL
         state$meta_columns <- character(0)
@@ -2264,6 +2442,7 @@ server <- function(input, output, session) {
         tryCatch({
           state$expression <- res_obj$object
           state$expr_summary <- res_obj
+          state$demo_source <- NULL
           md <- extract_object_metadata(res_obj$object)
           state$metadata <- md
           state$meta_columns <- if (!is.null(md)) colnames(md) else character(0)
@@ -2341,24 +2520,102 @@ server <- function(input, output, session) {
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   observeEvent(input$use_demo, {
-    set.seed(7)
-    n_genes <- 200L; n_cells <- 60L
-    m <- matrix(rpois(n_genes * n_cells, lambda = 3), nrow = n_genes, ncol = n_cells)
-    rownames(m) <- c("TP53","MYC","EGFR","BRCA1","CDKN2A","KRAS","PIK3CA","PTEN","MKI67","CD68",
-                     paste0("GENE", seq_len(n_genes - 10L)))
-    colnames(m) <- paste0("Cell_", seq_len(n_cells))
+    demo <- make_shiny_demo_dataset()
+    m <- demo$expression
     state$expression <- m
     state$expr_summary <- summarize_expression_object(m)
-    state$expr_summary$notes <- "Demo matrix (200 genes × 60 cells) loaded."
-    state$metadata <- data.frame(
-      .cell_id = colnames(m),
-      cell_type = sample(c("Acinar","Ductal","Macrophage","CD8T","Fibroblast"), n_cells, TRUE),
-      Source = sample(c("Tumor","Normal"), n_cells, TRUE),
-      stringsAsFactors = FALSE
+    state$expr_summary$notes <- sprintf(
+      "Demo subsample (%d genes \u00d7 %d cells) from %s with UMAP coordinates.",
+      nrow(m), ncol(m), demo$source_info$accession %||% "CRA001160"
     )
+    state$expr_summary$is_demo <- TRUE
+    state$metadata <- demo$metadata
     state$meta_columns <- colnames(state$metadata)
     state$metadata_source <- "demo"
-    showNotification("Demo matrix loaded.", type = "message", duration = 4)
+    state$demo_source <- demo$source_info
+    updateSliderInput(session, "percentile", value = 0.10)
+    updateRadioButtons(session, "reference_choice", selected = "precog")
+    demo_cts <- get_cancer_types("precog")
+    demo_panc <- if ("Pancreatic" %in% demo_cts) "Pancreatic" else demo_cts[1L]
+    updateSelectInput(session, "cancer_type", choices = demo_cts, selected = demo_panc)
+    n_fmt <- format(demo$source_info$n_cells_sampled %||% ncol(m), big.mark = ",")
+    showNotification(
+      sprintf(
+        "Demo loaded: %s pre-selected cells from %s (PRECOG Pancreatic selected).",
+        n_fmt, demo$source_info$accession %||% "CRA001160"
+      ),
+      type = "message", duration = 6
+    )
+  })
+
+  output$demo_source_panel <- renderUI({
+    if (!identical(state$metadata_source %||% "", "demo")) return(NULL)
+    info <- state$demo_source
+    if (is.null(info)) return(NULL)
+
+    fmt_int <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE)
+    tags$details(
+      class = "phenomapr-about-markers-details phenomapr-demo-source-details",
+      tags$summary(
+        icon("database"),
+        tags$span(
+          class = "phenomapr-about-markers-summary-label",
+          sprintf(" Demo source: %s", info$accession %||% "CRA001160")
+        ),
+        tags$span(
+          class = "phenomapr-about-markers-summary-hint",
+          " \u2014 click to expand"
+        )
+      ),
+      tags$div(
+        class = "phenomapr-demo-source-body",
+        tags$p(
+          tags$strong("Dataset: "),
+          sprintf("%s \u2014 %s", info$accession, info$title)
+        ),
+        tags$p(
+          tags$strong("Cancer type: "),
+          info$cancer_type
+        ),
+        tags$p(
+          tags$strong("Cohort: "),
+          sprintf(
+            "%s cells from %s patients (%s tumors, %s normal pancreases)",
+            fmt_int(info$n_cells_total),
+            fmt_int(info$n_patients),
+            fmt_int(info$n_tumors),
+            fmt_int(info$n_controls)
+          )
+        ),
+        tags$p(
+          tags$strong("Publication: "),
+          tags$a(
+            href = info$paper_url,
+            target = "_blank",
+            rel = "noopener noreferrer",
+            info$paper_label
+          )
+        ),
+        tags$p(
+          tags$strong("Processed data: "),
+          tags$a(
+            href = info$data_source_url,
+            target = "_blank",
+            rel = "noopener noreferrer",
+            info$data_source
+          )
+        ),
+        tags$p(
+          tags$strong("This load: "),
+          sprintf(
+            "Pre-selected subsample of %s cells \u00d7 %s genes (fixed demo subset). Default signature: %s.",
+            fmt_int(info$n_cells_sampled),
+            fmt_int(info$n_genes_sampled),
+            info$reference_signature
+          )
+        )
+      )
+    )
   })
 
   # Optional metadata upload
@@ -2548,12 +2805,17 @@ server <- function(input, output, session) {
     ct_default <- .pick_default(
       cols,
       patterns = c(
-        "^(cell[._\\s]?type|celltype|cell_type_[a-z]+)$",
+        "^cell_type$",
+        "cell_type_minor|minor[._\\s-]?lineage",
+        "^(cell[._\\s]?type|celltype)$",
         "annotated_celltype|predicted\\.celltype|leiden_celltype|seurat_clusters_annot",
         "^Annotation$|^annotation$",
         "^type$"
       ),
-      exclude = c("orig.ident", "feature_type")
+      exclude = c(
+        "orig.ident", "feature_type",
+        "cell_type_major", "cell_type_original"
+      )
     )
 
     # Source / group: cohort / sample / condition / donor / patient / tissue.
@@ -2561,6 +2823,7 @@ server <- function(input, output, session) {
       cols,
       patterns = c(
         "^source$|^Source$|^sample_source$",
+        "^group$|^Group$|^cohort$|^Cohort$",
         "^condition$|^Condition$|^treatment$",
         "^donor$|^patient$|^subject$",
         "^tissue$|^region$|^organ$",
@@ -2765,6 +3028,39 @@ server <- function(input, output, session) {
   })
   outputOptions(output, "score_have_matrix", suspendWhenHidden = FALSE)
 
+  # Pseudobulk is only meaningful for single-cell / spatial inputs (including
+  # matrix uploads classified as single-cell-like). Bulk matrices are already
+  # sample-level profiles.
+  score_allow_pseudobulk <- reactive({
+    s <- state$expr_summary
+    if (is.null(s)) return(FALSE)
+    kind <- s$kind %||% ""
+    if (kind %in% c("seurat", "sce", "spatial", "anndata")) return(TRUE)
+    if (isTRUE(s$is_demo)) return(TRUE)
+    if (!identical(kind, "matrix")) return(FALSE)
+    d <- expr_diagnostics()
+    if (is.null(d)) return(FALSE)
+    identical(d$sc_or_bulk, "single_cell")
+  })
+
+  output$score_allow_pseudobulk <- score_allow_pseudobulk
+  outputOptions(output, "score_allow_pseudobulk", suspendWhenHidden = FALSE)
+
+  output$score_is_bulk_matrix <- reactive({
+    s <- state$expr_summary
+    if (is.null(s) || !identical(s$kind %||% "", "matrix")) return(FALSE)
+    if (isTRUE(s$is_demo)) return(FALSE)
+    d <- expr_diagnostics()
+    !is.null(d) && identical(d$sc_or_bulk, "bulk")
+  })
+  outputOptions(output, "score_is_bulk_matrix", suspendWhenHidden = FALSE)
+
+  observeEvent(state$expr_summary, {
+    if (!isTRUE(score_allow_pseudobulk())) {
+      updateCheckboxInput(session, "pseudobulk", value = FALSE)
+    }
+  }, ignoreNULL = FALSE)
+
   # Whenever a fresh object lands in state$expr_summary, refresh:
   #   * score_slot choices  -> only layers we actually have (drop scale.data
   #     entirely; if the object lacks a normalized "data" layer, default to
@@ -2827,7 +3123,8 @@ server <- function(input, output, session) {
       metadata = state$metadata,
       cell_id_col = input$meta_cell_id_col,
       cell_type_col = input$meta_cell_type_col,
-      source_col = input$meta_source_col
+      source_col = input$meta_source_col,
+      score_column = active_score_column(state$scores)
     )
   })
 
@@ -2857,6 +3154,12 @@ server <- function(input, output, session) {
     n_samples   <- count_distinct_meta(md, sample_col)
 
     emb_avail <- list_available_embeddings(state$expression)
+    if (!length(emb_avail) && !is.null(state$metadata)) {
+      meta_emb_names <- names(detect_metadata_embeddings(state$metadata))
+      if (length(meta_emb_names)) {
+        emb_avail <- paste0(meta_emb_names, " (metadata)")
+      }
+    }
 
     # Show which column was used for patient / sample tile so the user can
     # sanity-check the auto-detection.
@@ -3404,10 +3707,87 @@ server <- function(input, output, session) {
     }, delay = 0)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
-  observeEvent(input$derive_run, {
+  observeEvent(derive_probe_file_pick(), {
+    pick <- derive_probe_file_pick()
+    if (is.null(pick)) {
+      state$derive_probe_annot <- NULL
+      return()
+    }
+    phenomapr_busy_show("Loading GPL probe annotation...", pick$name)
+    pick_local <- pick
+    sess <- session
+    later::later(function() {
+      df <- tryCatch(
+        parse_metadata_upload(pick_local$datapath, pick_local$name),
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 8,
+                           session = sess); NULL
+        }
+      )
+      phenomapr_busy_hide(session = sess)
+      if (is.null(df)) return()
+      later::later(function() {
+        state$derive_probe_annot <- df
+        showNotification(
+          sprintf("Probe annotation loaded (%d rows).", nrow(df)),
+          type = "message", duration = 4, session = sess
+        )
+      }, delay = 0)
+    }, delay = 0)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+  output$derive_meta_z_study_status <- renderText({
+    n <- length(state$derive_meta_z_studies %||% list())
+    if (n == 0L) {
+      "Meta-z cohort list: (empty — add at least one bulk + phenotype cohort)"
+    } else {
+      sprintf("Meta-z cohort list: %d cohort(s) queued.", n)
+    }
+  })
+
+  observeEvent(input$derive_add_study, {
     req(state$derive_bulk, state$derive_phen)
+    if (input$derive_platform == "microarray" && is.null(state$derive_probe_annot)) {
+      showNotification(
+        "Microarray cohorts need a GPL probe annotation before adding to the meta-z list.",
+        type = "warning", duration = 8
+      )
+      return()
+    }
+    n <- length(state$derive_meta_z_studies %||% list()) + 1L
+    label <- sprintf("cohort_%02d", n)
+    state$derive_meta_z_studies[[label]] <- list(
+      bulk_expression = state$derive_bulk,
+      phenotype = state$derive_phen,
+      sample_id_column = input$derive_id_col,
+      phenotype_column = if (input$derive_type == "survival") NULL else input$derive_pheno_col,
+      phenotype_type = input$derive_type,
+      survival_time = if (input$derive_type == "survival") input$derive_time_col else NULL,
+      survival_event = if (input$derive_type == "survival") input$derive_event_col else NULL,
+      normalize = isTRUE(input$derive_normalize),
+      platform = input$derive_platform %||% "rnaseq",
+      probe_annotation = state$derive_probe_annot
+    )
+    showNotification(
+      sprintf("Added %s to meta-z list (%d cohort(s) total).", label, n),
+      type = "message", duration = 4
+    )
+  })
+
+  observeEvent(input$derive_clear_studies, {
+    state$derive_meta_z_studies <- list()
+    showNotification("Meta-z cohort list cleared.", type = "message", duration = 3)
+  })
+
+  observeEvent(input$derive_run, {
+    meta_z_mode <- isTRUE(input$derive_meta_z_mode)
+    if (meta_z_mode) {
+      req(length(state$derive_meta_z_studies %||% list()) >= 1L)
+    } else {
+      req(state$derive_bulk, state$derive_phen)
+    }
     phenomapr_busy_show(
-      "Deriving phenotype signature...",
+      if (meta_z_mode) "Deriving meta-z signature..." else "Deriving phenotype signature...",
       sprintf("Bulk + phenotype | %s outcome", input$derive_type %||% "binary")
     )
     bin_pos <- if (input$derive_binary_positive %in% c("first", "second")) {
@@ -3415,6 +3795,8 @@ server <- function(input, output, session) {
     } else "second"
     bulk_snapshot  <- state$derive_bulk
     phen_snapshot  <- state$derive_phen
+    probe_snapshot <- state$derive_probe_annot
+    studies_snapshot <- state$derive_meta_z_studies
     derive_args <- list(
       sample_id_column = input$derive_id_col,
       phenotype_column = if (input$derive_type == "survival") NULL else input$derive_pheno_col,
@@ -3422,27 +3804,63 @@ server <- function(input, output, session) {
       survival_time    = if (input$derive_type == "survival") input$derive_time_col else NULL,
       survival_event   = if (input$derive_type == "survival") input$derive_event_col else NULL,
       normalize        = isTRUE(input$derive_normalize),
+      platform         = input$derive_platform %||% "rnaseq",
       hugo_species     = input$derive_hugo_species %||% "human",
-      binary_positive_reference = bin_pos
+      binary_positive_reference = bin_pos,
+      meta_z_mode      = meta_z_mode
     )
     sess <- session
     later::later(function() {
       ref <- tryCatch(
-        PhenoMapR::derive_reference_from_bulk(
-          bulk_expression  = bulk_snapshot,
-          phenotype        = phen_snapshot,
-          sample_id_column = derive_args$sample_id_column,
-          phenotype_column = derive_args$phenotype_column,
-          phenotype_type   = derive_args$phenotype_type,
-          survival_time    = derive_args$survival_time,
-          survival_event   = derive_args$survival_event,
-          normalize        = derive_args$normalize,
-          hugo_species     = derive_args$hugo_species,
-          binary_positive_reference = derive_args$binary_positive_reference,
-          verbose          = TRUE
-        ),
+        if (isTRUE(derive_args$meta_z_mode)) {
+          studies <- studies_snapshot
+          if (!length(studies) && !is.null(bulk_snapshot) && !is.null(phen_snapshot)) {
+            studies <- list(cohort_01 = list(
+              bulk_expression = bulk_snapshot,
+              phenotype = phen_snapshot,
+              sample_id_column = derive_args$sample_id_column,
+              phenotype_column = derive_args$phenotype_column,
+              phenotype_type = derive_args$phenotype_type,
+              survival_time = derive_args$survival_time,
+              survival_event = derive_args$survival_event,
+              normalize = derive_args$normalize,
+              platform = derive_args$platform,
+              probe_annotation = probe_snapshot
+            ))
+          }
+          PhenoMapR::derive_meta_z_from_bulk_studies(
+            studies = studies,
+            meta_z_label = "custom_meta_z",
+            hugo_species = derive_args$hugo_species,
+            binary_positive_reference = derive_args$binary_positive_reference,
+            verbose = TRUE
+          )
+        } else {
+          if (derive_args$platform == "microarray" && is.null(probe_snapshot) &&
+              !is.null(bulk_snapshot)) {
+            rn <- rownames(bulk_snapshot)
+            if (length(rn) && mean(grepl("^(AFFX-|ILMN_)", rn, ignore.case = TRUE)) >= 0.5) {
+              stop("Microarray probe-level bulk data requires a GPL probe annotation file.")
+            }
+          }
+          PhenoMapR::derive_reference_from_bulk(
+            bulk_expression  = bulk_snapshot,
+            phenotype        = phen_snapshot,
+            sample_id_column = derive_args$sample_id_column,
+            phenotype_column = derive_args$phenotype_column,
+            phenotype_type   = derive_args$phenotype_type,
+            survival_time    = derive_args$survival_time,
+            survival_event   = derive_args$survival_event,
+            normalize        = derive_args$normalize,
+            platform         = derive_args$platform,
+            probe_annotation = probe_snapshot,
+            hugo_species     = derive_args$hugo_species,
+            binary_positive_reference = derive_args$binary_positive_reference,
+            verbose          = TRUE
+          )
+        },
         error = function(e) {
-          showNotification(paste0("derive_reference_from_bulk failed: ",
+          showNotification(paste0("Reference derivation failed: ",
                                   conditionMessage(e)),
                            type = "error", duration = 10, session = sess); NULL
         }
@@ -3454,10 +3872,18 @@ server <- function(input, output, session) {
       derive_type_local <- derive_args$phenotype_type
       later::later(function() {
         state$reference <- ref
-        state$reference_label <- sprintf(
-          "Custom (derived from bulk + phenotype, type = %s)",
-          attr(ref, "phenotype_type") %||% derive_type_local
-        )
+        state$reference_label <- if (isTRUE(derive_args$meta_z_mode)) {
+          sprintf(
+            "Custom meta-z (%d cohorts)",
+            attr(ref, "n_studies") %||% length(studies_snapshot)
+          )
+        } else {
+          sprintf(
+            "Custom (derived from bulk + phenotype, type = %s, platform = %s)",
+            attr(ref, "phenotype_type") %||% derive_type_local,
+            attr(ref, "platform") %||% derive_args$platform
+          )
+        }
         showNotification(
           sprintf("Reference derived (%s genes).", .fmt_int(nrow(ref))),
           type = "message", duration = 5, session = sess
@@ -3834,11 +4260,20 @@ server <- function(input, output, session) {
     # is the convention used by PRECOG / TCGA / Pediatric PRECOG /
     # ICI PRECOG signatures.
     expr_snapshot <- state$expression
+    if (isTRUE(input$pseudobulk) && isTRUE(score_allow_pseudobulk()) &&
+        identical(state$expr_summary$kind %||% "", "matrix") &&
+        !is.null(state$metadata)) {
+      cid <- input$meta_cell_id_col %||% ".cell_id"
+      if (identical(cid, "(none)")) cid <- ".cell_id"
+      expr_snapshot <- attach_matrix_coldata(
+        expr_snapshot, state$metadata, cell_id_col = cid
+      )
+    }
     ref_snapshot  <- state$reference
     score_args <- list(
       cancer_type    = input$cancer_type,
       z_score_cutoff = input$z_score_cutoff,
-      pseudobulk     = isTRUE(input$pseudobulk),
+      pseudobulk     = isTRUE(input$pseudobulk) && isTRUE(score_allow_pseudobulk()),
       group_by       = input$pseudobulk_group_by,
       assay          = input$score_assay,
       slot           = input$score_slot
@@ -3874,9 +4309,6 @@ server <- function(input, output, session) {
           state$scores <- scores
           state$groups <- NULL  # invalidate downstream
           state$markers <- NULL
-          nm <- colnames(scores)
-          shiny::updateSelectInput(sess, "groups_score_col",
-                                   choices = nm, selected = nm[1L])
           shiny::showNotification(
             sprintf("Scored %s (%.1fs).",
                     .fmt_n_units(nrow(scores), "row"),
@@ -4684,6 +5116,14 @@ server <- function(input, output, session) {
     ct <- cell_table()
     df <- emb
     df <- dplyr::left_join(df, ct %||% data.frame(cell_id = character(0)), by = "cell_id")
+    score_col <- active_score_column(state$scores)
+    if (!is.null(state$scores) && nzchar(score_col) && score_col %in% colnames(state$scores)) {
+      df$score <- as.numeric(state$scores[[score_col]][match(df$cell_id, rownames(state$scores))])
+      grp_col <- resolve_phenotype_group_column(state$groups, score_col)
+      if (!is.na(grp_col) && !is.null(state$groups)) {
+        df$group <- as.character(state$groups[[grp_col]][match(df$cell_id, state$groups$cell_id)])
+      }
+    }
     pt_size <- input$umap_point_size %||% 0.8
     pt_alpha <- input$umap_point_alpha %||% 0.75
     # Detect spatial-frame embeddings (set by `extract_embedding()` when
@@ -4863,8 +5303,7 @@ server <- function(input, output, session) {
     groups <- tryCatch(
       PhenoMapR::define_phenotype_groups(
         scores = scores,
-        percentile = input$percentile,
-        score_columns = if (nzchar(input$groups_score_col %||% "")) input$groups_score_col else NULL
+        percentile = input$percentile
       ),
       error = function(e) {
         showNotification(paste0("define_phenotype_groups failed: ",
@@ -4909,7 +5348,8 @@ server <- function(input, output, session) {
   output$group_summary <- renderUI({
     if (is.null(state$groups)) return(tags$p(tags$em("Compute scores to see group counts here.")))
     g <- state$groups
-    grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]
+    score_col <- active_score_column(state$scores)
+    grp_col <- resolve_phenotype_group_column(g, score_col)
     if (is.na(grp_col)) return(tags$p(tags$em("No phenotype group column found.")))
     tbl <- as.data.frame(table(g[[grp_col]], useNA = "ifany"),
                          stringsAsFactors = FALSE)
@@ -4924,8 +5364,8 @@ server <- function(input, output, session) {
     # using HTML so we can bold the +/- markers without bringing in
     # a renderer (tag_table emits a plain <table>).
     display_map <- c(
-      "Most Adverse"   = "<strong>Most Phenotype +</strong>",
-      "Most Favorable" = "<strong>Most Phenotype &minus;</strong>",
+      "Most Adverse"   = as.character(phenomapr_phenotype_plus()),
+      "Most Favorable" = as.character(phenomapr_phenotype_minus()),
       "Other"          = "Other"
     )
     raw_vals <- as.character(tbl[["Phenotype group"]])
@@ -4944,7 +5384,8 @@ server <- function(input, output, session) {
   output$group_by_celltype_plot <- renderPlot({
     req(state$groups)
     g <- state$groups
-    grp_col <- grep("^phenotype_group_", colnames(g), value = TRUE)[1L]
+    score_col <- active_score_column(state$scores)
+    grp_col <- resolve_phenotype_group_column(g, score_col)
     if (is.na(grp_col)) {
       panel_objects$group_by_celltype_plot <- NULL
       return(NULL)
@@ -5052,14 +5493,21 @@ server <- function(input, output, session) {
       sprintf("Scope: %s", input$marker_scope %||% "across-all-cells")
     )
 
-    grp_col <- grep("^phenotype_group_", colnames(state$groups), value = TRUE)[1L]
+    score_col <- active_score_column(state$scores)
+    grp_col <- resolve_phenotype_group_column(state$groups, score_col)
     if (is.na(grp_col)) {
       phenomapr_busy_hide()
-      showNotification("Could not find a phenotype_group_* column.",
+      showNotification("Could not find a phenotype_group_* column for the selected score.",
                        type = "error", duration = 6); return()
     }
     ct_col_use <- input$meta_cell_type_col
-    if (ct_col_use == "(none)" || !ct_col_use %in% colnames(state$groups)) {
+    if (is.null(ct_col_use) || ct_col_use == "(none)") {
+      ct_col_use <- NULL
+    } else if (!ct_col_use %in% colnames(state$groups) &&
+               !is.null(state$metadata) && ct_col_use %in% colnames(state$metadata)) {
+      # groups$cell_id merge may use a differently named column; keep the
+      # metadata column name for find_phenotype_markers() regardless.
+    } else if (!ct_col_use %in% colnames(state$groups)) {
       ct_col_use <- NULL
     }
 
@@ -5130,11 +5578,20 @@ server <- function(input, output, session) {
       later::later(function() {
         tryCatch({
           state$markers <- markers
-          shiny::showNotification(sprintf(
-            "Found %s adverse + %s favorable markers.",
-            .fmt_int(nrow(markers$adverse_markers)),
-            .fmt_int(nrow(markers$favorable_markers))
-          ), type = "message", duration = 5, session = sess)
+          shiny::showNotification(
+            tagList(
+              "Found ",
+              .fmt_int(nrow(markers$adverse_markers)),
+              " ",
+              phenomapr_phenotype_plus("phenotype +"),
+              " and ",
+              .fmt_int(nrow(markers$favorable_markers)),
+              " ",
+              phenomapr_phenotype_minus("phenotype \u2212"),
+              " markers."
+            ),
+            type = "message", duration = 5, session = sess
+          )
         }, error = function(e) {
           shiny::showNotification(
             paste0("Internal error while applying markers: ",
@@ -5234,6 +5691,8 @@ server <- function(input, output, session) {
     hm_block_borders_in <- isTRUE(input$hm_block_borders)
     hm_color_mark_labels_in <- isTRUE(input$hm_color_mark_labels)
     hm_color_schemes_in <- marker_heatmap_color_schemes_from_input(input)
+    score_col_active <- active_score_column(scores_snapshot)
+    marker_pval_input   <- input$marker_pval %||% 0.05
     sess <- session
     later::later(function() {
       # For AnnData inputs, the marker heatmap only needs the marker genes,
@@ -5264,16 +5723,19 @@ server <- function(input, output, session) {
         return()
       }
 
-      grp_col <- grep("^phenotype_group_", colnames(groups_snapshot), value = TRUE)[1L]
+      grp_col <- resolve_phenotype_group_column(groups_snapshot, score_col_active)
       if (is.na(grp_col)) {
         phenomapr_busy_hide(session = sess)
-        showNotification("No phenotype_group_* column on the groups table \u2014 re-tag groups first.",
+        showNotification("No phenotype_group_* column for the selected score \u2014 re-tag groups first.",
                          type = "error", duration = 6, session = sess); return()
       }
-      score_name <- colnames(scores_snapshot)[1L]
+      score_name <- score_col_active
+      if (!nzchar(score_name) || !(score_name %in% colnames(scores_snapshot))) {
+        score_name <- colnames(scores_snapshot)[1L]
+      }
       scores_df <- data.frame(
         cell_id = rownames(scores_snapshot),
-        .score = as.numeric(scores_snapshot[[1L]]),
+        .score = as.numeric(scores_snapshot[[score_name]]),
         stringsAsFactors = FALSE
       )
       colnames(scores_df)[2L] <- score_name
@@ -5311,6 +5773,13 @@ server <- function(input, output, session) {
                   c("cell_type_specific", "cell_type_vs_opposite")) &&
                has_ct
       heatmap_type <- if (is_ct) "cell_type_specific" else "global"
+      if (identical(marker_scope_input, "cell_type_vs_opposite")) {
+        celltype_contrast_hm <- "vs_opposite_tail"
+      } else if (identical(marker_scope_input, "cell_type_specific")) {
+        celltype_contrast_hm <- "within_cell_type"
+      } else {
+        celltype_contrast_hm <- "vs_opposite_tail"
+      }
 
       phenomapr_busy_hide(session = sess)
       later::later(function() {
@@ -5323,8 +5792,10 @@ server <- function(input, output, session) {
           score_col = score_name,
           celltype_col = if (has_ct) ct_col_use else NULL,
           heatmap_type = heatmap_type,
+          celltype_contrast = celltype_contrast_hm,
           top_n_markers = hm_top_n_input,
           n_mark_labels = hm_n_labels_input,
+          p_adj_threshold = marker_pval_input,
           color_mark_labels_by_celltype = hm_color_mark_labels_in,
           # Block-outline parameters captured at draw time. The
           # renderImage handler also consults the live

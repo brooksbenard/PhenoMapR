@@ -35,6 +35,15 @@
 #'   \code{phenotype_type = "survival"}.
 #' @param normalize Logical. If \code{TRUE}, run normalization when expression
 #'   looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.
+#' @param platform One of \code{"auto"}, \code{"rnaseq"}, or \code{"microarray"}.
+#'   Microarray inputs follow the PRECOG preprocessing strategy: optional
+#'   probe-to-gene mapping, log2 transform when needed, removal of zero-variance
+#'   genes and samples/genes with heavy missingness, per-study quantile
+#'   normalization, and per-gene unit variance scaling across samples.
+#'   RNA-seq inputs use log2(CPM+1) when the matrix looks like raw counts.
+#' @param probe_annotation Optional data.frame with probe IDs and gene symbols
+#'   (required for probe-level microarray matrices unless row names are already
+#'   gene symbols). See \code{\link{collapse_probes_to_genes}}.
 #' @param hugo_species Character. Species for HUGO symbol cleaning:
 #'   \code{"human"} or \code{"mouse"} (default \code{"human"}).
 #' @param binary_positive_reference For \code{phenotype_type} \code{"binary"} only:
@@ -87,11 +96,14 @@ derive_reference_from_bulk <- function(bulk_expression,
                                        survival_time = NULL,
                                        survival_event = NULL,
                                        normalize = TRUE,
+                                       platform = c("auto", "rnaseq", "microarray"),
+                                       probe_annotation = NULL,
                                        hugo_species = c("human", "mouse"),
                                        binary_positive_reference = c("second", "first"),
                                        verbose = TRUE) {
 
   phenotype_type <- match.arg(phenotype_type)
+  platform <- match.arg(platform)
   hugo_species <- match.arg(hugo_species)
   binary_positive_reference <- match.arg(binary_positive_reference)
 
@@ -128,6 +140,40 @@ derive_reference_from_bulk <- function(bulk_expression,
   rownames(bulk_expression) <- gene_names
   colnames(bulk_expression) <- sample_ids
 
+  if (platform == "auto") {
+    platform <- if (!is.null(probe_annotation) ||
+                    .looks_like_microarray_probes(gene_names)) {
+      "microarray"
+    } else {
+      "rnaseq"
+    }
+    if (verbose && platform == "microarray") {
+      message("Inferred microarray platform from probe-like feature IDs.")
+    }
+  }
+
+  if (platform == "microarray") {
+    if (is.null(probe_annotation) && .looks_like_microarray_probes(gene_names)) {
+      stop(
+        "Microarray expression appears probe-level. Supply 'probe_annotation' ",
+        "(GPL-style table with probe and gene symbol columns) or pre-collapse ",
+        "probes to gene symbols before calling derive_reference_from_bulk()."
+      )
+    }
+    if (!is.null(probe_annotation)) {
+      if (verbose) message("Mapping microarray probes to gene symbols...")
+      bulk_expression <- collapse_probes_to_genes(bulk_expression, probe_annotation)
+      gene_names <- rownames(bulk_expression)
+    }
+    if (isTRUE(normalize)) {
+      bulk_expression <- preprocess_microarray_expression(
+        bulk_expression,
+        verbose = verbose
+      )
+      gene_names <- rownames(bulk_expression)
+    }
+  }
+
   # Downstream modeling expects samples x genes
   bulk_expression <- t(bulk_expression)
   rownames(bulk_expression) <- sample_ids
@@ -152,6 +198,7 @@ derive_reference_from_bulk <- function(bulk_expression,
 
   bulk_expression <- bulk_expression[common, , drop = FALSE]
   phenotype <- phenotype[match(common, pheno_ids), , drop = FALSE]
+  n_samples_used <- length(common)
 
   # 1) Clean gene names to HUGO
   if (requireNamespace("HGNChelper", quietly = TRUE)) {
@@ -181,8 +228,9 @@ derive_reference_from_bulk <- function(bulk_expression,
     message("Package 'HGNChelper' not installed; skipping HUGO symbol cleaning. Install with: install.packages('HGNChelper')")
   }
 
-  # 2) Check normalization and optionally normalize
-  if (normalize) {
+  # 2) Check normalization and optionally normalize (RNA-seq path only;
+  # microarray preprocessing already ran on the genes x samples matrix).
+  if (normalize && platform == "rnaseq") {
     x <- as.numeric(bulk_expression)
     looks_like_counts <- (all(x == floor(x)) && max(x, na.rm = TRUE) > 100) ||
       (max(x, na.rm = TRUE) > 1e4)
@@ -259,8 +307,300 @@ derive_reference_from_bulk <- function(bulk_expression,
 
   out <- data.frame(z = z_scores, row.names = names(z_scores))
   names(out) <- score_label
+  attr(out, "phenotype_type") <- phenotype_type
+  attr(out, "platform") <- platform
+  attr(out, "n_samples") <- n_samples_used
   if (verbose) message(glue::glue("Derived reference with {length(z_scores)} genes"))
   return(out)
+}
+
+
+#' Collapse probe-level microarray expression to gene symbols
+#'
+#' Maps platform probe IDs to gene symbols using a GPL-style annotation table,
+#' then averages expression for probes that map to the same symbol. Follows the
+#' probe summarization strategy used in the original PRECOG resource.
+#'
+#' @param expr_probe_by_sample Matrix with probes as rows and samples as columns.
+#' @param annot_df Annotation table (e.g. from GEO GPL) with probe and gene columns.
+#'
+#' @return Matrix with gene symbols as row names and the same sample columns.
+#' @export
+collapse_probes_to_genes <- function(expr_probe_by_sample, annot_df) {
+  if (is.data.frame(expr_probe_by_sample)) {
+    expr_probe_by_sample <- as.matrix(expr_probe_by_sample)
+  }
+  if (!is.matrix(expr_probe_by_sample)) {
+    stop("'expr_probe_by_sample' must be a matrix or data.frame")
+  }
+  annot_df <- as.data.frame(annot_df)
+  if (nrow(annot_df) == 0L) stop("'annot_df' has no rows")
+
+  probe_col <- .pick_annotation_column(
+    names(annot_df),
+    c("ID", "ID_REF", "Probe.Set.ID", "ProbeID", "Probe ID", "Platform ID", "SPOT_ID"),
+    regex = "^id(_ref)?$|probe"
+  )
+  if (is.na(probe_col)) probe_col <- names(annot_df)[1L]
+
+  gene_col <- .pick_annotation_column(
+    names(annot_df),
+    c("Gene Symbol", "Gene.symbol", "Symbol", "SYMBOL", "GENE_SYMBOL",
+      "GeneSymbol", "UniGene symbol", "Gene Symbol(s)"),
+    regex = "genesymbol|gene.?symbol|^symbol$"
+  )
+  if (is.na(gene_col)) {
+    stop(
+      "Could not infer gene symbol column in probe annotation. Columns: ",
+      paste(names(annot_df), collapse = ", ")
+    )
+  }
+
+  annot <- annot_df[, c(probe_col, gene_col), drop = FALSE]
+  names(annot) <- c("probe", "gene_symbol")
+  annot$probe <- as.character(annot$probe)
+  annot$gene_symbol <- as.character(annot$gene_symbol)
+  annot$gene_symbol <- trimws(annot$gene_symbol)
+  annot$gene_symbol <- sub("///.*$", "", annot$gene_symbol)
+  annot$gene_symbol <- sub(";.*$", "", annot$gene_symbol)
+  annot$gene_symbol <- sub(",.*$", "", annot$gene_symbol)
+
+  expr_df <- data.frame(
+    probe = rownames(expr_probe_by_sample),
+    expr_probe_by_sample,
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+  merged <- merge(expr_df, annot, by = "probe", all.x = FALSE, all.y = FALSE)
+  merged <- merged[!is.na(merged$gene_symbol) & nzchar(merged$gene_symbol), , drop = FALSE]
+  if (nrow(merged) == 0L) stop("No probe-to-gene mappings remained after merge.")
+
+  mat <- as.matrix(merged[, setdiff(names(merged), c("probe", "gene_symbol")), drop = FALSE])
+  storage.mode(mat) <- "double"
+  genes <- merged$gene_symbol
+  sample_ids <- colnames(mat)
+  gene_levels <- unique(genes)
+  out <- matrix(NA_real_, nrow = length(gene_levels), ncol = ncol(mat),
+                dimnames = list(gene_levels, sample_ids))
+  for (g in gene_levels) {
+    idx <- which(genes == g)
+    if (length(idx) == 1L) {
+      out[g, ] <- mat[idx, , drop = TRUE]
+    } else {
+      out[g, ] <- colMeans(mat[idx, , drop = FALSE], na.rm = TRUE)
+    }
+  }
+  out
+}
+
+
+#' PRECOG-style microarray preprocessing (genes x samples)
+#'
+#' @param expr_genes_by_sample Numeric matrix, genes as rows, samples as columns.
+#' @param min_gene_sd Minimum per-gene standard deviation to retain a gene.
+#' @param max_missing_frac Maximum allowed missing fraction per gene or sample.
+#' @param verbose Logical.
+#'
+#' @return Preprocessed matrix (genes x samples).
+#' @keywords internal
+preprocess_microarray_expression <- function(expr_genes_by_sample,
+                                             min_gene_sd = 1e-5,
+                                             max_missing_frac = 0.8,
+                                             verbose = TRUE) {
+  x <- as.matrix(expr_genes_by_sample)
+  storage.mode(x) <- "double"
+  gene_ids <- rownames(x)
+  sample_ids <- colnames(x)
+
+  if (max(x, na.rm = TRUE) > 50 && stats::median(x, na.rm = TRUE) > 1) {
+    if (verbose) message("Microarray values do not look log-scaled; applying log2(x + 1)...")
+    x <- log2(pmax(x, 0) + 1)
+  }
+
+  gene_na_frac <- rowMeans(is.na(x))
+  sample_na_frac <- colMeans(is.na(x))
+  keep_genes <- gene_na_frac < max_missing_frac
+  keep_samples <- sample_na_frac < max_missing_frac
+  if (any(!keep_genes) || any(!keep_samples)) {
+    if (verbose) {
+      message(glue::glue(
+        "Removing {sum(!keep_genes)} genes and {sum(!keep_samples)} samples with >={max_missing_frac * 100}% missing values"
+      ))
+    }
+    x <- x[keep_genes, keep_samples, drop = FALSE]
+  }
+  if (nrow(x) == 0L || ncol(x) == 0L) {
+    stop("No genes or samples remain after missing-value filtering.")
+  }
+
+  gene_sd <- apply(x, 1, stats::sd, na.rm = TRUE)
+  keep_var <- is.finite(gene_sd) & gene_sd >= min_gene_sd
+  if (any(!keep_var)) {
+    if (verbose) {
+      message(glue::glue("Removing {sum(!keep_var)} zero-variance genes (SD < {min_gene_sd})"))
+    }
+    x <- x[keep_var, , drop = FALSE]
+  }
+  if (nrow(x) == 0L) stop("No variable genes remain after variance filtering.")
+
+  if (verbose) message("Quantile-normalizing microarray samples...")
+  x <- .quantile_normalize_genes_by_sample(x)
+
+  if (verbose) message("Scaling each gene to unit variance across samples...")
+  x <- t(scale(t(x)))
+  x[!is.finite(x)] <- 0
+  rownames(x) <- gene_ids[seq_len(nrow(x))]
+  colnames(x) <- sample_ids[seq_len(ncol(x))]
+  x
+}
+
+
+#' Derive a pan-cohort meta-z reference from multiple bulk studies
+#'
+#' Computes per-study gene z-scores with \code{\link{derive_reference_from_bulk}}
+#' and combines them with a Stouffer weighted meta-analysis (weights =
+#' \code{sqrt(n_samples)} per study), analogous to PRECOG / TCGA meta-z signatures.
+#'
+#' @param studies A named list. Each element must be a list with at least
+#'   \code{bulk_expression} and \code{phenotype}. Optional per-study fields are
+#'   forwarded to \code{derive_reference_from_bulk()} (e.g. \code{phenotype_type},
+#'   \code{platform}, \code{probe_annotation}).
+#' @param meta_z_label Character label for the output z-score column
+#'   (default \code{"meta_z"}).
+#' @param hugo_species Species for HGNC symbol validation (\code{"human"} or
+#'   \code{"mouse"}); passed to each per-study call.
+#' @param binary_positive_reference For binary phenotypes, which level is the
+#'   positive reference (\code{"second"} or \code{"first"}); passed to each
+#'   per-study call.
+#' @param verbose Logical.
+#'
+#' @return A data.frame of combined meta-z scores suitable for \code{\link{PhenoMap}}.
+#' @export
+derive_meta_z_from_bulk_studies <- function(studies,
+                                           meta_z_label = "meta_z",
+                                           hugo_species = c("human", "mouse"),
+                                           binary_positive_reference = c("second", "first"),
+                                           verbose = TRUE) {
+  hugo_species <- match.arg(hugo_species)
+  binary_positive_reference <- match.arg(binary_positive_reference)
+  if (!is.list(studies) || length(studies) == 0L) {
+    stop("'studies' must be a non-empty list of study specifications")
+  }
+  if (is.null(names(studies)) || any(!nzchar(names(studies)))) {
+    names(studies) <- paste0("study_", seq_along(studies))
+  }
+
+  z_by_study <- list()
+  n_by_study <- list()
+  for (nm in names(studies)) {
+    spec <- studies[[nm]]
+    if (!is.list(spec) || is.null(spec$bulk_expression) || is.null(spec$phenotype)) {
+      stop("Each study must be a list with 'bulk_expression' and 'phenotype'")
+    }
+    call_args <- list(
+      bulk_expression = spec$bulk_expression,
+      phenotype = spec$phenotype,
+      sample_id_column = if (is.null(spec$sample_id_column)) NULL else spec$sample_id_column,
+      phenotype_column = if (is.null(spec$phenotype_column)) NULL else spec$phenotype_column,
+      phenotype_type = if (is.null(spec$phenotype_type)) "auto" else spec$phenotype_type,
+      survival_time = if (is.null(spec$survival_time)) NULL else spec$survival_time,
+      survival_event = if (is.null(spec$survival_event)) NULL else spec$survival_event,
+      normalize = if (is.null(spec$normalize)) TRUE else isTRUE(spec$normalize),
+      platform = if (is.null(spec$platform)) "auto" else spec$platform,
+      probe_annotation = if (is.null(spec$probe_annotation)) NULL else spec$probe_annotation,
+      hugo_species = hugo_species,
+      binary_positive_reference = binary_positive_reference,
+      verbose = isTRUE(verbose)
+    )
+    ref <- do.call(derive_reference_from_bulk, call_args)
+    z_col <- colnames(ref)[1L]
+    z_vec <- setNames(as.numeric(ref[[z_col]]), rownames(ref))
+    z_by_study[[nm]] <- z_vec
+    n_by_study[[nm]] <- attr(ref, "n_samples")
+    if (is.null(n_by_study[[nm]]) || is.na(n_by_study[[nm]])) {
+      n_by_study[[nm]] <- ncol(spec$bulk_expression)
+    }
+  }
+
+  all_genes <- unique(unlist(lapply(z_by_study, names), use.names = FALSE))
+  meta_z <- setNames(rep(NA_real_, length(all_genes)), all_genes)
+  for (g in all_genes) {
+    zs <- vapply(names(z_by_study), function(st) {
+      z <- z_by_study[[st]][g]
+      if (is.na(z)) NA_real_ else z
+    }, numeric(1))
+    ns <- vapply(names(z_by_study), function(st) {
+      if (is.na(zs[st])) 0 else sqrt(as.numeric(n_by_study[[st]]))
+    }, numeric(1))
+    ok <- is.finite(zs) & ns > 0
+    if (!any(ok)) next
+    meta_z[g] <- sum(zs[ok] * ns[ok], na.rm = TRUE) / sqrt(sum(ns[ok]^2, na.rm = TRUE))
+  }
+  meta_z <- meta_z[is.finite(meta_z)]
+  if (!length(meta_z)) stop("Meta-z combination produced no finite gene z-scores.")
+
+  out <- data.frame(z = as.numeric(meta_z), row.names = names(meta_z))
+  names(out) <- meta_z_label
+  attr(out, "phenotype_type") <- "meta_z"
+  attr(out, "n_studies") <- length(studies)
+  if (verbose) {
+    message(glue::glue(
+      "Derived meta-z reference from {length(studies)} studies ({length(meta_z)} genes)"
+    ))
+  }
+  out
+}
+
+
+#' @keywords internal
+.pick_annotation_column <- function(nm, candidates, regex = NULL) {
+  hit <- candidates[candidates %in% nm]
+  if (length(hit)) return(hit[1L])
+  if (!is.null(regex)) {
+    idx <- grep(regex, nm, ignore.case = TRUE, value = FALSE)
+    if (length(idx)) return(nm[idx[1L]])
+  }
+  NA_character_
+}
+
+
+#' @keywords internal
+.looks_like_microarray_probes <- function(ids) {
+  ids <- as.character(ids)
+  if (!length(ids)) return(FALSE)
+  probeish <- grepl(
+    "^(AFFX-|ILMN_|A_23_|probe_|[^A-Za-z0-9])|^[0-9]{6,}$",
+    ids,
+    ignore.case = TRUE
+  )
+  mean(probeish) >= 0.5
+}
+
+
+#' @keywords internal
+.quantile_normalize_genes_by_sample <- function(expr_genes_by_sample) {
+  mat <- as.matrix(expr_genes_by_sample)
+  if (ncol(mat) < 2L) return(mat)
+  if (requireNamespace("preprocessCore", quietly = TRUE)) {
+    return(t(preprocessCore::normalize.quantiles(t(mat))))
+  }
+  ranked <- apply(mat, 2, rank, ties.method = "average", na.last = "keep")
+  ref <- sort(mat[, 1L], na.last = TRUE)
+  ref <- ref[!is.na(ref)]
+  if (!length(ref)) return(mat)
+  out <- mat
+  for (j in seq_len(ncol(mat))) {
+    r <- ranked[, j]
+    ok <- is.finite(r)
+    if (!any(ok)) next
+    out[ok, j] <- stats::approx(
+      x = seq_along(ref) / length(ref),
+      y = ref,
+      xout = r[ok] / max(r[ok], na.rm = TRUE),
+      rule = 2
+    )$y
+  }
+  out
 }
 
 

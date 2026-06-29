@@ -140,10 +140,10 @@ define_phenotype_groups <- function(scores,
 #'   block. Three modes are available:
 #'   \itemize{
 #'     \item \code{"within_cell_type"} (default): reference is the \strong{same
-#'       cell type} but in a different phenotype group. Most stringent --
-#'       isolates phenotype-driven signal within a single cell-type identity.
-#'       Returns empty for a (cell type, tail) pair when the same cell type
-#'       does not exist outside that tail.
+#'       cell type in the opposite phenotype tail} (e.g. adverse ductal vs
+#'       favorable ductal). Only cell types with at least five cells in
+#'       \strong{both} tails are tested (see \code{min_cells_per_tail}).
+#'       Returns empty when the opposite tail lacks enough cells of that type.
 #'     \item \code{"vs_cohort_rest"}: reference is \strong{every other cell}
 #'       in the dataset with a non-missing phenotype label (other cell types
 #'       AND the opposite tail). Most permissive; markers reflect both
@@ -155,6 +155,10 @@ define_phenotype_groups <- function(scores,
 #'       return empty for ductal here; this contrast still surfaces the
 #'       phenotype signal by comparing against the entire opposite tail.
 #'   }
+#' @param min_cells_per_tail When \code{celltype_contrast = "within_cell_type"},
+#'   minimum number of cells required in \strong{both} the Most Adverse and
+#'   Most Favorable tails for each cell type before that type is tested
+#'   (default \code{5}).
 #' @details
 #' Phenotype tails (e.g. top/bottom 5\%) come from \code{\link{define_phenotype_groups}()}.
 #' For \code{marker_scope = "cell_type_specific"}, the contrast is set by
@@ -216,6 +220,7 @@ find_phenotype_markers <- function(expression,
                                     celltype_contrast = c("within_cell_type",
                                                           "vs_cohort_rest",
                                                           "vs_opposite_tail"),
+                                    min_cells_per_tail = .MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS,
                                     ...) {
   test.use <- match.arg(test.use)
   marker_scope <- match.arg(marker_scope)
@@ -348,7 +353,8 @@ find_phenotype_markers <- function(expression,
         max_cells_per_ident = max_cells_per_ident,
         verbose = verbose,
         unique_genes_across_celltypes = celltype_unique_genes,
-        celltype_contrast = celltype_contrast
+        celltype_contrast = celltype_contrast,
+        min_cells_per_tail = min_cells_per_tail
       )
     } else {
       out <- run_markers_on_matrix(
@@ -729,16 +735,46 @@ run_markers_on_matrix <- function(mat,
 }
 
 
+#' Minimum cells per phenotype tail required for \code{within_cell_type}
+#' cell-type-specific marker contrasts.
+#' @keywords internal
+.MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS <- 5L
+
+#' Cell types represented in both phenotype tails (internal helper).
+#'
+#' Used by cell-type-specific marker discovery and heatmaps so contrasts
+#' compare the same cell type across phenotype extremes.
+#'
+#' @keywords internal
+#' @noRd
+.cell_types_in_both_phenotype_tails <- function(group_vec,
+                                                cell_type_vec,
+                                                min_cells = .MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS) {
+  group_vec <- as.character(group_vec)
+  cell_type_vec <- as.character(cell_type_vec)
+  min_cells <- as.integer(min_cells)[1L]
+  if (min_cells < 1L) min_cells <- 1L
+  cell_types <- sort(unique(cell_type_vec[!is.na(cell_type_vec) & nzchar(cell_type_vec)]))
+  if (!length(cell_types)) return(character(0))
+  keep <- vapply(cell_types, function(ct) {
+    in_ct <- !is.na(cell_type_vec) & cell_type_vec == ct
+    n_fav <- sum(in_ct & group_vec == "Most Favorable", na.rm = TRUE)
+    n_adv <- sum(in_ct & group_vec == "Most Adverse", na.rm = TRUE)
+    n_fav >= min_cells && n_adv >= min_cells
+  }, logical(1L))
+  cell_types[keep]
+}
+
 #' One contrast: cell-type phenotype tail vs reference cells
 #'
 #' Three reference-cell strategies, controlled by \code{contrast}:
 #' \itemize{
 #'   \item \code{"within_cell_type"} (default): in-group is (cell type
-#'     \eqn{\cap} tail). Reference is the \strong{same cell type} but in
-#'     a different phenotype group. Most stringent contrast -- isolates
-#'     phenotype-driven signal within a single cell-type identity.
-#'     Returns empty when the same cell type does not exist outside
-#'     this tail.
+#'     \eqn{\cap} tail). Reference is the \strong{same cell type} in the
+#'     \strong{opposite} phenotype tail only (e.g. adverse ductal vs
+#'     favorable ductal). Cell types absent from either tail are skipped.
+#'     Returns empty when the opposite tail has fewer than ten cells of
+#'     that type.
 #'   \item \code{"vs_cohort_rest"}: in-group is (cell type \eqn{\cap}
 #'     tail). Reference is \strong{every other cell} with a non-missing
 #'     phenotype group (other cell types AND the opposite tail). Most
@@ -810,8 +846,11 @@ run_celltype_phenotype_vs_rest <- function(mat,
     }
     out_i <- which(!is.na(group_vec) & group_vec == opposite_tail)
   } else {
+    if (is.na(opposite_tail)) {
+      return(empty_markers())
+    }
     is_out <- !is.na(cell_type_vec) & !is.na(group_vec) &
-      (cell_type_vec == cell_type_label) & (group_vec != phenotype_tail)
+      (cell_type_vec == cell_type_label) & (group_vec == opposite_tail)
     out_i <- which(is_out)
   }
 
@@ -841,7 +880,7 @@ run_celltype_phenotype_vs_rest <- function(mat,
           ))
         } else {
           message(glue::glue(
-            "Subsampled same-type non-{phenotype_tail} cells for '{cell_type_label}' to {max_cells_per_ident} (memory limit)"
+            "Subsampled same-type {opposite_tail} cells for '{cell_type_label}' {phenotype_tail} contrast to {max_cells_per_ident} (memory limit)"
           ))
         }
       }
@@ -950,9 +989,9 @@ dedupe_celltype_marker_tables <- function(adverse_markers, favorable_markers) {
   adv$.phenomap_wing <- "adverse"
   fav$.phenomap_wing <- "favorable"
   comb <- rbind(adv, fav)
-  o <- order(comb$gene, -comb$avg_log2FC, comb$p_adj)
+  o <- order(comb$cell_type, comb$gene, -comb$avg_log2FC, comb$p_adj)
   comb <- comb[o, , drop = FALSE]
-  comb <- comb[!duplicated(comb$gene), , drop = FALSE]
+  comb <- comb[!duplicated(interaction(comb$cell_type, comb$gene, drop = TRUE)), , drop = FALSE]
   base_cols <- setdiff(names(comb), ".phenomap_wing")
   adverse_out <- comb[comb$.phenomap_wing == "adverse", base_cols, drop = FALSE]
   favorable_out <- comb[comb$.phenomap_wing == "favorable", base_cols, drop = FALSE]
@@ -978,7 +1017,8 @@ run_markers_on_matrix_by_celltype <- function(mat,
                                                unique_genes_across_celltypes = TRUE,
                                                celltype_contrast = c("within_cell_type",
                                                                      "vs_cohort_rest",
-                                                                     "vs_opposite_tail")) {
+                                                                     "vs_opposite_tail"),
+                                               min_cells_per_tail = .MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS) {
   celltype_contrast <- match.arg(celltype_contrast)
   if (length(group_vec) != ncol(mat)) {
     stop("Length of 'group_vec' must match number of columns in expression matrix")
@@ -989,6 +1029,17 @@ run_markers_on_matrix_by_celltype <- function(mat,
 
   cell_type_vec <- as.character(cell_type_vec)
   cell_types <- sort(unique(cell_type_vec[!is.na(cell_type_vec)]))
+  if (celltype_contrast == "within_cell_type") {
+    cell_types <- .cell_types_in_both_phenotype_tails(
+      group_vec, cell_type_vec, min_cells = min_cells_per_tail
+    )
+    if (verbose && length(cell_types) == 0L) {
+      message(glue::glue(
+        "No cell types with >= {min_cells_per_tail} cells in both phenotype tails; ",
+        "skipping within-cell-type marker detection."
+      ))
+    }
+  }
   if (length(cell_types) == 0) {
     return(list(
       adverse_markers = standardize_findmarkers_output(NULL, pval_threshold),

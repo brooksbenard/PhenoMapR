@@ -66,18 +66,18 @@ test_that("find_phenotype_markers with group_labels data.frame and group_column"
 test_that("find_phenotype_markers supports cell_type_specific marker detection", {
   set.seed(6)
   n_genes <- 20
-  n_cells <- 12
+  n_cells <- 60
   expr <- matrix(
     pmax(0, rnorm(n_genes * n_cells)),
     nrow = n_genes,
     ncol = n_cells,
     dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
   )
-  # Two cell types with exactly 2 adverse, 2 favorable, 2 other per type
-  cell_type <- c(rep("T", 6), rep("B", 6))
+  # Two cell types with 10 adverse, 10 favorable, 10 other per type
+  cell_type <- c(rep("T", 30), rep("B", 30))
   pg <- c(
-    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2),
-    rep("Most Adverse", 2), rep("Most Favorable", 2), rep("Other", 2)
+    rep("Most Adverse", 10), rep("Most Favorable", 10), rep("Other", 10),
+    rep("Most Adverse", 10), rep("Most Favorable", 10), rep("Other", 10)
   )
   groups_df <- data.frame(
     cell_id = colnames(expr),
@@ -289,24 +289,63 @@ test_that("find_phenotype_markers vs_opposite_tail still produces markers when a
   expect_gt(nrow(ductal_opp_adv), 0L)
 })
 
+test_that("within_cell_type skips cell types absent from either phenotype tail", {
+  set.seed(88)
+  n_genes <- 40
+  n_cells <- 60
+  expr <- matrix(
+    pmax(0, rnorm(n_genes * n_cells)),
+    nrow = n_genes, ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
+  )
+  groups_df <- data.frame(
+    cell_id = colnames(expr),
+    pg = c(
+      rep("Most Adverse", 20), rep("Most Favorable", 20), rep("Other", 20)
+    ),
+    cell_type = c(
+      rep("ductal", 10), rep("acinar", 10),
+      rep("ductal", 10), rep("beta", 10),
+      rep("ductal", 10), rep("acinar", 10)
+    ),
+    stringsAsFactors = FALSE
+  )
+  out <- find_phenotype_markers(
+    expr,
+    group_labels = groups_df,
+    group_column = "pg",
+    cell_id_column = "cell_id",
+    marker_scope = "cell_type_specific",
+    cell_type_column = "cell_type",
+    celltype_contrast = "within_cell_type",
+    min.pct = 0,
+    logfc.threshold = 0,
+    pval_threshold = 1,
+    max_cells_per_ident = Inf,
+    verbose = FALSE
+  )
+  expect_false("acinar" %in% out$adverse_markers$cell_type)
+  expect_false("acinar" %in% out$favorable_markers$cell_type)
+})
+
 test_that("find_phenotype_markers cell_type_specific handles empty per-cell-type results", {
   set.seed(66)
   n_genes <- 30
-  n_cells <- 24
+  n_cells <- 42
   expr <- matrix(
     pmax(0, rnorm(n_genes * n_cells)),
     nrow = n_genes,
     ncol = n_cells,
     dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
   )
-  # T cells have adverse/favorable/other; B cells have only "Other"
+  # T cells have adverse/favorable/other (>=5 per tail); B cells have only "Other"
   groups_df <- data.frame(
     cell_id = colnames(expr),
     pg = c(
-      rep("Most Adverse", 4), rep("Most Favorable", 4), rep("Other", 4),
+      rep("Most Adverse", 10), rep("Most Favorable", 10), rep("Other", 10),
       rep("Other", 12)
     ),
-    cell_type = c(rep("T", 12), rep("B", 12)),
+    cell_type = c(rep("T", 30), rep("B", 12)),
     stringsAsFactors = FALSE
   )
 
@@ -330,6 +369,8 @@ test_that("find_phenotype_markers cell_type_specific handles empty per-cell-type
   expect_named(out, c("adverse_markers", "favorable_markers"))
   expect_true("cell_type" %in% names(out$adverse_markers))
   expect_true("cell_type" %in% names(out$favorable_markers))
+  expect_false("B" %in% out$adverse_markers$cell_type)
+  expect_false("B" %in% out$favorable_markers$cell_type)
 })
 
 test_that("find_phenotype_markers errors when group_labels length mismatch", {

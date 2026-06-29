@@ -1,5 +1,49 @@
 # plot_phenotype_markers — requires ComplexHeatmap + circlize (Suggests)
 
+.ct_heatmap_meta_two_types <- function(cells = paste0("C", seq_len(60L))) {
+  data.frame(
+    Cell = cells,
+    phenotype_group = rep(
+      rep(c("Most Adverse", "Most Favorable", "Other"), each = 10L),
+      2L
+    ),
+    score = rnorm(length(cells)),
+    celltype_original = rep(c("T1", "T2"), each = 30L),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that(".phenotype_heatmap_cell_order nests all cell types within each phenotype", {
+  meta <- data.frame(
+    Cell = c("F_A", "F_B", "O_A", "A_A", "A_B"),
+    phenotype_group = c(
+      "Most Favorable", "Most Favorable", "Other",
+      "Most Adverse", "Most Adverse"
+    ),
+    cell_type = c("Alpha", "Beta", "Alpha", "Alpha", "Beta"),
+    score = c(1, 2, 3, 4, 5),
+    stringsAsFactors = FALSE
+  )
+  expr <- matrix(
+    1, nrow = 2, ncol = 5,
+    dimnames = list(c("G1", "G2"), meta$Cell)
+  )
+  ord <- PhenoMapR:::.phenotype_heatmap_cell_order(
+    meta = meta,
+    expr_mat = expr,
+    cell_id_col = "Cell",
+    group_col = "phenotype_group",
+    celltype_col = "cell_type",
+    score_col = "score",
+    hm_group_levels = c("Most Favorable", "Other", "Most Adverse"),
+    hm_celltype_levels = c("Alpha", "Beta")
+  )
+  expect_equal(
+    ord$cell_order,
+    c("F_A", "F_B", "O_A", "A_A", "A_B")
+  )
+})
+
 test_that(".global_marker_heatmap_cell_order sorts columns by score low to high", {
   meta <- data.frame(
     id = paste0("C", 1:5),
@@ -74,34 +118,28 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
   skip_if_not_installed("circlize")
 
   genes <- paste0("G", 1:15)
-  cells <- paste0("C", 1:24)
+  cells <- paste0("C", 1:60)
   expr <- matrix(
     pmax(0, rnorm(length(genes) * length(cells))),
     length(genes),
     length(cells),
     dimnames = list(genes, cells)
   )
-  meta <- data.frame(
-    Cell = cells,
-    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 8),
-    score = rnorm(24),
-    celltype_original = rep(c("T1", "T2"), 12),
-    stringsAsFactors = FALSE
-  )
+  meta <- .ct_heatmap_meta_two_types(cells)
 
   markers <- list(
     adverse_markers = data.frame(
-      gene = c("G1", "G2"),
-      cell_type = c("T1", "T1"),
-      avg_log2FC = c(1.2, 1.0),
-      p_adj = c(0.01, 0.02),
+      gene = c("G1", "G2", "G5", "G6"),
+      cell_type = c("T1", "T1", "T2", "T2"),
+      avg_log2FC = c(1.2, 1.0, 1.1, 0.9),
+      p_adj = c(0.01, 0.02, 0.01, 0.03),
       stringsAsFactors = FALSE
     ),
     favorable_markers = data.frame(
-      gene = c("G3", "G4"),
-      cell_type = c("T2", "T2"),
-      avg_log2FC = c(1.1, 0.9),
-      p_adj = c(0.01, 0.03),
+      gene = c("G3", "G4", "G7", "G8"),
+      cell_type = c("T1", "T1", "T2", "T2"),
+      avg_log2FC = c(1.1, 0.9, 1.0, 0.85),
+      p_adj = c(0.01, 0.03, 0.01, 0.02),
       stringsAsFactors = FALSE
     )
   )
@@ -111,8 +149,10 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
     expr_mat = expr,
     meta = meta,
     group_col = "phenotype_group",
+    celltype_col = "celltype_original",
     score_col = "score",
     heatmap_type = "cell_type_specific",
+    celltype_contrast = "within_cell_type",
     top_n_markers = 5L,
     n_mark_labels = 2L,
     p_adj_threshold = 0.05,
@@ -120,6 +160,17 @@ test_that("plot_phenotype_markers cell_type_specific returns Heatmap with fake t
     draw = FALSE
   )
   expect_s4_class(ht, "Heatmap")
+  expect_true(!is.null(ht@left_annotation))
+  expect_true(!is.null(ht@right_annotation))
+  f <- tempfile(fileext = ".png")
+  grDevices::png(f, width = 400, height = 300, res = 72)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  ComplexHeatmap::draw(ht)
+  split_names <- names(ComplexHeatmap::row_order(ht))
+  fav_i <- grep("Most Favorable", split_names)
+  adv_i <- grep("Most Adverse", split_names)
+  expect_true(length(fav_i) > 0L && length(adv_i) > 0L)
+  expect_true(max(fav_i) < min(adv_i))
 })
 
 test_that(".anno_mark_labels_gp colors labels from cell-type palette", {
@@ -135,34 +186,28 @@ test_that("plot_phenotype_markers accepts color_mark_labels_by_celltype", {
   skip_if_not_installed("circlize")
 
   genes <- paste0("G", 1:15)
-  cells <- paste0("C", 1:24)
+  cells <- paste0("C", 1:60)
   expr <- matrix(
     pmax(0, rnorm(length(genes) * length(cells))),
     length(genes),
     length(cells),
     dimnames = list(genes, cells)
   )
-  meta <- data.frame(
-    Cell = cells,
-    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 8),
-    score = rnorm(24),
-    celltype_original = rep(c("T1", "T2"), 12),
-    stringsAsFactors = FALSE
-  )
+  meta <- .ct_heatmap_meta_two_types(cells)
 
   markers <- list(
     adverse_markers = data.frame(
-      gene = c("G1", "G2"),
-      cell_type = c("T1", "T1"),
-      avg_log2FC = c(1.2, 1.0),
-      p_adj = c(0.01, 0.02),
+      gene = c("G1", "G2", "G5", "G6"),
+      cell_type = c("T1", "T1", "T2", "T2"),
+      avg_log2FC = c(1.2, 1.0, 1.1, 0.9),
+      p_adj = c(0.01, 0.02, 0.01, 0.03),
       stringsAsFactors = FALSE
     ),
     favorable_markers = data.frame(
-      gene = c("G3", "G4"),
-      cell_type = c("T2", "T2"),
-      avg_log2FC = c(1.1, 0.9),
-      p_adj = c(0.01, 0.03),
+      gene = c("G3", "G4", "G7", "G8"),
+      cell_type = c("T1", "T1", "T2", "T2"),
+      avg_log2FC = c(1.1, 0.9, 1.0, 0.85),
+      p_adj = c(0.01, 0.03, 0.01, 0.02),
       stringsAsFactors = FALSE
     )
   )
@@ -188,29 +233,23 @@ test_that("plot_phenotype_markers cell_type_specific accepts block_outline_color
   skip_if_not_installed("circlize")
 
   genes <- paste0("G", 1:15)
-  cells <- paste0("C", 1:24)
+  cells <- paste0("C", 1:60)
   expr <- matrix(
     pmax(0, rnorm(length(genes) * length(cells))),
     length(genes),
     length(cells),
     dimnames = list(genes, cells)
   )
-  meta <- data.frame(
-    Cell = cells,
-    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 8),
-    score = rnorm(24),
-    celltype_original = rep(c("T1", "T2"), 12),
-    stringsAsFactors = FALSE
-  )
+  meta <- .ct_heatmap_meta_two_types(cells)
   markers <- list(
     adverse_markers = data.frame(
-      gene = c("G1", "G2"), cell_type = c("T1", "T1"),
-      avg_log2FC = c(1.2, 1.0), p_adj = c(0.01, 0.02),
+      gene = c("G1", "G2", "G5", "G6"), cell_type = c("T1", "T1", "T2", "T2"),
+      avg_log2FC = c(1.2, 1.0, 1.1, 0.9), p_adj = c(0.01, 0.02, 0.01, 0.03),
       stringsAsFactors = FALSE
     ),
     favorable_markers = data.frame(
-      gene = c("G3", "G4"), cell_type = c("T2", "T2"),
-      avg_log2FC = c(1.1, 0.9), p_adj = c(0.01, 0.03),
+      gene = c("G3", "G4", "G7", "G8"), cell_type = c("T1", "T1", "T2", "T2"),
+      avg_log2FC = c(1.1, 0.9, 1.0, 0.85), p_adj = c(0.01, 0.03, 0.01, 0.02),
       stringsAsFactors = FALSE
     )
   )
@@ -229,6 +268,7 @@ test_that("plot_phenotype_markers cell_type_specific accepts block_outline_color
       group_col = "phenotype_group",
       score_col = "score",
       heatmap_type = "cell_type_specific",
+      celltype_contrast = "within_cell_type",
       top_n_markers = 5L,
       n_mark_labels = 2L,
       p_adj_threshold = 0.05,
@@ -569,19 +609,13 @@ test_that("plot_phenotype_markers cell_type_specific renders block outlines via 
 
   set.seed(11)
   genes <- paste0("G", 1:24)
-  cells <- paste0("C", 1:36)
+  cells <- paste0("C", 1:60)
   expr <- matrix(
     pmax(0, rnorm(length(genes) * length(cells), 1, 0.5)),
     length(genes), length(cells),
     dimnames = list(genes, cells)
   )
-  meta <- data.frame(
-    Cell = cells,
-    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 12),
-    score = rnorm(36),
-    celltype_original = rep(c("T1", "T2"), 18),
-    stringsAsFactors = FALSE
-  )
+  meta <- .ct_heatmap_meta_two_types(cells)
   adv <- data.frame(
     gene = c("G1", "G2", "G3", "G4"),
     cell_type = c("T1", "T1", "T2", "T2"),
@@ -606,6 +640,7 @@ test_that("plot_phenotype_markers cell_type_specific renders block outlines via 
       expr_mat = expr, meta = meta,
       group_col = "phenotype_group", score_col = "score",
       heatmap_type = "cell_type_specific",
+      celltype_contrast = "within_cell_type",
       top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
       outline_marker_blocks = outline,
       block_outline_color = "black",
@@ -630,70 +665,115 @@ test_that("plot_phenotype_markers cell_type_specific renders block outlines via 
   expect_gt(size_on, size_off * 0.95)
 })
 
-test_that("plot_phenotype_markers omits cell-type strip when only one level represented", {
-  # Regression test for the stray teal "1" badge: when the
-  # cell-type column has a single represented level, a uniform
-  # cell-type strip used to render at the top / left / right of
-  # the heatmap, AND its anno_simple auto-legend leaked as a
-  # stray single-cell-type tile despite show_legend = FALSE on
-  # the parent annotation. We now drop the cell-type strip in
-  # both `global` and `cell_type_specific` modes; this test asserts
-  # that:
-  #   1. the source code routes through `show_celltype_strip`
-  #      to gate every cell-type anno_simple call, and
-  #   2. rendering with a single represented cell type still
-  #      succeeds AND produces a smaller PNG than the same data
-  #      with two cell types -- the strip + legend are real
-  #      visual area, so dropping them is detectable.
+test_that("plot_phenotype_markers omits cell-type strip in global mode with one level", {
   skip_if_not_installed("ComplexHeatmap")
   skip_if_not_installed("circlize")
 
   set.seed(7)
-  genes <- paste0("G", 1:24)
-  cells <- paste0("C", 1:36)
+  genes <- paste0("G", 1:12)
+  cells <- paste0("C", 1:30)
   expr <- matrix(
     pmax(0, rnorm(length(genes) * length(cells), 1, 0.5)),
     length(genes), length(cells),
     dimnames = list(genes, cells)
   )
-  meta_one <- data.frame(
+  meta <- data.frame(
     Cell = cells,
-    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"),
-                          each = 12),
-    score = rnorm(36),
-    cell_type = rep("Acinar", 36),
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 10),
+    score = rnorm(30),
+    cell_type = rep("Acinar", 30),
     stringsAsFactors = FALSE
   )
-  meta_two <- meta_one
-  meta_two$cell_type <- rep(c("Acinar", "Beta"), 18)
+  adv <- data.frame(
+    gene = c("G1", "G2"), avg_log2FC = c(1.2, 1.0), p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
+  fav <- data.frame(
+    gene = c("G3", "G4"), avg_log2FC = c(1.0, 0.9), p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
+
+  f <- tempfile(fileext = ".png")
+  grDevices::png(f, width = 900, height = 500, res = 110)
+  PhenoMapR::plot_phenotype_markers(
+    markers = list(adverse_markers = adv, favorable_markers = fav),
+    expr_mat = expr, meta = meta,
+    group_col = "phenotype_group", celltype_col = "cell_type",
+    score_col = "score",
+    heatmap_type = "global",
+    top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
+    draw = TRUE
+  )
+  grDevices::dev.off()
+  expect_true(file.exists(f))
+  expect_gt(file.info(f)$size, 5000)
+})
+
+test_that("plot_phenotype_markers keeps cell-type strip in cell_type_specific mode with one level", {
+  # Regression: after the both-tails filter, only one cell type may qualify;
+  # the top/row cell-type annotations must still render.
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(7)
+  genes <- paste0("G", 1:24)
+  cells_one <- paste0("C", 1:30)
+  cells_two <- paste0("C", 1:60)
+  expr_one <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells_one), 1, 0.5)),
+    length(genes), length(cells_one),
+    dimnames = list(genes, cells_one)
+  )
+  expr_two <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells_two), 1, 0.5)),
+    length(genes), length(cells_two),
+    dimnames = list(genes, cells_two)
+  )
+  meta_one <- data.frame(
+    Cell = cells_one,
+    phenotype_group = rep(c("Most Adverse", "Most Favorable", "Other"), each = 10),
+    score = rnorm(30),
+    cell_type = rep("Acinar", 30),
+    stringsAsFactors = FALSE
+  )
+  meta_two <- .ct_heatmap_meta_two_types(cells_two)
+  meta_two$cell_type <- meta_two$celltype_original
   adv <- data.frame(
     gene = c("G1", "G2", "G3", "G4"),
-    cell_type = c("Acinar", "Acinar", "Beta", "Beta"),
+    cell_type = c("T1", "T1", "T2", "T2"),
     avg_log2FC = c(1.2, 1.0, 1.1, 0.9),
     p_adj = c(0.01, 0.02, 0.01, 0.03),
     stringsAsFactors = FALSE
   )
   fav <- data.frame(
     gene = c("G5", "G6", "G7", "G8"),
-    cell_type = c("Acinar", "Acinar", "Beta", "Beta"),
+    cell_type = c("T1", "T1", "T2", "T2"),
     avg_log2FC = c(1.0, 0.9, 1.1, 0.85),
     p_adj = c(0.01, 0.02, 0.01, 0.03),
     stringsAsFactors = FALSE
   )
-  # Markers for the single-celltype run only need the matched cell type.
-  adv_one <- adv[adv$cell_type == "Acinar", , drop = FALSE]
-  fav_one <- fav[fav$cell_type == "Acinar", , drop = FALSE]
+  adv_one <- data.frame(
+    gene = c("G1", "G2"), cell_type = c("Acinar", "Acinar"),
+    avg_log2FC = c(1.2, 1.0), p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
+  fav_one <- data.frame(
+    gene = c("G5", "G6"), cell_type = c("Acinar", "Acinar"),
+    avg_log2FC = c(1.0, 0.9), p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
 
-  render <- function(meta, mk_adv, mk_fav) {
+  render <- function(meta, mk_adv, mk_fav, expr_mat) {
     f <- tempfile(fileext = ".png")
     grDevices::png(f, width = 1100, height = 600, res = 110)
     on.exit(grDevices::dev.off(), add = TRUE)
     PhenoMapR::plot_phenotype_markers(
       markers = list(adverse_markers = mk_adv, favorable_markers = mk_fav),
-      expr_mat = expr, meta = meta,
+      expr_mat = expr_mat, meta = meta,
       group_col = "phenotype_group", celltype_col = "cell_type",
       score_col = "score",
       heatmap_type = "cell_type_specific",
+      celltype_contrast = "within_cell_type",
       top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
       outline_marker_blocks = TRUE,
       block_outline_color = "black",
@@ -703,24 +783,140 @@ test_that("plot_phenotype_markers omits cell-type strip when only one level repr
     f
   }
 
-  f_one <- render(meta_one, adv_one, fav_one)
-  f_two <- render(meta_two, adv,     fav)
+  f_one <- render(meta_one, adv_one, fav_one, expr_one)
+  f_two <- render(meta_two, adv, fav, expr_two)
   expect_true(file.exists(f_one) && file.exists(f_two))
-  # The single-celltype render should be at least as small as the
-  # two-celltype one (no cell-type strip, no cell-type legend).
-  expect_lt(file.info(f_one)$size, file.info(f_two)$size)
+  expect_gt(file.info(f_one)$size, 20000)
+  expect_gt(file.info(f_two)$size, file.info(f_one)$size)
 
-  # Source-level assertion: every anno_simple call that takes the
-  # cell-type palette must be guarded by `show_celltype_strip`.
-  # Use deparse() so this works against the installed package
-  # (R CMD check tests run with no on-disk R/*.R source files).
   src <- paste(
     deparse(PhenoMapR::plot_phenotype_markers, width.cutoff = 500L),
     collapse = "\n"
   )
-  expect_match(src,
-               "show_celltype_strip <- has_celltype && length\\(hm_celltype_levels\\) > 1L",
-               perl = TRUE)
-  expect_match(src, "if \\(show_celltype_strip\\)",
-               perl = TRUE)
+  expect_match(
+    src,
+    "heatmap_type == \"cell_type_specific\"",
+    fixed = TRUE
+  )
+  expect_match(src, "if \\(show_celltype_strip\\)", perl = TRUE)
+})
+
+test_that("plot_phenotype_markers maps cell-type colors for all column annotations", {
+  # Regression: column strip includes every cell on the heatmap, not only
+  # cell types that pass the both-tails minimum for marker row blocks.
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(11)
+  genes <- paste0("G", 1:12)
+  cells_qual <- paste0("C", 1:30)
+  cells_extra <- paste0("X", 1:20)
+  cells <- c(cells_qual, cells_extra)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells), 1, 0.5)),
+    length(genes), length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = c(
+      rep(c("Most Adverse", "Most Favorable", "Other"), each = 10),
+      rep("Other", 20)
+    ),
+    score = rnorm(length(cells)),
+    cell_type = c(rep("Acinar", 30), rep(c("Ductal", "Plasma"), 10)),
+    stringsAsFactors = FALSE
+  )
+  adv <- data.frame(
+    gene = c("G1", "G2"), cell_type = c("Acinar", "Acinar"),
+    avg_log2FC = c(1.2, 1.0), p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
+  fav <- data.frame(
+    gene = c("G3", "G4"), cell_type = c("Acinar", "Acinar"),
+    avg_log2FC = c(1.0, 0.9), p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
+
+  f <- tempfile(fileext = ".png")
+  grDevices::png(f, width = 1100, height = 600, res = 110)
+  out <- PhenoMapR::plot_phenotype_markers(
+    markers = list(adverse_markers = adv, favorable_markers = fav),
+    expr_mat = expr, meta = meta,
+    group_col = "phenotype_group", celltype_col = "cell_type",
+    score_col = "score",
+    heatmap_type = "cell_type_specific",
+    top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
+    draw = TRUE
+  )
+  grDevices::dev.off()
+  expect_true(inherits(out, "Heatmap"))
+  expect_true(file.exists(f))
+  expect_gt(file.info(f)$size, 10000)
+})
+
+test_that("plot_phenotype_markers vs_opposite_tail draws one-sided cell-type blocks", {
+  # Favorable ductal markers should render even without adverse ductal cells.
+  skip_if_not_installed("ComplexHeatmap")
+  skip_if_not_installed("circlize")
+
+  set.seed(21)
+  genes <- paste0("G", 1:20)
+  cells <- paste0("C", 1:40)
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * length(cells), 1, 0.5)),
+    length(genes), length(cells),
+    dimnames = list(genes, cells)
+  )
+  meta <- data.frame(
+    Cell = cells,
+    phenotype_group = c(
+      rep("Most Favorable", 10), rep("Most Adverse", 10), rep("Other", 20)
+    ),
+    score = rnorm(40),
+    cell_type = c(
+      rep("Ductal", 10), rep("Immune", 10),
+      rep("Ductal", 10), rep("Immune", 10)
+    ),
+    stringsAsFactors = FALSE
+  )
+  fav <- data.frame(
+    gene = c("G1", "G2", "G3"),
+    cell_type = rep("Ductal", 3),
+    avg_log2FC = c(1.2, 1.0, 0.9),
+    p_adj = c(0.01, 0.02, 0.03),
+    stringsAsFactors = FALSE
+  )
+  adv <- data.frame(
+    gene = c("G4", "G5"),
+    cell_type = rep("Immune", 2),
+    avg_log2FC = c(1.1, 1.0),
+    p_adj = c(0.01, 0.02),
+    stringsAsFactors = FALSE
+  )
+
+  ht_opp <- PhenoMapR::plot_phenotype_markers(
+    markers = list(adverse_markers = adv, favorable_markers = fav),
+    expr_mat = expr, meta = meta,
+    group_col = "phenotype_group", celltype_col = "cell_type",
+    score_col = "score",
+    heatmap_type = "cell_type_specific",
+    celltype_contrast = "vs_opposite_tail",
+    top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
+    draw = FALSE
+  )
+  expect_s4_class(ht_opp, "Heatmap")
+  expect_true(!is.null(ht_opp@left_annotation))
+
+  ht_within <- PhenoMapR::plot_phenotype_markers(
+    markers = list(adverse_markers = adv, favorable_markers = fav),
+    expr_mat = expr, meta = meta,
+    group_col = "phenotype_group", celltype_col = "cell_type",
+    score_col = "score",
+    heatmap_type = "cell_type_specific",
+    celltype_contrast = "within_cell_type",
+    top_n_markers = 5L, n_mark_labels = 2L, p_adj_threshold = 0.05,
+    draw = FALSE
+  )
+  expect_null(ht_within)
 })

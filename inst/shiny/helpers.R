@@ -11,6 +11,34 @@
 .fmt_int <- function(x) format(as.integer(x), big.mark = ",")
 .fmt_num <- function(x, digits = 3) format(round(as.numeric(x), digits), nsmall = digits)
 
+# User-facing phenotype tail labels (red = +, blue = −), shared app-wide.
+.phenomapr_phenotype_plus_class  <- "phenomapr-phenotype-plus"
+.phenomapr_phenotype_minus_class <- "phenomapr-phenotype-minus"
+
+phenomapr_phenotype_plus <- function(text = "Most Phenotype +") {
+  shiny::tags$span(class = .phenomapr_phenotype_plus_class, text)
+}
+
+phenomapr_phenotype_minus <- function(text = "Most Phenotype \u2212") {
+  shiny::tags$span(class = .phenomapr_phenotype_minus_class, text)
+}
+
+phenomapr_phenotype_plus_html <- function(text = "Most Phenotype +") {
+  htmltools::HTML(sprintf(
+    '<span class="%s">%s</span>',
+    .phenomapr_phenotype_plus_class,
+    htmltools::htmlEscape(text)
+  ))
+}
+
+phenomapr_phenotype_minus_html <- function(text = "Most Phenotype \u2212") {
+  htmltools::HTML(sprintf(
+    '<span class="%s">%s</span>',
+    .phenomapr_phenotype_minus_class,
+    htmltools::htmlEscape(text)
+  ))
+}
+
 # Cleanly say "x cells" / "x samples" depending on what the user uploaded.
 .fmt_n_units <- function(n, unit_singular, unit_plural = NULL) {
   if (is.null(unit_plural)) unit_plural <- paste0(unit_singular, "s")
@@ -2125,16 +2153,569 @@ celltype_source_anova_pvalues <- function(df,
 # Pull score + phenotype group + cell type + source into a single tibble so
 # downstream plots can pivot on whichever combination of columns is present.
 # Returns NULL when there are no scores.
+
+#' Column name for phenotype groups tied to a score column
+#' @keywords internal
+phenotype_group_column_for <- function(score_column) {
+  if (is.null(score_column) || !nzchar(score_column)) return(NA_character_)
+  paste0("phenotype_group_", score_column)
+}
+
+#' Resolve phenotype group column from groups table + active score column
+#' @keywords internal
+resolve_phenotype_group_column <- function(groups, score_column = NULL) {
+  if (is.null(groups)) return(NA_character_)
+  target <- phenotype_group_column_for(score_column)
+  if (!is.na(target) && target %in% colnames(groups)) return(target)
+  grp_cols <- grep("^phenotype_group_", colnames(groups), value = TRUE)
+  if (length(grp_cols)) grp_cols[1L] else NA_character_
+}
+
+#' Active score column from Shiny score-column selector
+#' @keywords internal
+active_score_column <- function(scores, score_col_input = NULL) {
+  sc <- score_col_input %||% ""
+  if (identical(sc, "__all__") || !nzchar(sc)) {
+    if (!is.null(scores) && ncol(scores) >= 1L) return(colnames(scores)[1L])
+    return("")
+  }
+  sc
+}
+
+#' @keywords internal
+.precog_pancreatic_gene_z <- function() {
+  ref <- tryCatch(PhenoMapR::precog, error = function(e) NULL)
+  if (is.null(ref) || !"Pancreatic" %in% colnames(ref)) return(NULL)
+  z <- ref[, "Pancreatic"]
+  names(z) <- rownames(ref)
+  z[is.finite(z)]
+}
+
+#' Catalog metadata for the Shiny demo source dataset (CRA001160).
+#' @keywords internal
+shiny_demo_source_info <- function() {
+  list(
+    accession = "CRA001160",
+    title = "Pancreatic ductal adenocarcinoma (PAAD) scRNA-seq",
+    cancer_type = "Pancreatic",
+    n_cells_total = 57530L,
+    n_patients = 34L,
+    n_tumors = 25L,
+    n_controls = 9L,
+    paper_label = "Peng et al. 2019",
+    paper_url = "https://doi.org/10.1038/s41422-019-0195-y",
+    data_source = "TISCH2",
+    data_source_url = "https://tisch.compbio.cn/home/",
+    reference_signature = "PRECOG \u00b7 Pancreatic"
+  )
+}
+
+.shiny_demo_pool_cache <- new.env(parent = emptyenv())
+
+.shiny_first_existing <- function(paths) {
+  paths <- unique(paths[nzchar(paths)])
+  for (p in paths) {
+    if (file.exists(p)) return(normalizePath(p, winslash = "/"))
+  }
+  NULL
+}
+
+.shiny_demo_search_roots <- function() {
+  helpers <- system.file("shiny", "helpers.R", package = "PhenoMapR")
+  pkg_from_helpers <- if (nzchar(helpers)) {
+    normalizePath(file.path(dirname(helpers), "..", ".."), winslash = "/")
+  } else {
+    character(0)
+  }
+  roots <- c(
+    getwd(),
+    Sys.getenv("PHENOMAPR_PACKAGE_ROOT", unset = ""),
+    system.file(package = "PhenoMapR"),
+    pkg_from_helpers
+  )
+  unique(roots[nzchar(roots)])
+}
+
+.shiny_row_var <- function(mat) {
+  if (inherits(mat, "Matrix")) {
+    mu <- Matrix::rowMeans(mat)
+    ex2 <- Matrix::rowMeans(mat^2)
+    pmax(as.numeric(ex2 - mu^2), 0)
+  } else {
+    apply(mat, 1L, stats::var)
+  }
+}
+
+.standardize_cra001160_metadata <- function(md) {
+  n <- nrow(md)
+  if (n == 0L) {
+    return(data.frame(
+      .cell_id = character(0),
+      cell_type = character(0),
+      cell_type_original = character(0),
+      Source = character(0),
+      Patient = character(0),
+      UMAP_1 = numeric(0),
+      UMAP_2 = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+  .pick <- function(cands, kind = c("char", "num")) {
+    kind <- match.arg(kind)
+    hit <- cands[cands %in% names(md)]
+    if (!length(hit)) {
+      return(if (kind == "num") rep(NA_real_, n) else rep(NA_character_, n))
+    }
+    if (kind == "num") as.numeric(md[[hit[1L]]]) else as.character(md[[hit[1L]]])
+  }
+  cell_id <- if ("Cell" %in% names(md)) {
+    as.character(md$Cell)
+  } else {
+    as.character(rownames(md))
+  }
+  if (length(cell_id) != n) cell_id <- as.character(rownames(md))
+  major <- .pick(c(
+    "Celltype (major-lineage)", "Celltype..major.lineage.",
+    "cell_type_major", "Celltype", "seurat_clusters"
+  ))
+  minor <- .pick(c(
+    "Celltype (minor-lineage)", "Celltype..minor.lineage.",
+    "cell_type_minor", "Celltype (original)", "Celltype..original."
+  ))
+  original <- .pick(c(
+    "Celltype (original)", "Celltype..original.",
+    "Celltype (minor-lineage)", "Celltype..minor.lineage."
+  ))
+  minor <- gsub(" cell$", "", minor, ignore.case = TRUE)
+  original <- gsub(" cell$", "", original, ignore.case = TRUE)
+  cell_type <- minor
+  na_ct <- is.na(cell_type) | !nzchar(cell_type)
+  if (any(na_ct)) cell_type[na_ct] <- original[na_ct]
+  na_ct <- is.na(cell_type) | !nzchar(cell_type)
+  if (any(na_ct)) cell_type[na_ct] <- major[na_ct]
+  data.frame(
+    .cell_id = cell_id,
+    cell_type = cell_type,
+    cell_type_minor = minor,
+    cell_type_major = major,
+    cell_type_original = original,
+    Source = .pick(c("Source", "Tumor_Normal", "Sample_Site")),
+    Patient = .pick(c("Patient", "Sample", "orig.ident")),
+    UMAP_1 = .pick(c("UMAP_1", "umap_1"), "num"),
+    UMAP_2 = .pick(c("UMAP_2", "umap_2"), "num"),
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Align metadata rows to matrix columns and attach as \code{phenomapr_coldata}.
+#' @keywords internal
+.attach_matrix_coldata <- function(expr, metadata, cell_id_col = ".cell_id") {
+  if (is.null(expr) || is.null(metadata) || !nrow(metadata)) return(expr)
+  cells <- colnames(expr)
+  if (is.null(cells) || !length(cells)) return(expr)
+
+  if (!is.null(cell_id_col) && nzchar(cell_id_col) &&
+      cell_id_col %in% colnames(metadata)) {
+    idx <- match(cells, metadata[[cell_id_col]])
+  } else if (!is.null(rownames(metadata))) {
+    idx <- match(cells, rownames(metadata))
+  } else if (nrow(metadata) == length(cells)) {
+    idx <- seq_along(cells)
+  } else {
+    return(expr)
+  }
+  if (anyNA(idx)) return(expr)
+
+  coldata <- metadata[idx, , drop = FALSE]
+  rownames(coldata) <- cells
+  attr(expr, "phenomapr_coldata") <- coldata
+  expr
+}
+
+#' Public wrapper for attaching matrix colData in the Shiny scoring path.
+attach_matrix_coldata <- function(expr, metadata, cell_id_col = ".cell_id") {
+  .attach_matrix_coldata(expr, metadata, cell_id_col = cell_id_col)
+}
+
+#' Attach metadata UMAP coordinates as \code{phenomapr_obsm} on a plain matrix.
+#' @keywords internal
+.attach_demo_matrix_obsm <- function(expr, metadata) {
+  expr <- .attach_matrix_coldata(expr, metadata, cell_id_col = ".cell_id")
+  if (is.null(metadata) || !all(c("UMAP_1", "UMAP_2") %in% colnames(metadata))) {
+    return(expr)
+  }
+  cells <- colnames(expr)
+  coldata <- attr(expr, "phenomapr_coldata")
+  if (!is.null(coldata) && all(c("UMAP_1", "UMAP_2") %in% colnames(coldata))) {
+    emb <- cbind(
+      UMAP_1 = as.numeric(coldata$UMAP_1),
+      UMAP_2 = as.numeric(coldata$UMAP_2)
+    )
+  } else {
+    idx <- match(cells, metadata$.cell_id)
+    if (anyNA(idx)) return(expr)
+    emb <- cbind(
+      UMAP_1 = as.numeric(metadata$UMAP_1[idx]),
+      UMAP_2 = as.numeric(metadata$UMAP_2[idx])
+    )
+  }
+  rownames(emb) <- cells
+  attr(expr, "phenomapr_obsm") <- list(UMAP = emb)
+  expr
+}
+
+.shiny_demo_bundle_path <- function() {
+  candidates <- character(0)
+  sf <- system.file("extdata", "shiny", "PAAD_CRA001160_demo_5000.rds", package = "PhenoMapR")
+  if (nzchar(sf)) candidates <- c(candidates, sf)
+  shiny_helpers <- system.file("shiny", "helpers.R", package = "PhenoMapR")
+  if (nzchar(shiny_helpers)) {
+    candidates <- c(
+      candidates,
+      normalizePath(
+        file.path(dirname(shiny_helpers), "..", "extdata", "shiny", "PAAD_CRA001160_demo_5000.rds"),
+        winslash = "/",
+        mustWork = FALSE
+      )
+    )
+  }
+  for (r in .shiny_demo_search_roots()) {
+    candidates <- c(
+      candidates,
+      file.path(r, "inst", "extdata", "shiny", "PAAD_CRA001160_demo_5000.rds")
+    )
+  }
+  candidates <- c(candidates, Sys.getenv("PHENOMAPR_SHINY_DEMO_RDS", unset = ""))
+  .shiny_first_existing(unique(candidates))
+}
+
+.load_shiny_demo_pool_from_seurat <- function(path) {
+  if (!requireNamespace("Seurat", quietly = TRUE)) return(NULL)
+  obj <- tryCatch(readRDS(path), error = function(e) NULL)
+  if (is.null(obj) || !inherits(obj, "Seurat")) return(NULL)
+  obj <- tryCatch(Seurat::UpdateSeuratObject(obj), error = function(e) obj)
+  assay <- if ("RNA" %in% names(obj@assays)) "RNA" else names(obj@assays)[1L]
+  layer <- if ("data" %in% .seurat_assay_layers(obj, assay)) {
+    "data"
+  } else if ("counts" %in% .seurat_assay_layers(obj, assay)) {
+    "counts"
+  } else {
+    "data"
+  }
+  expr <- tryCatch(
+    Seurat::GetAssayData(obj, assay = assay, layer = layer),
+    error = function(e) NULL
+  )
+  if (is.null(expr)) return(NULL)
+  cells <- colnames(expr)
+  md <- .standardize_cra001160_metadata(obj@meta.data)
+  if (any(is.na(md$UMAP_1)) || any(is.na(md$UMAP_2))) {
+    red_name <- if ("umap" %in% names(obj@reductions)) {
+      "umap"
+    } else if (length(obj@reductions)) {
+      names(obj@reductions)[1L]
+    } else {
+      NA_character_
+    }
+    if (!is.na(red_name)) {
+      emb <- tryCatch(Seurat::Embeddings(obj, red_name), error = function(e) NULL)
+      if (!is.null(emb) && ncol(emb) >= 2L) {
+        md$UMAP_1 <- emb[cells, 1L]
+        md$UMAP_2 <- emb[cells, 2L]
+      }
+    }
+  }
+  md$.cell_id <- cells
+  md <- md[match(cells, md$.cell_id), , drop = FALSE]
+  if (anyNA(md$.cell_id)) return(NULL)
+  list(expression = expr, metadata = md, from = "CRA001160")
+}
+
+.load_shiny_demo_pool_from_h5_tsv <- function(h5_path, tsv_path) {
+  if (!requireNamespace("Seurat", quietly = TRUE)) return(NULL)
+  expr <- tryCatch(Seurat::Read10X_h5(h5_path), error = function(e) NULL)
+  if (is.null(expr)) return(NULL)
+  md_raw <- tryCatch(
+    utils::read.delim(tsv_path, stringsAsFactors = FALSE, check.names = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(md_raw)) return(NULL)
+  md <- .standardize_cra001160_metadata(md_raw)
+  cells <- colnames(expr)
+  md <- md[match(cells, md$.cell_id), , drop = FALSE]
+  if (anyNA(md$.cell_id)) return(NULL)
+  list(expression = expr, metadata = md, from = "CRA001160")
+}
+
+#' Load (and cache) the full CRA001160 demo expression pool.
+#' @keywords internal
+load_shiny_demo_pool <- function() {
+  if (!is.null(.shiny_demo_pool_cache$pool)) {
+    return(.shiny_demo_pool_cache$pool)
+  }
+  roots <- .shiny_demo_search_roots()
+  pool <- NULL
+
+  h5_paths <- c(
+    Sys.getenv("PHENOMAPR_CRA001160_H5", unset = ""),
+    unlist(lapply(roots, function(r) {
+      file.path(r, "vignettes", "PAAD_CRA001160_expression.h5")
+    }), use.names = FALSE)
+  )
+  tsv_paths <- c(
+    Sys.getenv("PHENOMAPR_CRA001160_META", unset = ""),
+    unlist(lapply(roots, function(r) {
+      file.path(r, "vignettes", "PAAD_CRA001160_CellMetainfo_table.tsv")
+    }), use.names = FALSE)
+  )
+  h5_file <- .shiny_first_existing(h5_paths)
+  tsv_file <- .shiny_first_existing(tsv_paths)
+  if (!is.null(h5_file) && !is.null(tsv_file)) {
+    pool <- .load_shiny_demo_pool_from_h5_tsv(h5_file, tsv_file)
+  }
+
+  if (is.null(pool)) {
+    rds_paths <- unlist(lapply(roots, function(r) {
+      c(
+        file.path(r, "inst", "extdata", "vignette_subsets", "PAAD_CRA001160_seurat_subset.rds"),
+        file.path(r, "inst", "extdata", "shiny", "PAAD_CRA001160_demo_pool.rds"),
+        file.path(r, "vignette_subsets", "PAAD_CRA001160_seurat_subset.rds")
+      )
+    }), use.names = FALSE)
+    rds_paths <- c(
+      rds_paths,
+      Sys.getenv("PHENOMAPR_CRA001160_RDS", unset = ""),
+      system.file("extdata", "vignette_subsets", "PAAD_CRA001160_seurat_subset.rds",
+                  package = "PhenoMapR"),
+      system.file("extdata", "shiny", "PAAD_CRA001160_demo_pool.rds", package = "PhenoMapR")
+    )
+    rds_file <- .shiny_first_existing(rds_paths)
+    if (!is.null(rds_file)) {
+      pool <- .load_shiny_demo_pool_from_seurat(rds_file)
+    }
+  }
+
+  if (is.null(pool)) {
+    url <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", unset = "")
+    dest <- file.path(tempdir(), "PAAD_CRA001160_seurat_subset.rds")
+    dl_ok <- FALSE
+    if (nzchar(url)) {
+      dl_ok <- tryCatch({
+        utils::download.file(url, dest, quiet = TRUE, mode = "wb")
+        TRUE
+      }, error = function(e) FALSE)
+    }
+    if (!dl_ok && requireNamespace("googledrive", quietly = TRUE)) {
+      dl_ok <- tryCatch({
+        googledrive::drive_deauth()
+        googledrive::drive_download(
+          googledrive::as_id("14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb"),
+          path = dest,
+          overwrite = TRUE
+        )
+        TRUE
+      }, error = function(e) FALSE)
+    }
+    if (isTRUE(dl_ok) && file.exists(dest)) {
+      pool <- .load_shiny_demo_pool_from_seurat(dest)
+    }
+  }
+
+  if (!is.null(pool)) {
+    pool$source_info <- shiny_demo_source_info()
+    .shiny_demo_pool_cache$pool <- pool
+    return(pool)
+  }
+
+  NULL
+}
+
+#' Clear the in-memory CRA001160 demo pool cache (mainly for tests).
+#' @keywords internal
+clear_shiny_demo_pool_cache <- function() {
+  rm(list = ls(envir = .shiny_demo_pool_cache), envir = .shiny_demo_pool_cache)
+}
+
+#' @keywords internal
+.make_shiny_demo_dataset_synthetic <- function(n_genes = 500L, n_cells = 5000L, seed = 7L) {
+  set.seed(seed)
+  cell_types <- c("Acinar", "Ductal", "Macrophage", "CD8T", "Fibroblast")
+  sources <- c("Tumor", "Normal")
+  colnames_cells <- paste0("Cell_", seq_len(n_cells))
+  cell_type <- sample(cell_types, n_cells, replace = TRUE,
+                      prob = c(0.28, 0.22, 0.12, 0.18, 0.20))
+  source <- ifelse(cell_type %in% c("Acinar", "Ductal"),
+                   sample(sources, n_cells, replace = TRUE, prob = c(0.7, 0.3)),
+                   sample(sources, n_cells, replace = TRUE, prob = c(0.55, 0.45)))
+
+  hallmark <- c(
+    "TP53", "MYC", "EGFR", "BRCA1", "CDKN2A", "KRAS", "PIK3CA", "PTEN",
+    "MKI67", "CD68", "CD3D", "CD8A", "COL1A1", "KRT19", "AMY2A", "S100A8",
+    "FOXM1", "KLRB1", "CXCL8", "IL6", "VEGFA", "STAT1", "HLA-DRA", "GZMB"
+  )
+  precog_z <- .precog_pancreatic_gene_z()
+  precog_genes <- if (!is.null(precog_z)) {
+    names(precog_z)[abs(precog_z) >= 1]
+  } else {
+    character(0)
+  }
+  genes <- unique(c(hallmark, precog_genes))
+  if (length(genes) < n_genes) {
+    genes <- c(genes, paste0("GENE", seq_len(n_genes - length(genes))))
+  }
+  genes <- genes[seq_len(min(n_genes, length(genes)))]
+
+  base <- matrix(stats::rnorm(length(genes) * n_cells, mean = 0.45, sd = 0.3),
+                 nrow = length(genes), ncol = n_cells)
+  rownames(base) <- genes
+  colnames(base) <- colnames_cells
+
+  type_idx <- split(seq_len(n_cells), cell_type)
+  for (ct in names(type_idx)) {
+    bump_genes <- switch(
+      ct,
+      Acinar = c("AMY2A", "MYC"),
+      Ductal = c("KRT19", "FOXM1"),
+      Macrophage = c("CD68", "S100A8", "CXCL8"),
+      CD8T = c("CD3D", "CD8A", "GZMB", "KLRB1"),
+      Fibroblast = c("COL1A1", "IL6"),
+      character(0)
+    )
+    bump_genes <- intersect(bump_genes, genes)
+    for (g in bump_genes) {
+      base[g, type_idx[[ct]]] <- base[g, type_idx[[ct]]] +
+        stats::rnorm(length(type_idx[[ct]]), mean = 1.2, sd = 0.35)
+    }
+  }
+
+  expr <- pmax(base, 0)
+  zero_mask <- matrix(
+    stats::rbinom(length(expr), size = 1L, prob = 0.58),
+    nrow = nrow(expr), ncol = ncol(expr)
+  )
+  expr[zero_mask == 1L] <- 0
+
+  gene_var <- apply(expr, 1L, stats::var)
+  top_h <- order(gene_var, decreasing = TRUE)[seq_len(min(50L, nrow(expr)))]
+  cell_mat <- t(expr[top_h, , drop = FALSE])
+  pcs <- stats::prcomp(cell_mat, center = TRUE, scale. = TRUE)
+  umap1 <- pcs$x[, 1L] + stats::rnorm(n_cells, sd = 0.15)
+  umap2 <- if (ncol(pcs$x) >= 2L) {
+    pcs$x[, 2L] + stats::rnorm(n_cells, sd = 0.15)
+  } else {
+    stats::rnorm(n_cells, sd = 0.15)
+  }
+
+  metadata <- data.frame(
+    .cell_id = colnames_cells,
+    cell_type = cell_type,
+    cell_type_minor = cell_type,
+    Source = source,
+    UMAP_1 = umap1,
+    UMAP_2 = umap2,
+    stringsAsFactors = FALSE
+  )
+  expr <- .attach_demo_matrix_obsm(expr, metadata)
+  info <- shiny_demo_source_info()
+  info$title <- paste(info$title, "(synthetic fallback)")
+  info$n_cells_sampled <- n_cells
+  info$n_genes_sampled <- nrow(expr)
+  info$n_cells_pool <- n_cells
+  list(expression = expr, metadata = metadata, source_info = info, from = "synthetic")
+}
+
+#' Load the pre-built Shiny demo bundle (5,000 pre-selected CRA001160 cells).
+#'
+#' Falls back to building from the full CRA001160 pool or a synthetic matrix
+#' when the bundled RDS is unavailable (mainly for development).
+#'
+#' @return List with \code{expression}, \code{metadata}, and \code{source_info}.
+#' @keywords internal
+make_shiny_demo_dataset <- function(n_genes = 500L, n_cells = 5000L, seed = NULL) {
+  bundle_path <- .shiny_demo_bundle_path()
+  if (!is.null(bundle_path)) {
+    demo <- tryCatch(readRDS(bundle_path), error = function(e) NULL)
+    if (!is.null(demo) && !is.null(demo$expression) && !is.null(demo$metadata)) {
+      expr <- demo$expression
+      md <- demo$metadata
+      if (!"cell_type" %in% names(md) && "cell_type_minor" %in% names(md)) {
+        md$cell_type <- md$cell_type_minor
+      }
+      expr <- .attach_demo_matrix_obsm(expr, md)
+      info <- demo$source_info %||% shiny_demo_source_info()
+      info$is_presampled <- TRUE
+      info$n_cells_sampled <- ncol(expr)
+      info$n_genes_sampled <- nrow(expr)
+      return(list(
+        expression = expr,
+        metadata = md,
+        source_info = info,
+        from = demo$from %||% "CRA001160"
+      ))
+    }
+  }
+
+  pool <- load_shiny_demo_pool()
+  if (is.null(pool)) {
+    if (is.null(seed)) seed <- 20250625L
+    return(.make_shiny_demo_dataset_synthetic(n_genes = n_genes, n_cells = n_cells, seed = seed))
+  }
+
+  if (is.null(seed)) seed <- 20250625L
+  set.seed(seed)
+  cells <- colnames(pool$expression)
+  n_draw <- min(as.integer(n_cells), length(cells))
+  keep <- sample(cells, n_draw, replace = FALSE)
+
+  expr_sub <- pool$expression[, keep, drop = FALSE]
+  n_keep_genes <- min(as.integer(n_genes), nrow(expr_sub))
+  gene_var <- .shiny_row_var(expr_sub)
+  top_genes <- order(gene_var, decreasing = TRUE)[seq_len(n_keep_genes)]
+  expr <- if (inherits(expr_sub, "Matrix")) {
+    as.matrix(expr_sub[top_genes, , drop = FALSE])
+  } else {
+    expr_sub[top_genes, , drop = FALSE]
+  }
+
+  md <- pool$metadata[match(keep, pool$metadata$.cell_id), , drop = FALSE]
+  rownames(md) <- NULL
+  minor <- md$cell_type_minor
+  if (!is.null(minor)) md$cell_type <- as.character(minor)
+  expr <- .attach_demo_matrix_obsm(expr, md)
+
+  info <- pool$source_info
+  info$n_cells_pool <- length(cells)
+  info$n_cells_sampled <- n_draw
+  info$n_genes_sampled <- nrow(expr)
+  info$bundle_seed <- seed
+
+  list(
+    expression = expr,
+    metadata = md,
+    source_info = info,
+    from = pool$from
+  )
+}
+
 build_cell_table <- function(scores,
                               groups = NULL,
                               metadata = NULL,
                               cell_id_col = NULL,
                               cell_type_col = NULL,
-                              source_col = NULL) {
+                              source_col = NULL,
+                              score_column = NULL) {
   if (is.null(scores)) return(NULL)
   s <- as.data.frame(scores)
   s$cell_id <- rownames(scores)
-  score_name <- setdiff(colnames(s), "cell_id")[1L]
+  score_cols <- setdiff(colnames(s), "cell_id")
+  numeric_cols <- score_cols[vapply(s[score_cols], is.numeric, logical(1))]
+  if (!length(numeric_cols)) return(NULL)
+  score_name <- if (!is.null(score_column) && nzchar(score_column) &&
+                    score_column %in% numeric_cols) {
+    score_column
+  } else {
+    numeric_cols[1L]
+  }
   out <- data.frame(
     cell_id = s$cell_id,
     score   = as.numeric(s[[score_name]]),
@@ -2143,7 +2724,7 @@ build_cell_table <- function(scores,
   attr(out, "score_name") <- score_name
 
   if (!is.null(groups) && "cell_id" %in% colnames(groups)) {
-    grp_col <- grep("^phenotype_group_", colnames(groups), value = TRUE)[1L]
+    grp_col <- resolve_phenotype_group_column(groups, score_name)
     if (!is.na(grp_col)) {
       g <- data.frame(
         cell_id = as.character(groups$cell_id),

@@ -217,6 +217,34 @@ test_that("PhenoMap errors when pseudobulk TRUE but group_by NULL", {
   )
 })
 
+test_that("PhenoMap matrix pseudobulk aggregates with phenomapr_coldata", {
+  genes <- c("G1", "G2")
+  cells <- paste0("C", 1:4)
+  expr <- matrix(
+    c(1, 2, 3, 4, 5, 6, 7, 8),
+    nrow = 2,
+    ncol = 4,
+    dimnames = list(genes, cells)
+  )
+  coldata <- data.frame(
+    .cell_id = cells,
+    patient = c("P1", "P1", "P2", "P2"),
+    stringsAsFactors = FALSE
+  )
+  rownames(coldata) <- cells
+  attr(expr, "phenomapr_coldata") <- coldata
+  custom_ref <- data.frame(row.names = genes, s = c(1, -1))
+  scores <- PhenoMap(
+    expression = expr,
+    reference = custom_ref,
+    pseudobulk = TRUE,
+    group_by = "patient",
+    verbose = FALSE
+  )
+  expect_equal(nrow(scores), 2L)
+  expect_true(all(c("P1", "P2") %in% rownames(scores)))
+})
+
 test_that("PhenoMap with Seurat slot counts uses counts layer", {
   skip_if_not_installed("Seurat")
   data(precog, package = "PhenoMapR", envir = environment())

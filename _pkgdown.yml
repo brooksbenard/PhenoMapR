@@ -109,6 +109,9 @@ reference:
   desc: Derive reference z-scores from bulk expression and phenotype.
   contents:
   - derive_reference_from_bulk
+  - derive_meta_z_from_bulk_studies
+  - collapse_probes_to_genes
+  - preprocess_microarray_expression
   - plot_reference_signature
 - title: Phenotype group analysis
   desc: Define adverse/favorable groups and find marker genes.

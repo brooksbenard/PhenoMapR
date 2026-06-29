@@ -22,6 +22,7 @@ find_phenotype_markers(
   validate_expression_axes = TRUE,
   celltype_unique_genes = TRUE,
   celltype_contrast = c("within_cell_type", "vs_cohort_rest", "vs_opposite_tail"),
+  min_cells_per_tail = .MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS,
   ...
 )
 }
@@ -95,10 +96,10 @@ selects the reference cell population for each (cell type, phenotype tail)
 block. Three modes are available:
 \itemize{
 \item \code{"within_cell_type"} (default): reference is the \strong{same
-cell type} but in a different phenotype group. Most stringent --
-isolates phenotype-driven signal within a single cell-type identity.
-Returns empty for a (cell type, tail) pair when the same cell type
-does not exist outside that tail.
+cell type in the opposite phenotype tail} (e.g. adverse ductal vs
+favorable ductal). Only cell types with at least five cells in
+\strong{both} tails are tested (see \code{min_cells_per_tail}).
+Returns empty when the opposite tail lacks enough cells of that type.
 \item \code{"vs_cohort_rest"}: reference is \strong{every other cell}
 in the dataset with a non-missing phenotype label (other cell types
 AND the opposite tail). Most permissive; markers reflect both
@@ -110,6 +111,11 @@ cells, no favorable ductal cells) -- \code{"within_cell_type"} would
 return empty for ductal here; this contrast still surfaces the
 phenotype signal by comparing against the entire opposite tail.
 }}
+
+\item{min_cells_per_tail}{When \code{celltype_contrast = "within_cell_type"},
+minimum number of cells required in \strong{both} the Most Adverse and
+Most Favorable tails for each cell type before that type is tested
+(default \code{5}).}
 
 \item{...}{Additional arguments passed to \code{Seurat::FindMarkers} when input is a Seurat object (ignored for matrix/SCE/Matrix input).}
 }

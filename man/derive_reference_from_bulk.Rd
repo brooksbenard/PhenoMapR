@@ -13,6 +13,8 @@ derive_reference_from_bulk(
   survival_time = NULL,
   survival_event = NULL,
   normalize = TRUE,
+  platform = c("auto", "rnaseq", "microarray"),
+  probe_annotation = NULL,
   hugo_species = c("human", "mouse"),
   binary_positive_reference = c("second", "first"),
   verbose = TRUE
@@ -51,6 +53,17 @@ indicator (0/1 or FALSE/TRUE). Required when
 
 \item{normalize}{Logical. If \code{TRUE}, run normalization when expression
 looks like counts (default \code{TRUE}). Set \code{FALSE} to skip.}
+
+\item{platform}{One of \code{"auto"}, \code{"rnaseq"}, or \code{"microarray"}.
+Microarray inputs follow the PRECOG preprocessing strategy: optional
+probe-to-gene mapping, log2 transform when needed, removal of zero-variance
+genes and samples/genes with heavy missingness, per-study quantile
+normalization, and per-gene unit variance scaling across samples.
+RNA-seq inputs use log2(CPM+1) when the matrix looks like raw counts.}
+
+\item{probe_annotation}{Optional data.frame with probe IDs and gene symbols
+(required for probe-level microarray matrices unless row names are already
+gene symbols). See \code{\link{collapse_probes_to_genes}}.}
 
 \item{hugo_species}{Character. Species for HUGO symbol cleaning:
 \code{"human"} or \code{"mouse"} (default \code{"human"}).}

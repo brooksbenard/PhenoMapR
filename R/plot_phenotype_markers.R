@@ -31,6 +31,14 @@
 #' @param heatmap_type \code{"global"} (cell-type agnostic markers) or
 #'   \code{"cell_type_specific"} (markers per cell type from
 #'   \code{marker_scope = "cell_type_specific"}).
+#' @param celltype_contrast When \code{heatmap_type = "cell_type_specific"},
+#'   must match the \code{celltype_contrast} used in
+#'   \code{\link{find_phenotype_markers}()}. \code{"within_cell_type"} keeps
+#'   only cell types with enough cells in \strong{both} phenotype tails and
+#'   requires marker genes in both tails before a type is drawn.
+#'   \code{"vs_opposite_tail"} and \code{"vs_cohort_rest"} draw each
+#'   (cell type, phenotype tail) block independently when marker tables
+#'   contain genes for that block (default \code{"vs_opposite_tail"}).
 #' @param top_n_markers Maximum number of genes to keep per contrast block (per tail
 #'   for global; per phenotype bin \eqn{\times} cell type for cell-type-specific).
 #' @param rank_by How to rank genes when selecting the top markers for the heatmap.
@@ -128,6 +136,9 @@ plot_phenotype_markers <- function(markers,
                                    celltype_palette = NULL,
                                    color_schemes = NULL,
                                    heatmap_type = c("global", "cell_type_specific"),
+                                   celltype_contrast = c("vs_opposite_tail",
+                                                         "within_cell_type",
+                                                         "vs_cohort_rest"),
                                    top_n_markers = 20L,
                                    rank_by = c("lfc", "p_adj"),
                                    n_mark_labels = 5L,
@@ -144,6 +155,13 @@ plot_phenotype_markers <- function(markers,
                                    block_outline_color = "white",
                                    block_outline_lwd = 1) {
   heatmap_type <- match.arg(heatmap_type)
+  if (heatmap_type == "cell_type_specific") {
+    celltype_contrast <- match.arg(celltype_contrast)
+  } else {
+    celltype_contrast <- celltype_contrast[1L]
+  }
+  use_paired_ct_marker_blocks <- heatmap_type == "cell_type_specific" &&
+    identical(celltype_contrast, "within_cell_type")
   rank_by <- match.arg(rank_by)
   if (!is.character(block_outline_color) ||
       length(block_outline_color) != 1L ||
@@ -171,11 +189,19 @@ plot_phenotype_markers <- function(markers,
 
   adverse_df <- markers$adverse_markers
   favorable_df <- markers$favorable_markers
-  if (is.null(adverse_df) || is.null(favorable_df) ||
-      nrow(adverse_df) == 0L || nrow(favorable_df) == 0L) {
+  if (heatmap_type == "global") {
+    if (is.null(adverse_df) || is.null(favorable_df) ||
+        nrow(adverse_df) == 0L || nrow(favorable_df) == 0L) {
+      message("Marker tables are empty; skipping heatmap.")
+      return(invisible(NULL))
+    }
+  } else if ((is.null(adverse_df) || nrow(adverse_df) == 0L) &&
+             (is.null(favorable_df) || nrow(favorable_df) == 0L)) {
     message("Marker tables are empty; skipping heatmap.")
     return(invisible(NULL))
   }
+  if (is.null(adverse_df)) adverse_df <- data.frame()
+  if (is.null(favorable_df)) favorable_df <- data.frame()
 
   if (is.null(scale_clip)) {
     scale_clip <- if (heatmap_type == "global") c(-3, 3) else c(-5, 5)
@@ -254,6 +280,17 @@ plot_phenotype_markers <- function(markers,
   } else {
     character(0)
   }
+  # Marker row blocks: within_cell_type requires both tails; other contrasts
+  # draw each (cell type, phenotype tail) block when markers exist.
+  marker_celltype_levels <- if (use_paired_ct_marker_blocks && has_celltype) {
+    both_tail_cts <- .cell_types_in_both_phenotype_tails(
+      meta[[group_col]], meta[[celltype_col]],
+      min_cells = .MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS
+    )
+    intersect(hm_celltype_levels, both_tail_cts)
+  } else {
+    hm_celltype_levels
+  }
   # `show_celltype_strip` controls whether the *visual* cell-type strip
   # annotation (and its associated legend tile) is rendered on the
   # heatmap. It is independent of `has_celltype`, which still gates
@@ -266,10 +303,14 @@ plot_phenotype_markers <- function(markers,
   # single-celltype badge floating next to the main legend column --
   # despite `show_legend = FALSE` on the parent HeatmapAnnotation /
   # rowAnnotation in some ComplexHeatmap versions. Skipping the
-  # strip entirely (in BOTH global and cell_type_specific modes) is
-  # the most robust way to suppress that artifact: no anno_simple
-  # for cell type means no auto-legend to leak.
-  show_celltype_strip <- has_celltype && length(hm_celltype_levels) > 1L
+  # strip entirely in *global* mode when there is only one level is
+  # the most robust way to suppress that artifact. Cell-type-specific
+  # heatmaps always show the strip (even for a single qualifying type)
+  # because the annotation is part of the intended layout.
+  show_celltype_strip <- has_celltype && (
+    heatmap_type == "cell_type_specific" ||
+    length(hm_celltype_levels) > 1L
+  )
   # Preserve the long-standing global-mode behaviour: when the cell
   # type has a single level, the global heatmap also drops the
   # has_celltype gate so legend code paths that take the "no cell
@@ -310,9 +351,18 @@ plot_phenotype_markers <- function(markers,
   expr_colors <- .resolve_expression_colors(schemes$expression, n = 11L)
 
   if (has_celltype) {
+    # Column annotations use every cell type on the heatmap; the palette must
+    # cover those levels even when marker row blocks use a smaller both-tails
+    # subset (marker_celltype_levels).
+    pal_levels <- hm_celltype_levels
+    if (show_celltype_strip) {
+      ct_ann <- as.character(meta[[celltype_col]][meta_idx_hm])
+      ct_ann <- ct_ann[!is.na(ct_ann) & nzchar(ct_ann)]
+      pal_levels <- sort(unique(c(hm_celltype_levels, ct_ann)))
+    }
     pal_celltype <- .resolve_celltype_palette_from_spec(
       schemes$celltype,
-      hm_celltype_levels,
+      pal_levels,
       override = celltype_palette
     )
     pal_celltype[is.na(pal_celltype)] <- "#BBBBBB"
@@ -565,32 +615,74 @@ plot_phenotype_markers <- function(markers,
       )
     )
   } else {
-    # cell_type_specific
+    # cell_type_specific — row order: all favorable tail blocks, then all
+    # adverse tail blocks (phenotype outer loop); cell types nested within.
     gene_info <- list()
-    for (g in hm_group_levels) {
-      if (!g %in% c("Most Adverse", "Most Favorable")) next
-      for (ct in hm_celltype_levels) {
-        df_ct <- if (g == "Most Adverse") {
-          adverse_df[adverse_df$cell_type == ct, , drop = FALSE]
-        } else {
-          favorable_df[favorable_df$cell_type == ct, , drop = FALSE]
-        }
-        if (nrow(df_ct) == 0L) next
-        top_g <- .pick_marker_genes(
-          df_ct,
+    if (use_paired_ct_marker_blocks) {
+      paired_marker_genes <- list()
+      for (ct in marker_celltype_levels) {
+        fav_df <- favorable_df[favorable_df$cell_type == ct, , drop = FALSE]
+        adv_df <- adverse_df[adverse_df$cell_type == ct, , drop = FALSE]
+        top_fav <- .pick_marker_genes(
+          fav_df,
           n_keep = top_n_markers,
           p_adj_threshold = p_adj_threshold,
           rank_by = rank_by,
           valid_genes = gene_ids
         )
-        if (length(top_g) == 0L) next
-        gene_info[[length(gene_info) + 1L]] <- data.frame(
-          gene = top_g,
-          cell_type = ct,
-          phenotype_bin = g,
-          row_id = paste(ct, g, top_g, sep = "__"),
-          stringsAsFactors = FALSE
+        top_adv <- .pick_marker_genes(
+          adv_df,
+          n_keep = top_n_markers,
+          p_adj_threshold = p_adj_threshold,
+          rank_by = rank_by,
+          valid_genes = gene_ids
         )
+        if (length(top_fav) == 0L || length(top_adv) == 0L) next
+        paired_marker_genes[[ct]] <- list(favorable = top_fav, adverse = top_adv)
+      }
+      for (g in hm_group_levels) {
+        if (!g %in% c("Most Adverse", "Most Favorable")) next
+        for (ct in names(paired_marker_genes)) {
+          top_g <- if (g == "Most Adverse") {
+            paired_marker_genes[[ct]]$adverse
+          } else {
+            paired_marker_genes[[ct]]$favorable
+          }
+          gene_info[[length(gene_info) + 1L]] <- data.frame(
+            gene = top_g,
+            cell_type = ct,
+            phenotype_bin = g,
+            row_id = paste(ct, g, top_g, sep = "__"),
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+    } else {
+      for (g in hm_group_levels) {
+        if (!g %in% c("Most Adverse", "Most Favorable")) next
+        for (ct in marker_celltype_levels) {
+          df_ct <- if (g == "Most Adverse") {
+            adverse_df[adverse_df$cell_type == ct, , drop = FALSE]
+          } else {
+            favorable_df[favorable_df$cell_type == ct, , drop = FALSE]
+          }
+          if (nrow(df_ct) == 0L) next
+          top_g <- .pick_marker_genes(
+            df_ct,
+            n_keep = top_n_markers,
+            p_adj_threshold = p_adj_threshold,
+            rank_by = rank_by,
+            valid_genes = gene_ids
+          )
+          if (length(top_g) == 0L) next
+          gene_info[[length(gene_info) + 1L]] <- data.frame(
+            gene = top_g,
+            cell_type = ct,
+            phenotype_bin = g,
+            row_id = paste(ct, g, top_g, sep = "__"),
+            stringsAsFactors = FALSE
+          )
+        }
       }
     }
 
@@ -1287,7 +1379,14 @@ plot_phenotype_markers <- function(markers,
   }
   # Default: keep significant positive-effect markers; ordering controlled by rank_by.
   df <- df[is.finite(df$avg_log2FC) & is.finite(df$p_adj), , drop = FALSE]
-  df <- df[df$p_adj < p_adj_threshold & df$avg_log2FC > 0, , drop = FALSE]
+  df_fdr <- df[df$p_adj < p_adj_threshold & df$avg_log2FC > 0, , drop = FALSE]
+  if (nrow(df_fdr) == 0L && "p_val" %in% names(df)) {
+    # Small cohorts often fail BH-FDR while raw p-values remain
+    # significant (same genes returned by find_phenotype_markers()).
+    df <- df[df$p_val < p_adj_threshold & df$avg_log2FC > 0, , drop = FALSE]
+  } else {
+    df <- df_fdr
+  }
   if (nrow(df) == 0L) {
     return(character(0))
   }

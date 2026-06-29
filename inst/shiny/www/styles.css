@@ -524,6 +524,62 @@ table.dataTable thead th {
   margin-bottom: 0;
 }
 
+/* Phenotype tail labels app-wide (Most Phenotype + = red, − = blue). */
+.phenomapr-phenotype-plus {
+  color: #B2182B;
+  font-weight: 600;
+}
+.phenomapr-phenotype-minus {
+  color: #2166AC;
+  font-weight: 600;
+}
+.nav-tabs .nav-link .phenomapr-phenotype-plus,
+.nav-tabs .nav-link.active .phenomapr-phenotype-plus,
+.nav-tabs .nav-link[aria-selected="true"] .phenomapr-phenotype-plus {
+  color: #B2182B;
+}
+.nav-tabs .nav-link .phenomapr-phenotype-minus,
+.nav-tabs .nav-link.active .phenomapr-phenotype-minus,
+.nav-tabs .nav-link[aria-selected="true"] .phenomapr-phenotype-minus {
+  color: #2166AC;
+}
+.shiny-input-radiogroup .phenomapr-phenotype-plus,
+.shiny-notification .phenomapr-phenotype-plus,
+.help-block .phenomapr-phenotype-plus,
+.tag-table .phenomapr-phenotype-plus,
+.phenomapr-about-markers-text .phenomapr-phenotype-plus {
+  color: #B2182B;
+  font-weight: 600;
+}
+.shiny-input-radiogroup .phenomapr-phenotype-minus,
+.shiny-notification .phenomapr-phenotype-minus,
+.help-block .phenomapr-phenotype-minus,
+.tag-table .phenomapr-phenotype-minus,
+.phenomapr-about-markers-text .phenomapr-phenotype-minus {
+  color: #2166AC;
+  font-weight: 600;
+}
+.shiny-input-container label .phenomapr-phenotype-plus,
+.phenomapr-hm-colors-details label .phenomapr-phenotype-plus {
+  color: #B2182B;
+  font-weight: 600;
+}
+.shiny-input-container label .phenomapr-phenotype-minus,
+.phenomapr-hm-colors-details label .phenomapr-phenotype-minus {
+  color: #2166AC;
+  font-weight: 600;
+}
+.card-header .phenomapr-phenotype-plus,
+.card .card-header .phenomapr-phenotype-plus {
+  color: #B2182B;
+  font-weight: 600;
+}
+.card-header .phenomapr-phenotype-minus,
+.card .card-header .phenomapr-phenotype-minus {
+  color: #2166AC;
+  font-weight: 600;
+}
+
 /* Markers tab "Marker-gene heatmap" sub-section in the sidebar.
  * Tighten the heading + helpText + two numericInputs + Draw button
  * so the whole heatmap-control unit reads as one tight grouping
@@ -1355,6 +1411,40 @@ details.metadata-upload-details-prompt {
   font-style: italic;
 }
 
+/* Welcome page intro + step copy */
+.welcome-intro {
+  margin-bottom: 0.25rem;
+  line-height: 1.55;
+  color: #3d4f58;
+}
+.welcome-intro p > a.welcome-intro-ref-link {
+  display: inline;
+  color: #264653;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.welcome-intro p > a.welcome-intro-ref-link .fa,
+.welcome-intro p > a.welcome-intro-ref-link .fas {
+  color: #2A9D8F;
+  font-size: 0.9em;
+}
+.welcome-intro p > a.welcome-intro-ref-link:hover,
+.welcome-intro p > a.welcome-intro-ref-link:focus-visible {
+  color: #2A9D8F;
+  text-decoration: underline;
+}
+.welcome-step-desc .phenomapr-phenotype-plus,
+.welcome-intro .phenomapr-phenotype-plus {
+  color: #B2182B;
+  font-weight: 600;
+}
+.welcome-step-desc .phenomapr-phenotype-minus,
+.welcome-intro .phenomapr-phenotype-minus {
+  color: #2166AC;
+  font-weight: 600;
+}
+
 /* --- Welcome page sections -----------------------------------------------
  * Two card-style panels: a "How to use this app" stepper and a
  * "Server / remote use" companion. Both share the same header/body chrome
@@ -1583,7 +1673,15 @@ details.metadata-upload-details-prompt {
   font-size: 0.88em;
   color: #264653;
 }
-.welcome-step-desc strong { color: #264653; }
+.welcome-step-desc strong:not(.ref-name) { color: #264653; }
+.welcome-step-desc .ref-name-precog,
+.welcome-intro .ref-name-precog { color: #264653; }
+.welcome-step-desc .ref-name-tcga,
+.welcome-intro .ref-name-tcga { color: #6c757d; }
+.welcome-step-desc .ref-name-pediatric,
+.welcome-intro .ref-name-pediatric { color: #C0633A; }
+.welcome-step-desc .ref-name-ici,
+.welcome-intro .ref-name-ici { color: #5C9942; }
 .welcome-step-desc em { color: #4a5b66; }
 
 /* Markers tab — empty-state hint shown before the user has clicked
@@ -2373,6 +2471,20 @@ a.btn.phenomapr-panel-download-btn.shiny-download-link:focus-visible {
  * as a clickable header even though it now lives inside `card_body` (we
  * had to demote the header to make room for native disclosure semantics).
  */
+.phenomapr-demo-source-body {
+  padding: 0.85rem 1rem 0.95rem;
+  font-size: 0.9rem;
+  color: #3d4f5c;
+}
+.phenomapr-demo-source-body > p {
+  margin: 0 0 0.55rem;
+}
+.phenomapr-demo-source-body > p:last-child {
+  margin-bottom: 0;
+}
+.phenomapr-demo-source-details {
+  margin-top: 0.35rem;
+}
 .phenomapr-about-markers-details {
   margin: 0;
 }

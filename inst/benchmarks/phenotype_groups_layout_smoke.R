@@ -130,15 +130,16 @@ stopifnot_msg(pg_match > 0,
               "'About phenotype tails' + 'Group sizes' live inside layout_columns(6,6)")
 
 ## --- 5. "Most Phenotype +/-" replacement landed everywhere -----------------
-## Home-page hero now uses the new strong-wrapped labels.
+## Phenotype tail labels use shared helpers + CSS classes app-wide.
 stopifnot_msg(
-  grepl("<strong>Most Phenotype \\+</strong>", app_src),
-  "home hero replaces 'Most Adverse' with bold 'Most Phenotype +'"
+  grepl("phenomapr_phenotype_plus", app_src, fixed = TRUE) &&
+  grepl("phenomapr_phenotype_minus", app_src, fixed = TRUE),
+  "app.R defines phenomapr_phenotype_plus/minus label helpers"
 )
 stopifnot_msg(
-  grepl("<strong>Most Phenotype &minus;</strong>", app_src,
-        fixed = TRUE),
-  "home hero replaces 'Most Favorable' with bold 'Most Phenotype \u2212'"
+  grepl('class = "phenomapr-phenotype-plus"', app_src, fixed = TRUE) &&
+  grepl('class = "phenomapr-phenotype-minus"', app_src, fixed = TRUE),
+  "app.R uses phenomapr-phenotype-plus/minus CSS classes"
 )
 stopifnot_msg(
   !grepl("<strong>Most Adverse</strong>", app_src, fixed = TRUE) &&
@@ -146,16 +147,11 @@ stopifnot_msg(
   "no stale <strong>Most Adverse/Favorable</strong> remain in app.R"
 )
 
-## "About phenotype tails" markdown uses the renamed terms.
-## We accept either the bare Unicode minus (U+2212) or the R-source
-## escape `\u2212` in the file's bytes -- both R parse to the same
-## char at app load time, and StrReplace edits emitted the escape
-## form rather than the literal Unicode char.
+## "About phenotype tails" copy uses the renamed terms via helpers.
 stopifnot_msg(
-  grepl("**Most Phenotype +**", app_src, fixed = TRUE) &&
-  (grepl("**Most Phenotype \u2212**", app_src, fixed = TRUE) ||
-   grepl("**Most Phenotype \\u2212**", app_src, fixed = TRUE)),
-  "About-phenotype-tails markdown uses **Most Phenotype +/-**"
+  grepl("phenomapr_phenotype_plus\\(\\)", app_src, perl = TRUE) &&
+  grepl("phenomapr_phenotype_minus\\(\\)", app_src, perl = TRUE),
+  "About-phenotype-tails card uses phenomapr_phenotype_plus/minus"
 )
 stopifnot_msg(
   !grepl("**Most Adverse**", app_src, fixed = TRUE) &&
@@ -163,11 +159,11 @@ stopifnot_msg(
   "no stale **Most Adverse/Favorable** in app.R markdown"
 )
 
-## Sidebar Phenotype-groups helpText now uses bold +/- labels.
+## Sidebar Phenotype-groups helpText now uses colored +/- labels.
 stopifnot_msg(
-  grepl("<strong>Most Phenotype +</strong>", app_src, fixed = TRUE) &&
-  grepl("<strong>Most Phenotype &minus;</strong>", app_src, fixed = TRUE),
-  "sidebar Phenotype groups helpText uses <strong>Most Phenotype +/-</strong>"
+  grepl("phenomapr_phenotype_plus\\(\\)", app_src, perl = TRUE) &&
+  grepl("automatically tagged as", app_src, fixed = TRUE),
+  "sidebar Phenotype groups helpText uses phenomapr_phenotype_plus/minus"
 )
 
 ## Plots remap the LEGEND labels but keep the underlying data values.
@@ -233,20 +229,18 @@ stopifnot_msg(
 ## Re-create the remap that lives in output$group_summary so we can
 ## prove it is purely cosmetic: it builds NEW HTML strings for the
 ## table cells, but the underlying state$groups vector is untouched.
+plus_lbl <- as.character(helpers_env$phenomapr_phenotype_plus())
+minus_lbl <- as.character(helpers_env$phenomapr_phenotype_minus())
 display_map <- c(
-  "Most Adverse"   = "<strong>Most Phenotype +</strong>",
-  "Most Favorable" = "<strong>Most Phenotype &minus;</strong>",
+  "Most Adverse"   = plus_lbl,
+  "Most Favorable" = minus_lbl,
   "Other"          = "Other"
 )
 raw <- c("Most Adverse", "Most Favorable", "Other", "Most Adverse")
 mapped <- display_map[raw]
 stopifnot_msg(
-  identical(unname(mapped),
-            c("<strong>Most Phenotype +</strong>",
-              "<strong>Most Phenotype &minus;</strong>",
-              "Other",
-              "<strong>Most Phenotype +</strong>")),
-  "group_summary remap maps canonical strings to bold display labels"
+  identical(unname(mapped), c(plus_lbl, minus_lbl, "Other", plus_lbl)),
+  "group_summary remap maps canonical strings to colored display labels"
 )
 stopifnot_msg(
   identical(raw,
@@ -267,12 +261,12 @@ tbl_df[["Phenotype group"]] <- lapply(
 )
 rendered <- as.character(tt(tbl_df))
 stopifnot_msg(
-  grepl("<strong>Most Phenotype +</strong>", rendered, fixed = TRUE),
-  "rendered group_summary table contains <strong>Most Phenotype +</strong>"
+  grepl("phenomapr-phenotype-plus", rendered, fixed = TRUE),
+  "rendered group_summary table contains phenomapr-phenotype-plus label"
 )
 stopifnot_msg(
-  grepl("<strong>Most Phenotype &minus;</strong>", rendered, fixed = TRUE),
-  "rendered group_summary table contains <strong>Most Phenotype \u2212</strong>"
+  grepl("phenomapr-phenotype-minus", rendered, fixed = TRUE),
+  "rendered group_summary table contains phenomapr-phenotype-minus label"
 )
 stopifnot_msg(
   !grepl("Most Adverse", rendered, fixed = TRUE) &&

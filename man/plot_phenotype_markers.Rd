@@ -15,6 +15,7 @@ plot_phenotype_markers(
   celltype_palette = NULL,
   color_schemes = NULL,
   heatmap_type = c("global", "cell_type_specific"),
+  celltype_contrast = c("vs_opposite_tail", "within_cell_type", "vs_cohort_rest"),
   top_n_markers = 20L,
   rank_by = c("lfc", "p_adj"),
   n_mark_labels = 5L,
@@ -66,6 +67,15 @@ See \code{\link{list_marker_heatmap_color_palettes}()} for built-in options.}
 \item{heatmap_type}{\code{"global"} (cell-type agnostic markers) or
 \code{"cell_type_specific"} (markers per cell type from
 \code{marker_scope = "cell_type_specific"}).}
+
+\item{celltype_contrast}{When \code{heatmap_type = "cell_type_specific"},
+must match the \code{celltype_contrast} used in
+\code{\link{find_phenotype_markers}()}. \code{"within_cell_type"} keeps
+only cell types with enough cells in \strong{both} phenotype tails and
+requires marker genes in both tails before a type is drawn.
+\code{"vs_opposite_tail"} and \code{"vs_cohort_rest"} draw each
+(cell type, phenotype tail) block independently when marker tables
+contain genes for that block (default \code{"vs_opposite_tail"}).}
 
 \item{top_n_markers}{Maximum number of genes to keep per contrast block (per tail
 for global; per phenotype bin \eqn{\times} cell type for cell-type-specific).}

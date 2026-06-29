@@ -18,7 +18,7 @@ process_expression_input <- function(expression,
   }
 
   result <- switch(input_type,
-    "matrix" = process_matrix(expression, verbose = verbose),
+    "matrix" = process_matrix(expression, pseudobulk, group_by, verbose = verbose),
     "seurat" = process_seurat(expression, pseudobulk, group_by, assay, slot, genes_to_extract),
     # nocov start - spatial Seurat (slot=counts) not in default tests
     "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot = "counts", genes_to_extract = genes_to_extract),
@@ -131,10 +131,48 @@ validate_expression_axes_and_ids <- function(mat, verbose = TRUE) {
 }
 
 
+#' Sum expression columns by group (pseudobulk for plain matrices).
+#'
+#' @param mat Gene-by-cell expression matrix.
+#' @param groups Character/factor vector aligned to matrix columns.
+#' @return Aggregated gene-by-group matrix.
+#' @keywords internal
+.aggregate_matrix_pseudobulk <- function(mat, groups) {
+  groups <- as.character(groups)
+  ok <- !is.na(groups) & nzchar(groups)
+  if (!any(ok)) {
+    stop("No non-NA values in grouping vector for pseudobulk aggregation")
+  }
+  mat <- mat[, ok, drop = FALSE]
+  groups <- groups[ok]
+  grp_u <- unique(groups)
+  if (length(grp_u) < 1L) {
+    stop("No non-NA values in grouping vector for pseudobulk aggregation")
+  }
+
+  agg_cols <- lapply(grp_u, function(g) {
+    cells <- which(groups == g)
+    if (inherits(mat, "Matrix") || inherits(mat, "sparseMatrix")) {
+      Matrix::rowSums(mat[, cells, drop = FALSE])
+    } else {
+      rowSums(mat[, cells, drop = FALSE])
+    }
+  })
+  agg_matrix <- do.call(cbind, agg_cols)
+  colnames(agg_matrix) <- as.character(grp_u)
+  rownames(agg_matrix) <- rownames(mat)
+  if (inherits(mat, "Matrix") || inherits(mat, "sparseMatrix")) {
+    agg_matrix
+  } else {
+    as.matrix(agg_matrix)
+  }
+}
+
+
 #' Process Matrix Input
 #'
 #' @keywords internal
-process_matrix <- function(mat, verbose = TRUE) {
+process_matrix <- function(mat, pseudobulk = FALSE, group_by = NULL, verbose = TRUE) {
 
   if (is.data.frame(mat)) {
     mat <- as.matrix(mat)
@@ -144,6 +182,42 @@ process_matrix <- function(mat, verbose = TRUE) {
 
   if (is.null(rownames(mat))) {
     stop("Matrix must have gene names as rownames")
+  }
+
+  if (isTRUE(pseudobulk)) {
+    if (is.null(group_by)) {
+      stop("group_by must be specified for pseudobulk aggregation")
+    }
+    coldata <- attr(mat, "phenomapr_coldata")
+    if (is.null(coldata) || !is.data.frame(coldata)) {
+      stop(
+        "Pseudobulk for a plain matrix requires cell metadata attached as ",
+        "attr(expression, 'phenomapr_coldata') with a column named '",
+        group_by, "'"
+      )
+    }
+    if (!group_by %in% colnames(coldata)) {
+      stop(glue::glue("'{group_by}' not found in matrix colData"))
+    }
+    cells <- colnames(mat)
+    if (is.null(cells) || !length(cells)) {
+      stop("Matrix must have cell/sample names as colnames for pseudobulk aggregation")
+    }
+    if (!is.null(rownames(coldata)) && all(cells %in% rownames(coldata))) {
+      coldata <- coldata[cells, , drop = FALSE]
+    } else if (".cell_id" %in% colnames(coldata)) {
+      idx <- match(cells, coldata$.cell_id)
+      if (anyNA(idx)) {
+        stop("Matrix colnames do not match phenomapr_coldata .cell_id values")
+      }
+      coldata <- coldata[idx, , drop = FALSE]
+    } else if (nrow(coldata) == length(cells)) {
+      rownames(coldata) <- cells
+    } else {
+      stop("Cannot align matrix columns to phenomapr_coldata for pseudobulk aggregation")
+    }
+    grp_vec <- coldata[[group_by]]
+    mat <- .aggregate_matrix_pseudobulk(mat, grp_vec)
   }
 
   list(
