@@ -214,8 +214,8 @@ gc(verbose = FALSE)
 ```
 
     ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells  4380533 234.0    7847892 419.2   7847892 419.2
-    ## Vcells 11224509  85.7  126562432 965.6 126219433 963.0
+    ## Ncells  4389934 234.5    7858695 419.7   7858695 419.7
+    ## Vcells 11269941  86.0  126614764 966.0 126265328 963.4
 
 ``` r
 
@@ -944,7 +944,7 @@ sessionInfo()
     ## 
     ## other attached packages:
     ## [1] ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1        ggplot2_4.0.3     
-    ## [5] Seurat_5.5.0       SeuratObject_5.4.0 sp_2.2-1           PhenoMapR_0.1.0   
+    ## [5] Seurat_5.5.1       SeuratObject_5.4.0 sp_2.2-1           PhenoMapR_0.1.0   
     ## [9] testthat_3.3.2    
     ## 
     ## loaded via a namespace (and not attached):
@@ -957,7 +957,7 @@ sessionInfo()
     ##  [19] sctransform_0.4.3      parallelly_1.47.0      KernSmooth_2.23-26    
     ##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            
     ##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         
-    ##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.2          
+    ##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.3          
     ##  [31] iterators_1.0.14       mime_0.13              lifecycle_1.0.5       
     ##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              
     ##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    
@@ -984,7 +984,7 @@ sessionInfo()
     ## [100] splines_4.6.1          lattice_0.22-9         survival_3.8-6        
     ## [103] deldir_2.0-4           tidyselect_1.2.1       ComplexHeatmap_2.28.0 
     ## [106] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            
-    ## [109] gridExtra_2.3          IRanges_2.46.0         scattermore_1.2       
+    ## [109] gridExtra_2.3.1        IRanges_2.46.0         scattermore_1.2       
     ## [112] stats4_4.6.1           xfun_0.59              statmod_1.5.2         
     ## [115] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         
     ## [118] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        

@@ -68,6 +68,12 @@ Derive reference z-scores from bulk expression and phenotype.
 
 - [`derive_reference_from_bulk()`](https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.md)
   : Derive Reference Z-Scores from Bulk Expression and Phenotype
+- [`derive_meta_z_from_bulk_studies()`](https://brooksbenard.github.io/PhenoMapR/reference/derive_meta_z_from_bulk_studies.md)
+  : Derive a pan-cohort meta-z reference from multiple bulk studies
+- [`collapse_probes_to_genes()`](https://brooksbenard.github.io/PhenoMapR/reference/collapse_probes_to_genes.md)
+  : Collapse probe-level microarray expression to gene symbols
+- [`preprocess_microarray_expression()`](https://brooksbenard.github.io/PhenoMapR/reference/preprocess_microarray_expression.md)
+  : PRECOG-style microarray preprocessing (genes x samples)
 - [`plot_reference_signature()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_reference_signature.md)
   : Plot reference signature z-scores as a 1xN heatmap
 

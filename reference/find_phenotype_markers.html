@@ -81,6 +81,7 @@ available, else base R) and does not require Seurat.</p>
 <span>  validate_expression_axes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  celltype_unique_genes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  celltype_contrast <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"within_cell_type"</span>, <span class="st">"vs_cohort_rest"</span>, <span class="st">"vs_opposite_tail"</span><span class="op">)</span>,</span>
+<span>  min_cells_per_tail <span class="op">=</span> <span class="va">.MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -187,10 +188,10 @@ blocks. Set to <code>FALSE</code> to retain all significant hits per block.</p><
 <dd><p>When <code>marker_scope = "cell_type_specific"</code>,
 selects the reference cell population for each (cell type, phenotype tail)
 block. Three modes are available:</p><ul><li><p><code>"within_cell_type"</code> (default): reference is the <strong>same
-cell type</strong> but in a different phenotype group. Most stringent –
-isolates phenotype-driven signal within a single cell-type identity.
-Returns empty for a (cell type, tail) pair when the same cell type
-does not exist outside that tail.</p></li>
+cell type in the opposite phenotype tail</strong> (e.g. adverse ductal vs
+favorable ductal). Only cell types with at least five cells in
+<strong>both</strong> tails are tested (see <code>min_cells_per_tail</code>).
+Returns empty when the opposite tail lacks enough cells of that type.</p></li>
 <li><p><code>"vs_cohort_rest"</code>: reference is <strong>every other cell</strong>
 in the dataset with a non-missing phenotype label (other cell types
 AND the opposite tail). Most permissive; markers reflect both
@@ -202,6 +203,13 @@ cells, no favorable ductal cells) – <code>"within_cell_type"</code> would
 return empty for ductal here; this contrast still surfaces the
 phenotype signal by comparing against the entire opposite tail.</p></li>
 </ul></dd>
+
+
+<dt id="arg-min-cells-per-tail">min_cells_per_tail<a class="anchor" aria-label="anchor" href="#arg-min-cells-per-tail"></a></dt>
+<dd><p>When <code>celltype_contrast = "within_cell_type"</code>,
+minimum number of cells required in <strong>both</strong> the Most Adverse and
+Most Favorable tails for each cell type before that type is tested
+(default <code>5</code>).</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

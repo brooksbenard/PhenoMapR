@@ -359,7 +359,7 @@ sessionInfo()
     ## [45] grid_4.6.1         cli_3.6.6          magrittr_2.0.5     broom_1.0.13      
     ## [49] withr_3.0.3        scales_1.4.0       backports_1.5.1    googledrive_2.1.2 
     ## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
-    ## [57] gridExtra_2.3      ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
+    ## [57] gridExtra_2.3.1    ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
     ## [61] knitr_1.51         markdown_2.0       rlang_1.2.0        gridtext_0.1.6    
     ## [65] Rcpp_1.1.1-1.1     glue_1.8.1         xml2_1.6.0         jsonlite_2.0.0    
     ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.1.0

@@ -1155,7 +1155,7 @@ sessionInfo()
     ## other attached packages:
     ##  [1] purrr_1.2.2           ggsignif_0.6.4        ggchicklet2_0.7.0    
     ##  [4] circlize_0.4.18       ComplexHeatmap_2.28.0 patchwork_1.3.2      
-    ##  [7] Seurat_5.5.0          SeuratObject_5.4.0    sp_2.2-1             
+    ##  [7] Seurat_5.5.1          SeuratObject_5.4.0    sp_2.2-1             
     ## [10] dplyr_1.2.1           ggpubr_0.6.3          ggplot2_4.0.3        
     ## [13] googledrive_2.1.2     PhenoMapR_0.1.0       testthat_3.3.2       
     ## 
@@ -1183,7 +1183,7 @@ sessionInfo()
     ##  [61] survival_3.8-6         iterators_1.0.14       systemfonts_1.3.2     
     ##  [64] foreach_1.5.2          tools_4.6.1            progress_1.2.3        
     ##  [67] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.1-1.1        
-    ##  [70] glue_1.8.1             gridExtra_2.3          mgcv_1.9-4            
+    ##  [70] glue_1.8.1             gridExtra_2.3.1        mgcv_1.9-4            
     ##  [73] xfun_0.59              withr_3.0.3            fastmap_1.2.0         
     ##  [76] digest_0.6.39          R6_2.6.1               mime_0.13             
     ##  [79] colorspace_2.1-2       textshaping_1.0.5      scattermore_1.2       
@@ -1208,5 +1208,5 @@ sessionInfo()
     ## [136] lazyeval_0.2.3         spatstat.geom_3.8-1    Matrix_1.7-5          
     ## [139] RcppHNSW_0.7.0         hms_1.1.4              bit64_4.8.2           
     ## [142] future_1.70.0          shiny_1.14.0           ROCR_1.0-12           
-    ## [145] gargle_1.6.1           igraph_2.3.2           broom_1.0.13          
+    ## [145] gargle_1.6.1           igraph_2.3.3           broom_1.0.13          
     ## [148] bslib_0.11.0           bit_4.6.0

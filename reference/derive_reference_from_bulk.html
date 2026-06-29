@@ -66,6 +66,8 @@ association z-scores that can be used as a custom reference in <code><a href="Ph
 <span>  survival_time <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  survival_event <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  normalize <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  platform <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"rnaseq"</span>, <span class="st">"microarray"</span><span class="op">)</span>,</span>
+<span>  probe_annotation <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  hugo_species <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"human"</span>, <span class="st">"mouse"</span><span class="op">)</span>,</span>
 <span>  binary_positive_reference <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"second"</span>, <span class="st">"first"</span><span class="op">)</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -123,6 +125,21 @@ indicator (0/1 or FALSE/TRUE). Required when
 <dt id="arg-normalize">normalize<a class="anchor" aria-label="anchor" href="#arg-normalize"></a></dt>
 <dd><p>Logical. If <code>TRUE</code>, run normalization when expression
 looks like counts (default <code>TRUE</code>). Set <code>FALSE</code> to skip.</p></dd>
+
+
+<dt id="arg-platform">platform<a class="anchor" aria-label="anchor" href="#arg-platform"></a></dt>
+<dd><p>One of <code>"auto"</code>, <code>"rnaseq"</code>, or <code>"microarray"</code>.
+Microarray inputs follow the PRECOG preprocessing strategy: optional
+probe-to-gene mapping, log2 transform when needed, removal of zero-variance
+genes and samples/genes with heavy missingness, per-study quantile
+normalization, and per-gene unit variance scaling across samples.
+RNA-seq inputs use log2(CPM+1) when the matrix looks like raw counts.</p></dd>
+
+
+<dt id="arg-probe-annotation">probe_annotation<a class="anchor" aria-label="anchor" href="#arg-probe-annotation"></a></dt>
+<dd><p>Optional data.frame with probe IDs and gene symbols
+(required for probe-level microarray matrices unless row names are already
+gene symbols). See <code><a href="collapse_probes_to_genes.html">collapse_probes_to_genes</a></code>.</p></dd>
 
 
 <dt id="arg-hugo-species">hugo_species<a class="anchor" aria-label="anchor" href="#arg-hugo-species"></a></dt>

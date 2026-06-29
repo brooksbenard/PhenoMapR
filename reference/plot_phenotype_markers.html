@@ -71,6 +71,7 @@ transpose/scale costs small on large matrices.</p>
 <span>  celltype_palette <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  color_schemes <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  heatmap_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"global"</span>, <span class="st">"cell_type_specific"</span><span class="op">)</span>,</span>
+<span>  celltype_contrast <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"vs_opposite_tail"</span>, <span class="st">"within_cell_type"</span>, <span class="st">"vs_cohort_rest"</span><span class="op">)</span>,</span>
 <span>  top_n_markers <span class="op">=</span> <span class="fl">20L</span>,</span>
 <span>  rank_by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lfc"</span>, <span class="st">"p_adj"</span><span class="op">)</span>,</span>
 <span>  n_mark_labels <span class="op">=</span> <span class="fl">5L</span>,</span>
@@ -145,6 +146,17 @@ See <code><a href="list_marker_heatmap_color_palettes.html">list_marker_heatmap_
 <dd><p><code>"global"</code> (cell-type agnostic markers) or
 <code>"cell_type_specific"</code> (markers per cell type from
 <code>marker_scope = "cell_type_specific"</code>).</p></dd>
+
+
+<dt id="arg-celltype-contrast">celltype_contrast<a class="anchor" aria-label="anchor" href="#arg-celltype-contrast"></a></dt>
+<dd><p>When <code>heatmap_type = "cell_type_specific"</code>,
+must match the <code>celltype_contrast</code> used in
+<code><a href="find_phenotype_markers.html">find_phenotype_markers()</a></code>. <code>"within_cell_type"</code> keeps
+only cell types with enough cells in <strong>both</strong> phenotype tails and
+requires marker genes in both tails before a type is drawn.
+<code>"vs_opposite_tail"</code> and <code>"vs_cohort_rest"</code> draw each
+(cell type, phenotype tail) block independently when marker tables
+contain genes for that block (default <code>"vs_opposite_tail"</code>).</p></dd>
 
 
 <dt id="arg-top-n-markers">top_n_markers<a class="anchor" aria-label="anchor" href="#arg-top-n-markers"></a></dt>

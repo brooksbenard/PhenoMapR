@@ -21,6 +21,7 @@ plot_phenotype_markers(
   celltype_palette = NULL,
   color_schemes = NULL,
   heatmap_type = c("global", "cell_type_specific"),
+  celltype_contrast = c("vs_opposite_tail", "within_cell_type", "vs_cohort_rest"),
   top_n_markers = 20L,
   rank_by = c("lfc", "p_adj"),
   n_mark_labels = 5L,
@@ -94,6 +95,17 @@ plot_phenotype_markers(
 
   `"global"` (cell-type agnostic markers) or `"cell_type_specific"`
   (markers per cell type from `marker_scope = "cell_type_specific"`).
+
+- celltype_contrast:
+
+  When `heatmap_type = "cell_type_specific"`, must match the
+  `celltype_contrast` used in
+  [`find_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/find_phenotype_markers.md).
+  `"within_cell_type"` keeps only cell types with enough cells in
+  **both** phenotype tails and requires marker genes in both tails
+  before a type is drawn. `"vs_opposite_tail"` and `"vs_cohort_rest"`
+  draw each (cell type, phenotype tail) block independently when marker
+  tables contain genes for that block (default `"vs_opposite_tail"`).
 
 - top_n_markers:
 

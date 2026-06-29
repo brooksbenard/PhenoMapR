@@ -17,11 +17,15 @@
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/calculate_weighted_scores.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/cell_type_colors.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/clean_matrix_input.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/collapse_probes_to_genes.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/compute_scores.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/define_phenotype_groups.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/derive_meta_z_from_bulk_studies.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/detect_expression_format.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/detect_input_type.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-MIN_CELLS_PER_PHENO_TAIL_FOR_CT_MARKERS.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-aggregate_matrix_pseudobulk.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_X_to_genes_cells.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_find_symbol_column.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/dot-anndata_obs_df.html</loc></url>
@@ -69,6 +73,7 @@
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/plot_reference_signature.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/plot_score_distribution.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/precog.html</loc></url>
+<url><loc>https://brooksbenard.github.io/PhenoMapR/reference/preprocess_microarray_expression.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/process_anndata.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/process_expression_input.html</loc></url>
 <url><loc>https://brooksbenard.github.io/PhenoMapR/reference/process_matrix.html</loc></url>
