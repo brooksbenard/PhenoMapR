@@ -214,8 +214,8 @@ gc(verbose = FALSE)
 ```
 
     ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells  4389934 234.5    7858694 419.7   7858694 419.7
-    ## Vcells 11269941  86.0  126614769 966.0 126265326 963.4
+    ## Ncells  4390071 234.5    7859085 419.8   7859085 419.8
+    ## Vcells 11270289  86.0  126615171 966.0 126265720 963.4
 
 ``` r
 
@@ -954,7 +954,7 @@ sessionInfo()
     ##  [10] fs_2.1.0               ragg_1.5.2             vctrs_0.7.3           
     ##  [13] ROCR_1.0-12            spatstat.explore_3.8-1 htmltools_0.5.9       
     ##  [16] progress_1.2.3         curl_7.1.0             sass_0.4.10           
-    ##  [19] sctransform_0.4.3      parallelly_1.47.0      KernSmooth_2.23-26    
+    ##  [19] sctransform_0.4.3      parallelly_1.48.0      KernSmooth_2.23-26    
     ##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            
     ##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         
     ##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.3          

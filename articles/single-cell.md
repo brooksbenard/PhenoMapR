@@ -1175,7 +1175,7 @@ sessionInfo()
     ##  [37] IRanges_2.46.0         S4Vectors_0.50.1       ggrepel_0.9.8         
     ##  [40] irlba_2.3.7            listenv_1.0.0          spatstat.utils_3.2-3  
     ##  [43] goftest_1.2-3          RSpectra_0.16-2        spatstat.random_3.5-0 
-    ##  [46] fitdistrplus_1.2-6     parallelly_1.47.0      pkgdown_2.2.0         
+    ##  [46] fitdistrplus_1.2-6     parallelly_1.48.0      pkgdown_2.2.0         
     ##  [49] codetools_0.2-20       shape_1.4.6.1          tidyselect_1.2.1      
     ##  [52] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.1          
     ##  [55] spatstat.explore_3.8-1 jsonlite_2.0.0         GetoptLong_1.1.1      
