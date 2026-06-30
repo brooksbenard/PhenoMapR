@@ -910,6 +910,41 @@ test_that("list_available_embeddings() surfaces segmentation for AnnData with ob
   expect_false("X_segmentation" %in% avail)
 })
 
+test_that("list_available_embeddings() surfaces segmentation for CosMx obs columns", {
+  skip_if_not_installed("Matrix")
+  e <- source_shiny_helpers()
+  n <- 20L
+  cells <- paste0("C", seq_len(n))
+  m <- Matrix::Matrix(
+    matrix(rpois(10L * n, 1), 10L, n,
+           dimnames = list(paste0("G", seq_len(10L)), cells)),
+    sparse = TRUE
+  )
+  md <- data.frame(
+    x_FOV_px = runif(n, 0, 1000),
+    y_FOV_px = runif(n, 0, 1000),
+    fov = rep(c("A", "B"), each = 10L),
+    row.names = cells,
+    stringsAsFactors = FALSE
+  )
+  spatial_xy <- cbind(
+    x_slide_mm = runif(n, 4, 6),
+    y_slide_mm = runif(n, -9, -8)
+  )
+  rownames(spatial_xy) <- cells
+  attr(m, "phenomapr_obs") <- md
+  attr(m, "phenomapr_obsm") <- list(spatial = spatial_xy)
+
+  avail <- e$list_available_embeddings(m)
+  expect_true("spatial" %in% avail)
+  expect_true("segmentation" %in% avail)
+
+  emb <- e$extract_embedding(m, "segmentation")
+  expect_equal(nrow(emb), n)
+  expect_true(all(c("x_FOV_px", "y_FOV_px") %in% c(emb$dim1_name[1L], emb$dim2_name[1L])))
+  expect_equal(length(unique(emb$sample)), 2L)
+})
+
 test_that("extract_embedding() resolves 'segmentation' to whichever obsm key the user picked", {
   skip_if_not_installed("reticulate")
   ad <- tryCatch(reticulate::import("anndata", convert = FALSE),

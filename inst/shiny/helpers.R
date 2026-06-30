@@ -565,6 +565,16 @@ summarize_expression_object <- function(obj) {
   if (!is.null(obsm_list) && length(obsm_list)) {
     attr(X_genes_x_cells, "phenomapr_obsm") <- obsm_list
   }
+  if (is.data.frame(obs_df)) {
+    seg_mat <- .build_segmentation_obsm_from_obs(obs_df, cell_ids = obs_names)
+    if (!is.null(seg_mat)) {
+      obsm_list <- attr(X_genes_x_cells, "phenomapr_obsm") %||% list()
+      if (!length(intersect(.anndata_segmentation_obsm_keys, names(obsm_list)))) {
+        obsm_list$segmentation <- seg_mat
+        attr(X_genes_x_cells, "phenomapr_obsm") <- obsm_list
+      }
+    }
+  }
 
   X_genes_x_cells
 }
@@ -977,6 +987,73 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
   "segmentation_centroids"
 )
 
+# CosMx / imaging platforms often store slide-level coordinates in
+# obsm["spatial"] while the per-cell segmentation centroids in FOV pixel
+# space live in obs (e.g. x_FOV_px / y_FOV_px). Return the first matching
+# column pair, or NULL when none are present.
+.cosmx_segmentation_coord_columns <- function(meta_df) {
+  if (!is.data.frame(meta_df) || !ncol(meta_df)) return(NULL)
+  pairs <- list(
+    c("x_FOV_px", "y_FOV_px"),
+    c("x_fov_px", "y_fov_px"),
+    c("CenterX_local_px", "CenterY_local_px"),
+    c("centroid_x", "centroid_y"),
+    c("x_centroid", "y_centroid")
+  )
+  for (p in pairs) {
+    if (!all(p %in% colnames(meta_df))) next
+    x <- suppressWarnings(as.numeric(meta_df[[p[1L]]]))
+    y <- suppressWarnings(as.numeric(meta_df[[p[2L]]]))
+    if (sum(is.finite(x) & is.finite(y)) >= 2L) {
+      return(list(dim1_col = p[1L], dim2_col = p[2L]))
+    }
+  }
+  NULL
+}
+
+# Build a (cells x 2) segmentation-centroid matrix from obs columns.
+.build_segmentation_obsm_from_obs <- function(meta_df, cell_ids = NULL) {
+  cols <- .cosmx_segmentation_coord_columns(meta_df)
+  if (is.null(cols)) return(NULL)
+  x <- suppressWarnings(as.numeric(meta_df[[cols$dim1_col]]))
+  y <- suppressWarnings(as.numeric(meta_df[[cols$dim2_col]]))
+  n <- length(x)
+  if (n < 2L || sum(is.finite(x) & is.finite(y)) < 2L) return(NULL)
+  m <- cbind(x = x, y = y)
+  colnames(m) <- c(cols$dim1_col, cols$dim2_col)
+  ids <- cell_ids
+  if (is.null(ids) && !is.null(rownames(meta_df)) &&
+      length(rownames(meta_df)) == n) {
+    ids <- rownames(meta_df)
+  }
+  if (!is.null(ids) && length(ids) == n) rownames(m) <- as.character(ids)
+  m
+}
+
+# Segmentation is available from obsm keys and/or CosMx-style obs columns.
+.segmentation_embedding_available <- function(obsm_keys, meta_df = NULL) {
+  if (length(intersect(.anndata_segmentation_obsm_keys, obsm_keys))) {
+    return(TRUE)
+  }
+  if (is.data.frame(meta_df) && !is.null(.cosmx_segmentation_coord_columns(meta_df))) {
+    return(TRUE)
+  }
+  FALSE
+}
+
+# Column names used to tag tissue sections / FOVs on spatial embeddings.
+.spatial_sample_column_candidates <- function() {
+  c("library_id", "sample_id", "sample", "slide_id", "section", "section_id",
+    "core", "core_id", "fov", "fov_id", "fov_uid", "FOV")
+}
+
+.spatial_sample_vec_from_obs <- function(obs_df) {
+  if (!is.data.frame(obs_df) || !ncol(obs_df)) return(NULL)
+  hit <- intersect(.spatial_sample_column_candidates(), colnames(obs_df))
+  if (!length(hit)) return(NULL)
+  as.character(obs_df[[hit[1L]]])
+}
+
 # True iff the Seurat image carries a non-empty Seurat 5 Boundaries() set
 # (Xenium / CosMx / MERSCOPE / Visium HD FOV objects). VisiumV1 spot
 # grids and any pre-Seurat-5 image classes return character(0), so this
@@ -1029,7 +1106,14 @@ list_available_embeddings <- function(obj) {
   if (inherits(obj, "python.builtin.object")) {
     keys <- tryCatch(PhenoMapR:::.anndata_obsm_keys(obj),
                      error = function(e) character(0))
-    return(.collapse_anndata_embedding_keys(keys))
+    keys <- .collapse_anndata_embedding_keys(keys)
+    if (!"segmentation" %in% keys) {
+      md <- extract_object_metadata(obj)
+      if (.segmentation_embedding_available(character(0), md)) {
+        keys <- unique(c(keys, "segmentation"))
+      }
+    }
+    return(keys)
   }
   # Plain matrix / Matrix / dgCMatrix: typically the result of an h5ad
   # loaded via .read_h5ad_hdf5r(). The obsm entries live on the
@@ -1039,9 +1123,19 @@ list_available_embeddings <- function(obj) {
   # collapse to a single "segmentation" choice.
   if (is.matrix(obj) || inherits(obj, "Matrix")) {
     obsm_attr <- attr(obj, "phenomapr_obsm")
-    if (is.list(obsm_attr) && length(obsm_attr)) {
-      return(.collapse_anndata_embedding_keys(names(obsm_attr)))
+    keys <- if (is.list(obsm_attr) && length(obsm_attr)) {
+      .collapse_anndata_embedding_keys(names(obsm_attr))
+    } else {
+      character(0)
     }
+    if (!"segmentation" %in% keys) {
+      obs_attr <- attr(obj, "phenomapr_obs")
+      if (.segmentation_embedding_available(names(obsm_attr %||% list()),
+                                            obs_attr)) {
+        keys <- unique(c(keys, "segmentation"))
+      }
+    }
+    return(keys)
   }
   character(0)
 }
@@ -1223,6 +1317,12 @@ extract_embedding <- function(obj, name) {
         emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, seg_hit[1L]),
                         error = function(e) NULL)
       }
+      if (is.null(emb)) {
+        md <- extract_object_metadata(obj)
+        if (!is.null(md)) {
+          emb <- .build_segmentation_obsm_from_obs(md, cell_ids = md$.cell_id)
+        }
+      }
     } else {
       emb <- tryCatch(PhenoMapR:::.anndata_obsm_array(obj, name),
                       error = function(e) NULL)
@@ -1256,7 +1356,15 @@ extract_embedding <- function(obj, name) {
       } else {
         NA_character_
       }
-      if (!is.na(pick)) emb <- obsm_attr[[pick]]
+      if (!is.na(pick)) {
+        emb <- obsm_attr[[pick]]
+      } else if (is_segmentation) {
+        obs_attr <- attr(obj, "phenomapr_obs")
+        if (is.data.frame(obs_attr)) {
+          emb <- .build_segmentation_obsm_from_obs(obs_attr,
+                                                    cell_ids = colnames(obj))
+        }
+      }
     }
     if (is_spatial || is_segmentation) {
       # The hdf5r loader doesn't currently surface a per-cell tissue
@@ -1265,10 +1373,7 @@ extract_embedding <- function(obj, name) {
       # multi-library spatial h5ads still get the section switcher.
       obs_attr <- attr(obj, "phenomapr_obs")
       if (is.data.frame(obs_attr)) {
-        candidates <- c("library_id", "sample_id", "sample", "slide_id",
-                        "section", "section_id", "core", "core_id")
-        hit <- intersect(candidates, colnames(obs_attr))
-        if (length(hit)) sample_vec <- as.character(obs_attr[[hit[1L]]])
+        sample_vec <- .spatial_sample_vec_from_obs(obs_attr)
       }
     }
   }
@@ -1324,8 +1429,7 @@ extract_embedding <- function(obj, name) {
 # Returns a character vector the same length as adata.n_obs, or NULL.
 .anndata_spatial_sample_vec <- function(obj) {
   if (!requireNamespace("reticulate", quietly = TRUE)) return(NULL)
-  candidates <- c("library_id", "sample_id", "sample", "slide_id",
-                  "section", "section_id", "core", "core_id")
+  candidates <- .spatial_sample_column_candidates()
   obs_cols <- tryCatch({
     builtins <- reticulate::import_builtins(convert = FALSE)
     as.character(reticulate::py_to_r(builtins$list(obj$obs$columns)))
