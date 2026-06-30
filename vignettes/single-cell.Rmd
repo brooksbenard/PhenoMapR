@@ -61,6 +61,7 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(ggpubr)
   library(dplyr)
+  library(tidyr)
   library(Seurat)
   library(patchwork)
   library(ComplexHeatmap)
@@ -204,13 +205,17 @@ p_cell <- ggplot(prop_data, aes(x = Patient, y = proportion, fill = celltype_ori
 
 # NUMBER OF CELLS PER PATIENT
 meta$Patient <- factor(meta$Patient, levels = sample_order)
+patient_counts <- meta %>%
+  dplyr::count(Patient, name = "n")
 
-p_num <- ggplot(meta, aes(x = Patient)) +
-  # geom_bar(fill = "grey55", color = "white", linewidth = 0.2) +
-    ggchicklet2::geom_chicklet_bar(
-                                   radius = grid::unit(.5, "pt"), 
-                                   color = "white", linewidth = 0.2,
-                                   fill = "grey55") +
+p_num <- ggplot(patient_counts, aes(x = Patient, y = n)) +
+  ggchicklet2::geom_chicklet_bar(
+    stat = "identity",
+    radius = grid::unit(.5, "pt"),
+    color = "white",
+    linewidth = 0.2,
+    fill = "grey55"
+  ) +
   theme_pubclean(base_size = 8) +
   theme(
     axis.title.x = element_blank(),
@@ -502,36 +507,61 @@ Indeed, tumor samples are significantly enriched for more adverse scores across 
 Cell type counts in the top 5% (Most Adverse) and bottom 5% (Most Favorable) of cells by PRECOG score.
 
 ```{r celltype-in-extreme-percentiles, fig.align='center', fig.height=2, fig.width=4}
-q_lo <- quantile(meta[[score_precog_col]], 0.05, na.rm = TRUE)
-q_hi <- quantile(meta[[score_precog_col]], 0.95, na.rm = TRUE)
-pg_tmp <- ifelse(meta[[score_precog_col]] >= q_hi, "Most Adverse", ifelse(meta[[score_precog_col]] <= q_lo, "Most Favorable", NA))
-idx_extreme <- !is.na(pg_tmp)
-ct_in_extreme <- meta[idx_extreme, ]
+scores_tail <- meta[, score_precog_col, drop = FALSE]
+rownames(scores_tail) <- meta$Cell
+groups_tail <- define_phenotype_groups(
+  scores_tail,
+  percentile = 0.05,
+  score_columns = score_precog_col
+)
+tail_col <- grep("^phenotype_group_", names(groups_tail), value = TRUE)[1]
+pg_tmp <- groups_tail[[tail_col]][match(meta$Cell, groups_tail$cell_id)]
+idx_extreme <- pg_tmp %in% c("Most Adverse", "Most Favorable")
+
+ct_in_extreme <- meta[idx_extreme, , drop = FALSE]
 ct_in_extreme$pg <- pg_tmp[idx_extreme]
-ct_counts <- as.data.frame(table(Cell_type = ct_in_extreme$celltype_malignancy, pg = ct_in_extreme$pg))
-ct_wide <- reshape(ct_counts, idvar = "Cell_type", timevar = "pg", direction = "wide")
-names(ct_wide) <- gsub("Freq\\.", "", names(ct_wide))
+ct_counts <- as.data.frame(
+  table(Cell_type = ct_in_extreme$celltype_malignancy, pg = ct_in_extreme$pg),
+  stringsAsFactors = FALSE
+)
+ct_wide <- tidyr::pivot_wider(
+  ct_counts,
+  names_from = pg,
+  values_from = Freq,
+  values_fill = 0
+)
 for (c in c("Most Adverse", "Most Favorable")) {
-  if (!c %in% names(ct_wide)) ct_wide[[c]] <- 0
+  if (!c %in% names(ct_wide)) ct_wide[[c]] <- 0L
 }
-ct_wide$Cell_type <- factor(ct_wide$Cell_type, levels = ct_wide$Cell_type[order(ct_wide$`Most Adverse`, decreasing = TRUE)])
+ct_wide <- ct_wide[order(ct_wide[["Most Adverse"]], decreasing = TRUE), , drop = FALSE]
 ct_long <- rbind(
-  data.frame(Cell_type = ct_wide$Cell_type, pg = "Most Favorable", n = -ct_wide$`Most Favorable`),
-  data.frame(Cell_type = ct_wide$Cell_type, pg = "Most Adverse", n = ct_wide$`Most Adverse`)
+  data.frame(Cell_type = ct_wide$Cell_type, pg = "Most Favorable", n = -ct_wide[["Most Favorable"]]),
+  data.frame(Cell_type = ct_wide$Cell_type, pg = "Most Adverse", n = ct_wide[["Most Adverse"]])
 )
 ct_long$pg <- factor(ct_long$pg, levels = c("Most Favorable", "Most Adverse"))
 max_n <- max(abs(ct_long$n), 1)
 ggplot(ct_long, aes(x = Cell_type, y = n, fill = pg)) +
-  ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(0, "pt")) +
+  geom_col(width = 0.75) +
   coord_flip() +
-  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-  scale_y_continuous(breaks = seq(-max_n, max_n, length.out = 5), labels = abs(seq(-max_n, max_n, length.out = 5))) +
+  scale_fill_manual(
+    values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"),
+    name = "Prognostic group"
+  ) +
+  scale_y_continuous(
+    breaks = seq(-max_n, max_n, length.out = 5),
+    labels = abs(seq(-max_n, max_n, length.out = 5))
+  ) +
   theme_pubr(base_size = 10) +
   theme(
-  axis.text.y = element_text(size = 9),
-  legend.position = c(.8, .7),
-  plot.title = element_text(hjust = 0.5, size = 10)) +
-  labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Broad cell type abundance in \nadverse vs. favorable extremes")
+    axis.text.y = element_text(size = 9),
+    legend.position = c(.8, .7),
+    plot.title = element_text(hjust = 0.5, size = 10)
+  ) +
+  labs(
+    x = NULL,
+    y = "Cell count (in 5th percentile)",
+    title = "Broad cell type abundance in \nadverse vs. favorable extremes"
+  )
 ```
 At a broad cell type level, PhenoMapR assigns the vast majority of the top 5% of adverse cells to the malignant compartment, however the immune, stromal, and other cell types do contain some of the most adversely scoring cells.
 
@@ -539,38 +569,50 @@ At a broad cell type level, PhenoMapR assigns the vast majority of the top 5% of
 We then use the original cell type annotations from the authors to provide a more refined understanding of the prognostic score assignment across cell types.
 
 ```{r celltype-original-in-extreme-percentiles, fig.align='center', fig.height=3, fig.width=4}
-  ct_orig_in_extreme <- meta[idx_extreme, ]
-  ct_orig_in_extreme$pg <- pg_tmp[idx_extreme]
-  ct_orig_counts <- as.data.frame(table(Cell_type_original = ct_orig_in_extreme$celltype_original, pg = ct_orig_in_extreme$pg))
-  ct_orig_wide <- reshape(ct_orig_counts, idvar = "Cell_type_original", timevar = "pg", direction = "wide")
-  names(ct_orig_wide) <- gsub("Freq\\.", "", names(ct_orig_wide))
-  for (c in c("Most Adverse", "Most Favorable")) {
-    if (!c %in% names(ct_orig_wide)) ct_orig_wide[[c]] <- 0
-  }
-  ct_orig_wide$Cell_type_original <- factor(ct_orig_wide$Cell_type_original, levels = ct_orig_wide$Cell_type_original[order(ct_orig_wide$`Most Adverse`, decreasing = TRUE)])
-  ct_orig_long <- rbind(
-    data.frame(Cell_type_original = ct_orig_wide$Cell_type_original, pg = "Most Favorable", n = -ct_orig_wide$`Most Favorable`),
-    data.frame(Cell_type_original = ct_orig_wide$Cell_type_original, pg = "Most Adverse", n = ct_orig_wide$`Most Adverse`)
+ct_orig_in_extreme <- meta[idx_extreme, , drop = FALSE]
+ct_orig_in_extreme$pg <- pg_tmp[idx_extreme]
+ct_orig_counts <- as.data.frame(
+  table(Cell_type_original = ct_orig_in_extreme$celltype_original, pg = ct_orig_in_extreme$pg),
+  stringsAsFactors = FALSE
+)
+ct_orig_wide <- tidyr::pivot_wider(
+  ct_orig_counts,
+  names_from = pg,
+  values_from = Freq,
+  values_fill = 0
+)
+for (c in c("Most Adverse", "Most Favorable")) {
+  if (!c %in% names(ct_orig_wide)) ct_orig_wide[[c]] <- 0L
+}
+ct_orig_wide <- ct_orig_wide[order(ct_orig_wide[["Most Adverse"]], decreasing = TRUE), , drop = FALSE]
+ct_orig_long <- rbind(
+  data.frame(Cell_type_original = ct_orig_wide$Cell_type_original, pg = "Most Favorable", n = -ct_orig_wide[["Most Favorable"]]),
+  data.frame(Cell_type_original = ct_orig_wide$Cell_type_original, pg = "Most Adverse", n = ct_orig_wide[["Most Adverse"]])
+)
+ct_orig_long$pg <- factor(ct_orig_long$pg, levels = c("Most Favorable", "Most Adverse"))
+max_n_orig <- max(abs(ct_orig_long$n), 1)
+ggplot(ct_orig_long, aes(x = Cell_type_original, y = n, fill = pg)) +
+  geom_col(width = 0.75) +
+  coord_flip() +
+  scale_fill_manual(
+    values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"),
+    name = "Prognostic group"
+  ) +
+  scale_y_continuous(
+    breaks = round(seq(-max_n_orig, max_n_orig, length.out = 5)),
+    labels = abs(round(seq(-max_n_orig, max_n_orig, length.out = 5)))
+  ) +
+  theme_pubr(base_size = 10) +
+  theme(
+    axis.text.y = element_text(size = 9),
+    legend.position = c(.8, .75),
+    plot.title = element_text(hjust = 0.5, size = 10)
+  ) +
+  labs(
+    x = NULL,
+    y = "Cell count (in 5th percentile)",
+    title = "Cell Type abundance in adverse\nvs. favorable extremes"
   )
-  ct_orig_long$pg <- factor(ct_orig_long$pg, levels = c("Most Favorable", "Most Adverse"))
-  max_n_orig <- max(abs(ct_orig_long$n), 1)
-  print(ggplot(ct_orig_long, aes(x = Cell_type_original, y = n, fill = pg)) +
-
-        ggchicklet2::geom_chicklet_bar(stat = "identity", radius = grid::unit(0, "pt")) +
-    coord_flip() +
-    scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), name = "Prognostic group") +
-scale_y_continuous(
-  breaks = round(seq(-max_n_orig, max_n_orig, length.out = 5)),
-  labels = abs(round(seq(-max_n_orig, max_n_orig, length.out = 5)))
-) +
-theme_pubr(base_size = 10) +
-      theme(
-  axis.text.y = element_text(size = 9),
-  legend.position = c(.8, .75),
-  plot.title = element_text(hjust = 0.5, size = 10)
-) +
-    labs(x = NULL, y = "Cell count (in 5th percentile)", title = "Cell Type abundance in adverse\nvs. favorable extremes"))
-
 ```
 Here, we see that the vase majority of the top 5th percentile of adverse PhenoMapR cells are from the Ductal type 2 cells, in line with the results of [Jolasun et al.](https://www.nature.com/articles/s41467-025-66162-4/figures/2). The majority of favorably scoring cells were Acinar and B cell populations. 
 
@@ -582,22 +624,36 @@ Here, we see that the vase majority of the top 5th percentile of adverse PhenoMa
 
 ```{r prognostic-groups-markers, cache = FALSE}
 scores_df <- meta[, c(score_tcga_col, score_precog_col), drop = FALSE]
-groups <- define_phenotype_groups(scores_df, percentile = 0.05, score_columns = score_precog_col)
-group_col <- grep("phenotype_group", names(groups), value = TRUE)[1]
-meta[[group_col]] <- groups[rownames(meta), group_col]
+rownames(scores_df) <- meta$Cell
+groups <- define_phenotype_groups(
+  scores_df,
+  percentile = 0.05,
+  score_columns = score_precog_col
+)
+group_col <- grep("^phenotype_group_", names(groups), value = TRUE)[1]
+meta[[group_col]] <- groups[[group_col]][match(meta$Cell, groups$cell_id)]
 
-  markers <- NULL
+group_df <- data.frame(
+  cell_id = meta$Cell,
+  phenotype_group = meta[[group_col]],
+  cell_type = meta$celltype_original,
+  stringsAsFactors = FALSE
+)
 
-  markers <- find_phenotype_markers(
-    expr_mat,
-    group_labels = meta[[group_col]],
-    pval_threshold = 0.05,
-    max_cells_per_ident = 5000L
-  )
-  if (!is.null(markers)) {
-    message("Adverse markers (top 5):"); print(head(markers$adverse_markers, 5))
-    message("Favorable markers (top 5):"); print(head(markers$favorable_markers, 5))
-  }
+markers <- find_phenotype_markers(
+  expr_mat,
+  group_labels = group_df,
+  group_column = "phenotype_group",
+  cell_id_column = "cell_id",
+  marker_scope = "phenotype_groups",
+  pval_threshold = 0.05,
+  max_cells_per_ident = 5000L,
+  verbose = FALSE
+)
+if (!is.null(markers)) {
+  message("Adverse markers (top 5):"); print(head(markers$adverse_markers, 5))
+  message("Favorable markers (top 5):"); print(head(markers$favorable_markers, 5))
+}
 ```
 
 ## Marker genes heatmap
@@ -631,13 +687,6 @@ The `find_phenotype_markers()` function can also identify marker genes **for eac
 For the heatmap, we take up to **20** positive markers per cell type and phenotype tail with the **largest `avg_log2FC`**, restricting to genes that are **FDR-significant** (`p_adj` from Benjamini–Hochberg `< 0.05`). Rows follow the same column order: **Most Favorable** (each cell type), **Other** cells, **Most Adverse** (each cell type). **`plot_phenotype_markers(..., heatmap_type = "cell_type_specific")`** draws row splits between blocks; **`anno_mark`** labels the **top five** genes (by log2FC) within each (phenotype tail × cell type) group, with **cell type** and **phenotype** strips on the left. Setting **`color_mark_labels_by_celltype = TRUE`** colors each labeled gene with its cell-type palette so markers are easier to read against the strips.
 
 ```{r celltype-specific-phenotype-markers, fig.width=15, fig.height=7}
-group_df <- data.frame(
-  cell_id = meta$Cell,
-  phenotype_group = meta[[group_col]],
-  cell_type = meta$celltype_original,
-  stringsAsFactors = FALSE
-)
-
 markers_ct <- find_phenotype_markers(
   expr_mat,
   group_labels = group_df,
@@ -645,6 +694,7 @@ markers_ct <- find_phenotype_markers(
   cell_id_column = "cell_id",
   cell_type_column = "cell_type",
   marker_scope = "cell_type_specific",
+  celltype_contrast = "within_cell_type",
   pval_threshold = 0.05,
   max_cells_per_ident = 5000L,
   verbose = FALSE
@@ -660,23 +710,17 @@ plot_phenotype_markers(
   celltype_col = "celltype_original",
   celltype_palette = pal_cells,
   heatmap_type = "cell_type_specific",
+  celltype_contrast = "within_cell_type",
   top_n_markers = 10L,
   n_mark_labels = 5L,
   color_mark_labels_by_celltype = TRUE,
-  p_adj_threshold = 0.05, outline_marker_blocks = T
+  p_adj_threshold = 0.05,
+  outline_marker_blocks = TRUE
 )
-
 ```
 
 ```{r celltype-specific-against-tail-phenotype-markers, fig.width=12, fig.height=6}
-group_df <- data.frame(
-  cell_id = meta$Cell,
-  phenotype_group = meta[[group_col]],
-  cell_type = meta$celltype_original,
-  stringsAsFactors = FALSE
-)
-
-markers_ct <- find_phenotype_markers(
+markers_ct_vs_tail <- find_phenotype_markers(
   expr_mat,
   group_labels = group_df,
   group_column = "phenotype_group",
@@ -690,7 +734,7 @@ markers_ct <- find_phenotype_markers(
 )
 
 plot_phenotype_markers(
-  markers = markers_ct,
+  markers = markers_ct_vs_tail,
   expr_mat = expr_mat,
   meta = meta,
   cell_id_col = "Cell",
@@ -699,14 +743,14 @@ plot_phenotype_markers(
   celltype_col = "celltype_original",
   celltype_palette = pal_cells,
   heatmap_type = "cell_type_specific",
+  celltype_contrast = "vs_opposite_tail",
   outline_marker_blocks = TRUE,
   block_outline_color = "black",
   top_n_markers = 5L,
   n_mark_labels = 5L,
   color_mark_labels_by_celltype = TRUE,
-  p_adj_threshold = 0.05,
+  p_adj_threshold = 0.05
 )
-
 ```
 
 ## Dataset summary of PhenoMapR results
