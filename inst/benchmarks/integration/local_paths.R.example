@@ -1,9 +1,0 @@
-# Optional user-supplied datasets for integration stress tests.
-# Copy to local_paths.R (gitignored) and fill in paths.
-
-local_datasets <- list(
-  # seurat_rds = "/path/to/your_seurat.rds",
-  # h5ad = "/path/to/your_file.h5ad",
-  # bulk_expr = "/path/to/expression.rds",
-  # bulk_pheno = "/path/to/phenotype.rds"
-)

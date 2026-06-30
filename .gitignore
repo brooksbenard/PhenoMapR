@@ -112,9 +112,9 @@ inst/benchmarks/artifacts/*/PENCIL.tsv
 inst/benchmarks/artifacts/*/PENCIL_value.rds
 inst/benchmarks/artifacts/*/scAB.tsv
 
-# --- Integration stress harness ----------------------------------------------
-inst/benchmarks/integration/local_paths.R
-inst/benchmarks/integration/reports/
+# Internal dev benchmarks (not shipped with the package)
+inst/benchmarks/integration/
+inst/benchmarks/fshd_validation_*.R
 
 # Manuscript / exploratory figures (not shipped with the package)
 inst/figures/manuscript_candidates/
