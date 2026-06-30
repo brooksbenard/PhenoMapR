@@ -79,7 +79,9 @@ has_unicode_minus_label <- function(s) {
         s, fixed = TRUE) ||
   grepl(paste0('"Cohort-wide (phenotype + vs phenotype ',
                "\u2212", ')"'),
-        s, fixed = TRUE)
+        s, fixed = TRUE) ||
+  grepl('phenomapr_phenotype_plus\\("phenotype \\+"\\)', s) ||
+  grepl('phenomapr_phenotype_minus\\("phenotype \\\\u2212"\\)', s)
 }
 ct_specific_label <- "\"Cell-type specific (within phenotype groups)\""
 stopifnot_msg(

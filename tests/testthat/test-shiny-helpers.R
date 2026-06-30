@@ -945,6 +945,60 @@ test_that("list_available_embeddings() surfaces segmentation for CosMx obs colum
   expect_equal(length(unique(emb$sample)), 2L)
 })
 
+test_that("spatial_polygons_available detects phenomapr_polygons on matrix", {
+  skip_if_not_installed("Matrix")
+  e <- source_shiny_helpers()
+  cells <- paste0("C", 1:3)
+  m <- Matrix::Matrix(
+    matrix(1, 4, 3, dimnames = list(paste0("G", 1:4), cells)),
+    sparse = TRUE
+  )
+  poly <- data.frame(
+    cell_id = rep(cells, each = 4L),
+    x = c(0, 1, 1, 0, 2, 3, 3, 2, 4, 5, 5, 4),
+    y = c(0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1),
+    sample = "fov_1",
+    stringsAsFactors = FALSE
+  )
+  attr(m, "phenomapr_polygons") <- poly
+  expect_true(e$spatial_polygons_available(m))
+  out <- e$extract_spatial_polygons(m)
+  expect_equal(sort(unique(out$cell_id)), sort(cells))
+  expect_equal(nrow(out), 12L)
+  colored <- e$join_spatial_polygon_colors(
+    out,
+    data.frame(cell_id = cells, score = 1:3, stringsAsFactors = FALSE),
+    "score"
+  )
+  expect_equal(nrow(colored), 12L)
+  expect_true(all(colored$score %in% 1:3))
+})
+
+test_that("spatial_polygons_available is false for CosMx centroid-only h5ad", {
+  skip_if_not_installed("hdf5r")
+  skip_if_not_installed("Matrix")
+  path <- path.expand("~/Downloads/seurat_test_core_46.h5ad")
+  skip_if_not(file.exists(path), "CosMx demo h5ad not available locally")
+  e <- source_shiny_helpers()
+  obj <- e$.read_h5ad_hdf5r(path)
+  expect_false(e$spatial_polygons_available(obj))
+})
+
+test_that("apply_global_spatial_coords_for_combined uses spatial frame", {
+  skip_if_not_installed("Matrix")
+  skip_if_not_installed("hdf5r")
+  e <- source_shiny_helpers()
+  path <- path.expand("~/Downloads/seurat_test_core_46.h5ad")
+  skip_if_not(file.exists(path), "CosMx demo h5ad not available locally")
+  obj <- e$.read_h5ad_hdf5r(path)
+  seg <- e$extract_embedding(obj, "segmentation")
+  spatial <- e$extract_embedding(obj, "spatial")
+  combined <- e$apply_global_spatial_coords_for_combined(obj, seg)
+  expect_false(e$.spatial_coords_are_fov_local(combined))
+  expect_equal(combined$dim1, spatial$dim1[match(combined$cell_id, spatial$cell_id)])
+  expect_equal(combined$dim2, spatial$dim2[match(combined$cell_id, spatial$cell_id)])
+})
+
 test_that("extract_embedding() resolves 'segmentation' to whichever obsm key the user picked", {
   skip_if_not_installed("reticulate")
   ad <- tryCatch(reticulate::import("anndata", convert = FALSE),

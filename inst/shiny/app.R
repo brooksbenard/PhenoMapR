@@ -1359,7 +1359,11 @@ ui <- page_navbar(
               "image (whereas \"spatial\" plots the upstream pipeline's ",
               "canonical xy, often a spot grid). CosMx exports that only ",
               "store FOV pixel centroids in obs (e.g. x_FOV_px / y_FOV_px) ",
-              "also surface \"segmentation\" automatically. For matrix uploads, the ",
+              "also surface \"segmentation\" automatically. When polygon ",
+              "boundaries are present (Seurat 5 FOV @boundaries, or a ",
+              "phenomapr_polygons table on a matrix), choose the ",
+              "\"segmentation\" reduction and switch \"Segmentation render ",
+              "style\" to Cell masks (polygons). For matrix uploads, the ",
               "app additionally auto-detects 2D coordinate column pairs ",
               "(e.g. UMAP_1/UMAP_2, tSNE_1/tSNE_2, X_umap_0/X_umap_1) on ",
               "the metadata table from the Data tab \u2014 no second ",
@@ -1414,6 +1418,18 @@ ui <- page_navbar(
                     value = 0.8, step = 0.1),
         sliderInput("umap_point_alpha", "Point opacity", min = 0.1, max = 1,
                     value = 0.75, step = 0.05),
+        conditionalPanel(
+          "output.spatial_polygon_masks_available",
+          radioButtons(
+            "spatial_render_style", "Segmentation render style",
+            choices = c("Points (centroids)" = "points",
+                        "Cell masks (polygons)" = "masks"),
+            selected = "points",
+            inline = FALSE
+          ),
+          sliderInput("spatial_mask_alpha", "Mask fill opacity", min = 0.1, max = 1,
+                      value = 0.85, step = 0.05)
+        ),
         checkboxInput("umap_facet_source", "Facet by source", value = FALSE),
         downloadButton("download_umap_table", "Download embedding (TSV)",
                        class = "btn-outline-primary"),
@@ -1715,18 +1731,18 @@ ui <- page_navbar(
                   " when installed, otherwise base R; ",
                   tags$code("Seurat::FindMarkers"),
                   " for Seurat inputs in cohort-wide mode) between the ",
-                  phenomapr_phenotype_plus("most-adverse"),
-                  " (red) and ",
-                  phenomapr_phenotype_minus("most-favorable"),
-                  " (blue) tails, listed here from broadest to most ",
+                  phenomapr_phenotype_plus(),
+                  " and ",
+                  phenomapr_phenotype_minus(),
+                  " tails, listed here from broadest to most ",
                   "stringent."
                 ),
                 tags$p(
                   tags$strong("(1) Cohort-wide."),
                   " Whole ",
-                  phenomapr_phenotype_plus("adverse"),
+                  phenomapr_phenotype_plus(),
                   " tail vs whole ",
-                  phenomapr_phenotype_minus("favorable"),
+                  phenomapr_phenotype_minus(),
                   " tail \u2014 no cell-type partitioning."
                 ),
                 tags$p(
@@ -1739,11 +1755,11 @@ ui <- page_navbar(
                 tags$p(
                   tags$strong("(3) Cell-type specific (within phenotype groups)."),
                   " One cell type in the ",
-                  phenomapr_phenotype_plus("adverse"),
+                  phenomapr_phenotype_plus(),
                   " tail vs the ",
                   tags$em("same"),
                   " cell type in the ",
-                  phenomapr_phenotype_minus("favorable"),
+                  phenomapr_phenotype_minus(),
                   " tail. Requires at least ",
                   tags$strong("5 cells"),
                   " of that type in ",
@@ -1761,7 +1777,7 @@ ui <- page_navbar(
                   src = "PhenoMapR_marker_schematic.png",
                   alt = paste(
                     "Schematic of the three marker-gene contrast scopes:",
-                    "(1) cohort-wide adverse vs favorable,",
+                    "(1) cohort-wide Most Phenotype + vs Most Phenotype -,",
                     "(2) cell-type x phenotype vs all opposite-tail cells,",
                     "(3) cell-type specific within phenotype groups."
                   ),
@@ -4929,10 +4945,10 @@ server <- function(input, output, session) {
   # and (b) the embedding df spans >1 section.
   #
   # Two distinct UX modes share the same selectInput value:
-  #   * "__all__" -> the umap_plot reactive draws every section in one
-  #     facet_wrap, which is the right view for tissue microarrays /
-  #     multi-slide overviews.
-  #   * any specific section name -> the plot zooms to one tissue. The
+  #   * "__all__" -> every section in one panel. Slide-mm / global coords
+  #     overlay naturally; per-FOV pixel coords switch to the object's
+  #     global spatial frame (see apply_global_spatial_coords_for_combined()).
+  #   * any specific section name -> zoom to one tissue. The adjacent
   #     adjacent Prev / Next buttons walk through the section list one
   #     step at a time so users don't have to scroll a long dropdown.
   #     This is the "click through" mode -- intentionally separate from
@@ -4949,7 +4965,7 @@ server <- function(input, output, session) {
     # data lands. "All sections (facet view)" always stays at the top.
     sections <- sort(sections)
     choices <- c(
-      "All sections (facet view)" = "__all__",
+      "All sections (combined)" = "__all__",
       setNames(sections, sections)
     )
     tagList(
@@ -4957,7 +4973,7 @@ server <- function(input, output, session) {
         "spatial_sample",
         label = tagList(icon("layer-group"), " Tissue section / core"),
         choices = choices,
-        selected = sections[1L]
+        selected = "__all__"
       ),
       # Prev / Next stepper -- meaningful only when the user has chosen
       # an individual section. Hidden under "All sections (facet view)"
@@ -5111,6 +5127,17 @@ server <- function(input, output, session) {
     extract_embedding(state$expression, sel)
   })
 
+  spatial_polygon_masks_available <- reactive({
+    obj <- state$expression
+    if (is.null(obj) || !spatial_polygons_available(obj)) return(FALSE)
+    sel <- input$umap_reduction %||% ""
+    if (!identical(sel, "segmentation")) return(FALSE)
+    emb <- current_embedding()
+    !is.null(emb) && isTRUE(any(emb$is_spatial))
+  })
+  output$spatial_polygon_masks_available <- spatial_polygon_masks_available
+  outputOptions(output, "spatial_polygon_masks_available", suspendWhenHidden = FALSE)
+
   output$umap_plot <- renderPlot({
     emb <- current_embedding()
     req(emb)
@@ -5128,11 +5155,14 @@ server <- function(input, output, session) {
     }
     pt_size <- input$umap_point_size %||% 0.8
     pt_alpha <- input$umap_point_alpha %||% 0.75
+    mask_alpha <- input$spatial_mask_alpha %||% 0.85
     # Detect spatial-frame embeddings (set by `extract_embedding()` when
     # the user picks the synthetic "spatial" reduction). Spatial plots
     # need (a) equal aspect so tissue isn't squashed and (b) a reversed
     # y-axis since image-space coordinates have origin at top-left.
     is_spatial <- isTRUE(any(df$is_spatial))
+    spatial_pick <- input$spatial_sample %||% "__all__"
+    all_sections <- is_spatial && identical(spatial_pick, "__all__")
 
     # Multi-section spatial objects: when the user picks a single
     # section in the sidebar, restrict the plot to that section so
@@ -5148,11 +5178,38 @@ server <- function(input, output, session) {
       }
     }
 
-    base <- ggplot(df, aes(x = dim1, y = dim2)) +
-      labs(x = unique(df$dim1_name)[1L] %||% "dim1",
-           y = unique(df$dim2_name)[1L] %||% "dim2") +
-      theme_minimal(base_size = .theme_base_size()) +
-      theme(panel.grid.minor = element_blank())
+    use_masks <- is_spatial && isTRUE(spatial_polygon_masks_available()) &&
+      identical(input$spatial_render_style %||% "points", "masks")
+    poly_df <- NULL
+    if (use_masks) {
+      section_arg <- NULL
+      if (is_spatial && "sample" %in% colnames(df) &&
+          !identical(spatial_pick, "__all__")) {
+        section_arg <- spatial_pick
+      }
+      poly_df <- extract_spatial_polygons(state$expression, section = section_arg)
+      req(!is.null(poly_df) && nrow(poly_df) > 0L)
+      poly_df <- poly_df[poly_df$cell_id %in% df$cell_id, , drop = FALSE]
+      req(nrow(poly_df) > 0L)
+    }
+
+    if (all_sections && .spatial_coords_are_fov_local(df)) {
+      df <- apply_global_spatial_coords_for_combined(state$expression, df)
+    }
+
+    base <- if (use_masks) {
+      ggplot(poly_df, aes(x = x, y = y)) +
+        labs(x = unique(df$dim1_name)[1L] %||% "x",
+             y = unique(df$dim2_name)[1L] %||% "y") +
+        theme_minimal(base_size = .theme_base_size()) +
+        theme(panel.grid.minor = element_blank())
+    } else {
+      ggplot(df, aes(x = dim1, y = dim2)) +
+        labs(x = unique(df$dim1_name)[1L] %||% "dim1",
+             y = unique(df$dim2_name)[1L] %||% "dim2") +
+        theme_minimal(base_size = .theme_base_size()) +
+        theme(panel.grid.minor = element_blank())
+    }
     if (is_spatial) {
       base <- base +
         coord_fixed() +
@@ -5184,87 +5241,120 @@ server <- function(input, output, session) {
       }
       lim <- max(abs(df$score_to_plot), na.rm = TRUE)
       if (!is.finite(lim) || lim == 0) lim <- 1
-      # Pass the *updated* df (with `score_to_plot`) explicitly to
-      # geom_point so the layer sees the new column — ggplot2 4.0.0
-      # deprecated `%+%` for swapping plot-level data after-the-fact, so
-      # supplying the data at the layer level keeps things forward-
-      # compatible without rebuilding `base`.
-      p <- base +
-        geom_point(data = df, aes(color = score_to_plot),
-                   size = pt_size, alpha = pt_alpha) +
-        scale_color_gradient2(
-          low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
-          midpoint = 0, limits = c(-lim, lim),
-          oob = scales::squish, name = legend_name
-        )
+      if (use_masks) {
+        poly_col <- join_spatial_polygon_colors(poly_df, df, "score_to_plot")
+        req(!is.null(poly_col) && nrow(poly_col) > 0L)
+        p <- base +
+          geom_polygon(aes(group = cell_id, fill = score_to_plot),
+                       data = poly_col, color = NA, alpha = mask_alpha) +
+          scale_fill_gradient2(
+            low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
+            midpoint = 0, limits = c(-lim, lim),
+            oob = scales::squish, name = legend_name
+          )
+      } else {
+        p <- base +
+          geom_point(data = df, aes(color = score_to_plot),
+                     size = pt_size, alpha = pt_alpha) +
+          scale_color_gradient2(
+            low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
+            midpoint = 0, limits = c(-lim, lim),
+            oob = scales::squish, name = legend_name
+          )
+      }
     } else if (color_by == "cell_type" && "cell_type" %in% colnames(df)) {
       pal <- tryCatch(
         PhenoMapR::get_celltype_palette(as.character(unique(df$cell_type))),
         error = function(e) NULL
       )
-      p <- base +
-        geom_point(aes(color = cell_type), size = pt_size, alpha = pt_alpha) +
-        labs(color = "Cell type") +
-        # Match the score_rank_plot legend point size so the cell-type
-        # swatches in the Embedding legend are easy to read regardless
-        # of how small `pt_size` (input$umap_point_size) is set.
-        ggplot2::guides(color = ggplot2::guide_legend(
-          override.aes = list(size = 4, alpha = 1)
-        ))
-      if (!is.null(pal)) p <- p + scale_color_manual(values = pal)
+      if (use_masks) {
+        poly_col <- join_spatial_polygon_colors(poly_df, df, "cell_type")
+        req(!is.null(poly_col) && nrow(poly_col) > 0L)
+        p <- base +
+          geom_polygon(aes(group = cell_id, fill = cell_type),
+                       data = poly_col, color = NA, alpha = mask_alpha) +
+          labs(fill = "Cell type")
+        if (!is.null(pal)) p <- p + scale_fill_manual(values = pal)
+      } else {
+        p <- base +
+          geom_point(aes(color = cell_type), size = pt_size, alpha = pt_alpha) +
+          labs(color = "Cell type") +
+          ggplot2::guides(color = ggplot2::guide_legend(
+            override.aes = list(size = 4, alpha = 1)
+          ))
+        if (!is.null(pal)) p <- p + scale_color_manual(values = pal)
+      }
     } else if (color_by == "source" && "source" %in% colnames(df)) {
       # Apply the PhenoMapR brand palette so the Source coloring here
       # matches the Source coloring on the Data tab and Score tab plots.
       df$source <- factor(as.character(df$source),
                           levels = unique(as.character(df$source)))
-      p <- base +
-        geom_point(aes(color = source), size = pt_size, alpha = pt_alpha) +
-        scale_color_phenomapr_d() +
-        labs(color = "Source") +
-        ggplot2::guides(color = ggplot2::guide_legend(
-          override.aes = list(size = 4, alpha = 1)
-        ))
+      if (use_masks) {
+        poly_col <- join_spatial_polygon_colors(poly_df, df, "source")
+        req(!is.null(poly_col) && nrow(poly_col) > 0L)
+        p <- base +
+          geom_polygon(aes(group = cell_id, fill = source),
+                       data = poly_col, color = NA, alpha = mask_alpha) +
+          scale_fill_phenomapr_d() +
+          labs(fill = "Source")
+      } else {
+        p <- base +
+          geom_point(aes(color = source), size = pt_size, alpha = pt_alpha) +
+          scale_color_phenomapr_d() +
+          labs(color = "Source") +
+          ggplot2::guides(color = ggplot2::guide_legend(
+            override.aes = list(size = 4, alpha = 1)
+          ))
+      }
     } else if (color_by == "group" && "group" %in% colnames(df)) {
       # Display-only legend remap: the underlying group factor levels
       # stay "Most Adverse" / "Most Favorable" / "Other" (those strings
       # are the canonical output of define_phenotype_groups() and are
       # consumed verbatim by find_phenotype_markers() and friends), but
       # the LEGEND shows the user-facing "Most Phenotype +/-" labels.
-      p <- base +
-        geom_point(aes(color = group), size = pt_size, alpha = pt_alpha) +
-        scale_color_manual(
-          values = c(
-            "Most Adverse"   = "#B2182B",
-            "Most Favorable" = "#2166AC",
-            "Other"          = "#BBBBBB"
-          ),
-          labels = c(
-            "Most Adverse"   = "Most Phenotype +",
-            "Most Favorable" = "Most Phenotype \u2212",
-            "Other"          = "Other"
-          ),
-          na.value = "#E0E0E0",
-          name = "Group"
-        ) +
-        # Same legend point size override as the cell_type / source
-        # branches and the score_rank_plot legend.
-        ggplot2::guides(color = ggplot2::guide_legend(
-          override.aes = list(size = 4, alpha = 1)
-        ))
+      group_vals <- c(
+        "Most Adverse"   = "#B2182B",
+        "Most Favorable" = "#2166AC",
+        "Other"          = "#BBBBBB"
+      )
+      group_labs <- c(
+        "Most Adverse"   = "Most Phenotype +",
+        "Most Favorable" = "Most Phenotype \u2212",
+        "Other"          = "Other"
+      )
+      if (use_masks) {
+        poly_col <- join_spatial_polygon_colors(poly_df, df, "group")
+        req(!is.null(poly_col) && nrow(poly_col) > 0L)
+        p <- base +
+          geom_polygon(aes(group = cell_id, fill = group),
+                       data = poly_col, color = NA, alpha = mask_alpha) +
+          scale_fill_manual(
+            values = group_vals, labels = group_labs,
+            na.value = "#E0E0E0", name = "Group"
+          )
+      } else {
+        p <- base +
+          geom_point(aes(color = group), size = pt_size, alpha = pt_alpha) +
+          scale_color_manual(
+            values = group_vals, labels = group_labs,
+            na.value = "#E0E0E0", name = "Group"
+          ) +
+          ggplot2::guides(color = ggplot2::guide_legend(
+            override.aes = list(size = 4, alpha = 1)
+          ))
+      }
     } else {
-      p <- base + geom_point(size = pt_size, alpha = pt_alpha, color = "#555555")
+      if (use_masks) {
+        p <- base +
+          geom_polygon(aes(group = cell_id), fill = "#555555",
+                       color = NA, alpha = mask_alpha)
+      } else {
+        p <- base + geom_point(size = pt_size, alpha = pt_alpha, color = "#555555")
+      }
     }
 
     if (isTRUE(input$umap_facet_source) && "source" %in% colnames(df)) {
       p <- p + facet_wrap(~ source)
-    }
-    # Multi-section spatial "All sections" view: each section keeps its
-    # own coord_fixed() frame (free scales) so tissues are drawn
-    # side-by-side instead of getting overlaid in a shared origin.
-    if (is_spatial && "sample" %in% colnames(df) &&
-        identical(input$spatial_sample %||% "__all__", "__all__") &&
-        length(unique(df$sample)) > 1L) {
-      p <- p + facet_wrap(~ sample, scales = "free")
     }
     panel_objects$umap_plot <- p
     p

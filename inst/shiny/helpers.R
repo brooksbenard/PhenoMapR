@@ -1423,6 +1423,190 @@ extract_embedding <- function(obj, name) {
   )
 }
 
+# ---- spatial polygon / cell-mask extraction ---------------------------------
+#
+# Seurat 5 FOV objects (Xenium / CosMx / MERSCOPE / Visium HD) store
+# per-cell segmentation boundaries in @images[[*]]@boundaries. The
+# Visualization tab can render those as filled polygons when the user
+# selects the "segmentation" reduction. Plain matrices / h5ad loads can
+# also carry a long-format `phenomapr_polygons` attribute:
+#   data.frame(cell_id, x, y, sample) with multiple rows per cell.
+
+.seurat_polygon_boundary_name <- function(bnames) {
+  bnames <- as.character(bnames)
+  bnames <- bnames[nzchar(bnames)]
+  if (!length(bnames)) return(NA_character_)
+  poly_names <- setdiff(bnames, "centroids")
+  if (!length(poly_names)) return(NA_character_)
+  if ("segmentation" %in% poly_names) return("segmentation")
+  poly_names[1L]
+}
+
+.seurat_has_polygon_boundaries <- function(img) {
+  bnames <- tryCatch(Seurat::Boundaries(img), error = function(e) character(0))
+  !is.na(.seurat_polygon_boundary_name(bnames))
+}
+
+.normalize_spatial_polygon_df <- function(df) {
+  if (is.null(df) || !is.data.frame(df) || !nrow(df)) return(NULL)
+  req_cols <- c("cell_id", "x", "y")
+  if (!all(req_cols %in% colnames(df))) return(NULL)
+  out <- data.frame(
+    cell_id = as.character(df$cell_id),
+    x = suppressWarnings(as.numeric(df$x)),
+    y = suppressWarnings(as.numeric(df$y)),
+    stringsAsFactors = FALSE
+  )
+  if ("sample" %in% colnames(df)) {
+    out$sample <- as.character(df$sample)
+  } else {
+    out$sample <- "section_1"
+  }
+  ok <- is.finite(out$x) & is.finite(out$y) & !is.na(out$cell_id) & nzchar(out$cell_id)
+  out <- out[ok, , drop = FALSE]
+  if (!nrow(out)) return(NULL)
+  # Keep only cells with at least three vertices (a degenerate "polygon").
+  n_vert <- as.integer(stats::ave(seq_len(nrow(out)), out$cell_id, FUN = length))
+  out <- out[n_vert >= 3L, , drop = FALSE]
+  if (!nrow(out)) return(NULL)
+  out
+}
+
+.filter_spatial_polygons_section <- function(poly_df, section = NULL) {
+  if (is.null(poly_df) || !nrow(poly_df)) return(poly_df)
+  if (is.null(section) || !nzchar(section) ||
+      identical(section, "__all__") || !"sample" %in% colnames(poly_df)) {
+    return(poly_df)
+  }
+  poly_df[!is.na(poly_df$sample) & poly_df$sample == section, , drop = FALSE]
+}
+
+.extract_seurat_spatial_polygons <- function(obj, section = NULL) {
+  if (!inherits(obj, "Seurat") || !requireNamespace("Seurat", quietly = TRUE)) {
+    return(NULL)
+  }
+  imgs <- methods::slot(obj, "images") %||% list()
+  if (!length(imgs)) return(NULL)
+  img_names <- names(imgs)
+  if (is.null(img_names) || any(!nzchar(img_names))) {
+    img_names <- paste0("image_", seq_along(imgs))
+  }
+  parts <- lapply(seq_along(imgs), function(i) {
+    if (!is.null(section) && nzchar(section) && !identical(section, "__all__") &&
+        img_names[i] != section) {
+      return(NULL)
+    }
+    img <- imgs[[i]]
+    if (!.seurat_has_polygon_boundaries(img)) return(NULL)
+    bnames <- tryCatch(Seurat::Boundaries(img), error = function(e) character(0))
+    which_use <- .seurat_polygon_boundary_name(bnames)
+    if (is.na(which_use)) return(NULL)
+    coords <- tryCatch(
+      Seurat::GetTissueCoordinates(obj, image = img_names[i], which = which_use),
+      error = function(e) NULL
+    )
+    if (is.null(coords) || !nrow(coords)) return(NULL)
+    if (!all(c("x", "y", "cell") %in% colnames(coords))) return(NULL)
+    data.frame(
+      cell_id = as.character(coords$cell),
+      x = as.numeric(coords$x),
+      y = as.numeric(coords$y),
+      sample = img_names[i],
+      stringsAsFactors = FALSE
+    )
+  })
+  parts <- parts[!vapply(parts, is.null, logical(1L))]
+  if (!length(parts)) return(NULL)
+  .normalize_spatial_polygon_df(do.call(rbind, parts))
+}
+
+#' @keywords internal
+spatial_polygons_available <- function(obj) {
+  if (is.null(obj)) return(FALSE)
+  poly <- extract_spatial_polygons(obj, section = NULL)
+  !is.null(poly) && nrow(poly) > 0L
+}
+
+#' @keywords internal
+extract_spatial_polygons <- function(obj, section = NULL) {
+  poly <- NULL
+  if (inherits(obj, "Seurat")) {
+    poly <- .extract_seurat_spatial_polygons(obj, section = section)
+  } else if (is.matrix(obj) || inherits(obj, "Matrix")) {
+    attr_poly <- attr(obj, "phenomapr_polygons")
+    if (is.data.frame(attr_poly)) {
+      poly <- .normalize_spatial_polygon_df(attr_poly)
+      poly <- .filter_spatial_polygons_section(poly, section)
+    }
+  } else if (inherits(obj, "python.builtin.object")) {
+    poly <- .extract_anndata_spatial_polygons(obj, section = section)
+  }
+  if (is.null(poly) || !nrow(poly)) return(NULL)
+  poly
+}
+
+.extract_anndata_spatial_polygons <- function(obj, section = NULL) {
+  if (!inherits(obj, "python.builtin.object")) return(NULL)
+  NULL
+}
+
+#' Join per-vertex polygon rows with per-cell coloring columns for ggplot.
+#' @keywords internal
+join_spatial_polygon_colors <- function(poly_df, cell_df, value_col) {
+  if (is.null(poly_df) || !nrow(poly_df) || is.null(cell_df) ||
+      !value_col %in% colnames(cell_df)) {
+    return(NULL)
+  }
+  keep <- unique(c("cell_id", value_col))
+  meta <- cell_df[, keep, drop = FALSE]
+  out <- dplyr::left_join(poly_df, meta, by = "cell_id")
+  if (!value_col %in% colnames(out)) return(NULL)
+  out
+}
+
+# Per-FOV pixel coordinates (e.g. CosMx x_FOV_px / y_FOV_px) are local to each
+# imaging field. For "All sections (combined)" on the segmentation reduction,
+# plot in the same global slide frame as the spatial reduction.
+#' @keywords internal
+.spatial_coords_are_fov_local <- function(plot_df) {
+  if (is.null(plot_df) || !nrow(plot_df)) return(FALSE)
+  n1 <- unique(plot_df$dim1_name)[1L] %||% ""
+  n2 <- unique(plot_df$dim2_name)[1L] %||% ""
+  grepl("FOV_px|fov_px", paste(n1, n2, collapse = " "), ignore.case = TRUE)
+}
+
+#' Swap FOV-local embedding coordinates for global spatial coordinates.
+#'
+#' Used when the user selects segmentation + all sections combined on CosMx-
+#' style data: each FOV shares a 0..N pixel range, so we re-use the object's
+#' global \code{spatial} embedding positions (slide-mm / tissue frame) while
+#' keeping the segmentation reduction selected.
+#'
+#' @param obj Expression object passed to \code{extract_embedding()}.
+#' @param emb_df Embedding data.frame from the segmentation reduction.
+#' @return \code{emb_df} with \code{dim1}/\code{dim2} replaced when possible.
+#' @keywords internal
+apply_global_spatial_coords_for_combined <- function(obj, emb_df) {
+  if (is.null(emb_df) || !nrow(emb_df)) return(emb_df)
+  if (!isTRUE(.spatial_coords_are_fov_local(emb_df))) return(emb_df)
+
+  global_emb <- tryCatch(extract_embedding(obj, "spatial"), error = function(e) NULL)
+  if (is.null(global_emb) || !nrow(global_emb)) return(emb_df)
+
+  idx <- match(emb_df$cell_id, global_emb$cell_id)
+  if (!any(is.finite(idx))) return(emb_df)
+
+  out <- emb_df
+  out$dim1 <- global_emb$dim1[idx]
+  out$dim2 <- global_emb$dim2[idx]
+  out$dim1_name <- global_emb$dim1_name[1L] %||% out$dim1_name
+  out$dim2_name <- global_emb$dim2_name[1L] %||% out$dim2_name
+  if ("sample" %in% colnames(global_emb)) {
+    out$sample <- global_emb$sample[idx]
+  }
+  out
+}
+
 # Probe an AnnData object's `obs` for the column conventionally used to
 # disambiguate tissue sections in a multi-sample spatial dataset.
 # Tries (in order): library_id, sample_id, sample, slide_id, section.

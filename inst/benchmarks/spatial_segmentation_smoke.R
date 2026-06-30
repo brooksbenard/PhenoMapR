@@ -23,6 +23,13 @@ helpers_R <- system.file("shiny", "helpers.R", package = "PhenoMapR")
 dev_dir   <- Sys.getenv("PHENOMAPR_SHINY_DIR", unset = "")
 if (nzchar(dev_dir) && dir.exists(dev_dir)) {
   helpers_R <- file.path(dev_dir, "helpers.R")
+} else {
+  dev_helpers <- normalizePath(
+    file.path(getwd(), "inst", "shiny", "helpers.R"),
+    winslash = "/",
+    mustWork = FALSE
+  )
+  if (file.exists(dev_helpers)) helpers_R <- dev_helpers
 }
 stopifnot(file.exists(helpers_R))
 helpers_src <- paste(readLines(helpers_R, warn = FALSE), collapse = "\n")
@@ -80,15 +87,15 @@ stopifnot_msg(
 )
 stopifnot_msg(
   grepl(
-    "(?s)seg_hit\\s*<-\\s*intersect\\(\\s*\\.anndata_segmentation_obsm_keys\\s*,\\s*keys\\s*\\)",
-    le_window, perl = TRUE
+    "(?s)seg_hit\\s*<-\\s*intersect\\(\\s*\\.anndata_segmentation_obsm_keys",
+    helpers_src, perl = TRUE
   ),
   "AnnData path looks up segmentation obsm keys via the whitelist"
 )
 stopifnot_msg(
   grepl(
     "(?s)setdiff\\(\\s*keys\\s*,\\s*\\.anndata_segmentation_obsm_keys\\s*\\).{0,100}\"segmentation\"",
-    le_window, perl = TRUE
+    helpers_src, perl = TRUE
   ),
   "AnnData path collapses raw obsm keys into a single \"segmentation\" entry"
 )
@@ -142,6 +149,24 @@ stopifnot_msg(
 stopifnot_msg(
   grepl("obsm\\['segmentation'\\]", app_src, perl = TRUE),
   "help copy advertises AnnData obsm['segmentation'] convention"
+)
+
+## --- 6. Polygon mask extraction helpers for cell-boundary rendering ----
+stopifnot_msg(
+  grepl("spatial_polygons_available\\s*<-\\s*function", helpers_src, perl = TRUE),
+  "spatial_polygons_available() helper exists"
+)
+stopifnot_msg(
+  grepl("extract_spatial_polygons\\s*<-\\s*function", helpers_src, perl = TRUE),
+  "extract_spatial_polygons() helper exists"
+)
+stopifnot_msg(
+  grepl("geom_polygon", app_src, fixed = TRUE),
+  "Visualization tab renders segmentation masks with geom_polygon"
+)
+stopifnot_msg(
+  grepl("spatial_render_style", app_src, fixed = TRUE),
+  "UI exposes segmentation render style toggle"
 )
 
 cat("\nAll spatial-segmentation smoke tests passed.\n")

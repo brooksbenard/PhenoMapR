@@ -112,7 +112,14 @@ inst/benchmarks/artifacts/*/PENCIL.tsv
 inst/benchmarks/artifacts/*/PENCIL_value.rds
 inst/benchmarks/artifacts/*/scAB.tsv
 
-# --- Per-driver timing / cell-level result files -----------------------------
+# --- Integration stress harness ----------------------------------------------
+inst/benchmarks/integration/local_paths.R
+inst/benchmarks/integration/reports/
+
+# Manuscript / exploratory figures (not shipped with the package)
+inst/figures/manuscript_candidates/
+inst/figures/spatial_pair_maps/
+
 inst/benchmarks/*_timing_*.tsv
 inst/benchmarks/benchmark_integration_cell_level.tsv
 
