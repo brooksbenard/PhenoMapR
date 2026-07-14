@@ -183,6 +183,31 @@ theme_set(theme_minimal(base_size = 14))
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
+.is_drive_quota_json <- function(path) {
+  info <- file.info(path)
+  if (is.null(path) || !isTRUE(file.exists(path)) ||
+      is.na(info$size) || info$size < 10 || info$size > 5000) {
+    return(FALSE)
+  }
+  txt <- tryCatch(
+    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
+    error = function(e) ""
+  )
+  grepl("downloadQuotaExceeded|The download quota for this file", txt)
+}
+.is_valid_rds_blob <- function(path) {
+  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
+  if (.is_drive_quota_json(path)) {
+    unlink(path)
+    return(FALSE)
+  }
+  info <- file.info(path)
+  if (is.na(info$size) || info$size < 1e5) return(FALSE)
+  con <- file(path, "rb")
+  on.exit(close(con), add = TRUE)
+  magic <- readBin(con, what = "raw", n = 2L)
+  identical(magic, as.raw(c(0x1f, 0x8b))) || identical(rawToChar(magic), "RD")
+}
 .resolve_vignette_rds <- function(filename, drive_id, env_var = NULL) {
   candidates <- unique(c(
     filename,
@@ -190,19 +215,40 @@ googledrive::drive_deauth()
     file.path("..", filename),
     file.path("..", "vignettes", filename)
   ))
-  hit <- candidates[file.exists(candidates)][1]
+  hit <- candidates[file.exists(candidates) &
+                      vapply(candidates, .is_valid_rds_blob, logical(1))][1]
   if (!is.na(hit)) return(hit)
+  dest <- filename
   if (!is.null(env_var) && nzchar(env_var)) {
     url <- Sys.getenv(env_var, unset = "")
     if (nzchar(url)) {
       message("Downloading ", filename, " from ", env_var)
-      utils::download.file(url, filename, mode = "wb", quiet = TRUE)
-      return(filename)
+      ok <- tryCatch({
+        utils::download.file(url, dest, mode = "wb", quiet = TRUE)
+        TRUE
+      }, error = function(e) FALSE)
+      if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
+      if (file.exists(dest)) unlink(dest)
     }
   }
   message("Downloading ", filename, " from Google Drive")
-  googledrive::drive_download(googledrive::as_id(drive_id), filename, overwrite = TRUE)
-  filename
+  ok <- tryCatch({
+    googledrive::drive_download(
+      googledrive::as_id(drive_id), dest, overwrite = TRUE
+    )
+    TRUE
+  }, error = function(e) FALSE)
+  if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
+  if (file.exists(dest)) unlink(dest)
+  stop(
+    "Could not obtain ", filename,
+    if (!is.null(env_var) && nzchar(env_var)) {
+      paste0(". Place it under vignettes/ or set ", env_var, ".")
+    } else {
+      ". Place it under vignettes/."
+    },
+    call. = FALSE
+  )
 }
 
 gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"

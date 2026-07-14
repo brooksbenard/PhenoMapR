@@ -72,10 +72,11 @@ suppressPackageStartupMessages({
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-# Prefer local files (repo root or vignettes/), then optional CI URL secrets,
-# then public Google Drive IDs.
+# Prefer valid local files, then CI URL secrets, then Google Drive.
+# Reject Drive "quota exceeded" JSON stubs so we can fall back to Seurat RDS.
 .h5_name <- "PAAD_CRA001160_expression.h5"
 .meta_name <- "PAAD_CRA001160_CellMetainfo_table.tsv"
+.rds_name <- "PAAD_CRA001160_seurat.rds"
 .find_vignette_data <- function(filename) {
   candidates <- c(
     filename,
@@ -86,32 +87,141 @@ googledrive::drive_deauth()
   hit <- candidates[file.exists(candidates)][1]
   if (is.na(hit)) NULL else hit
 }
-.download_vignette_file <- function(filename, drive_id, env_var) {
+.is_drive_quota_json <- function(path) {
+  info <- file.info(path)
+  if (is.null(path) || !isTRUE(file.exists(path)) ||
+      is.na(info$size) || info$size < 10 || info$size > 5000) {
+    return(FALSE)
+  }
+  txt <- tryCatch(
+    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
+    error = function(e) ""
+  )
+  grepl("downloadQuotaExceeded|The download quota for this file", txt)
+}
+.purge_quota_stub <- function(path) {
+  if (.is_drive_quota_json(path)) {
+    message("Removing Google Drive quota error stub: ", path)
+    unlink(path)
+  }
+}
+.is_valid_h5 <- function(path) {
+  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
+  .purge_quota_stub(path)
+  if (!isTRUE(file.exists(path))) return(FALSE)
+  info <- file.info(path)
+  if (is.na(info$size) || info$size < 1e6) return(FALSE)
+  con <- file(path, "rb")
+  on.exit(close(con), add = TRUE)
+  magic <- readBin(con, what = "raw", n = 8L)
+  identical(magic, as.raw(c(0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a)))
+}
+.is_valid_meta_tsv <- function(path) {
+  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
+  .purge_quota_stub(path)
+  if (!isTRUE(file.exists(path))) return(FALSE)
+  info <- file.info(path)
+  if (is.na(info$size) || info$size < 1e5) return(FALSE)
+  hdr <- tryCatch(readLines(path, n = 1L, warn = FALSE), error = function(e) "")
+  grepl("UMAP_1", hdr, fixed = TRUE) && grepl("Cell", hdr, fixed = TRUE)
+}
+.is_valid_rds_blob <- function(path) {
+  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
+  .purge_quota_stub(path)
+  if (!isTRUE(file.exists(path))) return(FALSE)
+  info <- file.info(path)
+  if (is.na(info$size) || info$size < 1e5) return(FALSE)
+  con <- file(path, "rb")
+  on.exit(close(con), add = TRUE)
+  magic <- readBin(con, what = "raw", n = 2L)
+  identical(magic, as.raw(c(0x1f, 0x8b))) || identical(rawToChar(magic), "RD")
+}
+.resolve_vignette_file <- function(filename, drive_id, env_var, validator) {
   existing <- .find_vignette_data(filename)
-  if (!is.null(existing)) return(existing)
+  if (!is.null(existing) && isTRUE(validator(existing))) return(existing)
+  dest <- filename
   url <- Sys.getenv(env_var, unset = "")
   if (nzchar(url)) {
     message("Downloading ", filename, " from ", env_var)
-    utils::download.file(url, filename, mode = "wb", quiet = TRUE)
-    return(filename)
+    ok <- tryCatch({
+      utils::download.file(url, dest, mode = "wb", quiet = TRUE)
+      TRUE
+    }, error = function(e) {
+      message("URL download failed: ", conditionMessage(e))
+      FALSE
+    })
+    if (isTRUE(ok) && isTRUE(validator(dest))) return(dest)
+    if (file.exists(dest)) unlink(dest)
   }
   message("Downloading ", filename, " from Google Drive")
-  googledrive::drive_download(googledrive::as_id(drive_id), filename, overwrite = TRUE)
-  filename
+  ok <- tryCatch({
+    googledrive::drive_download(
+      googledrive::as_id(drive_id), dest, overwrite = TRUE
+    )
+    TRUE
+  }, error = function(e) {
+    message("Google Drive download failed: ", conditionMessage(e))
+    FALSE
+  })
+  if (isTRUE(ok) && isTRUE(validator(dest))) return(dest)
+  .purge_quota_stub(dest)
+  if (file.exists(dest) && !isTRUE(validator(dest))) unlink(dest)
+  NULL
 }
-.h5_path <- .download_vignette_file(
-  .h5_name,
-  "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
-  "PHENOMAPR_CRA001160_H5_URL"
-)
-.meta_path <- .download_vignette_file(
+
+.meta_path <- .resolve_vignette_file(
   .meta_name,
   "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
-  "PHENOMAPR_CRA001160_META_URL"
+  "PHENOMAPR_CRA001160_META_URL",
+  .is_valid_meta_tsv
+)
+if (is.null(.meta_path)) {
+  stop(
+    "Could not obtain CRA001160 cell metadata. Place ",
+    .meta_name, " under vignettes/ or set PHENOMAPR_CRA001160_META_URL.",
+    call. = FALSE
+  )
+}
+
+.h5_path <- .resolve_vignette_file(
+  .h5_name,
+  "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
+  "PHENOMAPR_CRA001160_H5_URL",
+  .is_valid_h5
 )
 
-# Expression matrix
-expr_mat <- Seurat::Read10X_h5(.h5_path)
+# Expression matrix from H5 when available; otherwise Seurat RDS (CI secret).
+if (!is.null(.h5_path)) {
+  expr_mat <- Seurat::Read10X_h5(.h5_path)
+} else {
+  message(
+    "CRA001160 HDF5 unavailable (often Google Drive quota). ",
+    "Falling back to Seurat RDS via local file or PHENOMAPR_CRA001160_RDS_URL."
+  )
+  .rds_path <- .resolve_vignette_file(
+    .rds_name,
+    "14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb",
+    "PHENOMAPR_CRA001160_RDS_URL",
+    .is_valid_rds_blob
+  )
+  if (is.null(.rds_path)) {
+    stop(
+      "Could not obtain CRA001160 expression (H5 or Seurat RDS). ",
+      "Set PHENOMAPR_CRA001160_H5_URL or PHENOMAPR_CRA001160_RDS_URL ",
+      "to a non-Drive mirror, or place the file under vignettes/.",
+      call. = FALSE
+    )
+  }
+  .seu <- readRDS(.rds_path)
+  expr_mat <- tryCatch(
+    PhenoMapR:::.get_assay_data_compat(.seu, assay = "RNA", slot = "counts"),
+    error = function(e) {
+      PhenoMapR:::.get_assay_data_compat(.seu, assay = "RNA", slot = "data")
+    }
+  )
+  rm(.seu)
+  invisible()
+}
 
 # Cell and sample metadata
 meta <- read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE) %>%

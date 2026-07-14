@@ -59,6 +59,7 @@ In R, **before** knitting or sourcing the vignettes, run (you can use the file I
 Sys.setenv(
   PHENOMAPR_CRA001160_H5_URL    = "https://drive.google.com/uc?export=download&id=1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
   PHENOMAPR_CRA001160_META_URL  = "https://drive.google.com/uc?export=download&id=17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
+  PHENOMAPR_CRA001160_RDS_URL   = "https://drive.google.com/uc?export=download&id=14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb",
   PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj",
   PHENOMAPR_GSE205154_MATRIX_URL = "https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN",
   PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ",
@@ -88,10 +89,11 @@ R
 
 ### Large files on Google Drive
 
-For large files, Google may show a warning page instead of downloading. If the automatic download fails:
+For large files, Google may show a warning page instead of downloading, or return a small JSON error when the file’s **download quota is exceeded**. The single-cell vignette rejects those stubs and falls back to `PHENOMAPR_CRA001160_RDS_URL` / a local Seurat RDS for expression. If automatic download fails:
 
 - **Easiest:** Use Option 1 — download the file in your browser from Drive and place it in `vignettes/`.
 - Or use the [gdown](https://github.com/wkentaro/gdown) Python tool with the file ID: `gdown FILE_ID`.
+- For CI, prefer secrets that point at a **non-Drive** mirror (S3, GitHub release asset, etc.); Drive `uc?export=download` URLs hit the same quota limits.
 
 ### GitHub Actions (CI)
 
@@ -101,6 +103,7 @@ Add the direct download URLs as repository secrets (e.g. `PHENOMAPR_GSE111672_RD
 env:
   PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
   PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
+  PHENOMAPR_CRA001160_RDS_URL: ${{ secrets.PHENOMAPR_CRA001160_RDS_URL }}
   PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}
   PHENOMAPR_GSE205154_MATRIX_URL: ${{ secrets.PHENOMAPR_GSE205154_MATRIX_URL }}
   PHENOMAPR_GSE205154_INFO_URL: ${{ secrets.PHENOMAPR_GSE205154_INFO_URL }}

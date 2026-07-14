@@ -33,18 +33,88 @@ suppressPackageStartupMessages({
   library(ggplot2)
 })
 
-# Vignette data, downloaded from Google Drive.
+# Prefer valid local files, then CI URL secrets, then Google Drive.
+# Reject Drive "quota exceeded" JSON stubs that break readRDS().
 googledrive::drive_deauth()
-options(googledrive_quiet = TRUE)    
+options(googledrive_quiet = TRUE)
 
-# Patient annotations
-googledrive::drive_download(googledrive::as_id("1c0GUMVzAr6K44Z7CfVRz-dy6jIvb0nNo"), "GSE205154_info.rds", overwrite = TRUE)
-pheno <- readRDS("GSE205154_info.rds")
-    
-# Expression matrix
-googledrive::drive_download(googledrive::as_id("16P-rfXD734seGl_xxTQuSDGMStQk9G7B"), "GSE205154_GPL20301_expression.rds", overwrite = TRUE)
-bulk_mat <- readRDS("GSE205154_GPL20301_expression.rds")
+.find_vignette_data <- function(filename) {
+  candidates <- c(
+    filename,
+    file.path("vignettes", filename),
+    file.path("..", filename),
+    file.path("..", "vignettes", filename)
+  )
+  hit <- candidates[file.exists(candidates)][1]
+  if (is.na(hit)) NULL else hit
+}
+.is_drive_quota_json <- function(path) {
+  info <- file.info(path)
+  if (is.null(path) || !isTRUE(file.exists(path)) ||
+      is.na(info$size) || info$size < 10 || info$size > 5000) {
+    return(FALSE)
+  }
+  txt <- tryCatch(
+    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
+    error = function(e) ""
+  )
+  grepl("downloadQuotaExceeded|The download quota for this file", txt)
+}
+.is_valid_rds_blob <- function(path) {
+  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
+  if (.is_drive_quota_json(path)) {
+    unlink(path)
+    return(FALSE)
+  }
+  info <- file.info(path)
+  if (is.na(info$size) || info$size < 1000) return(FALSE)
+  con <- file(path, "rb")
+  on.exit(close(con), add = TRUE)
+  magic <- readBin(con, what = "raw", n = 2L)
+  identical(magic, as.raw(c(0x1f, 0x8b))) || identical(rawToChar(magic), "RD")
+}
+.resolve_vignette_rds <- function(filename, drive_id, env_var) {
+  existing <- .find_vignette_data(filename)
+  if (!is.null(existing) && isTRUE(.is_valid_rds_blob(existing))) return(existing)
+  dest <- filename
+  url <- Sys.getenv(env_var, unset = "")
+  if (nzchar(url)) {
+    message("Downloading ", filename, " from ", env_var)
+    ok <- tryCatch({
+      utils::download.file(url, dest, mode = "wb", quiet = TRUE)
+      TRUE
+    }, error = function(e) FALSE)
+    if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
+    if (file.exists(dest)) unlink(dest)
+  }
+  message("Downloading ", filename, " from Google Drive")
+  ok <- tryCatch({
+    googledrive::drive_download(
+      googledrive::as_id(drive_id), dest, overwrite = TRUE
+    )
+    TRUE
+  }, error = function(e) FALSE)
+  if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
+  if (file.exists(dest)) unlink(dest)
+  stop(
+    "Could not obtain ", filename,
+    ". Place it under vignettes/ or set ", env_var, ".",
+    call. = FALSE
+  )
+}
 
+.info_path <- .resolve_vignette_rds(
+  "GSE205154_info.rds",
+  "1c0GUMVzAr6K44Z7CfVRz-dy6jIvb0nNo",
+  "PHENOMAPR_GSE205154_INFO_URL"
+)
+.expr_path <- .resolve_vignette_rds(
+  "GSE205154_GPL20301_expression.rds",
+  "16P-rfXD734seGl_xxTQuSDGMStQk9G7B",
+  "PHENOMAPR_GSE205154_MATRIX_URL"
+)
+pheno <- readRDS(.info_path)
+bulk_mat <- readRDS(.expr_path)
 message("Expression: ", nrow(bulk_mat), " genes × ", ncol(bulk_mat), " samples")
 message("Phenotype: ", nrow(pheno), " samples (Primary: ", sum(pheno$tumor_type == "Primary"), ", Met: ", sum(pheno$tumor_type == "Met"), ")")
 
