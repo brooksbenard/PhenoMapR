@@ -2899,6 +2899,10 @@ clear_shiny_demo_pool_cache <- function() {
     cell_type = cell_type,
     cell_type_minor = cell_type,
     Source = source,
+    # Sample IDs for pseudobulk demos when CRA001160 bundle is absent
+    # (e.g. R CMD check tarball drops inst/extdata).
+    Patient = paste0("P", sample.int(max(2L, min(8L, n_cells %/% 5L)),
+                                     n_cells, replace = TRUE)),
     UMAP_1 = umap1,
     UMAP_2 = umap2,
     stringsAsFactors = FALSE

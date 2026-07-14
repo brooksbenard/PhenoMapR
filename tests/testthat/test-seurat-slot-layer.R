@@ -29,6 +29,26 @@ test_that(".get_assay_data_compat reads counts/data on installed Seurat", {
   expect_equal(dim(m_data), dim(counts))
 })
 
+test_that(".get_assay_data_compat falls back from empty data to counts", {
+  skip_if_not_installed("Seurat")
+  set.seed(2)
+  counts <- matrix(
+    rpois(40, 2),
+    nrow = 10,
+    ncol = 4,
+    dimnames = list(paste0("g", 1:10), paste0("c", 1:4))
+  )
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = counts, assay = "RNA"))
+  # Fresh Assays often have empty 'data' until NormalizeData; compat should
+  # still return a usable counts matrix when 'data' is requested.
+  expect_warning(
+    m <- .get_assay_data_compat(obj, assay = "RNA", slot = "data"),
+    "using 'counts' instead"
+  )
+  expect_equal(dim(m), dim(counts))
+  expect_true(!is.null(rownames(m)))
+})
+
 test_that("PhenoMap accepts layer= (preferred) and slot= alias on Seurat objects", {
   skip_if_not_installed("Seurat")
   data(precog, package = "PhenoMapR", envir = environment())

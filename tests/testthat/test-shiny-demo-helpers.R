@@ -45,10 +45,15 @@ test_that("make_shiny_demo_dataset draws different cells without a fixed seed", 
   has_bundle <- !is.null(bundle) && nzchar(bundle) && file.exists(bundle)
   d1 <- e$make_shiny_demo_dataset(n_genes = 100L, n_cells = 50L, seed = 1L)
   d2 <- e$make_shiny_demo_dataset(n_genes = 100L, n_cells = 50L, seed = 2L)
-  if (!has_bundle) {
-    expect_false(identical(colnames(d1$expression), colnames(d2$expression)))
-  } else {
+  if (has_bundle || identical(d1$from, "CRA001160")) {
+    # Presampled CRA001160 bundle is fixed across seeds.
     expect_equal(colnames(d1$expression), colnames(d2$expression))
+  } else if (identical(d1$from, "synthetic")) {
+    # Synthetic uses Cell_1..Cell_n labels; expression values differ by seed.
+    expect_equal(colnames(d1$expression), colnames(d2$expression))
+    expect_false(identical(as.vector(d1$expression), as.vector(d2$expression)))
+  } else {
+    expect_false(identical(colnames(d1$expression), colnames(d2$expression)))
   }
 })
 

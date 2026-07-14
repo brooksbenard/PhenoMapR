@@ -71,14 +71,50 @@ suppressPackageStartupMessages({
 
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
-googledrive::drive_download(googledrive::as_id("1PolTXggREz8XmhutCLTQJGCfKxFAzqMl"), "PAAD_CRA001160_expression.h5", overwrite = TRUE)
-googledrive::drive_download(googledrive::as_id("17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu"), "PAAD_CRA001160_CellMetainfo_table.tsv", overwrite = TRUE)
+
+# Prefer local files (repo root or vignettes/), then optional CI URL secrets,
+# then public Google Drive IDs.
+.h5_name <- "PAAD_CRA001160_expression.h5"
+.meta_name <- "PAAD_CRA001160_CellMetainfo_table.tsv"
+.find_vignette_data <- function(filename) {
+  candidates <- c(
+    filename,
+    file.path("vignettes", filename),
+    file.path("..", filename),
+    file.path("..", "vignettes", filename)
+  )
+  hit <- candidates[file.exists(candidates)][1]
+  if (is.na(hit)) NULL else hit
+}
+.download_vignette_file <- function(filename, drive_id, env_var) {
+  existing <- .find_vignette_data(filename)
+  if (!is.null(existing)) return(existing)
+  url <- Sys.getenv(env_var, unset = "")
+  if (nzchar(url)) {
+    message("Downloading ", filename, " from ", env_var)
+    utils::download.file(url, filename, mode = "wb", quiet = TRUE)
+    return(filename)
+  }
+  message("Downloading ", filename, " from Google Drive")
+  googledrive::drive_download(googledrive::as_id(drive_id), filename, overwrite = TRUE)
+  filename
+}
+.h5_path <- .download_vignette_file(
+  .h5_name,
+  "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
+  "PHENOMAPR_CRA001160_H5_URL"
+)
+.meta_path <- .download_vignette_file(
+  .meta_name,
+  "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
+  "PHENOMAPR_CRA001160_META_URL"
+)
 
 # Expression matrix
-expr_mat <- Seurat::Read10X_h5("PAAD_CRA001160_expression.h5")
+expr_mat <- Seurat::Read10X_h5(.h5_path)
 
 # Cell and sample metadata
-meta <- read.delim("PAAD_CRA001160_CellMetainfo_table.tsv", stringsAsFactors = FALSE, check.names = FALSE) %>%
+meta <- read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE) %>%
    mutate(`Celltype (original)` = gsub(" cell", "", `Celltype (original)`)) %>%
    dplyr::rename(celltype_malignancy = `Celltype (malignancy)`,
          celltype_original = `Celltype (original)`)

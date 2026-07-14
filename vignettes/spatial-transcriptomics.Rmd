@@ -183,12 +183,34 @@ theme_set(theme_minimal(base_size = 14))
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
-rds_spot <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"
-
-if (!file.exists(rds_spot)) {
-  googledrive::drive_download(googledrive::as_id(gd_id_spot), rds_spot, overwrite = TRUE)
+.resolve_vignette_rds <- function(filename, drive_id, env_var = NULL) {
+  candidates <- unique(c(
+    filename,
+    file.path("vignettes", filename),
+    file.path("..", filename),
+    file.path("..", "vignettes", filename)
+  ))
+  hit <- candidates[file.exists(candidates)][1]
+  if (!is.na(hit)) return(hit)
+  if (!is.null(env_var) && nzchar(env_var)) {
+    url <- Sys.getenv(env_var, unset = "")
+    if (nzchar(url)) {
+      message("Downloading ", filename, " from ", env_var)
+      utils::download.file(url, filename, mode = "wb", quiet = TRUE)
+      return(filename)
+    }
+  }
+  message("Downloading ", filename, " from Google Drive")
+  googledrive::drive_download(googledrive::as_id(drive_id), filename, overwrite = TRUE)
+  filename
 }
+
+gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
+rds_spot <- .resolve_vignette_rds(
+  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds",
+  gd_id_spot,
+  "PHENOMAPR_SPATIAL_RDS_URL"
+)
 
 seurat_spot <- readRDS(rds_spot)
 
@@ -341,21 +363,22 @@ for (nm in c("seurat_spot", "scores_spot", "h_and_e", "hex_phenomapr",
 gc(verbose = FALSE)
 
 # Load the **CytoSPACE** object (single cells placed on Visium coordinates).
-rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
-gd_id_cyto <- "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
-
-if (!file.exists(rds_cyto)) {
-  googledrive::drive_download(googledrive::as_id(gd_id_cyto), rds_cyto, overwrite = TRUE)
-}
+rds_cyto <- .resolve_vignette_rds(
+  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds",
+  "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll",
+  "PHENOMAPR_SPATIAL_CYTO_RDS_URL"
+)
 
 seurat <- readRDS(rds_cyto)
 
-  scores_spatial <- PhenoMapR::PhenoMap(
+# Score CytoSPACE-mapped cells. Prefer counts: many CytoSPACE exports keep an
+# empty Assay5 `data` layer (PhenoMapR falls back to counts automatically).
+scores_spatial <- PhenoMapR::PhenoMap(
     expression = seurat,
     reference = "precog",
     cancer_type = "Pancreatic",
     assay = "Spatial",
-    layer = "data",
+    layer = "counts",
     verbose = FALSE
   )
   seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
@@ -1707,7 +1730,7 @@ markers_global <- PhenoMapR::find_phenotype_markers(
   cell_id_column = "cell_id",
   marker_scope = "phenotype_groups",
   assay = "Spatial",
-  layer = "data",
+  layer = "counts",
   max_cells_per_ident = max_cells_markers,
   verbose = FALSE
 )
@@ -1722,7 +1745,7 @@ if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
     marker_scope = "cell_type_specific",
     celltype_contrast = "vs_opposite_tail",
     assay = "Spatial",
-    layer = "data",
+    layer = "counts",
     max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )
@@ -1735,7 +1758,7 @@ if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
     marker_scope = "cell_type_specific",
     celltype_contrast = "within_cell_type",
     assay = "Spatial",
-    layer = "data",
+    layer = "counts",
     max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )

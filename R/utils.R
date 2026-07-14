@@ -75,33 +75,62 @@
   primary <- if (isTRUE(.seurat_uses_layers())) "layer" else "slot"
   secondary <- if (identical(primary, "layer")) "slot" else "layer"
 
-  run_get <- function(arg_name) {
+  run_get <- function(arg_name, matrix_name) {
     args <- args_base
-    args[[arg_name]] <- slot
+    args[[arg_name]] <- matrix_name
     do.call(Seurat::GetAssayData, args)
   }
 
-  tryCatch(
-    run_get(primary),
-    error = function(e1) {
-      tryCatch(
-        run_get(secondary),
-        error = function(e2) {
-          stop(
-            "Could not read Seurat assay matrix '", slot, "'",
-            if (!is.null(assay) && nzchar(assay)) {
-              paste0(" from assay '", assay, "'")
-            } else {
-              ""
-            },
-            " using either ", primary, "= or ", secondary, "=. ",
-            "Primary error: ", conditionMessage(e1),
-            call. = FALSE
-          )
-        }
+  fetch_one <- function(matrix_name) {
+    tryCatch(
+      run_get(primary, matrix_name),
+      error = function(e1) {
+        tryCatch(
+          run_get(secondary, matrix_name),
+          error = function(e2) {
+            stop(
+              "Could not read Seurat assay matrix '", matrix_name, "'",
+              if (!is.null(assay) && nzchar(assay)) {
+                paste0(" from assay '", assay, "'")
+              } else {
+                ""
+              },
+              " using either ", primary, "= or ", secondary, "=. ",
+              "Primary error: ", conditionMessage(e1),
+              call. = FALSE
+            )
+          }
+        )
+      }
+    )
+  }
+
+  .matrix_usable <- function(m) {
+    !is.null(m) &&
+      (is.matrix(m) || inherits(m, "Matrix")) &&
+      !is.null(rownames(m)) &&
+      length(rownames(m)) > 0L &&
+      nrow(m) > 0L &&
+      ncol(m) > 0L
+  }
+
+  mat <- fetch_one(slot)
+  # Many saved Seurat / CytoSPACE objects expose an empty Assay5 `data`
+  # layer while `counts` is populated. Fall back so scoring keeps working
+  # when callers ask for the default normalized layer.
+  if (!.matrix_usable(mat) && identical(as.character(slot)[1L], "data")) {
+    alt <- tryCatch(fetch_one("counts"), error = function(e) NULL)
+    if (.matrix_usable(alt)) {
+      warning(
+        "Seurat layer/slot 'data' is empty",
+        if (!is.null(assay) && nzchar(assay)) paste0(" for assay '", assay, "'") else "",
+        "; using 'counts' instead.",
+        call. = FALSE
       )
+      return(alt)
     }
-  )
+  }
+  mat
 }
 
 #' Seurat 4 / 5 compatibility shim for \code{Seurat::SetAssayData()}
