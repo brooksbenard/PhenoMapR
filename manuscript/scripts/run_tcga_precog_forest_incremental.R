@@ -58,9 +58,22 @@ drive_html_url <- paste0(
   "?usp=drive_link"
 )
 
-tpm_dir <- get_flag("--tpm_dir", "data/tcga")
+# Resolve package / manuscript roots when run from repo (defaults stay relative if paths.R missing).
+.args_all <- commandArgs(trailingOnly = FALSE)
+.script_path <- sub("^--file=", "", .args_all[grep("^--file=", .args_all)])
+.paths_r <- if (length(.script_path) == 1L && nzchar(.script_path)) {
+  normalizePath(file.path(dirname(.script_path), "paths.R"), mustWork = FALSE)
+} else {
+  "manuscript/scripts/paths.R"
+}
+if (file.exists(.paths_r)) source(.paths_r, local = FALSE)
+
+.tpm_default <- if (exists("tcga_data_dir")) tcga_data_dir() else "data/tcga"
+.out_default <- if (exists("manuscript_results_dir")) manuscript_results_dir() else "manuscript/results"
+
+tpm_dir <- get_flag("--tpm_dir", .tpm_default)
 cdr_file <- get_flag("--cdr_file", file.path(tpm_dir, "TCGA-CDR-SupplementalTableS1.xlsx"))
-out_dir <- get_flag("--out_dir", "results")
+out_dir <- get_flag("--out_dir", .out_default)
 # Unshrunk meta-z tables for PRECOG–TCGA Pearson r (forest point sizes); optional, repo root by default
 precog_full_path <- get_flag("--precog_full", "PRECOG_V2_Cancer_Type_Meta_Zscores_Final.rds")
 tcga_full_path <- get_flag("--tcga_full", "TCGA_metaz.csv")
@@ -176,11 +189,16 @@ sample_to_type_code <- function(sample_ids) {
 
 sample_stratum <- function(sample_type) {
   # Map TCGA sample_type codes to analysis strata.
-  # We keep normals separate from tumor samples on the forest plot.
   # 01/02/03/... are treated as "Tumor" except 06 metastatic and 11 normal.
+  # Normal samples are classified but excluded from PRECOG forests (no normal signatures).
   ifelse(sample_type == "11", "Normal",
     ifelse(sample_type == "06", "Metastatic", "Tumor")
   )
+}
+
+#' PRECOG signatures are defined for primary/metastatic tumor only — exclude normal tissue.
+precog_forest_strata <- function(strata) {
+  sort(setdiff(unique(strata), "Normal"))
 }
 
 #' Patient-level survival from TCGA-CDR columns (time in days, event 1/0).
@@ -785,7 +803,7 @@ for (tcga_code in tcga_types_precog) {
       surv_dt_comb <- build_survival_cdr(clin[acronym == tcga_code], ep_comb$time, ep_comb$event)
       dat_comb <- merge(surv_dt_comb, score_dt_patient, by = "patient", all = FALSE)
       if (nrow(dat_comb) >= 20) {
-        for (st in sort(unique(dat_comb$stratum))) {
+        for (st in precog_forest_strata(dat_comb$stratum)) {
           sub_c <- dat_comb[stratum == st]
           if (nrow(sub_c) < 20) next
           forest_label_st <- ifelse(st == "Tumor", tcga_code, paste0(tcga_code, "_", st))
@@ -901,7 +919,7 @@ for (tcga_code in tcga_types_precog) {
 
         if (nrow(dat) >= 20) {
         out_panels <- list()
-        for (st in sort(unique(dat$stratum))) {
+        for (st in precog_forest_strata(dat$stratum)) {
           sub <- dat[stratum == st]
           if (nrow(sub) < 20) next
 
@@ -990,7 +1008,7 @@ for (tcga_code in tcga_types_precog) {
         } else {
           out_panels_tm <- list()
           n_tcga_sig_genes <- as.integer(scr$n_genes_tcga)
-          for (st in sort(unique(dat_tm$stratum))) {
+          for (st in precog_forest_strata(dat_tm$stratum)) {
             sub_tm <- dat_tm[stratum == st]
             if (nrow(sub_tm) < 20) next
 

@@ -17,7 +17,7 @@ test_that("PhenoMap with Seurat object returns scores", {
   scores <- PhenoMap(expression = obj, reference = "precog", cancer_type = "Breast", assay = "RNA", slot = "data", verbose = FALSE)
   expect_s3_class(scores, "data.frame")
   expect_equal(nrow(scores), n_cells)
-  expect_true(any(grepl("weighted_sum", colnames(scores))))
+  expect_true(any(grepl("PhenoMapR", colnames(scores))))
 })
 
 test_that("PhenoMap Seurat pseudobulk with a single sample group returns one score", {
@@ -45,7 +45,7 @@ test_that("PhenoMap Seurat pseudobulk with a single sample group returns one sco
   )
   expect_s3_class(scores, "data.frame")
   expect_equal(nrow(scores), 1L)
-  expect_true(any(grepl("weighted_sum", colnames(scores))))
+  expect_true(any(grepl("PhenoMapR", colnames(scores))))
 })
 
 test_that("PhenoMap with SingleCellExperiment returns scores", {

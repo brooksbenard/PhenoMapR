@@ -4,7 +4,7 @@
 #' highest scores), favorable (bottom percentile, lowest scores), or middle.
 #'
 #' @param scores Data.frame of phenotype scores from \code{PhenoMap}.
-#'   Rows = cells/samples, columns = score variables (e.g. weighted_sum_score_precog_BRCA).
+#'   Rows = cells/samples, columns = score variables (e.g. PhenoMapR_precog_BRCA).
 #' @param percentile Fraction of cells in each tail (default 0.05 for top and bottom 5%).
 #' @param score_columns Character vector of score column names to use. If NULL,
 #'   all numeric columns in \code{scores} are used.
@@ -21,7 +21,7 @@
 #' \dontrun{
 #' scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 #' groups <- define_phenotype_groups(scores, percentile = 0.05)
-#' table(groups$phenotype_group_weighted_sum_score_precog_BRCA)
+#' table(groups$phenotype_group_PhenoMapR_precog_BRCA)
 #' }
 #'
 #' @export
@@ -191,7 +191,7 @@ define_phenotype_groups <- function(scores,
 #' markers <- find_phenotype_markers(
 #'   seurat_obj,
 #'   group_labels = groups,
-#'   group_column = "phenotype_group_weighted_sum_score_precog_BRCA",
+#'   group_column = "phenotype_group_PhenoMapR_precog_BRCA",
 #'   cell_id_column = "cell_id"
 #' )
 #' head(markers$adverse_markers)
@@ -406,6 +406,8 @@ find_phenotype_markers <- function(expression,
       }
       cells_keep <- c(cells_keep, colnames(seurat_obj)[idx])
     }
+    # Drop graphs again before a second subset (subsample path).
+    seurat_obj <- .drop_seurat_graphs_for_markers(seurat_obj)
     seurat_obj <- tryCatch(
       seurat_obj[, cells_keep],
       error = function(e) {
@@ -1119,6 +1121,27 @@ run_markers_on_matrix_by_celltype <- function(mat,
 }
 
 
+#' Drop neighbor Graphs that can break Seurat subsetting for FindMarkers.
+#'
+#' FindMarkers (Wilcoxon) does not need SNN/NN graphs. Spatial / CosMx objects
+#' often carry Graphs whose cell dimnames no longer match the object (e.g. after
+#' rename/filter elsewhere). Subsetting then calls \code{as.Graph()} on a
+#' 0-row matrix and errors with
+#' "Please provide rownames to the matrix before converting to a Graph".
+#'
+#' @keywords internal
+#' @noRd
+.drop_seurat_graphs_for_markers <- function(obj) {
+  if (!inherits(obj, "Seurat")) return(obj)
+  if (length(obj@graphs)) {
+    obj@graphs <- list()
+  }
+  if (length(obj@neighbors)) {
+    obj@neighbors <- list()
+  }
+  obj
+}
+
 #' Get existing Seurat object or create one from matrix/SCE; add phenotype group to metadata
 #' @keywords internal
 # nocov start - only used by Seurat path in find_phenotype_markers (nocov'd)
@@ -1139,7 +1162,7 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
         if (is.null(assay) || !assay %in% avail) assay <- avail[1L]
       }
     }
-    obj <- expression
+    obj <- .drop_seurat_graphs_for_markers(expression)
     # Ensure cells in same order as expr_info
     cell_ids <- expr_info$cell_names
     obj <- obj[, cell_ids]

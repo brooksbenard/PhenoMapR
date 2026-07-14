@@ -37,9 +37,27 @@
 #'   from \code{\link{derive_reference_from_bulk}}, prefer setting
 #'   \code{binary_positive_reference} so the reference itself matches your factor
 #'   levels (first level = positive association when \code{"first"}).
+#' @param score_mode Scoring mode: \code{"weighted_sum"} (default) uses the
+#'   standard dot product of expression and reference z-scores;
+#'   \code{"activity_adjusted"} regresses technical covariates per gene (via
+#'   Seurat \code{ScaleData}) before computing the weighted sum on the regressed
+#'   layer. Requires Seurat for matrix inputs.
+#' @param vars_to_regress Metadata columns to regress when
+#'   \code{score_mode = "activity_adjusted"}. Default:
+#'   \code{c("S.Score", "G2M.Score", "nCount_RNA")}. For matrix input, pass
+#'   covariates via \code{sample_metadata} (see below). \code{nCount_RNA} is
+#'   computed from column sums when absent.
+#' @param sample_metadata Optional data.frame of per-cell/sample covariates for
+#'   \code{score_mode = "activity_adjusted"} when \code{expression} is a matrix.
+#'   Must include a cell identifier column (default \code{"cell_id"}).
+#' @param cell_id_column Column in \code{sample_metadata} matching matrix colnames
+#'   (default \code{"cell_id"}).
+#' @param permutation_n If a positive integer, compute gene-shuffle permutation
+#'   null scores and add \code{empirical_p_*} columns alongside raw score columns.
+#' @param permutation_seed Random seed for permutation null (default \code{42}).
 #'
 #' @return A data.frame with samples/cells as rows and score columns. Column 
-#'   names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}.
+#'   names follow pattern: \code{PhenoMapR_\{reference\}_\{cancer_type\}}.
 #'   **Directionality (built-in PRECOG/TCGA/ICI references)**: higher score =
 #'   worse prognosis (adverse); lower score = better prognosis (favorable),
 #'   matching positive reference z = worse survival. **Custom references** from
@@ -98,15 +116,30 @@ PhenoMap <- function(expression,
                     assay = NULL,
                     slot = "data",
                     verbose = TRUE,
-                    reference_sign = 1L) {
+                    reference_sign = 1L,
+                    score_mode = c("weighted_sum", "activity_adjusted"),
+                    vars_to_regress = c("S.Score", "G2M.Score", "nCount_RNA"),
+                    sample_metadata = NULL,
+                    cell_id_column = "cell_id",
+                    permutation_n = NULL,
+                    permutation_seed = 42L) {
 
-  # Validate inputs
+  score_mode <- match.arg(score_mode)
   reference_sign <- as.integer(reference_sign)[1L]
   if (!reference_sign %in% c(-1L, 1L)) {
     stop("'reference_sign' must be 1 or -1")
   }
   if (pseudobulk && is.null(group_by)) {
     stop("'group_by' must be specified when pseudobulk = TRUE")
+  }
+  if (!is.null(permutation_n)) {
+    permutation_n <- as.integer(permutation_n)[1L]
+    if (is.na(permutation_n) || permutation_n < 1L) {
+      stop("'permutation_n' must be a positive integer")
+    }
+  }
+  if (score_mode == "activity_adjusted" && !requireNamespace("Seurat", quietly = TRUE)) {
+    stop("score_mode = 'activity_adjusted' requires the Seurat package")
   }
 
   # Handle reference data
@@ -126,9 +159,30 @@ PhenoMap <- function(expression,
     verbose = verbose
   )
 
+  expr_matrix <- expr_info$matrix
+  if (score_mode == "activity_adjusted") {
+    cell_md <- sample_metadata
+    if (is.null(cell_md) && expr_info$input_type == "seurat" && inherits(expression, "Seurat")) {
+      cell_md <- expression@meta.data
+      if (!cell_id_column %in% names(cell_md)) {
+        cell_md[[cell_id_column]] <- rownames(cell_md)
+      }
+    }
+    use_counts <- identical(slot, "counts") || expr_info$input_type == "matrix"
+    expr_matrix <- regress_expression_for_scoring(
+      expression_matrix = expr_matrix,
+      signature_genes = genes_to_extract,
+      cell_metadata = cell_md,
+      cell_id_column = cell_id_column,
+      vars_to_regress = vars_to_regress,
+      use_counts = use_counts,
+      verbose = verbose
+    )
+  }
+
   # Calculate scores
   scores <- calculate_weighted_scores(
-    expression_matrix = expr_info$matrix,
+    expression_matrix = expr_matrix,
     reference_data = reference_data,
     z_score_cutoff = z_score_cutoff,
     pseudobulk = pseudobulk,
@@ -136,6 +190,25 @@ PhenoMap <- function(expression,
     reference_sign = reference_sign,
     verbose = verbose
   )
+
+  if (!is.null(permutation_n)) {
+    ref_col <- colnames(reference_data)[1]
+    meta_z <- reference_data[[ref_col]]
+    names(meta_z) <- rownames(reference_data)
+    meta_z <- meta_z[!is.na(meta_z) & abs(meta_z) > z_score_cutoff]
+    if (reference_sign == -1L) meta_z <- -meta_z
+    perm <- permutation_score_pvalues(
+      expression_matrix = expr_matrix,
+      meta_z = meta_z,
+      n_perm = permutation_n,
+      seed = permutation_seed,
+      pseudobulk = pseudobulk,
+      verbose = verbose
+    )
+    score_col <- colnames(scores)[1]
+    p_col <- sub("^PhenoMapR_", "empirical_p_", score_col)
+    scores[[p_col]] <- perm$empirical_p[rownames(scores)]
+  }
 
   return(scores)
 }

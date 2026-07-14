@@ -3032,14 +3032,17 @@ build_cell_table <- function(scores,
     }
     md$cell_id <- as.character(md[[id_col]])
 
+    # Always store cell_type / source as character labels. Integers (e.g. FOV
+    # / core / cluster IDs) would otherwise stay numeric and ggplot2 would
+    # treat them as continuous when applying discrete PhenoMapR scales.
     if (!is.null(cell_type_col) && nzchar(cell_type_col) && cell_type_col != "(none)" &&
         cell_type_col %in% colnames(md)) {
-      out$.cell_type <- md[match(out$cell_id, md$cell_id), cell_type_col]
+      out$.cell_type <- as.character(md[match(out$cell_id, md$cell_id), cell_type_col])
       names(out)[names(out) == ".cell_type"] <- "cell_type"
     }
     if (!is.null(source_col) && nzchar(source_col) && source_col != "(none)" &&
         source_col %in% colnames(md)) {
-      out$.source <- md[match(out$cell_id, md$cell_id), source_col]
+      out$.source <- as.character(md[match(out$cell_id, md$cell_id), source_col])
       names(out)[names(out) == ".source"] <- "source"
     }
   }

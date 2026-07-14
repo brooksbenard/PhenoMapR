@@ -678,9 +678,11 @@ ui <- page_navbar(
               HTML(paste0(
                 " ICI PRECOG ships pre-filtered to ",
                 "<strong>|z| &ge; 1</strong> (every other built-in ",
-                "ships at <strong>|z| &ge; 2</strong>). The slider ",
-                "can only tighten this cutoff further; values below ",
-                "1 are no-ops on the shipped ICI matrix."
+                "ships at <strong>|z| &ge; 2</strong>). Selecting ICI ",
+                "auto-sets the slider to 1 because several cohorts have ",
+                "no genes above 2. The slider can only tighten this ",
+                "cutoff further; values below 1 are no-ops on the ",
+                "shipped ICI matrix."
               ))
             ),
             conditionalPanel(
@@ -3262,7 +3264,10 @@ server <- function(input, output, session) {
     md <- state$metadata
     src_col <- input$meta_source_col
     req(!is.null(md), nzchar(src_col), src_col != "(none)", src_col %in% colnames(md))
-    df <- as.data.frame(table(md[[src_col]], useNA = "no"))
+    # as.character() first: integer FOV/core IDs would otherwise stay numeric
+    # and trip discrete_scale ("Continuous value supplied to a discrete scale").
+    df <- as.data.frame(table(as.character(md[[src_col]]), useNA = "no"),
+                        stringsAsFactors = FALSE)
     colnames(df) <- c("source", "n")
     df <- df[order(-df$n), ]
     df$source <- factor(df$source, levels = df$source)
@@ -3576,10 +3581,23 @@ server <- function(input, output, session) {
   # 2. Reference
   # ------------------------------------------------------------------------
   # Populate cancer_type dropdown when reference changes.
+  # ICI PRECOG ships pre-filtered to |z| >= 1 and several cohorts have
+  # zero genes above 2; auto-set the Signature |z| slider to 1 so
+  # "Compute PhenoMapR scores" does not return an empty score table.
   observeEvent(input$reference_choice, {
     if (input$reference_choice == "_custom") return()
     cts <- get_cancer_types(input$reference_choice)
     updateSelectInput(session, "cancer_type", choices = cts, selected = cts[1L])
+    if (identical(input$reference_choice, "ici_precog")) {
+      updateSliderInput(session, "z_score_cutoff", value = 1)
+    } else {
+      # Restore the package default when leaving ICI, but only if the
+      # user is still sitting on the ICI-recommended value of 1.
+      cut_now <- suppressWarnings(as.numeric(input$z_score_cutoff))
+      if (is.finite(cut_now) && isTRUE(all.equal(cut_now, 1))) {
+        updateSliderInput(session, "z_score_cutoff", value = 2)
+      }
+    }
   })
 
   # Custom: upload file
@@ -4312,9 +4330,26 @@ server <- function(input, output, session) {
         ),
         error = function(e) {
           showNotification(paste0("PhenoMap failed: ", conditionMessage(e)),
-                           type = "error", duration = 10, session = sess); NULL
+                           type = "error", duration = 12, session = sess); NULL
         }
       )
+      # Guard against legacy empty score frames (character-only) so the
+      # phenotype-group observer cannot surface the cryptic
+      # "No numeric score columns found in 'scores'" message.
+      if (!is.null(scores)) {
+        n_num <- sum(vapply(scores, is.numeric, logical(1)))
+        if (n_num < 1L) {
+          showNotification(
+            paste0(
+              "PhenoMap returned no numeric score columns. ",
+              "For ICI PRECOG, set Signature |z| cutoff to 1 ",
+              "(many ICI cohorts have no genes with |z| > 2)."
+            ),
+            type = "error", duration = 12, session = sess
+          )
+          scores <- NULL
+        }
+      }
       # Hide the popup BEFORE assigning to state$scores so the hide
       # custom message lands in its own (tiny) flush ahead of the
       # ~half-dozen renderPlot/renderUI outputs that re-render off
@@ -4507,6 +4542,16 @@ server <- function(input, output, session) {
         override.aes = list(size = 4, alpha = 1)
       )
     )
+    # Coerce categorical aesthetics before ggplot() captures `d`. Mutating
+    # after ggplot(d) does not update plot data, so integer source IDs
+    # would still hit scale_color_phenomapr_d as continuous values.
+    if (color_by == "cell_type" && "cell_type" %in% colnames(d)) {
+      d$cell_type <- as.character(d$cell_type)
+    }
+    if (color_by == "source" && "source" %in% colnames(d)) {
+      d$source <- factor(as.character(d$source),
+                         levels = unique(as.character(d$source)))
+    }
     base <- ggplot(d, aes(x = rank, y = score)) +
       labs(x = "Rank by PhenoMapR score", y = "PhenoMapR score") +
       theme_minimal(base_size = .theme_base_size())
@@ -4529,8 +4574,6 @@ server <- function(input, output, session) {
       # source composition" plots on the Data tab. Sort levels by their
       # appearance order in the input metadata so the color mapping is
       # stable across refreshes.
-      d$source <- factor(as.character(d$source),
-                         levels = unique(as.character(d$source)))
       p <- base +
         geom_point(aes(color = source), size = 0.7, alpha = 0.85) +
         scale_color_phenomapr_d() +
@@ -5197,6 +5240,20 @@ server <- function(input, output, session) {
       df <- apply_global_spatial_coords_for_combined(state$expression, df)
     }
 
+    # Discrete aesthetics must be character/factor BEFORE ggplot() captures
+    # `df`. Mutating after ggplot(df) leaves integer FOV/core IDs continuous
+    # in the plot data and breaks scale_*_phenomapr_d().
+    if ("cell_type" %in% colnames(df)) {
+      df$cell_type <- as.character(df$cell_type)
+    }
+    if ("source" %in% colnames(df)) {
+      df$source <- factor(as.character(df$source),
+                          levels = unique(as.character(df$source)))
+    }
+    if ("group" %in% colnames(df)) {
+      df$group <- as.character(df$group)
+    }
+
     base <- if (use_masks) {
       ggplot(poly_df, aes(x = x, y = y)) +
         labs(x = unique(df$dim1_name)[1L] %||% "x",
@@ -5287,8 +5344,7 @@ server <- function(input, output, session) {
     } else if (color_by == "source" && "source" %in% colnames(df)) {
       # Apply the PhenoMapR brand palette so the Source coloring here
       # matches the Source coloring on the Data tab and Score tab plots.
-      df$source <- factor(as.character(df$source),
-                          levels = unique(as.character(df$source)))
+      # (source levels already factorized above, before ggplot() capture.)
       if (use_masks) {
         poly_col <- join_spatial_polygon_colors(poly_df, df, "source")
         req(!is.null(poly_col) && nrow(poly_col) > 0L)

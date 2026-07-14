@@ -14,7 +14,13 @@ PhenoMap(
   assay = NULL,
   slot = "data",
   verbose = TRUE,
-  reference_sign = 1L
+  reference_sign = 1L,
+  score_mode = c("weighted_sum", "activity_adjusted"),
+  vars_to_regress = c("S.Score", "G2M.Score", "nCount_RNA"),
+  sample_metadata = NULL,
+  cell_id_column = "cell_id",
+  permutation_n = NULL,
+  permutation_seed = 42L
 )
 }
 \arguments{
@@ -61,10 +67,34 @@ want positive scores to mean the opposite association). For custom references
 from \code{\link{derive_reference_from_bulk}}, prefer setting
 \code{binary_positive_reference} so the reference itself matches your factor
 levels (first level = positive association when \code{"first"}).}
+
+\item{score_mode}{Scoring mode: \code{"weighted_sum"} (default) uses the
+standard dot product of expression and reference z-scores;
+\code{"activity_adjusted"} regresses technical covariates per gene (via
+Seurat \code{ScaleData}) before computing the weighted sum on the regressed
+layer. Requires Seurat for matrix inputs.}
+
+\item{vars_to_regress}{Metadata columns to regress when
+\code{score_mode = "activity_adjusted"}. Default:
+\code{c("S.Score", "G2M.Score", "nCount_RNA")}. For matrix input, pass
+covariates via \code{sample_metadata} (see below). \code{nCount_RNA} is
+computed from column sums when absent.}
+
+\item{sample_metadata}{Optional data.frame of per-cell/sample covariates for
+\code{score_mode = "activity_adjusted"} when \code{expression} is a matrix.
+Must include a cell identifier column (default \code{"cell_id"}).}
+
+\item{cell_id_column}{Column in \code{sample_metadata} matching matrix colnames
+(default \code{"cell_id"}).}
+
+\item{permutation_n}{If a positive integer, compute gene-shuffle permutation
+null scores and add \code{empirical_p_*} columns alongside raw score columns.}
+
+\item{permutation_seed}{Random seed for permutation null (default \code{42}).}
 }
 \value{
 A data.frame with samples/cells as rows and score columns. Column
-names follow pattern: \code{weighted_sum_score_\{reference\}_\{cancer_type\}}.
+names follow pattern: \code{PhenoMapR_\{reference\}_\{cancer_type\}}.
 \strong{Directionality (built-in PRECOG/TCGA/ICI references)}: higher score =
 worse prognosis (adverse); lower score = better prognosis (favorable),
 matching positive reference z = worse survival. \strong{Custom references} from

@@ -17,9 +17,11 @@
 .Rcheck/
 revdep/
 library/
+PhenoMapR.Rcheck/
+..Rcheck/
 
 # Benchmark Python venv (shears / SIDISH; Python ≥3.10)
-inst/benchmarks/.venv-bench-py312/
+manuscript/benchmarks/.venv-bench-py312/
 
 # pkgdown build (site is deployed to gh-pages by GitHub Actions)
 docs/
@@ -35,6 +37,7 @@ pediatric_metaZ*
 ici_precog_collapsed*
 datasets_info_for_scoring.rds
 data/datasets_info.rda
+data/tcga/
 
 # Large vignette/data files in vignettes/ (users download from GEO/PRECOG)
 vignettes/PAAD_*.rds
@@ -52,6 +55,7 @@ vignettes/FSHD_*.rda
 vignettes/FSHD_validation_*.rds
 vignettes/GSE*_expression.rds
 vignettes/GSE*_info.rds
+vignettes/results/
 data-raw/
 
 # Generated article outputs (pkgdown builds from .Rmd in CI)
@@ -61,76 +65,56 @@ vignettes/*.html
 
 # Other large/unnecessary
 figure/
-..Rcheck/
-PhenoMapR.Rcheck/
-Rplots.pdf
 inst/figures/~$*
+package_README_backup.md
+PhenoMapR_*.tar.gz
 
 # Generated spatial analysis caches (not package data/)
 inst/data/
-
-# Local outputs / data next to draft vignettes (sources under inst/vignette-drafts/ are tracked)
-inst/vignette-drafts/*.html
-inst/vignette-drafts/*.rds
+inst/figures/spatial_pair_maps/
+inst/figures/manuscript_candidates/
 
 # ============================================================
-# Benchmarking inputs, outputs, and run artifacts (DO NOT COMMIT)
-# Only the benchmark *source* files in inst/benchmarks/ should be tracked
-# (e.g. *_benchmark_reticulate.py, *_benchmark_sizes_peakRAM.R, helpers).
-# Everything below is generated, downloaded, or per-run output and stays local.
+# Manuscript analyses stay local (package/pkgdown only on GitHub)
+# Keep a lightweight manuscript/README.md tracked for orientation.
 # ============================================================
+manuscript/data/
+manuscript/results/
+manuscript/docs/
+# Draft analyses are local-only; keep manuscript/drafts/README.md trackable.
+manuscript/drafts/*.html
+manuscript/drafts/*.rds
+manuscript/drafts/*.Rmd
+manuscript/drafts/*.csv
+manuscript/figures/manuscript_candidates/
+manuscript/benchmarks/methodology/
+manuscript/benchmarks/integration/
+manuscript/benchmarks/artifacts/
+manuscript/benchmarks/cell_level_by_method/
+manuscript/benchmarks/degas_temps/
+manuscript/benchmarks/*_benchmark_out/
+manuscript/benchmarks/results/
+manuscript/benchmarks/GSE*_expression.rds
+manuscript/benchmarks/GSE*_info.rds
+manuscript/benchmarks/PAAD_*
+manuscript/benchmarks/FSHD_*.rds
+manuscript/benchmarks/Scissor_*.RData
+manuscript/benchmarks/*_timing_*.tsv
+manuscript/benchmarks/benchmark_integration_cell_level.tsv
+manuscript/benchmarks/fshd_validation_*.R
 
-# --- Raw input datasets (downloaded from GEO / authors) -----------------------
-# At repo root
+# --- Raw input datasets at repo root -----------------------------------------
 /FSHD_GSE122873_seurat.rds
 /FSHD_GSE140261_*.rds
 /GSE253260_expression.rds
 /GSE253260_info.rds
 /PAAD_CRA001160_CellMetainfo_table.tsv
 /PAAD_CRA001160_expression.h5
-# Mirrored under inst/benchmarks/
-inst/benchmarks/GSE*_expression.rds
-inst/benchmarks/GSE*_info.rds
-inst/benchmarks/PAAD_*
-inst/benchmarks/FSHD_*.rds
-inst/benchmarks/Scissor_*.RData
-
-# --- Per-run benchmark output directories ------------------------------------
-inst/benchmarks/*_benchmark_out/
-inst/benchmarks/results/
-inst/benchmarks/cell_level_by_method/
-inst/benchmarks/degas_temps/
-# Per-driver/per-size scratch dirs (PDAC_*_n5000/, n10000/, etc.)
-inst/benchmarks/artifacts/PDAC_*_n*/
-inst/benchmarks/artifacts/*/cell_level/
-inst/benchmarks/artifacts/*/python_subprocess/
-# Per-method cell-level outputs inside artifacts (the small reference .rds for
-# PhenoMapR / scAB at inst/benchmarks/artifacts/<dataset>/<METHOD>.rds remain
-# tracked; only the large per-run outputs and PENCIL outputs are ignored.)
-inst/benchmarks/artifacts/*/PENCIL.rds
-inst/benchmarks/artifacts/*/PENCIL.tsv
-inst/benchmarks/artifacts/*/PENCIL_value.rds
-inst/benchmarks/artifacts/*/scAB.tsv
-
-# Internal dev benchmarks (not shipped with the package)
-inst/benchmarks/integration/
-inst/benchmarks/fshd_validation_*.R
-
-# Manuscript / exploratory figures (not shipped with the package)
-inst/figures/manuscript_candidates/
-inst/figures/spatial_pair_maps/
-
-inst/benchmarks/*_timing_*.tsv
-inst/benchmarks/benchmark_integration_cell_level.tsv
-
-# --- Top-level benchmark output sinks ----------------------------------------
-/results/
-vignettes/results/
 
 # --- Cached / extracted upstream package trees -------------------------------
 /.tmp_scsurv_pkg/
 
-# --- Review / manuscript build artifacts (we don't commit the rendered docs) -
+# --- Review / manuscript build artifacts -------------------------------------
 /Review_Bulk_phenotype_mapping_to_scRNA_and_spatial.*
 /Review_for_GoogleDocs.*
 /Review_for_GoogleDocs_with_citekeys.*

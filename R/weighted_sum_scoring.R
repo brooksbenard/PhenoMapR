@@ -7,7 +7,7 @@ calculate_weighted_scores <- function(expression_matrix,
                                       reference_data,
                                       z_score_cutoff = 2,
                                       pseudobulk = FALSE,
-                                      score_name = "weighted_sum_score",
+                                      score_name = "PhenoMapR",
                                       reference_sign = 1L,
                                       verbose = TRUE) {
   reference_sign <- as.integer(reference_sign)[1L]
@@ -88,7 +88,7 @@ calculate_weighted_scores <- function(expression_matrix,
     )
 
     # Add to results
-    score_col_name <- paste0("weighted_sum_score_", meta_z_label)
+    score_col_name <- paste0("PhenoMapR_", meta_z_label)
     scores_all[[score_col_name]] <- score_vector
     
     if (verbose) {
@@ -102,7 +102,19 @@ calculate_weighted_scores <- function(expression_matrix,
   # Set rownames and remove Cell column
   rownames(scores_all) <- scores_all$Cell
   scores_all$Cell <- NULL
-  
+
+  score_cols <- names(scores_all)[vapply(scores_all, is.numeric, logical(1))]
+  if (length(score_cols) == 0L) {
+    stop(
+      "No phenotype scores were computed: no genes passed ",
+      "|z| > z_score_cutoff (", z_score_cutoff, ") with overlapping ",
+      "expression. For ICI PRECOG many cohorts require ",
+      "z_score_cutoff <= 1 (the shipped ICI matrix is pre-filtered to ",
+      "|z| >= 1 and has no genes above 2 for some labels). ",
+      "Lower the Signature |z| cutoff and try again."
+    )
+  }
+
   return(scores_all)
 }
 

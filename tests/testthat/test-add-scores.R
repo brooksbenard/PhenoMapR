@@ -5,14 +5,14 @@ test_that("add_scores_to_seurat adds score columns and returns Seurat object", {
   skip_if_not_installed("Seurat")
   scores <- data.frame(
     row.names = c("c1", "c2", "c3"),
-    weighted_sum_score_sig = c(0.5, -0.2, 0.8)
+    PhenoMapR_sig = c(0.5, -0.2, 0.8)
   )
   counts <- matrix(1, nrow = 10, ncol = 3, dimnames = list(paste0("G", 1:10), c("c1", "c2", "c3")))
   obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = counts, assay = "RNA"))
   out <- add_scores_to_seurat(obj, scores)
   expect_true(inherits(out, "Seurat"))
-  expect_true("weighted_sum_score_sig" %in% names(out@meta.data))
-  expect_equal(out@meta.data["c1", "weighted_sum_score_sig"], 0.5)
+  expect_true("PhenoMapR_sig" %in% names(out@meta.data))
+  expect_equal(out@meta.data["c1", "PhenoMapR_sig"], 0.5)
 })
 
 test_that("add_scores_to_seurat errors when no common cells", {

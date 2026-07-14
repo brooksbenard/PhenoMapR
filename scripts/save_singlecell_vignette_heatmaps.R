@@ -9,13 +9,8 @@
 #   Rscript scripts/save_singlecell_vignette_heatmaps.R /path/to/PhenoMapR
 
 args <- commandArgs(trailingOnly = TRUE)
-root <- if (length(args) >= 1L) {
-  normalizePath(args[1L])
-} else {
-  normalizePath(".")
-}
+root <- if (length(args) >= 1L) normalizePath(args[1L]) else normalizePath(".")
 
-# Load package from source tree when run from repo (pkgload)
 if (file.exists(file.path(root, "DESCRIPTION"))) {
   if (!requireNamespace("pkgload", quietly = TRUE)) {
     stop("Install pkgload or run after devtools::install()")
@@ -68,8 +63,8 @@ scores_precog <- PhenoMap(expression = expr_mat, reference = "precog", cancer_ty
 for (col in names(scores_tcga)) meta[[col]] <- scores_tcga[meta$Cell, col]
 for (col in names(scores_precog)) meta[[col]] <- scores_precog[meta$Cell, col]
 
-score_tcga_col <- grep("weighted_sum_score.*PAAD", names(meta), value = TRUE, ignore.case = TRUE)[1]
-score_precog_col <- grep("weighted_sum_score.*Pancreatic", names(meta), value = TRUE, ignore.case = TRUE)[1]
+score_tcga_col <- grep("PhenoMapR_.*PAAD", names(meta), value = TRUE, ignore.case = TRUE)[1]
+score_precog_col <- grep("PhenoMapR_.*Pancreatic", names(meta), value = TRUE, ignore.case = TRUE)[1]
 if (is.na(score_tcga_col)) score_tcga_col <- names(scores_tcga)[1]
 if (is.na(score_precog_col)) score_precog_col <- names(scores_precog)[1]
 

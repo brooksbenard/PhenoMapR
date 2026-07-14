@@ -33,7 +33,7 @@ test_that("PhenoMap with custom reference data.frame works", {
   scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE)
   expect_s3_class(scores, "data.frame")
   expect_equal(nrow(scores), 4)
-  expect_true(any(grepl("my_sig|weighted_sum", colnames(scores))))
+  expect_true(any(grepl("my_sig|PhenoMapR", colnames(scores))))
 })
 
 test_that("PhenoMap errors on invalid reference name", {
@@ -63,7 +63,7 @@ test_that("PhenoMap errors on non-matrix expression", {
 })
 
 test_that("PhenoMap accepts data.frame expression (process_matrix path)", {
-  custom_ref <- data.frame(row.names = c("G1", "G2"), sig = c(1, -1))
+  custom_ref <- data.frame(row.names = c("G1", "G2"), sig = c(2.5, -2.5))
   expr_df <- as.data.frame(matrix(pmax(0, rnorm(2 * 4)), 2, 4))
   rownames(expr_df) <- c("G1", "G2")
   colnames(expr_df) <- paste0("C", 1:4)
@@ -112,7 +112,7 @@ test_that("extract_ici_column warns when multiple columns match", {
 })
 
 test_that("PhenoMap with matrix lacking colnames generates cell names and returns scores", {
-  custom_ref <- data.frame(row.names = c("A", "B"), s = c(3, -2))
+  custom_ref <- data.frame(row.names = c("A", "B"), s = c(3, -2.5))
   expr <- matrix(1, nrow = 2, ncol = 3)
   rownames(expr) <- c("A", "B")
   expect_warning(
@@ -156,18 +156,18 @@ test_that("PhenoMap with TCGA reference returns scores", {
   scores <- PhenoMap(expression = expr, reference = "tcga", cancer_type = "PAAD", verbose = FALSE)
   expect_s3_class(scores, "data.frame")
   expect_equal(nrow(scores), 4)
-  expect_true(any(grepl("PAAD|weighted_sum", colnames(scores))))
+  expect_true(any(grepl("PAAD|PhenoMapR", colnames(scores))))
 })
 
 test_that("PhenoMap verbose=TRUE runs without error", {
-  custom_ref <- data.frame(row.names = c("G1", "G2", "G3"), s = c(2, -1, 2))
+  custom_ref <- data.frame(row.names = c("G1", "G2", "G3"), s = c(2.5, -2.5, 3))
   expr <- matrix(pmax(0, rnorm(3 * 3)), 3, 3, dimnames = list(c("G1", "G2", "G3"), c("C1", "C2", "C3")))
   capture.output(scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = TRUE))
   expect_s3_class(scores, "data.frame")
 })
 
 test_that("PhenoMap with matrix containing NA warns", {
-  custom_ref <- data.frame(row.names = c("A", "B"), s = c(1, -1))
+  custom_ref <- data.frame(row.names = c("A", "B"), s = c(2.5, -2.5))
   expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("A", "B"), c("C1", "C2", "C3")))
   expr[1, 1] <- NA_real_
   expect_warning(
@@ -178,7 +178,7 @@ test_that("PhenoMap with matrix containing NA warns", {
 })
 
 test_that("PhenoMap with matrix containing negative values warns", {
-  custom_ref <- data.frame(row.names = c("A", "B"), s = c(1, -1))
+  custom_ref <- data.frame(row.names = c("A", "B"), s = c(2.5, -2.5))
   expr <- matrix(1, nrow = 2, ncol = 3, dimnames = list(c("A", "B"), c("C1", "C2", "C3")))
   expr[1, 1] <- -0.5
   expect_warning(
@@ -188,24 +188,26 @@ test_that("PhenoMap with matrix containing negative values warns", {
   expect_s3_class(scores, "data.frame")
 })
 
-test_that("PhenoMap with custom ref and no genes passing z cutoff warns", {
+test_that("PhenoMap with custom ref and no genes passing z cutoff errors clearly", {
   custom_ref <- data.frame(row.names = c("G1", "G2"), s = c(0.5, -0.5))
   expr <- matrix(1, nrow = 2, ncol = 2, dimnames = list(c("G1", "G2"), c("C1", "C2")))
-  expect_warning(
-    scores <- PhenoMap(expression = expr, reference = custom_ref, z_score_cutoff = 10, verbose = FALSE),
-    "No genes pass|z-score cutoff"
+  expect_error(
+    suppressWarnings(
+      PhenoMap(expression = expr, reference = custom_ref, z_score_cutoff = 10, verbose = FALSE)
+    ),
+    "No phenotype scores were computed|z_score_cutoff"
   )
-  expect_s3_class(scores, "data.frame")
 })
 
-test_that("PhenoMap with custom ref and no common genes warns", {
-  custom_ref <- data.frame(row.names = c("X", "Y", "Z"), s = c(3, -2, 2))
+test_that("PhenoMap with custom ref and no common genes errors clearly", {
+  custom_ref <- data.frame(row.names = c("X", "Y", "Z"), s = c(3, -2.5, 2.5))
   expr <- matrix(1, nrow = 2, ncol = 2, dimnames = list(c("A", "B"), c("C1", "C2")))
-  expect_warning(
-    scores <- PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE),
-    "No common genes"
+  expect_error(
+    suppressWarnings(
+      PhenoMap(expression = expr, reference = custom_ref, verbose = FALSE)
+    ),
+    "No phenotype scores were computed|No common genes"
   )
-  expect_s3_class(scores, "data.frame")
 })
 
 test_that("PhenoMap errors when pseudobulk TRUE but group_by NULL", {
@@ -233,7 +235,7 @@ test_that("PhenoMap matrix pseudobulk aggregates with phenomapr_coldata", {
   )
   rownames(coldata) <- cells
   attr(expr, "phenomapr_coldata") <- coldata
-  custom_ref <- data.frame(row.names = genes, s = c(1, -1))
+  custom_ref <- data.frame(row.names = genes, s = c(2.5, -2.5))
   scores <- PhenoMap(
     expression = expr,
     reference = custom_ref,
@@ -320,5 +322,48 @@ test_that("PhenoMap with ici_precog gives a helpful error when cancer_type is un
     PhenoMapR:::extract_ici_column(ici, "DEFINITELY_NOT_A_CANCER_TYPE"),
     "No ICI columns matched cancer_type"
   )
+})
+
+test_that("PhenoMap errors clearly when ICI cohort has no genes above z_score_cutoff", {
+  # Regression: SKCM_CTLA4_PD1_Metastatic_Naive (and several other ICI
+  # cohorts) have zero genes with |z| > 2. Default cutoff left the Shiny
+  # Score tab with an empty score frame and a cryptic
+  # define_phenotype_groups() error. PhenoMap() must fail with a message
+  # that points users at z_score_cutoff <= 1.
+  data(ici, package = "PhenoMapR", envir = environment())
+  label <- "SKCM_CTLA4_PD1_Metastatic_Naive"
+  if (!label %in% colnames(ici)) skip("ICI label not present")
+  keep <- which(!is.na(ici[, label]) & abs(ici[, label]) >= 1)
+  if (!length(keep)) skip("No ICI genes at |z| >= 1 for label")
+  genes <- rownames(ici)[keep]
+  expr <- matrix(
+    pmax(0, rnorm(length(genes) * 4)),
+    nrow = length(genes), ncol = 4,
+    dimnames = list(genes, paste0("S", 1:4))
+  )
+  expect_error(
+    suppressWarnings(
+      PhenoMap(
+        expression = expr,
+        reference = "ici_precog",
+        cancer_type = label,
+        z_score_cutoff = 2,
+        verbose = FALSE
+      )
+    ),
+    "z_score_cutoff|ICI PRECOG|no genes passed"
+  )
+  scores <- suppressWarnings(
+    PhenoMap(
+      expression = expr,
+      reference = "ici_precog",
+      cancer_type = label,
+      z_score_cutoff = 1,
+      verbose = FALSE
+    )
+  )
+  expect_s3_class(scores, "data.frame")
+  expect_true(ncol(scores) >= 1L)
+  expect_true(any(vapply(scores, is.numeric, logical(1))))
 })
 

@@ -288,7 +288,7 @@ stopifnot_msg(
 n_cells <- 12L
 set.seed(7)
 scores <- data.frame(
-  weighted_sum_score_precog_BRCA = rnorm(n_cells),
+  PhenoMapR_precog_BRCA = rnorm(n_cells),
   row.names = paste0("Cell_", seq_len(n_cells))
 )
 state_scores <- scores
@@ -296,7 +296,7 @@ state_scores <- scores
 ## state$groups must use the canonical phenotype-group strings.
 state_groups <- data.frame(
   cell_id = rownames(state_scores),
-  phenotype_group_weighted_sum_score_precog_BRCA = c(
+  phenotype_group_PhenoMapR_precog_BRCA = c(
     rep("Most Adverse", 3),
     rep("Other", 6),
     rep("Most Favorable", 3)
@@ -335,18 +335,18 @@ build_score_table <- function(scores, groups) {
 
 merged <- build_score_table(state_scores, state_groups)
 stopifnot_msg(
-  "phenotype_group_weighted_sum_score_precog_BRCA" %in% colnames(merged),
+  "phenotype_group_PhenoMapR_precog_BRCA" %in% colnames(merged),
   "score_table_data() merges phenotype_group_<col> from state$groups"
 )
 stopifnot_msg(
   identical(
     tail(colnames(merged), 1L),
-    "phenotype_group_weighted_sum_score_precog_BRCA"
+    "phenotype_group_PhenoMapR_precog_BRCA"
   ),
   "phenotype_group_<col> is placed at the END of the column order"
 )
 stopifnot_msg(
-  identical(sort(unique(merged$phenotype_group_weighted_sum_score_precog_BRCA)),
+  identical(sort(unique(merged$phenotype_group_PhenoMapR_precog_BRCA)),
             c("Most Adverse", "Most Favorable", "Other")),
   "merged group values preserve canonical 'Most Adverse/Favorable/Other'"
 )
@@ -359,7 +359,7 @@ stopifnot_msg(
 )
 stopifnot_msg(
   "cell_id" %in% colnames(merged_no_groups) &&
-  "scaled_weighted_sum_score_precog_BRCA" %in% colnames(merged_no_groups),
+  "scaled_PhenoMapR_precog_BRCA" %in% colnames(merged_no_groups),
   "fallback schema (no groups) still emits cell_id + scaled_<col>"
 )
 

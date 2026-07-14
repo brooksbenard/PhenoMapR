@@ -41,11 +41,12 @@
 ^.*\.Rcheck$
 ^\.\.Rcheck$
 
-# -- inst/ subtrees that are dev-only or far too large for an install ---------
-# inst/benchmarks holds 7+ GB of datasets, artifacts, and Python scripts used
-# only for benchmarking write-ups; nothing in there is needed at runtime.
+# -- manuscript / legacy benchmark trees (not shipped with the package) -------
+# Analyses and large artifacts live under manuscript/ (see manuscript/README.md).
+# Keep ignoring legacy inst/benchmarks if anything remains there locally.
 ^inst/benchmarks$
 ^inst/benchmarking$
+^manuscript$
 ^inst/extdata$
 ^inst/vignette-drafts$
 ^inst/figures$

@@ -9,7 +9,7 @@ calculate_weighted_scores(
   reference_data,
   z_score_cutoff = 2,
   pseudobulk = FALSE,
-  score_name = "weighted_sum_score",
+  score_name = "PhenoMapR",
   reference_sign = 1L,
   verbose = TRUE
 )

@@ -518,3 +518,44 @@ test_that("find_phenotype_markers with Seurat object uses FindMarkers path", {
   expect_s3_class(out$adverse_markers, "data.frame")
   expect_s3_class(out$favorable_markers, "data.frame")
 })
+
+test_that("find_phenotype_markers tolerates stale Seurat Graphs (CosMx / spatial)", {
+  skip_if_not_installed("Seurat")
+  skip_if_not_installed("Matrix")
+  set.seed(7)
+  n_genes <- 30
+  n_cells <- 40
+  counts <- matrix(
+    pmax(0, as.integer(rnorm(n_genes * n_cells, 10, 3))),
+    nrow = n_genes,
+    ncol = n_cells,
+    dimnames = list(paste0("G", seq_len(n_genes)), paste0("C", seq_len(n_cells)))
+  )
+  obj <- suppressWarnings(Seurat::CreateSeuratObject(counts = counts, assay = "RNA"))
+  obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+  # Stale Graphs whose dimnames do not match object cells reproduce the
+  # user-facing CosMx error:
+  #   "Please provide rownames to the matrix before converting to a Graph"
+  # when Seurat subsets during FindMarkers prep.
+  fake <- Matrix::Diagonal(n = ncol(obj), x = 1)
+  rownames(fake) <- colnames(fake) <- paste0("OLD_", colnames(obj))
+  obj@graphs$RNA_nn <- SeuratObject::as.Graph(fake)
+  obj@graphs$RNA_snn <- SeuratObject::as.Graph(fake)
+  expect_error(obj[, colnames(obj)[seq_len(10L)]], "rownames|Graph")
+
+  groups <- c(
+    rep("Most Adverse", 8),
+    rep("Most Favorable", 8),
+    rep("Other", n_cells - 16L)
+  )
+  out <- find_phenotype_markers(
+    obj,
+    group_labels = groups,
+    assay = "RNA",
+    slot = "data",
+    max_cells_per_ident = 15L,
+    verbose = FALSE
+  )
+  expect_type(out, "list")
+  expect_named(out, c("adverse_markers", "favorable_markers"))
+})

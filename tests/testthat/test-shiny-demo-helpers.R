@@ -98,6 +98,44 @@ test_that("build_cell_table honors score_column selection", {
   expect_equal(attr(tbl, "score_name"), "score_b")
 })
 
+test_that("build_cell_table coerces integer source / cell_type to character", {
+  e <- source_shiny_helpers()
+  scores <- data.frame(
+    score = c(0.1, -0.2, 0.3),
+    row.names = c("C1", "C2", "C3")
+  )
+  metadata <- data.frame(
+    cell_id = c("C1", "C2", "C3"),
+    core = c(26L, 27L, 3L),
+    cluster = c(1L, 2L, 1L),
+    stringsAsFactors = FALSE
+  )
+  tbl <- e$build_cell_table(
+    scores = scores,
+    metadata = metadata,
+    cell_id_col = "cell_id",
+    cell_type_col = "cluster",
+    source_col = "core",
+    score_column = "score"
+  )
+  expect_type(tbl$source, "character")
+  expect_type(tbl$cell_type, "character")
+  expect_equal(tbl$source, c("26", "27", "3"))
+  expect_equal(tbl$cell_type, c("1", "2", "1"))
+
+  # Discrete brand scale must accept integer-like source IDs after coercion
+  # (this is the CosMx `core` metadata failure mode).
+  d <- data.frame(
+    x = seq_len(nrow(tbl)),
+    y = tbl$score,
+    source = factor(tbl$source, levels = unique(tbl$source))
+  )
+  p <- ggplot2::ggplot(d, ggplot2::aes(x, y, color = source)) +
+    ggplot2::geom_point() +
+    e$scale_color_phenomapr_d()
+  expect_silent(ggplot2::ggplot_build(p))
+})
+
 test_that("resolve_phenotype_group_column matches score-specific group column", {
   e <- source_shiny_helpers()
   groups <- data.frame(

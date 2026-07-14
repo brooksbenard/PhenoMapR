@@ -25,7 +25,6 @@ sticker(
   p_size = 20,
   p_color = "#36454f",
   s_x = 1,
-  # Place the graphic midway between the previous two positions (0.88 and 0.92).
   s_y = 0.90,
   s_width = 0.8,
   s_height = 0.75,

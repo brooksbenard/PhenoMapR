@@ -27,9 +27,18 @@ suppressPackageStartupMessages({
 z_score_cutoff <- 2
 reference <- "precog"
 
-tpm_dir <- "data/tcga"
+.args_all <- commandArgs(trailingOnly = FALSE)
+.script_path <- sub("^--file=", "", .args_all[grep("^--file=", .args_all)])
+.paths_r <- if (length(.script_path) == 1L && nzchar(.script_path)) {
+  normalizePath(file.path(dirname(.script_path), "paths.R"), mustWork = FALSE)
+} else {
+  "manuscript/scripts/paths.R"
+}
+if (file.exists(.paths_r)) source(.paths_r, local = FALSE)
+
+tpm_dir <- if (exists("tcga_data_dir")) tcga_data_dir() else "data/tcga"
 clinical_file <- file.path(tpm_dir, "clinical_PANCAN_patient_with_followup.tsv")
-out_dir <- "results"
+out_dir <- if (exists("manuscript_results_dir")) manuscript_results_dir() else "manuscript/results"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 if (!file.exists(clinical_file)) {
