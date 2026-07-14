@@ -133,8 +133,11 @@ googledrive::drive_deauth()
   if (is.na(info$size) || info$size < 1e5) return(FALSE)
   con <- file(path, "rb")
   on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 2L)
-  identical(magic, as.raw(c(0x1f, 0x8b))) || identical(rawToChar(magic), "RD")
+  magic <- readBin(con, what = "raw", n = 6L)
+  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
+  is_xz <- length(magic) >= 6L && identical(magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00)))
+  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
+  is_gzip || is_xz || is_rds
 }
 .resolve_vignette_file <- function(filename, drive_id, env_var, validator) {
   existing <- .find_vignette_data(filename)
@@ -169,34 +172,151 @@ googledrive::drive_deauth()
   NULL
 }
 
-.meta_path <- .resolve_vignette_file(
-  .meta_name,
-  "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
-  "PHENOMAPR_CRA001160_META_URL",
-  .is_valid_meta_tsv
-)
-if (is.null(.meta_path)) {
-  stop(
-    "Could not obtain CRA001160 cell metadata. Place ",
-    .meta_name, " under vignettes/ or set PHENOMAPR_CRA001160_META_URL.",
-    call. = FALSE
+.find_packaged_cra_subset <- function() {
+  candidates <- c(
+    file.path("inst", "extdata", "vignette_subsets",
+              "PAAD_CRA001160_vignette_subset.rds"),
+    file.path("..", "inst", "extdata", "vignette_subsets",
+              "PAAD_CRA001160_vignette_subset.rds"),
+    system.file(
+      "extdata", "vignette_subsets", "PAAD_CRA001160_vignette_subset.rds",
+      package = "PhenoMapR"
+    ),
+    file.path("inst", "extdata", "shiny", "PAAD_CRA001160_demo_5000.rds"),
+    system.file(
+      "extdata", "shiny", "PAAD_CRA001160_demo_5000.rds",
+      package = "PhenoMapR"
+    )
   )
+  candidates <- unique(candidates[nzchar(candidates)])
+  for (p in candidates) {
+    if (isTRUE(.is_valid_rds_blob(p))) return(p)
+  }
+  NULL
+}
+.normalize_cra_meta <- function(meta_df) {
+  # Accept either TISCH column names or the packaged Shiny-demo schema.
+  if ("Celltype (original)" %in% names(meta_df)) {
+    meta_df <- meta_df %>%
+      mutate(`Celltype (original)` = gsub(" cell", "", `Celltype (original)`)) %>%
+      dplyr::rename(
+        celltype_malignancy = `Celltype (malignancy)`,
+        celltype_original = `Celltype (original)`
+      )
+  } else if (".cell_id" %in% names(meta_df)) {
+    map_mal <- c(
+      Malignant = "Malignant cells",
+      Ductal = "Others",
+      Acinar = "Others",
+      Endocrine = "Others",
+      Endothelial = "Others",
+      Fibroblasts = "Stromal cells",
+      Stellate = "Stromal cells",
+      CD8Tex = "Immune cells",
+      Monocyte = "Immune cells",
+      `Mono/Macro` = "Immune cells",
+      M1 = "Immune cells",
+      pDC = "Immune cells",
+      DC = "Immune cells",
+      B = "Immune cells",
+      Plasma = "Immune cells"
+    )
+    maj <- as.character(meta_df$cell_type_major)
+    meta_df <- data.frame(
+      Cell = as.character(meta_df$.cell_id),
+      UMAP_1 = as.numeric(meta_df$UMAP_1),
+      UMAP_2 = as.numeric(meta_df$UMAP_2),
+      celltype_malignancy = unname(
+        ifelse(maj %in% names(map_mal), map_mal[maj], "Others")
+      ),
+      celltype_original = gsub(
+        " cell$", "", as.character(meta_df$cell_type_original)
+      ),
+      Patient = as.character(meta_df$Patient),
+      Source = as.character(meta_df$Source),
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  }
+  if (!"Cell" %in% names(meta_df) && !is.null(rownames(meta_df))) {
+    meta_df$Cell <- rownames(meta_df)
+  }
+  meta_df
+}
+.load_cra_from_packaged_subset <- function(path) {
+  message("Using packaged CRA001160 subset: ", path)
+  obj <- readRDS(path)
+  if (is.list(obj) && !is.null(obj$expression) && !is.null(obj$metadata)) {
+    list(
+      expression = obj$expression,
+      metadata = .normalize_cra_meta(as.data.frame(obj$metadata))
+    )
+  } else if (inherits(obj, "Seurat")) {
+    expr <- tryCatch(
+      PhenoMapR:::.get_assay_data_compat(obj, assay = "RNA", slot = "counts"),
+      error = function(e) {
+        PhenoMapR:::.get_assay_data_compat(obj, assay = "RNA", slot = "data")
+      }
+    )
+    list(
+      expression = expr,
+      metadata = .normalize_cra_meta(as.data.frame(obj@meta.data))
+    )
+  } else {
+    NULL
+  }
 }
 
-.h5_path <- .resolve_vignette_file(
-  .h5_name,
-  "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
-  "PHENOMAPR_CRA001160_H5_URL",
-  .is_valid_h5
-)
+expr_mat <- NULL
+meta <- NULL
 
-# Expression matrix from H5 when available; otherwise Seurat RDS (CI secret).
-if (!is.null(.h5_path)) {
-  expr_mat <- Seurat::Read10X_h5(.h5_path)
+# On CI / pkgdown Actions, prefer the committed subset and skip flaky Drive
+# downloads of the full H5/Seurat objects (quota JSON stubs).
+.prefer_packaged_subset <- nzchar(Sys.getenv("CI", unset = "")) ||
+  nzchar(Sys.getenv("GITHUB_ACTIONS", unset = "")) ||
+  identical(Sys.getenv("PHENOMAPR_VIGNETTE_USE_SUBSET", unset = ""), "true")
+if (isTRUE(.prefer_packaged_subset)) {
+  .packaged <- .find_packaged_cra_subset()
+  if (!is.null(.packaged)) {
+    loaded <- .load_cra_from_packaged_subset(.packaged)
+    if (!is.null(loaded)) {
+      expr_mat <- loaded$expression
+      meta <- loaded$metadata
+    }
+  }
+}
+
+.h5_path <- if (is.null(expr_mat)) {
+  .resolve_vignette_file(
+    .h5_name,
+    "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
+    "PHENOMAPR_CRA001160_H5_URL",
+    .is_valid_h5
+  )
 } else {
+  NULL
+}
+
+# Prefer full H5 + metadata; else Seurat RDS; else packaged subset for CI.
+if (is.null(expr_mat) && !is.null(.h5_path)) {
+  expr_mat <- Seurat::Read10X_h5(.h5_path)
+  .meta_path <- .resolve_vignette_file(
+    .meta_name,
+    "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
+    "PHENOMAPR_CRA001160_META_URL",
+    .is_valid_meta_tsv
+  )
+  if (!is.null(.meta_path)) {
+    meta <- .normalize_cra_meta(
+      read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+    )
+  }
+}
+
+if (is.null(expr_mat)) {
   message(
     "CRA001160 HDF5 unavailable (often Google Drive quota). ",
-    "Falling back to Seurat RDS via local file or PHENOMAPR_CRA001160_RDS_URL."
+    "Trying Seurat RDS via local file or PHENOMAPR_CRA001160_RDS_URL."
   )
   .rds_path <- .resolve_vignette_file(
     .rds_name,
@@ -204,30 +324,70 @@ if (!is.null(.h5_path)) {
     "PHENOMAPR_CRA001160_RDS_URL",
     .is_valid_rds_blob
   )
-  if (is.null(.rds_path)) {
+  if (!is.null(.rds_path)) {
+    .seu <- readRDS(.rds_path)
+    if (is.list(.seu) && !is.null(.seu$expression)) {
+      loaded <- .load_cra_from_packaged_subset(.rds_path)
+      expr_mat <- loaded$expression
+      meta <- loaded$metadata
+    } else {
+      expr_mat <- tryCatch(
+        PhenoMapR:::.get_assay_data_compat(.seu, assay = "RNA", slot = "counts"),
+        error = function(e) {
+          PhenoMapR:::.get_assay_data_compat(.seu, assay = "RNA", slot = "data")
+        }
+      )
+      rm(.seu)
+      gc()
+      if (is.null(meta)) {
+        .meta_path <- .resolve_vignette_file(
+          .meta_name,
+          "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
+          "PHENOMAPR_CRA001160_META_URL",
+          .is_valid_meta_tsv
+        )
+        if (!is.null(.meta_path)) {
+          meta <- .normalize_cra_meta(
+            read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+          )
+        }
+      }
+    }
+  }
+}
+
+if (is.null(expr_mat) || is.null(meta)) {
+  .packaged <- .find_packaged_cra_subset()
+  if (is.null(.packaged)) {
     stop(
-      "Could not obtain CRA001160 expression (H5 or Seurat RDS). ",
-      "Set PHENOMAPR_CRA001160_H5_URL or PHENOMAPR_CRA001160_RDS_URL ",
-      "to a non-Drive mirror, or place the file under vignettes/.",
+      "Could not obtain CRA001160 expression/metadata. ",
+      "Place H5+TSV or Seurat RDS under vignettes/, set ",
+      "PHENOMAPR_CRA001160_*_URL secrets to a non-Drive mirror, ",
+      "or keep inst/extdata/vignette_subsets/PAAD_CRA001160_vignette_subset.rds ",
+      "in the checkout for CI/pkgdown.",
       call. = FALSE
     )
   }
-  .seu <- readRDS(.rds_path)
-  expr_mat <- tryCatch(
-    PhenoMapR:::.get_assay_data_compat(.seu, assay = "RNA", slot = "counts"),
-    error = function(e) {
-      PhenoMapR:::.get_assay_data_compat(.seu, assay = "RNA", slot = "data")
-    }
-  )
-  rm(.seu)
-  invisible()
+  loaded <- .load_cra_from_packaged_subset(.packaged)
+  if (is.null(loaded)) {
+    stop("Packaged CRA001160 subset was unreadable: ", .packaged, call. = FALSE)
+  }
+  expr_mat <- loaded$expression
+  meta <- loaded$metadata
 }
 
-# Cell and sample metadata
-meta <- read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE) %>%
-   mutate(`Celltype (original)` = gsub(" cell", "", `Celltype (original)`)) %>%
-   dplyr::rename(celltype_malignancy = `Celltype (malignancy)`,
-         celltype_original = `Celltype (original)`)
+# Keep metadata aligned to scored cells (important for subsampled CI builds).
+cells_keep <- intersect(colnames(expr_mat), as.character(meta$Cell))
+if (!length(cells_keep)) {
+  stop("No overlapping cell IDs between expression and metadata.", call. = FALSE)
+}
+expr_mat <- expr_mat[, cells_keep, drop = FALSE]
+meta <- meta[match(cells_keep, as.character(meta$Cell)), , drop = FALSE]
+rownames(meta) <- NULL
+message(
+  "CRA001160 load: ", nrow(expr_mat), " genes x ", ncol(expr_mat),
+  " cells (", length(unique(meta$Patient)), " patients)."
+)
 
 # visuals for cohort
 paad_vs_ctrl_clors <- c(

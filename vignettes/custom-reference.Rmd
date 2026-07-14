@@ -75,8 +75,11 @@ options(googledrive_quiet = TRUE)
   if (is.na(info$size) || info$size < 1000) return(FALSE)
   con <- file(path, "rb")
   on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 2L)
-  identical(magic, as.raw(c(0x1f, 0x8b))) || identical(rawToChar(magic), "RD")
+  magic <- readBin(con, what = "raw", n = 6L)
+  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
+  is_xz <- length(magic) >= 6L && identical(magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00)))
+  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
+  is_gzip || is_xz || is_rds
 }
 .resolve_vignette_rds <- function(filename, drive_id, env_var) {
   existing <- .find_vignette_data(filename)
