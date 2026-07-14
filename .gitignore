@@ -74,6 +74,10 @@ inst/data/
 inst/figures/spatial_pair_maps/
 inst/figures/manuscript_candidates/
 
+# CI copies inst/figures/spatial_*.png → man/figures/ for pkgdown; don't
+# duplicate those large prerenders in git (logo/schematic stay tracked).
+man/figures/spatial_*.png
+
 # ============================================================
 # Manuscript analyses stay local (package/pkgdown only on GitHub)
 # Keep a lightweight manuscript/README.md tracked for orientation.

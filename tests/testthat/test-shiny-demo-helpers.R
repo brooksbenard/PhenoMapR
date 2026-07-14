@@ -70,13 +70,15 @@ test_that("make_shiny_demo_dataset attaches colData for matrix pseudobulk", {
   expect_equal(rownames(coldata), colnames(demo$expression))
 
   genes <- rownames(demo$expression)
+  # |z| must exceed the default cutoff of 2 or PhenoMap errors with no scores.
   ref <- data.frame(
     row.names = genes[seq_len(min(5L, length(genes)))],
-    s = rep(1, min(5L, length(genes)))
+    s = rep(3, min(5L, length(genes)))
   )
   scores <- PhenoMapR::PhenoMap(
     expression = demo$expression,
     reference = ref,
+    z_score_cutoff = 2,
     pseudobulk = TRUE,
     group_by = "Patient",
     verbose = FALSE

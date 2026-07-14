@@ -77,9 +77,17 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
 .spatial_coloc_top_lr_axes_prerender_file <- "spatial_coloc_top_lr_spatial_axes.png"
 .spatial_cytospace_loc_scaled_prerender_file <- "spatial_cytospace_locations_scaled.png"
 .spatial_cytospace_loc_uniform_prerender_file <- "spatial_cytospace_locations_uniform.png"
+.spatial_cytospace_phenomapr_scaled_prerender_file <- "spatial_cytospace_phenomapr_scaled.png"
+.spatial_cytospace_tails_scaled_prerender_file <- "spatial_cytospace_prognostic_tails_scaled.png"
 .spatial_cellchat_pairs_rds <- "spatial_coloc_cellchat_pairs.rds"
 .prerender_fig_path <- function(filename, must_exist = TRUE) {
+  # Prefer man/figures / vignettes (pkgdown only embeds those locations).
+  # CI copies inst/figures/*.png → man/figures/ before build_site().
   candidates <- c(
+    file.path("man", "figures", filename),
+    file.path("..", "man", "figures", filename),
+    file.path("vignettes", filename),
+    file.path(".", filename),
     file.path("inst", "figures", filename),
     file.path("..", "inst", "figures", filename),
     system.file("figures", filename, package = "PhenoMapR")
@@ -358,6 +366,23 @@ plot_score_distribution(
   main = "PRECOG Pancreatic score distribution (CytoSPACE cells)",
   base_size = 14
 )
+
+# Always build the cell_locations table used by location maps and
+# co-localization. Pre-rendered location PNGs must not skip this:
+# downstream chunks (scores / tails / coloc) depend on it.
+cell_locations <- seurat@meta.data %>%
+  as.data.frame() %>%
+  dplyr::select("Cell", "row", "col", "CellType", dplyr::all_of(score_col)) %>%
+  dplyr::group_by(.data$row, .data$col) %>%
+  dplyr::mutate(points_per_location = dplyr::n()) %>%
+  dplyr::ungroup()
+names(cell_locations)[names(cell_locations) == score_col] <- "PhenoMapR_Pancreatic"
+cell_locations$CellType <- as.factor(cell_locations$CellType)
+rng_row <- diff(range(cell_locations$row, na.rm = TRUE))
+rng_col <- diff(range(-cell_locations$col, na.rm = TRUE))
+spatial_jitter_w <- max(0.25, if (rng_row > 0) rng_row * 0.025 else 0.15)
+spatial_jitter_h <- max(0.25, if (rng_col > 0) rng_col * 0.025 else 0.15)
+spatial_point_range <- c(0.5, 1.6)
 ```
 
 ## Score by cell type
@@ -428,59 +453,53 @@ knitr::include_graphics(.prerender_fig_path(.spatial_cytospace_loc_uniform_prere
 The code below mirrors the location render script when pre-rendered figures are absent (scaled points only):
 
 ```{r cytospace-locations-live, fig.width=12, eval=run_spatial_cytospace_loc_live}
-cell_locations <- seurat@meta.data %>%
-  as.data.frame() %>%
-  dplyr::select("Cell", "row", "col", 
-                "CellType", "PhenoMapR_Pancreatic") %>%
-    group_by(.data$row, .data$col) %>%
-    mutate(points_per_location = n()) %>%
-    ungroup()
+spatial_celltype_pal <- PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
+ct_freq <- sort(table(cell_locations$CellType, useNA = "no"), decreasing = TRUE)
+ct_order <- names(ct_freq)
+cell_locations$celltype_zorder <- as.numeric(
+  factor(as.character(cell_locations$CellType), levels = ct_order)
+)
+ct_pal <- if (!is.null(spatial_celltype_pal)) {
+  spatial_celltype_pal
+} else {
+  PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
+}
 
-cell_locations$CellType <- as.factor(cell_locations$CellType)
-
-  # Shared jitter and point size so all three spatial plots match (multiple cells per spot)
-  rng_row <- diff(range(cell_locations$row, na.rm = TRUE))
-  rng_col <- diff(range(-cell_locations$col, na.rm = TRUE))
-  spatial_jitter_w <- max(0.25, if (rng_row > 0) rng_row * 0.025 else 0.15)
-  spatial_jitter_h <- max(0.25, if (rng_col > 0) rng_col * 0.025 else 0.15)
-  spatial_point_range <- c(0.5, 1.6)
-
-  spatial_celltype_pal <- PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
-  
-    ct_freq <- sort(table(cell_locations$CellType, useNA = "no"), decreasing = TRUE)
-  ct_order <- names(ct_freq)
-  cell_locations$celltype_zorder <- as.numeric(factor(as.character(cell_locations$CellType), levels = ct_order))
-  ct_pal <- if (!is.null(spatial_celltype_pal)) spatial_celltype_pal else PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
- 
- cytospace_loc <-  ggplot(cell_locations, aes(x = .data$row, y = -.data$col, color = .data$CellType,
-    size = points_per_location, zorder = .data$celltype_zorder)) +
-    geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
-    scale_color_manual(values = ct_pal, name = "Cell Type", na.value = "grey90") +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
-    guides(
-      color = guide_legend(override.aes = list(size = 4), ncol = 2)
-      # size  = guide_legend(override.aes = list(size = 4))
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title  = element_blank(),
-      axis.text   = element_blank(),
-      axis.ticks  = element_blank(),
-      axis.title  = element_blank()
-    ) +
-       coord_fixed(ratio = 0.6) +
+cytospace_loc <- ggplot(
+  cell_locations,
+  aes(
+    x = .data$row, y = -.data$col, color = .data$CellType,
+    size = points_per_location, zorder = .data$celltype_zorder
+  )
+) +
+  geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+  scale_color_manual(values = ct_pal, name = "Cell Type", na.value = "grey90") +
+  scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+  guides(color = guide_legend(override.aes = list(size = 4), ncol = 2)) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank()
+  ) +
+  coord_fixed(ratio = 0.6) +
   theme_void()
-  
- print(cytospace_loc)
+
+print(cytospace_loc)
 ```
 Interestingly, it appears that several cell types tend to co-localize with themselves, some of which seem to be localized to the areas where we saw the greatest adverse and favorable scores mapping to at the spot level.
 
 
 ### Where raw PhenoMapR scores are
 
-Spatial map of PhenoMapR score (z-scaled for color gradient). Blue = more favorable, red = more adverse.
+Spatial map of PhenoMapR score (z-scaled for color gradient). Blue = more favorable, red = more adverse. When pre-rendered figures are available (pkgdown), the combined location panel above already includes this view; the stand-alone score map is shown next.
 
-```{r, fig.width=12}
+```{r cytospace-phenomapr-prerender, fig.width=8, fig.height=7, out.width="100%", echo=FALSE, eval=!run_spatial_cytospace_loc_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_cytospace_phenomapr_scaled_prerender_file))
+```
+
+```{r cytospace-phenomapr-live, fig.width=12, eval=run_spatial_cytospace_loc_live}
 cell_locations <- cell_locations[order(abs(cell_locations$PhenoMapR_Pancreatic)), ]
 
 sc_phenomapr <- ggplot(cell_locations, aes(
@@ -500,19 +519,20 @@ sc_phenomapr <- ggplot(cell_locations, aes(
   coord_fixed(ratio = 0.6) +
   theme_void()
 
-(cytospace_loc | sc_phenomapr) + 
-  # plot_layout(guides = "collect") & 
+(cytospace_loc | sc_phenomapr) +
   theme(aspect.ratio = 1)
 ```
-
-
 
 ### Where 5th percentile cells are
 
 In order to make the visualization more apparent, we restrict the spatial map of prognostic groups to: top 5% (Most Adverse), bottom 5% (Most Favorable), and the rest (Other).
 
-```{r}
-cell_locations <- cell_locations %>% 
+```{r cytospace-tails-prerender, fig.width=8, fig.height=7, out.width="100%", echo=FALSE, eval=!run_spatial_cytospace_loc_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_cytospace_tails_scaled_prerender_file))
+```
+
+```{r cytospace-tails-live, fig.width=12, eval=run_spatial_cytospace_loc_live}
+cell_locations <- cell_locations %>%
   mutate(percentile = percent_rank(PhenoMapR_Pancreatic)) %>%
   mutate(prognostic_group = case_when(
     percentile < 0.05 ~ "Favorable",
@@ -520,43 +540,59 @@ cell_locations <- cell_locations %>%
     TRUE ~ "Other"
   ))
 
-  df_other <- cell_locations %>%
-    dplyr::filter(prognostic_group=="Other")
-  
-  df_extreme <- cell_locations %>%
-    dplyr::filter(prognostic_group!="Other")
-  
- sc_phenomapr_5 <- ggplot() +
-    geom_jitter(data = df_other, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
-      size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
-    geom_jitter(data = df_extreme, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
-      size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
-    # ggtitle("5th percentile: Most Adverse vs Most Favorable") +
-    scale_color_manual(
-      values = c(`Adverse` = "#B2182B", Other = "#f7f7f7", `Favorable` = "#2166AC"),
-      name = "Prognostic group",
-      na.value = "grey90",
-      drop = FALSE
-    ) +
-     guides(
-      color = guide_legend(override.aes = list(size = 4))
-      # size  = guide_legend(override.aes = list(size = 4))
-    ) +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title = element_text(hjust = 0.5, size = 14),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.title = element_blank()
-    ) +
+df_other <- cell_locations %>%
+  dplyr::filter(prognostic_group == "Other")
+
+df_extreme <- cell_locations %>%
+  dplyr::filter(prognostic_group != "Other")
+
+sc_phenomapr_5 <- ggplot() +
+  geom_jitter(
+    data = df_other,
+    aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+        size = points_per_location),
+    alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16
+  ) +
+  geom_jitter(
+    data = df_extreme,
+    aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+        size = points_per_location),
+    alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16
+  ) +
+  scale_color_manual(
+    values = c(`Adverse` = "#B2182B", Other = "#f7f7f7", `Favorable` = "#2166AC"),
+    name = "Prognostic group",
+    na.value = "grey90",
+    drop = FALSE
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 4))) +
+  scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank()
+  ) +
   coord_fixed(ratio = 0.6) +
   theme_void()
 
-  (sc_phenomapr | sc_phenomapr_5) + 
-  # plot_layout(guides = "collect") & 
+(sc_phenomapr | sc_phenomapr_5) +
   theme(aspect.ratio = 1)
-  
+```
+
+```{r cytospace-prognostic-groups-for-coloc}
+# Ensure prognostic_group exists for co-localization even when live
+# location / tails plotting was skipped (prerendered figures present).
+if (!"prognostic_group" %in% names(cell_locations)) {
+  cell_locations <- cell_locations %>%
+    mutate(percentile = dplyr::percent_rank(PhenoMapR_Pancreatic)) %>%
+    mutate(prognostic_group = dplyr::case_when(
+      percentile < 0.05 ~ "Favorable",
+      percentile >= 0.95 ~ "Adverse",
+      TRUE ~ "Other"
+    ))
+}
 ```
 
 Visually, adverse and favorable cells can appear to segregate on the tissue. The next section tests three **CytoSPACE-grounded** spatial hypotheses on prognostic **`CellType_PrognosticGroup`** labels:
