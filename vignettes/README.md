@@ -6,6 +6,7 @@ The vignettes use data files that are too large for GitHub. You can place them l
 
 | File | Drive file ID | Vignette |
 |------|----------------|----------|
+| `PAAD_CRA001160_full.rds` | (host via GitHub Release / non-Drive URL) | Single-cell — preferred full bundle (`$expression` + `$metadata`) |
 | `PAAD_CRA001160_expression.h5` | `1PolTXggREz8XmhutCLTQJGCfKxFAzqMl` | Single-cell (CRA001160) |
 | `PAAD_CRA001160_CellMetainfo_table.tsv` | `17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu` | Single-cell (CRA001160) |
 | `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj` | Spatial transcriptomics |
@@ -57,9 +58,9 @@ In R, **before** knitting or sourcing the vignettes, run (you can use the file I
 ```r
 # Use the file IDs from the table at the top of this README.
 Sys.setenv(
+  PHENOMAPR_CRA001160_RDS_URL   = "https://github.com/OWNER/REPO/releases/download/TAG/PAAD_CRA001160_full.rds",
   PHENOMAPR_CRA001160_H5_URL    = "https://drive.google.com/uc?export=download&id=1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
   PHENOMAPR_CRA001160_META_URL  = "https://drive.google.com/uc?export=download&id=17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
-  PHENOMAPR_CRA001160_RDS_URL   = "https://drive.google.com/uc?export=download&id=14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb",
   PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj",
   PHENOMAPR_GSE205154_MATRIX_URL = "https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN",
   PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ",
@@ -89,11 +90,16 @@ R
 
 ### Large files on Google Drive
 
-For large files, Google may show a warning page instead of downloading, or return a small JSON error when the file’s **download quota is exceeded**. The single-cell vignette rejects those stubs and falls back to `PHENOMAPR_CRA001160_RDS_URL` / a local Seurat RDS for expression. If automatic download fails:
+For large files, Google may show a warning page instead of downloading, or return a small JSON error when the file’s **download quota is exceeded**. The single-cell article expects the **full** CRA001160 cohort (not a subset). Preferred CI path:
+
+1. Build the full bundle locally: `Rscript tools/make_cra001160_full_rds.R`
+2. Publish it: `bash tools/upload_cra001160_release.sh`
+3. Set repository secret `PHENOMAPR_CRA001160_RDS_URL` to the printed release asset URL (must be a **non-Drive** mirror).
+
+Place `PAAD_CRA001160_full.rds` under `vignettes/` for local knitting (gitignored). If automatic Drive download fails for H5/Seurat:
 
 - **Easiest:** Use Option 1 — download the file in your browser from Drive and place it in `vignettes/`.
 - Or use the [gdown](https://github.com/wkentaro/gdown) Python tool with the file ID: `gdown FILE_ID`.
-- For CI, prefer secrets that point at a **non-Drive** mirror (S3, GitHub release asset, etc.); Drive `uc?export=download` URLs hit the same quota limits.
 
 ### GitHub Actions (CI)
 
