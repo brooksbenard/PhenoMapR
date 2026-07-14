@@ -12,7 +12,8 @@ PhenoMap(
   pseudobulk = FALSE,
   group_by = NULL,
   assay = NULL,
-  slot = "data",
+  layer = "data",
+  slot = NULL,
   verbose = TRUE,
   reference_sign = 1L,
   score_mode = c("weighted_sum", "activity_adjusted"),
@@ -53,10 +54,15 @@ pseudobulk = TRUE. For Seurat/SCE objects, should be a metadata column.}
 \item{assay}{Assay name for Seurat/SCE objects (default: "RNA" for sc,
 "Spatial" for spatial)}
 
-\item{slot}{Data layer for Seurat objects: "data" for normalized,
-"counts" for raw, "scale.data" for scaled (default: "data").
-In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot.
-The function handles both automatically.}
+\item{layer}{Seurat matrix to score (\code{"data"} normalized,
+\code{"counts"} raw, or \code{"scale.data"}; default \code{"data"}).
+Seurat v5 terminology. PhenoMapR maps this to
+\code{GetAssayData(layer=...)} or \code{GetAssayData(slot=...)} based on
+the installed SeuratObject version.}
+
+\item{slot}{Alias for \code{layer} (Seurat v4 name for the same matrix).
+Prefer \code{layer} in new code. If both are set to different values, an
+error is thrown.}
 
 \item{verbose}{Logical. Print progress messages (default: TRUE)}
 
@@ -118,13 +124,13 @@ scores <- PhenoMap(
   cancer_type = "BRCA"
 )
 
-# Single cell Seurat object
+# Single-cell Seurat object (prefer layer=; Seurat v5)
 scores <- PhenoMap(
   expression = seurat_obj,
   reference = "tcga",
   cancer_type = "LUAD",
   assay = "RNA",
-  slot = "data"
+  layer = "data"
 )
 
 # Spatial with pseudobulk
@@ -132,6 +138,8 @@ scores <- PhenoMap(
   expression = spatial_seurat,
   reference = "ici_precog",
   cancer_type = "MELANOMA_Metastatic",
+  assay = "Spatial",
+  layer = "data",
   pseudobulk = TRUE,
   group_by = "sample_id"
 )

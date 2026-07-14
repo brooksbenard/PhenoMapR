@@ -209,7 +209,7 @@ scores_spot <- PhenoMapR::PhenoMap(
     reference = "precog",
     cancer_type = "Pancreatic",
     assay = "Spatial",
-    slot = "data",
+    layer = "data",
     verbose = FALSE
   )
 
@@ -355,7 +355,7 @@ seurat <- readRDS(rds_cyto)
     reference = "precog",
     cancer_type = "Pancreatic",
     assay = "Spatial",
-    slot = "data",
+    layer = "data",
     verbose = FALSE
   )
   seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
@@ -1707,7 +1707,7 @@ markers_global <- PhenoMapR::find_phenotype_markers(
   cell_id_column = "cell_id",
   marker_scope = "phenotype_groups",
   assay = "Spatial",
-  slot = "data",
+  layer = "data",
   max_cells_per_ident = max_cells_markers,
   verbose = FALSE
 )
@@ -1722,7 +1722,7 @@ if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
     marker_scope = "cell_type_specific",
     celltype_contrast = "vs_opposite_tail",
     assay = "Spatial",
-    slot = "data",
+    layer = "data",
     max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )
@@ -1735,7 +1735,7 @@ if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
     marker_scope = "cell_type_specific",
     celltype_contrast = "within_cell_type",
     assay = "Spatial",
-    slot = "data",
+    layer = "data",
     max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )

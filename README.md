@@ -47,7 +47,7 @@ scores <- PhenoMap(
   reference = "tcga",
   cancer_type = "LUAD",
   assay = if ("Spatial" %in% names(seurat_obj@assays)) "Spatial" else "RNA",
-  slot = if ("Spatial" %in% names(seurat_obj@assays)) "counts" else "data"
+  layer = if ("Spatial" %in% names(seurat_obj@assays)) "counts" else "data"
 )
 ```
 

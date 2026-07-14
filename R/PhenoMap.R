@@ -25,10 +25,14 @@
 #'   pseudobulk = TRUE. For Seurat/SCE objects, should be a metadata column.
 #' @param assay Assay name for Seurat/SCE objects (default: "RNA" for sc, 
 #'   "Spatial" for spatial)
-#' @param slot Data layer for Seurat objects: "data" for normalized, 
-#'   "counts" for raw, "scale.data" for scaled (default: "data"). 
-#'   In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot. 
-#'   The function handles both automatically.
+#' @param layer Seurat matrix to score (\code{"data"} normalized,
+#'   \code{"counts"} raw, or \code{"scale.data"}; default \code{"data"}).
+#'   Seurat v5 terminology. PhenoMapR maps this to
+#'   \code{GetAssayData(layer=...)} or \code{GetAssayData(slot=...)} based on
+#'   the installed SeuratObject version.
+#' @param slot Alias for \code{layer} (Seurat v4 name for the same matrix).
+#'   Prefer \code{layer} in new code. If both are set to different values, an
+#'   error is thrown.
 #' @param verbose Logical. Print progress messages (default: TRUE)
 #' @param reference_sign Multiply all reference gene z-scores by this value before
 #'   the weighted sum. Use \code{1} (default) or \code{-1} to flip the sign of
@@ -77,13 +81,13 @@
 #'   cancer_type = "BRCA"
 #' )
 #'
-#' # Single cell Seurat object
+#' # Single-cell Seurat object (prefer layer=; Seurat v5)
 #' scores <- PhenoMap(
 #'   expression = seurat_obj,
 #'   reference = "tcga",
 #'   cancer_type = "LUAD",
 #'   assay = "RNA",
-#'   slot = "data"
+#'   layer = "data"
 #' )
 #'
 #' # Spatial with pseudobulk
@@ -91,6 +95,8 @@
 #'   expression = spatial_seurat,
 #'   reference = "ici_precog",
 #'   cancer_type = "MELANOMA_Metastatic",
+#'   assay = "Spatial",
+#'   layer = "data",
 #'   pseudobulk = TRUE,
 #'   group_by = "sample_id"
 #' )
@@ -114,7 +120,8 @@ PhenoMap <- function(expression,
                     pseudobulk = FALSE,
                     group_by = NULL,
                     assay = NULL,
-                    slot = "data",
+                    layer = "data",
+                    slot = NULL,
                     verbose = TRUE,
                     reference_sign = 1L,
                     score_mode = c("weighted_sum", "activity_adjusted"),
@@ -125,6 +132,7 @@ PhenoMap <- function(expression,
                     permutation_seed = 42L) {
 
   score_mode <- match.arg(score_mode)
+  slot <- .resolve_seurat_layer_or_slot(layer = layer, slot = slot)
   reference_sign <- as.integer(reference_sign)[1L]
   if (!reference_sign %in% c(-1L, 1L)) {
     stop("'reference_sign' must be 1 or -1")

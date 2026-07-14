@@ -1120,7 +1120,7 @@ ui <- page_navbar(
               )
             ),
             radioButtons(
-              "score_slot", "Layer / slot to score against",
+              "score_slot", "Layer to score against (Seurat v5)",
               choices = c("data (log-normalized)" = "data",
                           "counts (raw)"          = "counts"),
               selected = "data"
@@ -4312,7 +4312,7 @@ server <- function(input, output, session) {
       pseudobulk     = isTRUE(input$pseudobulk) && isTRUE(score_allow_pseudobulk()),
       group_by       = input$pseudobulk_group_by,
       assay          = input$score_assay,
-      slot           = input$score_slot
+      layer          = input$score_slot
     )
     sess <- session
     later::later(function() {
@@ -4325,7 +4325,7 @@ server <- function(input, output, session) {
           pseudobulk = score_args$pseudobulk,
           group_by = score_args$group_by,
           assay = score_args$assay,
-          slot = score_args$slot,
+          layer = score_args$layer,
           reference_sign = 1L
         ),
         error = function(e) {
@@ -5857,7 +5857,7 @@ server <- function(input, output, session) {
         extract_expression_matrix(
           expr_obj_snapshot,
           assay = if (nzchar(score_assay_input)) score_assay_input else NULL,
-          slot = score_slot_input,
+          layer = score_slot_input,
           gene_subset = if (length(marker_genes)) marker_genes else NULL
         ),
         error = function(e) {

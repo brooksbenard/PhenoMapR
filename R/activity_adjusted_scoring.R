@@ -40,7 +40,9 @@ regress_expression_for_scoring <- function(expression_matrix,
   if (isTRUE(use_counts)) {
     obj <- Seurat::NormalizeData(obj, verbose = FALSE)
   } else {
-    obj <- Seurat::SetAssayData(obj, assay = "RNA", layer = "data", new.data = expression_matrix)
+    obj <- .set_assay_data_compat(
+      obj, assay = "RNA", slot = "data", new.data = expression_matrix
+    )
   }
 
   nfeat <- min(2000L, nrow(obj))
@@ -104,10 +106,7 @@ regress_expression_for_scoring <- function(expression_matrix,
     vars.to.regress = regressors,
     verbose = FALSE
   )
-  reg_mat <- tryCatch(
-    Seurat::GetAssayData(obj, assay = "RNA", layer = "scale.data"),
-    error = function(e) Seurat::GetAssayData(obj, assay = "RNA", slot = "scale.data")
-  )
+  reg_mat <- .get_assay_data_compat(obj, assay = "RNA", slot = "scale.data")
   reg_mat
 }
 

@@ -112,8 +112,10 @@ define_phenotype_groups <- function(scores,
 #' @param cell_type_column When \code{marker_scope = "cell_type_specific"}, the
 #'   column in \code{group_labels} that contains cell type labels.
 #' @param assay Assay name for Seurat/SCE (e.g. \code{"RNA"}).
-#' @param slot Layer for Seurat: \code{"data"}, \code{"counts"}, or
-#'   \code{"scale.data"} (default \code{"data"}).
+#' @param layer Seurat matrix for testing (\code{"data"}, \code{"counts"}, or
+#'   \code{"scale.data"}; default \code{"data"}). Seurat v5 name; use
+#'   \code{slot} for the Seurat v4 alias (same values).
+#' @param slot Alias for \code{layer} (Seurat v4 terminology).
 #' @param test.use Seurat \code{test.use}: \code{"wilcox"} (default), \code{"t"},
 #'   \code{"roc"}, \code{"negbinom"}, \code{"poisson"}, or \code{"LR"}.
 #' @param min.pct Minimum fraction of cells expressing the gene in either group
@@ -208,7 +210,8 @@ find_phenotype_markers <- function(expression,
                                     marker_scope = c("phenotype_groups", "cell_type_specific"),
                                     cell_type_column = NULL,
                                     assay = NULL,
-                                    slot = "data",
+                                    layer = "data",
+                                    slot = NULL,
                                     test.use = c("wilcox", "t", "roc", "negbinom", "poisson", "LR"),
                                     min.pct = 0.1,
                                     logfc.threshold = 0.25,
@@ -225,6 +228,7 @@ find_phenotype_markers <- function(expression,
   test.use <- match.arg(test.use)
   marker_scope <- match.arg(marker_scope)
   celltype_contrast <- match.arg(celltype_contrast)
+  slot <- .resolve_seurat_layer_or_slot(layer = layer, slot = slot)
 
   # Resolve the assay to use for Seurat input ONCE, here, before any
   # downstream helper sees it. This is what makes the function work
@@ -1181,7 +1185,7 @@ get_or_create_seurat_for_markers <- function(expression, expr_info, group_vec, a
   # avoid double-normalization when input is already normalized (e.g. TISCH2).
   if (slot == "data") {
     if (is_likely_normalized(mat)) {
-      Seurat::SetAssayData(obj, layer = "data", new.data = mat, assay = "RNA")
+      obj <- .set_assay_data_compat(obj, assay = "RNA", slot = "data", new.data = mat)
     } else {
       obj <- Seurat::NormalizeData(obj, verbose = FALSE)
     }
@@ -1213,9 +1217,11 @@ sanitize_cell_ids_vec <- function(x) {
 #' @noRd
 process_expression_for_markers <- function(expression,
                                             assay = NULL,
-                                            slot = "data",
+                                            layer = "data",
+                                            slot = NULL,
                                             validate_axes = TRUE,
                                             verbose = TRUE) {
+  slot <- .resolve_seurat_layer_or_slot(layer = layer, slot = slot)
   if (is.matrix(expression) || is.data.frame(expression)) {
     if (is.data.frame(expression)) {
       expression <- as.matrix(expression)

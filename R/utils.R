@@ -1,54 +1,151 @@
+#' Whether the installed SeuratObject uses \code{layer=} (v5+) vs \code{slot=} (v4)
+#'
+#' @keywords internal
+#' @noRd
+.seurat_uses_layers <- function() {
+  tryCatch(
+    requireNamespace("SeuratObject", quietly = TRUE) &&
+      utils::packageVersion("SeuratObject") >= "5.0.0",
+    error = function(e) TRUE
+  )
+}
+
+#' Resolve public \code{layer} / \code{slot} arguments to one matrix name
+#'
+#' PhenoMapR prefers Seurat v5 \code{layer} wording and still accepts
+#' Seurat v4 \code{slot} as an alias. Values are identical
+#' (\code{"data"}, \code{"counts"}, \code{"scale.data"}).
+#'
+#' @keywords internal
+#' @noRd
+.resolve_seurat_layer_or_slot <- function(layer = "data",
+                                          slot = NULL,
+                                          default = "data") {
+  layer_chr <- if (is.null(layer) || !length(layer) ||
+                   !nzchar(as.character(layer)[1L])) {
+    default
+  } else {
+    as.character(layer)[1L]
+  }
+  has_slot <- !is.null(slot) && length(slot) >= 1L &&
+    nzchar(as.character(slot)[1L])
+  if (has_slot) {
+    slot_chr <- as.character(slot)[1L]
+    # slot alone (legacy callers): honour it when layer is still default
+    if (identical(layer_chr, default) && !identical(slot_chr, default)) {
+      return(slot_chr)
+    }
+    if (!identical(layer_chr, slot_chr)) {
+      stop(
+        "Conflicting Seurat matrix selection: layer = '", layer_chr,
+        "' vs slot = '", slot_chr, "'. ",
+        "Pass only one (Seurat v5 'layer' preferred; 'slot' is the v4 alias; ",
+        "values 'data', 'counts', or 'scale.data').",
+        call. = FALSE
+      )
+    }
+    return(slot_chr)
+  }
+  layer_chr
+}
+
 #' Seurat 4 / 5 compatibility shim for \code{Seurat::GetAssayData()}
 #'
-#' Picks the right argument name -- \code{layer} on Seurat /
-#' SeuratObject 5.0 and later (where \code{slot} is now defunct) or
-#' \code{slot} on Seurat 4.x (where \code{layer} isn't a known
-#' argument) -- and forwards the call. Avoids the
-#' deprecation/defunct messages users were seeing during scoring on
-#' recent Seurat installs.
-#'
-#' Detection is via \code{packageVersion("SeuratObject")}:
-#' SeuratObject became a separate package in Seurat 4.x and bumped to
-#' \code{5.0.0} when \code{layer} replaced \code{slot}. Probing
-#' \code{formals(Seurat::GetAssayData)} doesn't work because the
-#' top-level function is just \code{function(object, ...)} on Seurat
-#' 5+ and dispatches to an S4 method that absorbs the named args
-#' through \code{...} -- so neither \code{layer} nor \code{slot}
-#' appears in the formal args at all.
-#'
-#' \code{slot} stays the public-facing argument name on this side of
-#' the call so existing call sites (which all use
-#' \code{slot = "data" / "counts" / "scale.data"}) don't have to
-#' change.
+#' Forwards as \code{layer=} on SeuratObject >= 5.0 (where \code{slot=} is
+#' defunct) or \code{slot=} on Seurat 4.x. Retries the alternate name once on
+#' failure so mixed installs / objects saved under the other major version
+#' still work.
 #'
 #' @param obj A Seurat object.
-#' @param assay Assay name (e.g. \code{"RNA"}, \code{"Spatial"},
-#'   \code{"SCT"}); passed straight through.
-#' @param slot Layer/slot name to fetch. Forwarded as \code{layer}
-#'   on SeuratObject >= 5.0, else as \code{slot}.
-#' @return The matrix returned by \code{Seurat::GetAssayData()}.
-#'
+#' @param assay Assay name (e.g. \code{"RNA"}, \code{"Spatial"}).
+#' @param slot Resolved matrix name (\code{"data"}, \code{"counts"}, or
+#'   \code{"scale.data"}). Use \code{.resolve_seurat_layer_or_slot()} for the
+#'   public \code{slot}/\code{layer} arguments.
+#' @return Matrix from \code{Seurat::GetAssayData()}.
 #' @keywords internal
 #' @noRd
 .get_assay_data_compat <- function(obj, assay = NULL, slot = "data") {
   if (!requireNamespace("Seurat", quietly = TRUE)) {
     stop("'Seurat' package is not installed.", call. = FALSE)
   }
-  args <- list(object = obj)
+  args_base <- list(object = obj)
   if (!is.null(assay) && nzchar(assay)) {
-    args$assay <- assay
+    args_base$assay <- assay
   }
-  use_layer <- tryCatch(
-    requireNamespace("SeuratObject", quietly = TRUE) &&
-      utils::packageVersion("SeuratObject") >= "5.0.0",
-    error = function(e) TRUE  # Default to layer= on lookup failure (modern Seurat).
+  primary <- if (isTRUE(.seurat_uses_layers())) "layer" else "slot"
+  secondary <- if (identical(primary, "layer")) "slot" else "layer"
+
+  run_get <- function(arg_name) {
+    args <- args_base
+    args[[arg_name]] <- slot
+    do.call(Seurat::GetAssayData, args)
+  }
+
+  tryCatch(
+    run_get(primary),
+    error = function(e1) {
+      tryCatch(
+        run_get(secondary),
+        error = function(e2) {
+          stop(
+            "Could not read Seurat assay matrix '", slot, "'",
+            if (!is.null(assay) && nzchar(assay)) {
+              paste0(" from assay '", assay, "'")
+            } else {
+              ""
+            },
+            " using either ", primary, "= or ", secondary, "=. ",
+            "Primary error: ", conditionMessage(e1),
+            call. = FALSE
+          )
+        }
+      )
+    }
   )
-  if (isTRUE(use_layer)) {
-    args$layer <- slot
-  } else {
-    args$slot <- slot
+}
+
+#' Seurat 4 / 5 compatibility shim for \code{Seurat::SetAssayData()}
+#'
+#' @keywords internal
+#' @noRd
+.set_assay_data_compat <- function(obj, assay = NULL, slot = "data", new.data) {
+  if (!requireNamespace("Seurat", quietly = TRUE)) {
+    stop("'Seurat' package is not installed.", call. = FALSE)
   }
-  do.call(Seurat::GetAssayData, args)
+  args_base <- list(object = obj, new.data = new.data)
+  if (!is.null(assay) && nzchar(assay)) {
+    args_base$assay <- assay
+  }
+  primary <- if (isTRUE(.seurat_uses_layers())) "layer" else "slot"
+  secondary <- if (identical(primary, "layer")) "slot" else "layer"
+
+  run_set <- function(arg_name) {
+    args <- args_base
+    args[[arg_name]] <- slot
+    do.call(Seurat::SetAssayData, args)
+  }
+
+  tryCatch(
+    run_set(primary),
+    error = function(e1) {
+      tryCatch(
+        run_set(secondary),
+        error = function(e2) {
+          stop(
+            "Could not write Seurat assay matrix '", slot, "'",
+            if (!is.null(assay) && nzchar(assay)) {
+              paste0(" to assay '", assay, "'")
+            } else {
+              ""
+            },
+            " using either ", primary, "= or ", secondary, "=. ",
+            "Primary error: ", conditionMessage(e1),
+            call. = FALSE
+          )
+        }
+      )
+    }
+  )
 }
 
 

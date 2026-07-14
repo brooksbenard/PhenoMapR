@@ -12,7 +12,8 @@ find_phenotype_markers(
   marker_scope = c("phenotype_groups", "cell_type_specific"),
   cell_type_column = NULL,
   assay = NULL,
-  slot = "data",
+  layer = "data",
+  slot = NULL,
   test.use = c("wilcox", "t", "roc", "negbinom", "poisson", "LR"),
   min.pct = 0.1,
   logfc.threshold = 0.25,
@@ -59,8 +60,11 @@ column in \code{group_labels} that contains cell type labels.}
 
 \item{assay}{Assay name for Seurat/SCE (e.g. \code{"RNA"}).}
 
-\item{slot}{Layer for Seurat: \code{"data"}, \code{"counts"}, or
-\code{"scale.data"} (default \code{"data"}).}
+\item{layer}{Seurat matrix for testing (\code{"data"}, \code{"counts"}, or
+\code{"scale.data"}; default \code{"data"}). Seurat v5 name; use
+\code{slot} for the Seurat v4 alias (same values).}
+
+\item{slot}{Alias for \code{layer} (Seurat v4 terminology).}
 
 \item{test.use}{Seurat \code{test.use}: \code{"wilcox"} (default), \code{"t"},
 \code{"roc"}, \code{"negbinom"}, \code{"poisson"}, or \code{"LR"}.}

@@ -953,7 +953,7 @@ safe_list_cancer_types <- function(reference) {
 # so this helper has no further UI side-effects.
 run_phenomap_with_progress <- function(expression, reference, cancer_type,
                                        z_score_cutoff, pseudobulk, group_by,
-                                       assay, slot, reference_sign) {
+                                       assay, layer, reference_sign) {
   t0 <- Sys.time()
   scores <- PhenoMapR::PhenoMap(
     expression = expression,
@@ -963,7 +963,7 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
     pseudobulk = pseudobulk,
     group_by = if (pseudobulk && nzchar(group_by %||% "")) group_by else NULL,
     assay = if (nzchar(assay %||% "")) assay else NULL,
-    slot = slot,
+    layer = layer,
     reference_sign = reference_sign,
     verbose = TRUE
   )
@@ -2691,7 +2691,7 @@ attach_matrix_coldata <- function(expr, metadata, cell_id_col = ".cell_id") {
     "data"
   }
   expr <- tryCatch(
-    Seurat::GetAssayData(obj, assay = assay, layer = layer),
+    PhenoMapR:::.get_assay_data_compat(obj, assay = assay, slot = layer),
     error = function(e) NULL
   )
   if (is.null(expr)) return(NULL)

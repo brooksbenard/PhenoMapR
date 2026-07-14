@@ -7,11 +7,13 @@ process_expression_input <- function(expression,
                                      pseudobulk = FALSE,
                                      group_by = NULL,
                                      assay = NULL,
-                                     slot = "data",
+                                     layer = "data",
+                                     slot = NULL,
                                      genes_to_extract = NULL,
                                      verbose = TRUE) {
 
   input_type <- detect_input_type(expression)
+  slot <- .resolve_seurat_layer_or_slot(layer = layer, slot = slot)
 
   if (verbose) {
     message(glue::glue("Detected input type: {input_type}"))
@@ -20,9 +22,8 @@ process_expression_input <- function(expression,
   result <- switch(input_type,
     "matrix" = process_matrix(expression, pseudobulk, group_by, verbose = verbose),
     "seurat" = process_seurat(expression, pseudobulk, group_by, assay, slot, genes_to_extract),
-    # nocov start - spatial Seurat (slot=counts) not in default tests
-    "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot = "counts", genes_to_extract = genes_to_extract),
-    # nocov end
+    # Honour the caller's slot/layer for spatial Seurat (do not force counts).
+    "seurat_spatial" = process_seurat(expression, pseudobulk, group_by, assay, slot, genes_to_extract),
     "sce" = process_sce(expression, pseudobulk, group_by, assay, genes_to_extract),
     "spatial_experiment" = process_spatial_experiment(expression, pseudobulk, group_by, assay, genes_to_extract),
     "anndata" = process_anndata(expression, pseudobulk, group_by, genes_to_extract),
