@@ -64,7 +64,13 @@ from various reference datasets (PRECOG, TCGA, Pediatric, ICI).</p>
 <span>  assay <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  slot <span class="op">=</span> <span class="st">"data"</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  reference_sign <span class="op">=</span> <span class="fl">1L</span></span>
+<span>  reference_sign <span class="op">=</span> <span class="fl">1L</span>,</span>
+<span>  score_mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"weighted_sum"</span>, <span class="st">"activity_adjusted"</span><span class="op">)</span>,</span>
+<span>  vars_to_regress <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"S.Score"</span>, <span class="st">"G2M.Score"</span>, <span class="st">"nCount_RNA"</span><span class="op">)</span>,</span>
+<span>  sample_metadata <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  cell_id_column <span class="op">=</span> <span class="st">"cell_id"</span>,</span>
+<span>  permutation_n <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  permutation_seed <span class="op">=</span> <span class="fl">42L</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -133,11 +139,47 @@ from <code><a href="derive_reference_from_bulk.html">derive_reference_from_bulk<
 <code>binary_positive_reference</code> so the reference itself matches your factor
 levels (first level = positive association when <code>"first"</code>).</p></dd>
 
+
+<dt id="arg-score-mode">score_mode<a class="anchor" aria-label="anchor" href="#arg-score-mode"></a></dt>
+<dd><p>Scoring mode: <code>"weighted_sum"</code> (default) uses the
+standard dot product of expression and reference z-scores;
+<code>"activity_adjusted"</code> regresses technical covariates per gene (via
+Seurat <code>ScaleData</code>) before computing the weighted sum on the regressed
+layer. Requires Seurat for matrix inputs.</p></dd>
+
+
+<dt id="arg-vars-to-regress">vars_to_regress<a class="anchor" aria-label="anchor" href="#arg-vars-to-regress"></a></dt>
+<dd><p>Metadata columns to regress when
+<code>score_mode = "activity_adjusted"</code>. Default:
+<code>c("S.Score", "G2M.Score", "nCount_RNA")</code>. For matrix input, pass
+covariates via <code>sample_metadata</code> (see below). <code>nCount_RNA</code> is
+computed from column sums when absent.</p></dd>
+
+
+<dt id="arg-sample-metadata">sample_metadata<a class="anchor" aria-label="anchor" href="#arg-sample-metadata"></a></dt>
+<dd><p>Optional data.frame of per-cell/sample covariates for
+<code>score_mode = "activity_adjusted"</code> when <code>expression</code> is a matrix.
+Must include a cell identifier column (default <code>"cell_id"</code>).</p></dd>
+
+
+<dt id="arg-cell-id-column">cell_id_column<a class="anchor" aria-label="anchor" href="#arg-cell-id-column"></a></dt>
+<dd><p>Column in <code>sample_metadata</code> matching matrix colnames
+(default <code>"cell_id"</code>).</p></dd>
+
+
+<dt id="arg-permutation-n">permutation_n<a class="anchor" aria-label="anchor" href="#arg-permutation-n"></a></dt>
+<dd><p>If a positive integer, compute gene-shuffle permutation
+null scores and add <code>empirical_p_*</code> columns alongside raw score columns.</p></dd>
+
+
+<dt id="arg-permutation-seed">permutation_seed<a class="anchor" aria-label="anchor" href="#arg-permutation-seed"></a></dt>
+<dd><p>Random seed for permutation null (default <code>42</code>).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data.frame with samples/cells as rows and score columns. Column
-names follow pattern: <code>weighted_sum_score_{reference}_{cancer_type}</code>.
+names follow pattern: <code>PhenoMapR_{reference}_{cancer_type}</code>.
 <strong>Directionality (built-in PRECOG/TCGA/ICI references)</strong>: higher score =
 worse prognosis (adverse); lower score = better prognosis (favorable),
 matching positive reference z = worse survival. <strong>Custom references</strong> from
@@ -199,7 +241,7 @@ are retained for downstream analyses (e.g. cell type marker genes).</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

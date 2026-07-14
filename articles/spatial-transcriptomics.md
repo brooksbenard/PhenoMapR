@@ -39,9 +39,11 @@ googledrive::drive_deauth()
 gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
 rds_spot <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"
 
-googledrive::drive_download(googledrive::as_id(gd_id_spot), rds_spot, overwrite = TRUE)
+if (!file.exists(rds_spot)) {
+  googledrive::drive_download(googledrive::as_id(gd_id_spot), rds_spot, overwrite = TRUE)
+}
 
-seurat_spot <- readRDS("HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds")
+seurat_spot <- readRDS(rds_spot)
 
 h_and_e <- SpatialPlot(object = seurat_spot,
   features = NULL,
@@ -71,7 +73,7 @@ scores_spot <- PhenoMapR::PhenoMap(
 # Add scores to Seurat object
 seurat_spot <- PhenoMapR::add_scores_to_seurat(seurat_spot, scores_spot)
 
-score_col_spot <- grep("weighted_sum_score", names(scores_spot), value = TRUE)[1]
+score_col_spot <- grep("^PhenoMapR_", names(scores_spot), value = TRUE)[1]
 ## Z-scaled PhenoMapR score on spots (for hex / metadata plots)
 sc_sp <- suppressWarnings(as.numeric(seurat_spot@meta.data[[score_col_spot]]))
 seurat_spot$phenomapr_scaled_spot <- as.numeric(scale(sc_sp))
@@ -91,7 +93,7 @@ plot_score_distribution(
 
 p <- SpatialPlot(
   object = seurat_spot,
-  features = "weighted_sum_score_Pancreatic", image.alpha = 0
+  features = "PhenoMapR_Pancreatic", image.alpha = 0
 )
 cols_pheno <- grDevices::colorRampPalette(c("#2166AC", "#F7F7F7", "#B2182B"))(100)
 
@@ -102,7 +104,7 @@ spot_hex_bins <- max(10, min(50L, as.integer(round(sqrt(nrow(df))))))
 hex_phenomapr <- ggplot(df, aes(
   x = x,
   y = -y,
-  z = scale(weighted_sum_score_Pancreatic)
+  z = scale(PhenoMapR_Pancreatic)
 )) +
   stat_summary_hex(fun = mean, bins = spot_hex_bins) +
   scale_fill_gradient2(
@@ -134,11 +136,11 @@ the top and bottom 5th percentile of spots based on PhenoMapR scores.
 
 df <- SpatialPlot(
   object = seurat_spot,
-  features = "weighted_sum_score_Pancreatic", image.alpha = 0
+  features = "PhenoMapR_Pancreatic", image.alpha = 0
 )$data %>%
   as.data.frame()
 
-groups_spot <- PhenoMapR::define_phenotype_groups(df, score_columns = "weighted_sum_score_Pancreatic", percentile = 0.05)
+groups_spot <- PhenoMapR::define_phenotype_groups(df, score_columns = "PhenoMapR_Pancreatic", percentile = 0.05)
 
 df <- left_join(df, groups_spot, by = c("cell" = "cell_id"))
 
@@ -153,7 +155,7 @@ hex_phenomapr_groups <- ggplot(df, aes(
   x = x,
   y = -y,
   z = as.numeric(factor(
-    phenotype_group_weighted_sum_score_Pancreatic,
+    phenotype_group_PhenoMapR_Pancreatic,
     levels = c("Most Favorable", "Other", "Most Adverse")
   ))
 )) +
@@ -214,8 +216,8 @@ gc(verbose = FALSE)
 ```
 
     ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells  4390071 234.5    7859085 419.8   7859085 419.8
-    ## Vcells 11270289  86.0  126615171 966.0 126265720 963.4
+    ## Ncells  4398784 235.0    7893412 421.6   7893412 421.6
+    ## Vcells 11309091  86.3  126659540 966.4 126303666 963.7
 
 ``` r
 
@@ -223,7 +225,9 @@ gc(verbose = FALSE)
 rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
 gd_id_cyto <- "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
 
-googledrive::drive_download(googledrive::as_id(gd_id_cyto), rds_cyto, overwrite = TRUE)
+if (!file.exists(rds_cyto)) {
+  googledrive::drive_download(googledrive::as_id(gd_id_cyto), rds_cyto, overwrite = TRUE)
+}
 
 seurat <- readRDS(rds_cyto)
 
@@ -236,7 +240,7 @@ seurat <- readRDS(rds_cyto)
     verbose = FALSE
   )
   seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
-score_col <- grep("weighted_sum_score", names(scores_spatial), value = TRUE)[1]
+score_col <- grep("^PhenoMapR_", names(scores_spatial), value = TRUE)[1]
 
 plot_score_distribution(
   seurat@meta.data[[score_col]],
@@ -246,6 +250,26 @@ plot_score_distribution(
 ```
 
 ![](spatial-transcriptomics_files/figure-html/score-spots-1.png)
+
+``` r
+
+# Always build the cell_locations table used by location maps and
+# co-localization. Pre-rendered location PNGs must not skip this:
+# downstream chunks (scores / tails / coloc) depend on it.
+cell_locations <- seurat@meta.data %>%
+  as.data.frame() %>%
+  dplyr::select("Cell", "row", "col", "CellType", dplyr::all_of(score_col)) %>%
+  dplyr::group_by(.data$row, .data$col) %>%
+  dplyr::mutate(points_per_location = dplyr::n()) %>%
+  dplyr::ungroup()
+names(cell_locations)[names(cell_locations) == score_col] <- "PhenoMapR_Pancreatic"
+cell_locations$CellType <- as.factor(cell_locations$CellType)
+rng_row <- diff(range(cell_locations$row, na.rm = TRUE))
+rng_col <- diff(range(-cell_locations$col, na.rm = TRUE))
+spatial_jitter_w <- max(0.25, if (rng_row > 0) rng_row * 0.025 else 0.15)
+spatial_jitter_h <- max(0.25, if (rng_col > 0) rng_col * 0.025 else 0.15)
+spatial_point_range <- c(0.5, 1.6)
+```
 
 ### Score by cell type
 
@@ -309,59 +333,60 @@ some of the most favorably prognostic cells across the sample.
 
 ### Where are the different cell types?
 
-Here, we use the single-cell coordinates from the spatial seurat object
-and pair them with the cell level metadata in order to plot the results
-in spatial context.
+CytoSPACE maps single cells onto the Visium tissue grid; every analysis
+below uses **`row` / `col`** from the CytoSPACE metadata (and
+**`imagerow` / `imagecol`** tissue coordinates for spatial CellChat
+distance weighting on the same mapped cells). Point size is **scaled
+inversely by cells per spot** when multiple cells share a Visium
+location (default), or **uniform** for easier visual comparison —
+regenerate both with
+`Rscript scripts/render_spatial_cytospace_location_plots.R`.
+
+![](../reference/figures/spatial_cytospace_locations_scaled.png)
+
+![](../reference/figures/spatial_cytospace_locations_uniform.png)
+
+The code below mirrors the location render script when pre-rendered
+figures are absent (scaled points only):
 
 ``` r
 
-cell_locations <- seurat@meta.data %>%
-  as.data.frame() %>%
-  dplyr::select("Cell", "row", "col", 
-                "CellType", "weighted_sum_score_Pancreatic") %>%
-    group_by(.data$row, .data$col) %>%
-    mutate(points_per_location = n()) %>%
-    ungroup()
+spatial_celltype_pal <- PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
+ct_freq <- sort(table(cell_locations$CellType, useNA = "no"), decreasing = TRUE)
+ct_order <- names(ct_freq)
+cell_locations$celltype_zorder <- as.numeric(
+  factor(as.character(cell_locations$CellType), levels = ct_order)
+)
+ct_pal <- if (!is.null(spatial_celltype_pal)) {
+  spatial_celltype_pal
+} else {
+  PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
+}
 
-cell_locations$CellType <- as.factor(cell_locations$CellType)
-
-  # Shared jitter and point size so all three spatial plots match (multiple cells per spot)
-  rng_row <- diff(range(cell_locations$row, na.rm = TRUE))
-  rng_col <- diff(range(-cell_locations$col, na.rm = TRUE))
-  spatial_jitter_w <- max(0.25, if (rng_row > 0) rng_row * 0.025 else 0.15)
-  spatial_jitter_h <- max(0.25, if (rng_col > 0) rng_col * 0.025 else 0.15)
-  spatial_point_range <- c(0.5, 1.6)
-
-  spatial_celltype_pal <- PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
-  
-    ct_freq <- sort(table(cell_locations$CellType, useNA = "no"), decreasing = TRUE)
-  ct_order <- names(ct_freq)
-  cell_locations$celltype_zorder <- as.numeric(factor(as.character(cell_locations$CellType), levels = ct_order))
-  ct_pal <- if (!is.null(spatial_celltype_pal)) spatial_celltype_pal else PhenoMapR::get_celltype_palette(levels(cell_locations$CellType))
- 
- cytospace_loc <-  ggplot(cell_locations, aes(x = .data$row, y = -.data$col, color = .data$CellType,
-    size = points_per_location, zorder = .data$celltype_zorder)) +
-    geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
-    scale_color_manual(values = ct_pal, name = "Cell Type", na.value = "grey90") +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
-    guides(
-      color = guide_legend(override.aes = list(size = 4), ncol = 2)
-      # size  = guide_legend(override.aes = list(size = 4))
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title  = element_blank(),
-      axis.text   = element_blank(),
-      axis.ticks  = element_blank(),
-      axis.title  = element_blank()
-    ) +
-       coord_fixed(ratio = 0.6) +
+cytospace_loc <- ggplot(
+  cell_locations,
+  aes(
+    x = .data$row, y = -.data$col, color = .data$CellType,
+    size = points_per_location, zorder = .data$celltype_zorder
+  )
+) +
+  geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
+  scale_color_manual(values = ct_pal, name = "Cell Type", na.value = "grey90") +
+  scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+  guides(color = guide_legend(override.aes = list(size = 4), ncol = 2)) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank()
+  ) +
+  coord_fixed(ratio = 0.6) +
   theme_void()
-  
- print(cytospace_loc)
+
+print(cytospace_loc)
 ```
 
-![](spatial-transcriptomics_files/figure-html/unnamed-chunk-2-1.png)
 Interestingly, it appears that several cell types tend to co-localize
 with themselves, some of which seem to be localized to the areas where
 we saw the greatest adverse and favorable scores mapping to at the spot
@@ -370,16 +395,20 @@ level.
 #### Where raw PhenoMapR scores are
 
 Spatial map of PhenoMapR score (z-scaled for color gradient). Blue =
-more favorable, red = more adverse.
+more favorable, red = more adverse. When pre-rendered figures are
+available (pkgdown), the combined location panel above already includes
+this view; the stand-alone score map is shown next.
+
+![](../reference/figures/spatial_cytospace_phenomapr_scaled.png)
 
 ``` r
 
-cell_locations <- cell_locations[order(abs(cell_locations$weighted_sum_score_Pancreatic)), ]
+cell_locations <- cell_locations[order(abs(cell_locations$PhenoMapR_Pancreatic)), ]
 
 sc_phenomapr <- ggplot(cell_locations, aes(
   x = .data$row,
   y = -.data$col,
-  color = scale(weighted_sum_score_Pancreatic),
+  color = scale(PhenoMapR_Pancreatic),
   size = .data$points_per_location
 )) +
   geom_jitter(alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
@@ -393,12 +422,9 @@ sc_phenomapr <- ggplot(cell_locations, aes(
   coord_fixed(ratio = 0.6) +
   theme_void()
 
-(cytospace_loc | sc_phenomapr) + 
-  # plot_layout(guides = "collect") & 
+(cytospace_loc | sc_phenomapr) +
   theme(aspect.ratio = 1)
 ```
-
-![](spatial-transcriptomics_files/figure-html/unnamed-chunk-3-1.png)
 
 #### Where 5th percentile cells are
 
@@ -406,98 +432,1166 @@ In order to make the visualization more apparent, we restrict the
 spatial map of prognostic groups to: top 5% (Most Adverse), bottom 5%
 (Most Favorable), and the rest (Other).
 
+![](../reference/figures/spatial_cytospace_prognostic_tails_scaled.png)
+
 ``` r
 
-cell_locations <- cell_locations %>% 
-  mutate(percentile = percent_rank(weighted_sum_score_Pancreatic)) %>%
+cell_locations <- cell_locations %>%
+  mutate(percentile = percent_rank(PhenoMapR_Pancreatic)) %>%
   mutate(prognostic_group = case_when(
     percentile < 0.05 ~ "Favorable",
     percentile >= 0.95 ~ "Adverse",
     TRUE ~ "Other"
   ))
 
-  df_other <- cell_locations %>%
-    dplyr::filter(prognostic_group=="Other")
-  
-  df_extreme <- cell_locations %>%
-    dplyr::filter(prognostic_group!="Other")
-  
- sc_phenomapr_5 <- ggplot() +
-    geom_jitter(data = df_other, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
-      size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
-    geom_jitter(data = df_extreme, aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
-      size = points_per_location), alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16) +
-    # ggtitle("5th percentile: Most Adverse vs Most Favorable") +
-    scale_color_manual(
-      values = c(`Adverse` = "#B2182B", Other = "#f7f7f7", `Favorable` = "#2166AC"),
-      name = "Prognostic group",
-      na.value = "grey90",
-      drop = FALSE
-    ) +
-     guides(
-      color = guide_legend(override.aes = list(size = 4))
-      # size  = guide_legend(override.aes = list(size = 4))
-    ) +
-    scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
-    theme_minimal(base_size = 14) +
-    theme(
-      plot.title = element_text(hjust = 0.5, size = 14),
-      axis.text = element_blank(),
-      axis.ticks = element_blank(),
-      axis.title = element_blank()
-    ) +
+df_other <- cell_locations %>%
+  dplyr::filter(prognostic_group == "Other")
+
+df_extreme <- cell_locations %>%
+  dplyr::filter(prognostic_group != "Other")
+
+sc_phenomapr_5 <- ggplot() +
+  geom_jitter(
+    data = df_other,
+    aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+        size = points_per_location),
+    alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16
+  ) +
+  geom_jitter(
+    data = df_extreme,
+    aes(x = .data$row, y = -.data$col, color = .data$prognostic_group,
+        size = points_per_location),
+    alpha = 0.8, width = spatial_jitter_w, height = spatial_jitter_h, shape = 16
+  ) +
+  scale_color_manual(
+    values = c(`Adverse` = "#B2182B", Other = "#f7f7f7", `Favorable` = "#2166AC"),
+    name = "Prognostic group",
+    na.value = "grey90",
+    drop = FALSE
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 4))) +
+  scale_size_continuous(range = spatial_point_range, trans = "reverse", name = "Cells per spot") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank()
+  ) +
   coord_fixed(ratio = 0.6) +
   theme_void()
 
-  (sc_phenomapr | sc_phenomapr_5) + 
-  # plot_layout(guides = "collect") & 
+(sc_phenomapr | sc_phenomapr_5) +
   theme(aspect.ratio = 1)
 ```
 
-![](spatial-transcriptomics_files/figure-html/unnamed-chunk-4-1.png)
+``` r
+
+# Ensure prognostic_group exists for co-localization even when live
+# location / tails plotting was skipped (prerendered figures present).
+if (!"prognostic_group" %in% names(cell_locations)) {
+  cell_locations <- cell_locations %>%
+    mutate(percentile = dplyr::percent_rank(PhenoMapR_Pancreatic)) %>%
+    mutate(prognostic_group = dplyr::case_when(
+      percentile < 0.05 ~ "Favorable",
+      percentile >= 0.95 ~ "Adverse",
+      TRUE ~ "Other"
+    ))
+}
+```
 
 Visually, adverse and favorable cells can appear to segregate on the
-tissue. The next section quantifies **neighborhood co-occurrence** of
-prognostic groups with
+tissue. The next section tests three **CytoSPACE-grounded** spatial
+hypotheses on prognostic **`CellType_PrognosticGroup`** labels:
+
+1.  **Uniquely spatial structure between prognostic cells** — do adverse
+    vs favorable groups of the same or different cell types co-occur in
+    neighborhoods more than expected by chance? (`nhood_enrichment`
+    z-scores; local `cooccur_local` scores)
+2.  **PhenoMapR tracks co-localization context** — among cells in a
+    reference prognostic group, does PhenoMapR correlate with local
+    co-localization to a target group, or with the PhenoMapR scores of
+    co-localized target neighbors? (Spearman ρ heatmaps)
+3.  **Co-localization enriches for spatial CellChat L-R pairs** — among
+    significantly co-localized sender → receiver pairs, is there
+    enriched ligand–receptor communication in **spatial CellChat** mode
+    using CytoSPACE-mapped Visium coordinates? (integrated
+    `dual_spatial_lr` pairs)
+
+We quantify (1)–(2) with
 **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)**
 (Inamo *et al.*, [medRxiv
-2025](https://doi.org/10.1101/2025.08.05.25332835)).
+2025](https://doi.org/10.1101/2025.08.05.25332835)) and (3) with
+**[CellChat v2](https://github.com/jinworks/CellChat)** spatial
+inference on the same CytoSPACE object.
 
 ### Co-localization of prognostic cells (CytoSPACE)
 
-We use the same **Visium row / column** coordinates as the spatial
-plots, assembled as a **`data.frame`** with **`x`**, **`y`**, and a
-**combined label** that includes **cell type and prognostic group**.
-Each cell is labeled as `CellType_prognostic_group`
+We use **CytoSPACE-mapped Visium `row` / `col`** coordinates (same as
+the location maps above), assembled as a **`data.frame`** with **`x`**,
+**`y`**, and **`CellType_PrognosticGroup`** labels
 (e.g. `Ductal_Adverse`). This lets us ask whether, for example,
 **adverse ductal cells** co-localize differently than **favorable ductal
-cells**.
+cells**, and whether those spatial patterns track PhenoMapR scores and
+spatial CellChat L-R support.
 
 Install **`spatialCooccur`** from GitHub if needed:
 `remotes::install_github("juninamo/spatialCooccur")`.
 
-**`spatialCooccur::nhood_enrichment()`** builds a **kNN graph**
-(**[`Seurat::FindNeighbors()`](https://satijalab.org/seurat/reference/FindNeighbors.html)**
-inside the package), optionally normalizes adjacency, aggregates
-**co-occurrence** between cluster pairs, and compares the observed
-matrix to **permutation** nulls to produce a **z-score** matrix. We use
-**`n_jobs = 1`** so the vignette runs on a single core (set higher
-locally if you install the package).
-**`spatialCooccur::cooccur_local()`** scores each cell by whether its
-**radius** neighborhood contains both **Adverse** and **Favorable**
-labels, then applies a short diffusion-style step when
-**`maxnsteps > 0`**. Duplicate spot coordinates (many CytoSPACE cells
-per spot) get a small jitter.
+**Question 1 — spatial determinants:**
+**`spatialCooccur::nhood_enrichment()`** builds a **kNN graph** on
+CytoSPACE coordinates, aggregates **co-occurrence** between prognostic
+label pairs, and compares observed counts to **permutation** nulls
+(z-scores; BH FDR on two-sided *p*). **`cooccur_local()`** scores each
+cell by whether its **radius** neighborhood contains both a reference
+and target prognostic label; pairwise heatmaps summarize mean non-zero
+scores per reference group.
 
-The neighborhood **Z-score** matrix is shown below as a **pre-rendered
-figure** (full CytoSPACE cell set, no subsampling). Stars use
-Benjamini–Hochberg FDR on two-sided p(\|Z\|): \*\*\* q\<0.001, \*\*
-q\<0.01, \* q\<0.05. To regenerate after changing labels or
-`spatialCooccur` settings, run
-`Rscript scripts/render_spatial_colocalization_heatmap.R` from the
-package root.
+**Question 2 — PhenoMapR vs co-localization:** for each reference group
+**G** and target **T**, we compute Spearman ρ between (a) each cell’s
+PhenoMapR score and its local **`cooccur_local(G, T)`** score, and (b)
+each cell’s PhenoMapR score and the **mean PhenoMapR score of T
+neighbors** in the same radius graph.
 
-![](../inst/figures/spatial_colocalization_nhood_enrichment.png)
+When the pre-rendered PNGs in `inst/figures/` are present (as in the
+pkgdown build), the vignette **shows but does not execute** the analysis
+code below and **embeds those static figures** instead. Delete a PNG to
+re-run that analysis live on the full CytoSPACE cell set (no
+subsampling). Regenerate all figures without knitting:
+`Rscript scripts/render_spatial_colocalization_heatmap.R`.
+
+#### Neighborhood enrichment (`nhood_enrichment`) — Question 1
+
+``` r
+
+if (!requireNamespace("spatialCooccur", quietly = TRUE)) {
+  stop("Install spatialCooccur: remotes::install_github(\"juninamo/spatialCooccur\")")
+}
+if (!requireNamespace("ComplexHeatmap", quietly = TRUE) ||
+    !requireNamespace("circlize", quietly = TRUE)) {
+  stop("Install ComplexHeatmap and circlize for the co-localization heatmap")
+}
+if (!exists("cell_locations") ||
+    !all(c("Cell", "row", "col", "CellType", "prognostic_group") %in% names(cell_locations))) {
+  stop("Expected `cell_locations` with Cell, row, col, CellType, prognostic_group")
+}
+
+dfb <- cell_locations[
+  stats::complete.cases(cell_locations[, c("Cell", "row", "col", "CellType", "prognostic_group")]),
+  ,
+  drop = FALSE
+]
+dfb$Cell <- as.character(dfb$Cell)
+dfb$row <- as.numeric(dfb$row)
+dfb$col <- as.numeric(dfb$col)
+dfb$CellType <- as.character(dfb$CellType)
+dfb$prognostic_group <- as.character(dfb$prognostic_group)
+dfb$prognostic_group <- dplyr::recode(
+  dfb$prognostic_group,
+  `Most Adverse` = "Adverse",
+  `Most Favorable` = "Favorable"
+)
+dfb <- dfb[dfb$prognostic_group %in% c("Adverse", "Favorable", "Other"), , drop = FALSE]
+dfb <- dfb[!is.na(dfb$CellType) & nzchar(trimws(dfb$CellType)), , drop = FALSE]
+dfb$ct_pg <- paste0(dfb$CellType, "_", dfb$prognostic_group)
+
+scoc_df <- data.frame(
+  x = dfb$row,
+  y = dfb$col,
+  ct_pg = dfb$ct_pg,
+  stringsAsFactors = FALSE
+)
+rownames(scoc_df) <- dfb$Cell
+scoc_df$cell_type <- scoc_df$ct_pg
+
+xy_mat <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
+if (any(duplicated(xy_mat) | duplicated(xy_mat, fromLast = TRUE))) {
+  rng <- max(
+    diff(range(xy_mat[, 1], na.rm = TRUE)),
+    diff(range(xy_mat[, 2], na.rm = TRUE)),
+    na.rm = TRUE
+  )
+  eps <- if (is.finite(rng) && rng > 0) rng * 1e-5 else 1e-6
+  set.seed(4L)
+  scoc_df$x <- scoc_df$x + stats::runif(nrow(scoc_df), 0, eps)
+  scoc_df$y <- scoc_df$y + stats::runif(nrow(scoc_df), 0, eps)
+}
+
+k_sc <- min(20L, max(5L, nrow(scoc_df) - 1L))
+n_perm_sc <- 100L
+n_grp <- length(unique(scoc_df$ct_pg))
+if (nrow(scoc_df) < (k_sc + 3L) || n_grp < 2L) {
+  stop("Not enough cells or label groups for nhood_enrichment")
+}
+
+scoc_nhood <- spatialCooccur::nhood_enrichment(
+  scoc_df,
+  cluster_key = "ct_pg",
+  neighbors.k = k_sc,
+  connectivity_key = "nn",
+  transformation = TRUE,
+  n_perms = n_perm_sc,
+  seed = 42L,
+  n_jobs = 1L
+)
+if (is.null(scoc_nhood$zscore)) {
+  stop("spatialCooccur::nhood_enrichment returned no zscore matrix")
+}
+
+zm <- as.matrix(scoc_nhood$zscore)
+lab_clean <- function(nm) gsub("^Cluster", "", nm)
+rn <- lab_clean(rownames(zm))
+cn <- lab_clean(colnames(zm))
+
+suffix_pg <- c("Adverse", "Favorable", "Other")
+.parse_ct_pg <- function(lab) {
+  for (s in suffix_pg) {
+    suff <- paste0("_", s)
+    if (nzchar(lab) && endsWith(lab, suff)) {
+      ct <- substr(lab, 1L, nchar(lab) - nchar(suff))
+      return(c(ct = ct, pg = s))
+    }
+  }
+  c(ct = lab, pg = NA_character_)
+}
+
+all_labs <- sort(unique(c(rn, cn)))
+meta_labs <- as.data.frame(
+  do.call(rbind, lapply(all_labs, function(l) {
+    p <- .parse_ct_pg(l)
+    data.frame(label = l, CellType = p[["ct"]], Prognostic = p[["pg"]], stringsAsFactors = FALSE)
+  })),
+  stringsAsFactors = FALSE
+)
+meta_labs$Prognostic <- factor(meta_labs$Prognostic, levels = suffix_pg)
+meta_labs <- meta_labs[!is.na(meta_labs$Prognostic), , drop = FALSE]
+ord <- order(meta_labs$CellType, meta_labs$Prognostic)
+labs_ord <- meta_labs$label[ord]
+labs_ord <- labs_ord[labs_ord %in% rn & labs_ord %in% cn]
+if (length(labs_ord) < 2L) {
+  stop("Not enough overlapping labels in zscore matrix for heatmap")
+}
+
+mat <- zm[match(labs_ord, rn), match(labs_ord, cn), drop = FALSE]
+dimnames(mat) <- list(labs_ord, labs_ord)
+
+row_ct <- as.character(meta_labs$CellType[match(rownames(mat), meta_labs$label)])
+row_pg <- as.character(meta_labs$Prognostic[match(rownames(mat), meta_labs$label)])
+col_ct <- as.character(meta_labs$CellType[match(colnames(mat), meta_labs$label)])
+col_pg <- as.character(meta_labs$Prognostic[match(colnames(mat), meta_labs$label)])
+
+pal_pg <- c(Adverse = "#B2182B", Favorable = "#2166AC", Other = "#f7f7f7")
+uct <- sort(unique(c(row_ct, col_ct)))
+pal_ct <- PhenoMapR::get_celltype_palette(uct)
+
+col_ncells <- rep(0L, ncol(mat))
+names(col_ncells) <- colnames(mat)
+tab_ct <- table(scoc_df$ct_pg)
+hit <- names(col_ncells) %in% names(tab_ct)
+col_ncells[hit] <- as.integer(tab_ct[names(col_ncells)[hit]])
+
+.spatial_anno_mm <- 2.5
+.spatial_bar_mm <- 10
+.spatial_hm_cell_mm <- 2.8
+
+.spatial_hm_wh <- function(mat) {
+  list(
+    width = grid::unit(ncol(mat) * .spatial_hm_cell_mm, "mm"),
+    height = grid::unit(nrow(mat) * .spatial_hm_cell_mm, "mm")
+  )
+}
+
+.spatial_png_inches <- function(mat, pad_w = 3.5, pad_h = 3) {
+  wh <- .spatial_hm_wh(mat)
+  top_anno_mm <- .spatial_bar_mm + 2 * .spatial_anno_mm
+  left_anno_mm <- 2 * .spatial_anno_mm
+  c(
+    width = as.numeric(grid::convertWidth(wh$width, "in", valueOnly = TRUE)) +
+      as.numeric(grid::convertWidth(grid::unit(left_anno_mm, "mm"), "in", valueOnly = TRUE)) + pad_w,
+    height = as.numeric(grid::convertHeight(wh$height, "in", valueOnly = TRUE)) +
+      as.numeric(grid::convertHeight(grid::unit(top_anno_mm, "mm"), "in", valueOnly = TRUE)) + pad_h
+  )
+}
+
+.spatial_bar_axis_at <- function(x) {
+  mx <- max(x, 1L, na.rm = TRUE)
+  if (mx <= 1000) {
+    stats::pretty(c(0, mx), n = 3)
+  } else {
+    c(0, round(mx / 2), mx)
+  }
+}
+
+.spatial_make_ha <- function(mat) {
+  row_ct_ha <- as.character(meta_labs$CellType[match(rownames(mat), meta_labs$label)])
+  row_pg_ha <- as.character(meta_labs$Prognostic[match(rownames(mat), meta_labs$label)])
+  col_ct_ha <- as.character(meta_labs$CellType[match(colnames(mat), meta_labs$label)])
+  col_pg_ha <- as.character(meta_labs$Prognostic[match(colnames(mat), meta_labs$label)])
+  col_nc <- col_ncells[colnames(mat)]
+  col_nc[is.na(col_nc)] <- 0L
+  anno_u <- grid::unit(.spatial_anno_mm, "mm")
+  bar_u <- grid::unit(.spatial_bar_mm, "mm")
+  bar_axis_at <- .spatial_bar_axis_at(col_nc)
+  list(
+    row = ComplexHeatmap::rowAnnotation(
+      CellType = row_ct_ha,
+      `Prognostic Group` = row_pg_ha,
+      col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
+      show_annotation_name = FALSE,
+      simple_anno_size = anno_u,
+      show_legend = c(FALSE)
+    ),
+    col = ComplexHeatmap::HeatmapAnnotation(
+      `# cells` = ComplexHeatmap::anno_barplot(
+        col_nc,
+        gp = grid::gpar(fill = "#666666"),
+        border = FALSE,
+        height = bar_u,
+        ylim = c(0, max(col_nc, 1L, na.rm = TRUE)),
+        axis_param = list(
+          at = bar_axis_at,
+          gp = grid::gpar(fontsize = 6),
+          side = "left"
+        )
+      ),
+      CellType = col_ct_ha,
+      `Prognostic Group` = col_pg_ha,
+      col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
+      annotation_name_side = "right",
+      annotation_name_gp = grid::gpar(fontsize = 7),
+      annotation_height = grid::unit(c(.spatial_bar_mm, .spatial_anno_mm, .spatial_anno_mm), "mm")
+    )
+  )
+}
+
+mat_p <- 2 * stats::pnorm(-abs(mat))
+mat_p[!is.finite(mat)] <- NA_real_
+mat_p_adj <- mat_p
+pv_flat <- as.vector(mat_p)
+ok_flat <- is.finite(pv_flat)
+mat_p_adj[] <- NA_real_
+mat_p_adj[ok_flat] <- stats::p.adjust(pv_flat[ok_flat], method = "BH")
+
+mabs <- suppressWarnings(max(abs(as.numeric(mat)), na.rm = TRUE))
+if (!is.finite(mabs) || mabs <= 0) mabs <- 1
+col_fun <- circlize::colorRamp2(c(-mabs, 0, mabs), c("#7F312FFF", "#f7f7f7", "#005C55FF"))
+
+ha_nhood <- .spatial_make_ha(mat)
+row_ha <- ha_nhood$row
+col_ha <- ha_nhood$col
+hm_wh_nhood <- .spatial_hm_wh(mat)
+
+ht <- ComplexHeatmap::Heatmap(
+  mat,
+  name = "Z",
+  col = col_fun,
+  width = hm_wh_nhood$width,
+  height = hm_wh_nhood$height,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  row_names_gp = grid::gpar(fontsize = 7),
+  column_names_gp = grid::gpar(fontsize = 7),
+  left_annotation = row_ha,
+  top_annotation = col_ha,
+  row_title = "Reference Cell Type",
+  column_title = "Neighborhood Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  heatmap_legend_param = list(title = "Z-score"),
+  border = TRUE,
+  cell_fun = function(j, i, x, y, w, h, fill) {
+    qv <- mat_p_adj[i, j]
+    if (!is.finite(qv)) return(invisible(NULL))
+    sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
+    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+  }
+)
+
+ComplexHeatmap::draw(
+  ht,
+  column_title = "Neighborhood Enrichment of Prognostic Cell Types",
+  column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right"
+)
+
+ht_nhood_cluster <- ComplexHeatmap::Heatmap(
+  mat,
+  name = "Z",
+  col = col_fun,
+  width = hm_wh_nhood$width,
+  height = hm_wh_nhood$height,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  row_names_gp = grid::gpar(fontsize = 7),
+  column_names_gp = grid::gpar(fontsize = 7),
+  left_annotation = row_ha,
+  top_annotation = col_ha,
+  row_title = "Reference Cell Type",
+  column_title = "Neighborhood Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  heatmap_legend_param = list(title = "Z-score"),
+  border = TRUE,
+  cell_fun = function(j, i, x, y, w, h, fill) {
+    qv <- mat_p_adj[i, j]
+    if (!is.finite(qv)) return(invisible(NULL))
+    sym <- if (qv < 0.001) "***" else if (qv < 0.01) "**" else if (qv < 0.05) "*" else return(invisible(NULL))
+    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+  }
+)
+
+ComplexHeatmap::draw(
+  ht_nhood_cluster,
+  column_title = "Neighborhood Enrichment of Prognostic Cell Types (clustered)",
+  column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right"
+)
+
+# --- Local co-localization (spatialCooccur::cooccur_local) ---
+rad_sc <- max(
+  3,
+  0.04 * max(
+    diff(range(scoc_df$x, na.rm = TRUE)),
+    diff(range(scoc_df$y, na.rm = TRUE)),
+    na.rm = TRUE
+  )
+)
+local_maxnsteps <- 3L
+local_min_cells <- 3L
+
+# cooccur_local() rebuilds neighborhoods on every call; precompute once and reuse
+# the same radius + diffusion logic for all reference/target pairs.
+coords_local <- as.matrix(scoc_df[, c("x", "y"), drop = FALSE])
+neighbors_local <- Seurat::FindNeighbors(coords_local, k.param = k_sc, verbose = FALSE)
+adj_local <- neighbors_local$nn
+rownames(adj_local) <- colnames(adj_local) <- rownames(scoc_df)
+degrees_local <- Matrix::colSums(adj_local) + 1
+res_local <- RANN::nn2(
+  data = coords_local,
+  query = coords_local,
+  searchtype = "radius",
+  radius = rad_sc,
+  k = k_sc
+)
+label_vec <- as.character(scoc_df$cell_type)
+neighbor_labels <- vector("list", nrow(scoc_df))
+for (i in seq_len(nrow(scoc_df))) {
+  ni <- res_local$nn.idx[i, ]
+  ni <- ni[ni > 0 & ni != i]
+  neighbor_labels[[i]] <- if (length(ni)) label_vec[ni] else character(0)
+}
+
+.spatial_cooccur_local_scores <- function(cluster_x, cluster_y) {
+  binary <- vapply(
+    neighbor_labels,
+    function(nl) {
+      if (!length(nl)) return(0)
+      as.numeric(any(nl == cluster_x) & any(nl == cluster_y))
+    },
+    numeric(1)
+  )
+  if (local_maxnsteps <= 0L) {
+    return(binary)
+  }
+  s_norm <- matrix(binary) / degrees_local
+  as.numeric((adj_local %*% s_norm) + s_norm)
+}
+
+all_ref_labels <- labs_ord
+mat_local <- matrix(
+  NA_real_,
+  nrow = length(all_ref_labels),
+  ncol = length(all_ref_labels),
+  dimnames = list(all_ref_labels, all_ref_labels)
+)
+ref_idx_by_label <- split(seq_len(nrow(scoc_df)), scoc_df$ct_pg)
+
+for (ref_label in all_ref_labels) {
+  ref_idx <- ref_idx_by_label[[ref_label]]
+  if (is.null(ref_idx) || length(ref_idx) < local_min_cells) next
+
+  for (target_label in all_ref_labels) {
+    # Equivalent to:
+    # loc <- spatialCooccur::cooccur_local(
+    #   scoc_df,
+    #   cluster_x = ref_label,
+    #   cluster_y = target_label,
+    #   connectivity_key = "nn",
+    #   neighbors.k = k_sc,
+    #   radius = rad_sc,
+    #   maxnsteps = local_maxnsteps
+    # )
+    # scores <- loc[[1]]
+    scores <- .spatial_cooccur_local_scores(ref_label, target_label)
+    s_ref <- scores[ref_idx]
+    s_nz <- s_ref[is.finite(s_ref) & s_ref > 0]
+    mat_local[ref_label, target_label] <- if (length(s_nz)) mean(s_nz) else 0
+  }
+}
+
+if (all(!is.finite(mat_local))) {
+  stop("spatialCooccur::cooccur_local returned no scores for any reference group")
+}
+
+mabs_local <- suppressWarnings(max(as.numeric(mat_local), na.rm = TRUE))
+if (!is.finite(mabs_local) || mabs_local <= 0) mabs_local <- 1
+col_fun_local <- circlize::colorRamp2(c(0, mabs_local), c("#f7f7f7", "#005C55FF"))
+
+ha_local <- .spatial_make_ha(mat_local)
+row_ha_local <- ha_local$row
+col_ha_local <- ha_local$col
+hm_wh_local <- .spatial_hm_wh(mat_local)
+
+ht_local <- ComplexHeatmap::Heatmap(
+  mat_local,
+  name = "Mean score",
+  col = col_fun_local,
+  width = hm_wh_local$width,
+  height = hm_wh_local$height,
+  na_col = "#eeeeee",
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  row_names_gp = grid::gpar(fontsize = 7),
+  column_names_gp = grid::gpar(fontsize = 7),
+  left_annotation = row_ha_local,
+  top_annotation = col_ha_local,
+  row_title = "Reference Cell Type",
+  column_title = "Target Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  border = TRUE,
+  heatmap_legend_param = list(title = "Mean non-zero\nlocal score")
+)
+
+ComplexHeatmap::draw(
+  ht_local,
+  column_title = "Local Co-localization of Prognostic Cell Types",
+  column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right"
+)
+
+mat_local_cluster <- mat_local
+mat_local_cluster[!is.finite(mat_local_cluster)] <- 0
+
+ht_local_cluster <- ComplexHeatmap::Heatmap(
+  mat_local_cluster,
+  name = "Mean score",
+  col = col_fun_local,
+  width = hm_wh_local$width,
+  height = hm_wh_local$height,
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  row_names_gp = grid::gpar(fontsize = 7),
+  column_names_gp = grid::gpar(fontsize = 7),
+  left_annotation = row_ha_local,
+  top_annotation = col_ha_local,
+  row_title = "Reference Cell Type",
+  column_title = "Target Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  border = TRUE,
+  heatmap_legend_param = list(title = "Mean non-zero\nlocal score")
+)
+grDevices::pdf(NULL)
+ht_local_cluster_drawn <- ComplexHeatmap::draw(ht_local_cluster)
+local_row_ord <- ComplexHeatmap::row_order(ht_local_cluster_drawn)
+local_col_ord <- ComplexHeatmap::column_order(ht_local_cluster_drawn)
+grDevices::dev.off()
+
+local_outline_threshold <- 0.75
+ht_local_cluster_outline <- ComplexHeatmap::Heatmap(
+  mat_local_cluster,
+  name = "Mean score",
+  col = col_fun_local,
+  width = hm_wh_local$width,
+  height = hm_wh_local$height,
+  row_order = local_row_ord,
+  column_order = local_col_ord,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  show_row_dend = FALSE,
+  show_column_dend = FALSE,
+  row_names_gp = grid::gpar(fontsize = 7),
+  column_names_gp = grid::gpar(fontsize = 7),
+  left_annotation = row_ha_local,
+  top_annotation = col_ha_local,
+  row_title = "Reference Cell Type",
+  column_title = "Target Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  border = TRUE,
+  heatmap_legend_param = list(title = "Mean non-zero\nlocal score"),
+  cell_fun = function(j, i, x, y, w, h, fill) {
+    val <- mat_local_cluster[i, j]
+    if (is.finite(val) && val >= local_outline_threshold) {
+      grid::grid.rect(
+        x, y, w, h,
+        gp = grid::gpar(col = "black", lwd = 1.5, fill = NA)
+      )
+    }
+  }
+)
+
+ComplexHeatmap::draw(
+  ht_local_cluster_drawn,
+  column_title = "Local Co-localization of Prognostic Cell Types (clustered)",
+  column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right"
+)
+
+ComplexHeatmap::draw(
+  ht_local_cluster_outline,
+  column_title = paste0(
+    "Local Co-localization of Prognostic Cell Types (clustered; score \u2265 ",
+    local_outline_threshold, " outlined)"
+  ),
+  column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right"
+)
+
+# --- PhenoMapR score vs local co-localization ---
+cor_min_cells <- 10L
+pheno_vec <- stats::setNames(as.numeric(dfb[[score_col]]), dfb$Cell)
+pheno_vec <- pheno_vec[rownames(scoc_df)]
+
+neighbor_idx <- vector("list", nrow(scoc_df))
+for (i in seq_len(nrow(scoc_df))) {
+  ni <- res_local$nn.idx[i, ]
+  neighbor_idx[[i]] <- ni[ni > 0 & ni != i]
+}
+
+mat_nbr_pheno <- matrix(
+  NA_real_,
+  nrow = nrow(scoc_df),
+  ncol = length(all_ref_labels),
+  dimnames = list(rownames(scoc_df), all_ref_labels)
+)
+for (i in seq_len(nrow(scoc_df))) {
+  ni <- neighbor_idx[[i]]
+  if (!length(ni)) next
+  nl <- label_vec[ni]
+  pv <- pheno_vec[ni]
+  for (target_label in unique(nl)) {
+    hit <- nl == target_label
+    if (any(hit)) {
+      mat_nbr_pheno[i, target_label] <- mean(pv[hit], na.rm = TRUE)
+    }
+  }
+}
+
+mat_cor_pheno_cooccur <- matrix(
+  NA_real_,
+  nrow = length(all_ref_labels),
+  ncol = length(all_ref_labels),
+  dimnames = list(all_ref_labels, all_ref_labels)
+)
+mat_cor_pheno_neighbor <- matrix(
+  NA_real_,
+  nrow = length(all_ref_labels),
+  ncol = length(all_ref_labels),
+  dimnames = list(all_ref_labels, all_ref_labels)
+)
+
+.spatial_spearman_cor <- function(x, y) {
+  ok <- is.finite(x) & is.finite(y)
+  if (sum(ok) < cor_min_cells) return(NA_real_)
+  x_ok <- x[ok]
+  y_ok <- y[ok]
+  if (stats::sd(x_ok) == 0 || stats::sd(y_ok) == 0) return(NA_real_)
+  stats::cor(x_ok, y_ok, method = "spearman")
+}
+
+for (ref_label in all_ref_labels) {
+  ref_idx <- ref_idx_by_label[[ref_label]]
+  if (is.null(ref_idx) || length(ref_idx) < cor_min_cells) next
+  pheno_ref <- pheno_vec[ref_idx]
+  for (target_label in all_ref_labels) {
+    cooc_ref <- .spatial_cooccur_local_scores(ref_label, target_label)[ref_idx]
+    mat_cor_pheno_cooccur[ref_label, target_label] <- .spatial_spearman_cor(pheno_ref, cooc_ref)
+    nbr_ref <- mat_nbr_pheno[ref_idx, target_label]
+    mat_cor_pheno_neighbor[ref_label, target_label] <- .spatial_spearman_cor(pheno_ref, nbr_ref)
+  }
+}
+
+.spatial_spearman_palette <- function() {
+  c(
+    "#283C93", "#4960C1", "#6987D6", "#91ABE4", "#C5D5F1", "#FDF9FA",
+    "#E9A5B8", "#D5708F", "#BC5270", "#A83E5D", "#8D2842"
+  )
+}
+
+.spatial_spearman_col_fun <- function() {
+  cols <- .spatial_spearman_palette()
+  breaks <- seq(-1, 1, length.out = length(cols))
+  circlize::colorRamp2(breaks, cols)
+}
+
+col_fun_cor <- .spatial_spearman_col_fun()
+
+.spatial_cor_dist <- function(x) {
+  x[!is.finite(x)] <- 0
+  stats::dist(x)
+}
+
+.draw_cor_heatmap <- function(mat_cor, title, clustered = FALSE, outline_abs_threshold = NULL) {
+  ha_cor <- .spatial_make_ha(mat_cor)
+  hm_wh <- .spatial_hm_wh(mat_cor)
+  row_order <- NULL
+  col_order <- NULL
+  if (isTRUE(clustered) && !is.null(outline_abs_threshold)) {
+    ht_cluster <- ComplexHeatmap::Heatmap(
+      mat_cor,
+      name = "Spearman",
+      col = col_fun_cor,
+      width = hm_wh$width,
+      height = hm_wh$height,
+      na_col = "#eeeeee",
+      cluster_rows = TRUE,
+      cluster_columns = TRUE,
+      clustering_distance_rows = .spatial_cor_dist,
+      clustering_distance_columns = .spatial_cor_dist,
+      show_row_names = FALSE,
+      show_column_names = FALSE,
+      show_row_dend = FALSE,
+      show_column_dend = FALSE,
+      left_annotation = ha_cor$row,
+      top_annotation = ha_cor$col,
+      border = TRUE
+    )
+    grDevices::pdf(NULL)
+    ht_cluster_drawn <- ComplexHeatmap::draw(ht_cluster)
+    row_order <- ComplexHeatmap::row_order(ht_cluster_drawn)
+    col_order <- ComplexHeatmap::column_order(ht_cluster_drawn)
+    grDevices::dev.off()
+    clustered <- FALSE
+  }
+  cell_fun_outline <- NULL
+  if (!is.null(outline_abs_threshold)) {
+    thr <- outline_abs_threshold
+    cell_fun_outline <- function(j, i, x, y, w, h, fill) {
+      val <- mat_cor[i, j]
+      if (is.finite(val) && abs(val) > thr) {
+        grid::grid.rect(
+          x, y, w, h,
+          gp = grid::gpar(col = "black", lwd = 1.5, fill = NA)
+        )
+      }
+    }
+  }
+  ComplexHeatmap::Heatmap(
+    mat_cor,
+    name = "Spearman",
+    col = col_fun_cor,
+    width = hm_wh$width,
+    height = hm_wh$height,
+    na_col = "#eeeeee",
+    cluster_rows = clustered,
+    cluster_columns = clustered,
+    row_order = row_order,
+    column_order = col_order,
+    clustering_distance_rows = if (clustered) .spatial_cor_dist else "euclidean",
+    clustering_distance_columns = if (clustered) .spatial_cor_dist else "euclidean",
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    row_names_gp = grid::gpar(fontsize = 7),
+    column_names_gp = grid::gpar(fontsize = 7),
+    left_annotation = ha_cor$row,
+    top_annotation = ha_cor$col,
+    row_title = "Reference Cell Type",
+    column_title = "Target Cell Type",
+    row_title_gp = grid::gpar(fontsize = 12),
+    column_title_gp = grid::gpar(fontsize = 12),
+    row_title_side = "left",
+    column_title_side = "bottom",
+    border = TRUE,
+    heatmap_legend_param = list(title = "Spearman rho"),
+    cell_fun = cell_fun_outline
+  ) -> ht_cor
+  ComplexHeatmap::draw(
+    ht_cor,
+    column_title = title,
+    column_title_gp = grid::gpar(fontsize = 14, fontface = "bold"),
+    heatmap_legend_side = "right",
+    annotation_legend_side = "right"
+  )
+}
+
+cor_outline_threshold <- 0.5
+
+.draw_cor_heatmap(
+  mat_cor_pheno_cooccur,
+  "PhenoMapR Score vs Local Co-localization (Spearman rho)",
+  clustered = FALSE
+)
+.draw_cor_heatmap(
+  mat_cor_pheno_cooccur,
+  "PhenoMapR Score vs Local Co-localization (Spearman rho, clustered)",
+  clustered = TRUE
+)
+.draw_cor_heatmap(
+  mat_cor_pheno_cooccur,
+  paste0(
+    "PhenoMapR Score vs Local Co-localization (Spearman rho, clustered; |rho| > ",
+    cor_outline_threshold, " outlined)"
+  ),
+  clustered = TRUE,
+  outline_abs_threshold = cor_outline_threshold
+)
+.draw_cor_heatmap(
+  mat_cor_pheno_neighbor,
+  "PhenoMapR Score vs Co-occurring Neighbor PhenoMapR (Spearman rho)",
+  clustered = FALSE
+)
+.draw_cor_heatmap(
+  mat_cor_pheno_neighbor,
+  "PhenoMapR Score vs Co-occurring Neighbor PhenoMapR (Spearman rho, clustered)",
+  clustered = TRUE
+)
+.draw_cor_heatmap(
+  mat_cor_pheno_neighbor,
+  paste0(
+    "PhenoMapR Score vs Co-occurring Neighbor PhenoMapR (Spearman rho, clustered; |rho| > ",
+    cor_outline_threshold, " outlined)"
+  ),
+  clustered = TRUE,
+  outline_abs_threshold = cor_outline_threshold
+)
+```
+
+![](../reference/figures/spatial_colocalization_nhood_enrichment.png)
+
+Clustering rows and columns (without dendrograms) reorders the
+neighborhood enrichment matrix to highlight groups with similar
+co-occurrence profiles.
+
+![](../reference/figures/spatial_colocalization_nhood_enrichment_clustered.png)
+
+#### Local co-localization scores (`cooccur_local`) — Question 1
+
+The heatmap below shows **pairwise local co-localization scores** across
+all **`CellType_PrognosticGroup`** labels (not neighborhood enrichment
+z-scores). Each cell is the **mean non-zero `cooccur_local()` score**
+for reference group (row) versus target group (column).
+
+![](../reference/figures/spatial_colocalization_colocalization_scores.png)
+
+![](../reference/figures/spatial_colocalization_colocalization_scores_clustered.png)
+
+Cells with mean non-zero local scores **≥ 0.75** are outlined in black
+on the clustered heatmap below.
+
+![](../reference/figures/spatial_colocalization_colocalization_scores_clustered_outlined.png)
+
+#### PhenoMapR score vs local co-localization — Question 2
+
+We next ask whether a cell’s **PhenoMapR score** is associated with its
+**local co-localization** context. For each reference group **G** (rows)
+and target group **T** (columns):
+
+1.  **PhenoMapR vs co-localization score:** among cells in **G**,
+    Spearman correlation between each cell’s PhenoMapR score and its
+    **`cooccur_local(G, T)`** score (same radius and diffusion as
+    above).
+2.  **PhenoMapR vs neighbor PhenoMapR:** among cells in **G** with at
+    least one **T** neighbor in the radius, Spearman correlation between
+    the cell’s PhenoMapR score and the **mean PhenoMapR score of T
+    neighbors** (e.g., for adverse ductal cells, is co-localization with
+    favorable plasma cells associated with both the ductal cell’s score
+    and the plasma neighbors’ scores?).
+
+![](../reference/figures/spatial_colocalization_pheno_vs_cooccur_spearman.png)
+
+![](../reference/figures/spatial_colocalization_pheno_vs_cooccur_spearman_clustered.png)
+
+Cells with **\|Spearman rho\| \> 0.5** are outlined in **black** on the
+clustered heatmaps below (from
+`scripts/render_spatial_colocalization_heatmap.R`). After integrating
+**spatial CellChat**, dual-positive sender → receiver pairs receive an
+additional **purple** outline on separate figures
+(`*_clustered_outlined_integrated.png`; see CellChat section below).
+
+![](../reference/figures/spatial_colocalization_pheno_vs_cooccur_spearman_clustered_outlined.png)
+
+![](../reference/figures/spatial_colocalization_pheno_vs_neighbor_pheno_spearman.png)
+
+Clustered versions reorder row and column annotations with the heatmap
+(no dendrograms). Spearman **rho** uses a custom blue–white–pink
+diverging palette (ρ = −1 navy blue, ρ = 0 off-white, ρ = +1 burgundy
+pink).
+
+![](../reference/figures/spatial_colocalization_pheno_vs_neighbor_pheno_spearman_clustered.png)
+
+![](../reference/figures/spatial_colocalization_pheno_vs_neighbor_pheno_spearman_clustered_outlined.png)
+
+### Co-localization meets cell-cell signaling (CellChat) — Question 3
+
+The co-localization and PhenoMapR correlation analyses above identify
+**which prognostic cell groups neighbor one another** (Question 1) and
+whether **PhenoMapR scores track local mixing** (Question 2). Question 3
+asks whether those **significantly co-localized** sender → receiver
+pairs are enriched for **spatial CellChat** ligand–receptor (L-R)
+interactions on the same CytoSPACE-mapped cells.
+
+We integrate the spatial metrics with **[CellChat
+v2](https://github.com/jinworks/CellChat)** ([Jin *et al.*, *Nat.
+Protoc.* 2024](https://doi.org/10.1038/s41596-024-01045-4)) in **spatial
+mode**, using CytoSPACE-mapped **Visium tissue coordinates**
+(`GetTissueCoordinates`) and distance constraints from the CellChat
+spatial FAQ (65 µm spot size, `contact.range = 100` µm for Visium,
+`interaction.range = 250` µm for secreted signaling):
+
+1.  **Pairwise spatial summary** — for every `CellType_PrognosticGroup`
+    sender → receiver pair, combine **neighborhood enrichment** z-score,
+    **local co-localization** score (`cooccur_local`), and Spearman
+    **ρ** (PhenoMapR vs co-localization / neighbor PhenoMapR).
+2.  **Spatial CellChat inference** — run on cells in the **Adverse** and
+    **Favorable** tails (≥10 cells per group), using normalized
+    **Spatial** assay expression, CytoSPACE **imagerow/imagecol**
+    coordinates, and the same combined labels (`Ductal_Adverse`,
+    `Plasma_Favorable`, …). Communication probabilities use
+    `datatype = "spatial"` with `distance.use = TRUE` so L-R pairs are
+    weighted by physical cell–cell distance on tissue.
+3.  **Interaction mode** — split CellChat probabilities into
+    **physical** (Cell-Cell Contact + ECM-Receptor) vs **secreted**
+    (Secreted Signaling) using `CellChatDB` annotations.
+4.  **Integrated filters** — flag pairs with neighborhood enrichment
+    (*q* \< 0.05), local co-localization (score ≥ 0.5), and/or spatial
+    CellChat L-R support; test whether physical vs secreted modes
+    associate differently with spatial proximity and PhenoMapR
+    correlations.
+
+Install CellChat if needed:
+`remotes::install_github("jinworks/CellChat")` (requires
+**BiocNeighbors** from Bioconductor). Pre-rendered figures and the pair
+summary table are in `inst/figures/` and `inst/data/`; regenerate with:
+
+`Rscript scripts/render_spatial_colocalization_cellchat.R`
+
+The code chunk below mirrors the render script; it is not executed
+during knitting (use the pre-rendered outputs or run the script
+locally).
+
+``` r
+
+if (!requireNamespace("CellChat", quietly = TRUE)) {
+  stop("Install CellChat: remotes::install_github(\"jinworks/CellChat\")")
+}
+if (!exists("scoc_df") || !exists("mat_z") || !exists("mat_local")) {
+  stop("Run the co-localization chunk first (or use pre-rendered figures)")
+}
+
+# Spatial CellChat on CytoSPACE prognostic tail cells (Visium coordinates + distance constraints)
+meta_cc <- seurat@meta.data
+meta_cc$percentile <- dplyr::percent_rank(meta_cc[[score_col]])
+meta_cc$prognostic_group <- dplyr::case_when(
+  meta_cc$percentile < 0.05 ~ "Favorable",
+  meta_cc$percentile >= 0.95 ~ "Adverse",
+  TRUE ~ "Other"
+)
+meta_cc$ct_pg <- paste0(meta_cc$CellType, "_", meta_cc$prognostic_group)
+cells_cc <- rownames(meta_cc)[meta_cc$prognostic_group %in% c("Adverse", "Favorable")]
+expr_counts <- Seurat::GetAssayData(seurat, assay = "Spatial", layer = "counts")[, cells_cc, drop = FALSE]
+cs <- Matrix::colSums(expr_counts)
+expr_norm <- log1p(Matrix::t(Matrix::t(expr_counts) / pmax(cs, 1) * 10000))
+meta_cc <- meta_cc[cells_cc, , drop = FALSE]
+meta_cc$labels <- meta_cc$ct_pg
+meta_cc$samples <- factor(meta_cc$orig.ident)
+keep_labs <- names(table(meta_cc$labels))[table(meta_cc$labels) >= 10L]
+cells_cc <- rownames(meta_cc)[meta_cc$labels %in% keep_labs]
+
+spatial.locs <- Seurat::GetTissueCoordinates(
+  seurat, scale = NULL, cols = c("imagerow", "imagecol")
+)[cells_cc, , drop = FALSE]
+spot.size <- 65
+spatial.factors <- data.frame(
+  ratio = spot.size / seurat@images[[Seurat::Images(seurat)[1]]]@scale.factors$spot,
+  tol = spot.size / 2
+)
+d_um <- CellChat::computeCellDistance(
+  coordinates = spatial.locs,
+  ratio = spatial.factors$ratio,
+  tol = spatial.factors$tol
+)
+min_d <- min(d_um[d_um > 0], na.rm = TRUE)
+scale.distance <- min(1, 1.1 / min_d)
+
+cellchat <- CellChat::createCellChat(
+  object = expr_norm[, cells_cc, drop = FALSE],
+  meta = meta_cc[cells_cc, , drop = FALSE],
+  group.by = "labels",
+  datatype = "spatial",
+  coordinates = spatial.locs,
+  spatial.factors = spatial.factors
+)
+cellchat@DB <- CellChat::CellChatDB.human
+cellchat <- CellChat::subsetData(cellchat)
+cellchat <- CellChat::identifyOverExpressedGenes(cellchat)
+cellchat <- CellChat::identifyOverExpressedInteractions(cellchat)
+cellchat <- CellChat::computeCommunProb(
+  cellchat,
+  type = "truncatedMean",
+  trim = 0.1,
+  distance.use = TRUE,
+  interaction.range = 250,
+  scale.distance = scale.distance,
+  contact.dependent = TRUE,
+  contact.range = 100
+)
+cellchat <- CellChat::filterCommunication(cellchat, min.cells = 10)
+cellchat <- CellChat::computeCommunProbPathway(cellchat)
+cellchat <- CellChat::aggregateNet(cellchat)
+
+cc_df <- CellChat::subsetCommunication(cellchat)
+cc_agg <- cc_df %>%
+  dplyr::group_by(source, target) %>%
+  dplyr::summarise(
+    cellchat_prob = sum(.data$prob, na.rm = TRUE),
+    cellchat_n_lr = dplyr::n(),
+    .groups = "drop"
+  )
+
+# Merge spatial + CellChat pair metrics (full pipeline in render script)
+pairs_path <- .prerender_data_path(.spatial_cellchat_pairs_rds, must_exist = FALSE)
+if (!is.na(pairs_path)) {
+  pair_prognostic <- readRDS(pairs_path)
+}
+```
+
+The bubble plot below compares **neighborhood enrichment** (x) with
+**spatial CellChat** aggregated L-R probability (y), using CytoSPACE
+cell locations and Visium distance constraints. Point size reflects
+**local co-localization**; red points are pairs with both spatial
+co-localization and predicted signaling.
+
+![](../reference/figures/spatial_coloc_cellchat_bubble.png)
+
+The integrated heatmap clusters prognostic sender → receiver pairs by a
+combined score (enrichment z-score, local co-localization, and spatial
+CellChat probability).
+
+![](../reference/figures/spatial_coloc_cellchat_dual_heatmap.png)
+
+![](../reference/figures/spatial_coloc_cellchat_chord.png)
+
+Top pathways for the strongest spatial + signaling pairs
+(e.g. **Fibroblast_Adverse → Ductal_Adverse**):
+
+![](../reference/figures/spatial_coloc_cellchat_lr_bubble.png)
+
+#### Physical vs secreted CellChat interactions
+
+CellChat annotates each ligand–receptor pair as **Cell-Cell Contact**,
+**ECM-Receptor** (grouped here as **physical**), or **Secreted
+Signaling** (**secreted**). We ask whether physical interactions track
+**neighborhood enrichment** and **local co-localization** more strongly
+than secreted interactions, and whether **physical interaction
+fraction** correlates with PhenoMapR score associations.
+
+![](../reference/figures/spatial_coloc_cellchat_type_spatial.png)
+
+![](../reference/figures/spatial_coloc_cellchat_type_pheno.png)
+
+![](../reference/figures/spatial_coloc_cellchat_type_assoc.png)
+
+#### Integrated spatial + PhenoMapR + CellChat heatmaps
+
+The four-panel heatmap below uses the same row/column order as the
+PhenoMapR neighbor Spearman matrix: **(1)** neighbor PhenoMapR ρ with
+dual-evidence outlines, **(2)** log1p spatial CellChat probability,
+**(3)** integrated score (z-scaled spatial, PhenoMapR ρ, and CellChat),
+and **(4)** dual-positive flag.
+
+![](../reference/figures/spatial_coloc_integrated_four_panel.png)
+
+![](../reference/figures/spatial_coloc_cellchat_prob_heatmap_clustered.png)
+
+![](../reference/figures/spatial_coloc_integration_evidence.png)
+
+Spearman heatmaps with **black** outlines for **\|ρ\| \> 0.5** and
+**purple** outlines for pairs with both spatial co-localization and
+spatial CellChat L-R support:
+
+![](../reference/figures/spatial_colocalization_pheno_vs_cooccur_spearman_clustered_outlined_integrated.png)
+
+![](../reference/figures/spatial_colocalization_pheno_vs_neighbor_pheno_spearman_clustered_outlined_integrated.png)
+
+#### Top co-localized expression axes
+
+The plots below summarize the strongest **spatially co-localized L-R
+expression axes** among dual-positive cross-type pairs
+(CellChat-inspired topic composition and spatial axis maps).
+
+![](../reference/figures/spatial_coloc_lr_topic_composition.png)
+
+![](../reference/figures/spatial_coloc_pathway_topic_composition.png)
+
+![](../reference/figures/spatial_coloc_expression_axis_heatmap.png)
+
+![](../reference/figures/spatial_coloc_top_lr_spatial_axes.png)
+
+#### Spatial pair evidence maps (CytoSPACE locations)
+
+For the top **dual spatial + CellChat** cross-type pairs, seven-panel
+maps show prognostic tail cells, sender/receiver roles, PhenoMapR score,
+local co-localization, CellChat sender L-R potential, integrated
+hotspots, and target-neighbor fraction — all on **CytoSPACE
+`row`/`col`** coordinates. Each pair is saved in **scaled** (point size
+∝ 1/cells per spot) and **uniform** (fixed point size) versions under
+`inst/figures/spatial_pair_maps/`; regenerate with
+`Rscript scripts/render_spatial_pair_spatial_maps.R` (after the CellChat
+render script).
+
+**Interpretation.** Many high-scoring pairs are **within-group**
+(e.g. adverse ductal cells enriched near other adverse ductal cells),
+consistent with spatial clustering of extreme phenotypes. Cross-type
+pairs such as **Fibroblast_Adverse → Ductal_Adverse** combine moderate
+neighborhood enrichment, local mixing, and spatial CellChat L-R
+probability—candidate **stromal–epithelial** interactions among adverse
+prognostic cells that are both co-localized and within signaling range
+on tissue.
+
+**Physical vs secreted.** The association table above summarizes how
+**physical** (contact/ECM) vs **secreted** CellChat probabilities relate
+to neighborhood enrichment, local co-localization, and PhenoMapR spatial
+correlations among prognostic pairs with signaling support. In general,
+**physical** interaction probability tracks immediate co-localization
+more strongly than **secreted** signaling, which can remain nonzero over
+broader neighborhoods where neighbor PhenoMapR scores covary.
 
 ### Prognostic markers
 
@@ -898,9 +1992,21 @@ phenotypes.
   score by cell type, prognostic groups, and spatial maps (jittered
   cells per spot).
 - **Co-localization**: pre-rendered
-  **`spatialCooccur::nhood_enrichment()`** heatmap on full CytoSPACE
-  cells (`CellType` × prognostic group labels); regenerate with
+  **`spatialCooccur::nhood_enrichment()`** and
+  **`spatialCooccur::cooccur_local()`** heatmaps (ordered and
+  clustered), plus **Spearman correlations** of PhenoMapR scores with
+  local co-localization scores and with co-occurring neighbors’
+  PhenoMapR scores; regenerate with
   `scripts/render_spatial_colocalization_heatmap.R`.
+- **Spatial CellChat integration**: co-localization metrics merged with
+  distance-constrained **[CellChat
+  v2](https://github.com/jinworks/CellChat)** L-R inference on
+  CytoSPACE-mapped cells (`datatype = "spatial"`); integrated four-panel
+  heatmaps, dual-evidence Spearman outlines (black = \|ρ\| \> 0.5,
+  purple = spatial + CellChat), and evidence-tier summary; regenerate
+  with `scripts/render_spatial_colocalization_cellchat.R` (or
+  `scripts/render_spatial_integrated_heatmaps.R` from cached
+  `inst/data/spatial_coloc_cellchat_pairs.rds`).
 - **Markers**: three
   **[`plot_phenotype_markers()`](https://brooksbenard.github.io/PhenoMapR/reference/plot_phenotype_markers.md)**
   heatmaps on CytoSPACE cells — (1) **cell-type agnostic**
@@ -962,10 +2068,10 @@ sessionInfo()
     ##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              
     ##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    
     ##  [40] future_1.70.0          shiny_1.14.0           digest_0.6.39         
-    ##  [43] colorspace_2.1-2       S4Vectors_0.50.1       rprojroot_2.1.1       
+    ##  [43] colorspace_2.1-3       S4Vectors_0.50.1       rprojroot_2.1.1       
     ##  [46] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           
     ##  [49] pkgload_1.5.3          textshaping_1.0.5      labeling_0.4.3        
-    ##  [52] progressr_0.19.0       spatstat.sparse_3.2-0  httr_1.4.8            
+    ##  [52] progressr_1.0.0        spatstat.sparse_3.2-0  httr_1.4.8            
     ##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.1        
     ##  [58] gargle_1.6.1           doParallel_1.0.17      withr_3.0.3           
     ##  [61] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         
@@ -985,15 +2091,15 @@ sessionInfo()
     ## [103] deldir_2.0-4           tidyselect_1.2.1       ComplexHeatmap_2.28.0 
     ## [106] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            
     ## [109] gridExtra_2.3.1        IRanges_2.46.0         scattermore_1.2       
-    ## [112] stats4_4.6.1           xfun_0.59              statmod_1.5.2         
+    ## [112] stats4_4.6.1           xfun_0.60              statmod_1.5.2         
     ## [115] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         
     ## [118] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        
     ## [121] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             
     ## [124] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     
-    ## [127] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.1-1.1        
+    ## [127] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.2            
     ## [130] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             
-    ## [133] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.0         
+    ## [133] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.1         
     ## [136] presto_1.0.0           prettyunits_1.2.0      dotCall64_1.2         
     ## [139] listenv_1.0.0          viridisLite_0.4.3      scales_1.4.0          
     ## [142] ggridges_0.5.7         purrr_1.2.2            crayon_1.5.3          
-    ## [145] GetoptLong_1.1.1       rlang_1.2.0            cowplot_1.2.0
+    ## [145] GetoptLong_1.1.1       rlang_1.3.0            cowplot_1.2.0

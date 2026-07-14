@@ -115,102 +115,92 @@ umap_3 <- ggscatter(meta,
   )
 
 
-# MALIGNANT PLOT 
+# Order samples by malignant-cell proportion (cohort overview).
+# Use plain geom_col() for dense per-sample bars: ggchicklet rounded
+# geoms can collapse to invisible segments when many x categories share
+# a narrow patchwork panel (seen as empty bars with only one sample drawn).
 target_celltype <- "Malignant cells"
 
-# Calculate proportions
 prop_data_mal <- meta %>%
-  group_by(Patient, celltype_malignancy) %>%
-  summarise(n = n(), .groups = "drop") %>%
+  count(Patient, celltype_malignancy, name = "n") %>%
   group_by(Patient) %>%
-  mutate(proportion = n / sum(n))
+  mutate(proportion = n / sum(n)) %>%
+  ungroup()
 
-# Create a complete list with 0 for missing cell types
 sample_order <- prop_data_mal %>%
-  ungroup() %>%  # Add this!
   filter(celltype_malignancy == target_celltype) %>%
-  tidyr::complete(Patient = unique(prop_data_mal$Patient), fill = list(proportion = 0)) %>%
+  tidyr::complete(Patient = unique(meta$Patient), fill = list(proportion = 0, n = 0L)) %>%
   arrange(desc(proportion)) %>%
-  pull(Patient)
+  pull(Patient) %>%
+  unique()
 
-prop_data_mal$Patient <- factor(prop_data_mal$Patient, levels = sample_order)
+prop_data_mal <- prop_data_mal %>%
+  mutate(Patient = factor(Patient, levels = sample_order))
 
-# Plot
-p_mal <- ggplot(prop_data_mal, aes(x = Patient, y = proportion, fill = celltype_malignancy)) +
-  # geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
-    ggchicklet2::geom_chicklet_bar(stat = "identity",radius = grid::unit(1, "pt"),linewidth = 0.2) +
-  scale_y_continuous(labels = scales::percent) +
-  scale_fill_manual(values = malignant_colors) +
-  theme_pubclean(base_size = 8) +
-    theme(
+prop_data_src <- meta %>%
+  count(Patient, Source, name = "n") %>%
+  group_by(Patient) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup() %>%
+  mutate(Patient = factor(Patient, levels = sample_order))
+
+prop_data <- meta %>%
+  count(Patient, celltype_original, name = "n") %>%
+  group_by(Patient) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup() %>%
+  mutate(Patient = factor(Patient, levels = sample_order))
+
+patient_counts <- meta %>%
+  mutate(Patient = factor(Patient, levels = sample_order)) %>%
+  count(Patient, name = "n", .drop = FALSE)
+
+.bar_theme_top <- theme_pubclean(base_size = 8) +
+  theme(
     axis.title.x = element_blank(),
-    axis.text.x = element_blank(), 
+    axis.text.x = element_blank(),
     axis.ticks.x = element_blank(),
     legend.position = "none"
-  ) +
+  )
+
+p_num <- ggplot(patient_counts, aes(x = Patient, y = n)) +
+  geom_col(width = 0.9, fill = "grey55") +
+  .bar_theme_top +
+  labs(x = NULL, y = "# of cells", title = NULL)
+
+p_src <- ggplot(prop_data_src, aes(x = Patient, y = proportion, fill = Source)) +
+  geom_col(width = 0.9, position = "stack") +
+  scale_y_continuous(labels = scales::percent, expand = c(0, 0)) +
+  scale_fill_manual(values = paad_vs_ctrl_clors) +
+  .bar_theme_top +
+  labs(x = NULL, y = NULL, fill = "Source")
+
+p_mal <- ggplot(prop_data_mal, aes(x = Patient, y = proportion, fill = celltype_malignancy)) +
+  geom_col(width = 0.9, position = "stack") +
+  scale_y_continuous(labels = scales::percent, expand = c(0, 0)) +
+  scale_fill_manual(values = malignant_colors, drop = FALSE) +
+  .bar_theme_top +
   labs(x = NULL, y = NULL, fill = "Cell Type (Broad)")
 
-
-# CELL TYPE PLOT
-# Calculate proportions
-prop_data <- meta %>%
-  group_by(Patient, celltype_original) %>%
-  summarise(n = n(), .groups = "drop") %>%
-  group_by(Patient) %>%
-  mutate(proportion = n / sum(n))
-
-prop_data$Patient <- factor(prop_data$Patient, levels = sample_order)
-
-# Plot
 p_cell <- ggplot(prop_data, aes(x = Patient, y = proportion, fill = celltype_original)) +
-  # geom_bar(stat = "identity", color = "white", linewidth = 0.2) +
-  ggchicklet2::geom_chicklet_bar(stat = "identity",radius = grid::unit(1, "pt"),linewidth = 0.2) +
-  scale_y_continuous(labels = scales::percent) +
-    scale_fill_manual(values = pal_cells) +
+  geom_col(width = 0.9, position = "stack") +
+  scale_y_continuous(labels = scales::percent, expand = c(0, 0)) +
+  scale_fill_manual(values = pal_cells, drop = FALSE) +
   theme_pubclean(base_size = 8) +
   theme(
     axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
-        legend.position = "none") +
-  labs(x = NULL, 
-       y = "Proportion of cells",
-       fill = "Cell Type",
-       title = NULL)
-
-
-# NUMBER OF CELLS PER PATIENT
-meta$Patient <- factor(meta$Patient, levels = sample_order)
-patient_counts <- meta %>%
-  dplyr::count(Patient, name = "n")
-
-p_num <- ggplot(patient_counts, aes(x = Patient, y = n)) +
-  ggchicklet2::geom_chicklet_bar(
-    stat = "identity",
-    radius = grid::unit(.5, "pt"),
-    color = "white",
-    linewidth = 0.2,
-    fill = "grey55"
+    legend.position = "none"
   ) +
-  theme_pubclean(base_size = 8) +
-  theme(
-    axis.title.x = element_blank(),
-    axis.text.x = element_blank(), 
-    axis.ticks.x = element_blank() 
-  ) +
-  labs(x = NULL, 
-       y = "# of cells",
-       title = NULL)
+  labs(x = NULL, y = "Proportion of cells", fill = "Cell Type", title = NULL)
 
-# Left column with specific heights for each barplot
-left_plots <- (p_num / p_mal / p_cell) + 
-  plot_layout(heights = c(1, 1, 5), guides = "collect")
+left_plots <- (p_num / p_src / p_mal / p_cell) +
+  plot_layout(heights = c(1.2, 0.55, 0.55, 4.2), guides = "collect")
 
-# Right column with specific heights for UMAPs
-right_plots <- (umap_1 / umap_2 / umap_3) + 
+right_plots <- (umap_1 / umap_2 / umap_3) +
   plot_layout(heights = c(1, 1, 1), guides = "collect")
 
-# Combine
-(left_plots | right_plots) + 
-  plot_layout(widths = c(1, 0.5))
+(left_plots | right_plots) +
+  plot_layout(widths = c(1.15, 0.55))
 ```
 
 ![](single-cell_files/figure-html/load-data-1.png)
@@ -253,8 +243,8 @@ scores_precog <- PhenoMap(expression = expr_mat,
 for (col in names(scores_tcga)) meta[[col]] <- scores_tcga[meta$Cell, col]
 for (col in names(scores_precog)) meta[[col]] <- scores_precog[meta$Cell, col]
 
-score_tcga_col <- grep("weighted_sum_score.*PAAD", names(meta), value = TRUE, ignore.case = TRUE)[1]
-score_precog_col <- grep("weighted_sum_score.*Pancreatic", names(meta), value = TRUE, ignore.case = TRUE)[1]
+score_tcga_col <- grep("PhenoMapR_.*PAAD", names(meta), value = TRUE, ignore.case = TRUE)[1]
+score_precog_col <- grep("PhenoMapR_.*Pancreatic", names(meta), value = TRUE, ignore.case = TRUE)[1]
 if (is.na(score_tcga_col)) score_tcga_col <- names(scores_tcga)[1]
 if (is.na(score_precog_col)) score_precog_col <- names(scores_precog)[1]
 ```
@@ -318,10 +308,10 @@ and PRECOG references across all major cell types.
 
 # PRECOG
 meta_ordered <- meta %>%
-  arrange(abs(weighted_sum_score_Pancreatic))
+  arrange(abs(PhenoMapR_Pancreatic))
 
 # scale the score for easier visualization
-meta_ordered$score_scaled <- scale(meta_ordered$weighted_sum_score_Pancreatic)
+meta_ordered$score_scaled <- scale(meta_ordered$PhenoMapR_Pancreatic)
 
 precog_scaled_umap <- ggscatter(meta_ordered,
           x = "UMAP_1", 
@@ -954,7 +944,7 @@ scores_precog_pb <- PhenoMap(
 pb_score_col <- if (score_precog_col %in% names(scores_precog_pb)) {
   score_precog_col
 } else {
-  grep("^weighted_sum_score", names(scores_precog_pb), value = TRUE)[1]
+  grep("^PhenoMapR_", names(scores_precog_pb), value = TRUE)[1]
 }
 pb_mean <- as.numeric(scores_precog_pb[[pb_score_col]][match(as.character(sample_lev), rownames(scores_precog_pb))])
 pb_mean[!col_filled] <- NA_real_
@@ -970,9 +960,8 @@ pb_df <- data.frame(
   pb_score_scaled = pb_scaled,
   stringsAsFactors = FALSE
 )
-p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_scaled, fill = .data$pb_score_scaled)) +
-  # geom_col(width = 0.65) +
-  ggchicklet2::geom_chicklet(width = 0.9, radius = grid::unit(1, "pt")) +
+p_pbulk <- ggplot(pb_df, aes(x = .data$sample, y = .data$pb_score_scaled, fill = .data$pb_score_scaled)) +
+  geom_col(width = 0.85, na.rm = FALSE) +
   scale_fill_gradient2(
     low = "#2166AC",
     mid = "#FFFFFF",
@@ -982,12 +971,7 @@ p_pbulk <- ggplot(pb_df, aes(x = as.numeric(.data$sample), y = .data$pb_score_sc
     guide = "none"
   ) +
   geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", color = "grey40") +
-  scale_x_continuous(
-    breaks = seq_along(sample_lev),
-    labels = sample_lev,
-    limits = c(0.5, length(sample_lev) + 0.5),
-    expand = c(0, 0)
-  ) +
+  scale_x_discrete(drop = FALSE) +
   scale_y_continuous(expand = expansion(mult = c(0.08, 0.08))) +
   theme_minimal() +
   theme(
@@ -1018,24 +1002,17 @@ bar_stack$sample <- factor(bar_stack$sample, levels = sample_lev)
 
 # Stacked bar: per-sample fraction of cohort tail cells (from define_phenotype_groups above)
 bar_long <- rbind(
-  data.frame(sample = bar_stack$sample, pg = "Most Favorable", y_min = 0, y_max = bar_stack$p_fav),
-  data.frame(sample = bar_stack$sample, pg = "Most Adverse", y_min = bar_stack$p_fav, y_max = bar_stack$p_fav + bar_stack$p_adv)
+  data.frame(sample = bar_stack$sample, pg = "Most Favorable", proportion = bar_stack$p_fav),
+  data.frame(sample = bar_stack$sample, pg = "Most Adverse", proportion = bar_stack$p_adv)
 )
 bar_long$pg <- factor(bar_long$pg, levels = c("Most Favorable", "Most Adverse"))
+bar_long$sample <- factor(as.character(bar_long$sample), levels = sample_lev)
 
-p_bar <- ggplot(bar_long, aes(x = as.numeric(sample), fill = pg,
-                               ymin = y_min, ymax = y_max,
-                               xmin = as.numeric(sample) - 0.4,
-                               xmax = as.numeric(sample) + 0.4)) +
-  ggchicklet2::geom_rrect(radius = grid::unit(0, "pt")) +
-  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"), 
+p_bar <- ggplot(bar_long, aes(x = sample, y = proportion, fill = pg)) +
+  geom_col(width = 0.85, position = "stack") +
+  scale_fill_manual(values = c(`Most Adverse` = "#B2182B", `Most Favorable` = "#2166AC"),
                     name = "Prognostic group") +
-  scale_x_continuous(
-    breaks = seq_along(sample_lev),
-    labels = sample_lev,
-    limits = c(0.5, length(sample_lev) + 0.5),
-    expand = c(0, 0)
-  ) +
+  scale_x_discrete(drop = FALSE) +
   scale_y_continuous(expand = c(0, 0)) +
   theme_minimal() +
   theme(
@@ -1203,14 +1180,14 @@ sessionInfo()
     ##  [1] purrr_1.2.2           ggsignif_0.6.4        ggchicklet2_0.7.0    
     ##  [4] circlize_0.4.18       ComplexHeatmap_2.28.0 patchwork_1.3.2      
     ##  [7] Seurat_5.5.1          SeuratObject_5.4.0    sp_2.2-1             
-    ## [10] tidyr_1.3.2           dplyr_1.2.1           ggpubr_0.6.3         
+    ## [10] tidyr_1.3.2           dplyr_1.2.1           ggpubr_1.0.0         
     ## [13] ggplot2_4.0.3         googledrive_2.1.2     PhenoMapR_0.1.0      
     ## [16] testthat_3.3.2       
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RcppAnnoy_0.0.23       splines_4.6.1          later_1.4.8           
     ##   [4] tibble_3.3.1           polyclip_1.10-7        fastDummies_1.7.6     
-    ##   [7] lifecycle_1.0.5        rstatix_0.7.3          doParallel_1.0.17     
+    ##   [7] lifecycle_1.0.5        rstatix_1.0.0          doParallel_1.0.17     
     ##  [10] rprojroot_2.1.1        hdf5r_1.3.12           globals_0.19.1        
     ##  [13] lattice_0.22-9         MASS_7.3-65            backports_1.5.1       
     ##  [16] magrittr_2.0.5         plotly_4.12.0          sass_0.4.10           
@@ -1223,18 +1200,18 @@ sessionInfo()
     ##  [37] IRanges_2.46.0         S4Vectors_0.50.1       ggrepel_0.9.8         
     ##  [40] irlba_2.3.7            listenv_1.0.0          spatstat.utils_3.2-3  
     ##  [43] goftest_1.2-3          RSpectra_0.16-2        spatstat.random_3.5-0 
-    ##  [46] fitdistrplus_1.2-6     parallelly_1.48.0      pkgdown_2.2.0         
+    ##  [46] fitdistrplus_1.2-6     parallelly_1.48.0      pkgdown_2.2.1         
     ##  [49] codetools_0.2-20       shape_1.4.6.1          tidyselect_1.2.1      
     ##  [52] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.1          
     ##  [55] spatstat.explore_3.8-1 jsonlite_2.0.0         GetoptLong_1.1.1      
-    ##  [58] progressr_0.19.0       Formula_1.2-5          ggridges_0.5.7        
+    ##  [58] progressr_1.0.0        Formula_1.2-5          ggridges_0.5.7        
     ##  [61] survival_3.8-6         iterators_1.0.14       systemfonts_1.3.2     
     ##  [64] foreach_1.5.2          tools_4.6.1            progress_1.2.3        
-    ##  [67] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.1-1.1        
+    ##  [67] ragg_1.5.2             ica_1.0-3              Rcpp_1.1.2            
     ##  [70] glue_1.8.1             gridExtra_2.3.1        mgcv_1.9-4            
-    ##  [73] xfun_0.59              withr_3.0.3            fastmap_1.2.0         
+    ##  [73] xfun_0.60              withr_3.0.3            fastmap_1.2.0         
     ##  [76] digest_0.6.39          R6_2.6.1               mime_0.13             
-    ##  [79] colorspace_2.1-2       textshaping_1.0.5      scattermore_1.2       
+    ##  [79] colorspace_2.1-3       textshaping_1.0.5      scattermore_1.2       
     ##  [82] tensor_1.5.1           spatstat.data_3.1-9    generics_0.1.4        
     ##  [85] data.table_1.18.4      prettyunits_1.2.0      httr_1.4.8            
     ##  [88] htmlwidgets_1.6.4      uwot_0.2.4             pkgconfig_2.0.3       
@@ -1249,7 +1226,7 @@ sessionInfo()
     ## [115] pillar_1.11.1          vctrs_0.7.3            RANN_2.6.2            
     ## [118] promises_1.5.0         car_3.1-5              xtable_1.8-8          
     ## [121] cluster_2.1.8.2        evaluate_1.0.5         magick_2.9.1          
-    ## [124] cli_3.6.6              compiler_4.6.1         rlang_1.2.0           
+    ## [124] cli_3.6.6              compiler_4.6.1         rlang_1.3.0           
     ## [127] crayon_1.5.3           future.apply_1.20.2    labeling_0.4.3        
     ## [130] plyr_1.8.9             fs_2.1.0               stringi_1.8.7         
     ## [133] viridisLite_0.4.3      deldir_2.0-4           lazyeval_0.2.3        

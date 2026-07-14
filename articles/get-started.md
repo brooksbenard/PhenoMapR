@@ -399,13 +399,13 @@ scores <- PhenoMap(seurat_obj, reference = "precog", cancer_type = "BRCA")
 groups <- define_phenotype_groups(scores, percentile = 0.05)
 
 # One group column per score; values: "adverse", "favorable", "other"
-table(groups$phenotype_group_weighted_sum_score_precog_BRCA)
+table(groups$phenotype_group_PhenoMapR_precog_BRCA)
 
 # Find marker genes via Seurat::FindMarkers (adverse vs rest, favorable vs rest)
 markers <- find_phenotype_markers(
   seurat_obj,
   group_labels = groups,
-  group_column = "phenotype_group_weighted_sum_score_precog_BRCA",
+  group_column = "phenotype_group_PhenoMapR_precog_BRCA",
   cell_id_column = "cell_id"
 )
 head(markers$adverse_markers)   # genes enriched in top 5% (worst prognosis)

@@ -16,7 +16,13 @@ PhenoMap(
   assay = NULL,
   slot = "data",
   verbose = TRUE,
-  reference_sign = 1L
+  reference_sign = 1L,
+  score_mode = c("weighted_sum", "activity_adjusted"),
+  vars_to_regress = c("S.Score", "G2M.Score", "nCount_RNA"),
+  sample_metadata = NULL,
+  cell_id_column = "cell_id",
+  permutation_n = NULL,
+  permutation_seed = 42L
 )
 ```
 
@@ -90,14 +96,48 @@ PhenoMap(
   matches your factor levels (first level = positive association when
   `"first"`).
 
+- score_mode:
+
+  Scoring mode: `"weighted_sum"` (default) uses the standard dot product
+  of expression and reference z-scores; `"activity_adjusted"` regresses
+  technical covariates per gene (via Seurat `ScaleData`) before
+  computing the weighted sum on the regressed layer. Requires Seurat for
+  matrix inputs.
+
+- vars_to_regress:
+
+  Metadata columns to regress when `score_mode = "activity_adjusted"`.
+  Default: `c("S.Score", "G2M.Score", "nCount_RNA")`. For matrix input,
+  pass covariates via `sample_metadata` (see below). `nCount_RNA` is
+  computed from column sums when absent.
+
+- sample_metadata:
+
+  Optional data.frame of per-cell/sample covariates for
+  `score_mode = "activity_adjusted"` when `expression` is a matrix. Must
+  include a cell identifier column (default `"cell_id"`).
+
+- cell_id_column:
+
+  Column in `sample_metadata` matching matrix colnames (default
+  `"cell_id"`).
+
+- permutation_n:
+
+  If a positive integer, compute gene-shuffle permutation null scores
+  and add `empirical_p_*` columns alongside raw score columns.
+
+- permutation_seed:
+
+  Random seed for permutation null (default `42`).
+
 ## Value
 
 A data.frame with samples/cells as rows and score columns. Column names
-follow pattern: `weighted_sum_score_{reference}_{cancer_type}`.
-**Directionality (built-in PRECOG/TCGA/ICI references)**: higher score =
-worse prognosis (adverse); lower score = better prognosis (favorable),
-matching positive reference z = worse survival. **Custom references**
-from
+follow pattern: `PhenoMapR_{reference}_{cancer_type}`. **Directionality
+(built-in PRECOG/TCGA/ICI references)**: higher score = worse prognosis
+(adverse); lower score = better prognosis (favorable), matching positive
+reference z = worse survival. **Custom references** from
 [`derive_reference_from_bulk`](https://brooksbenard.github.io/PhenoMapR/reference/derive_reference_from_bulk.md)
 follow the sign convention you chose there (see
 `binary_positive_reference`) times `reference_sign`. For Seurat/SCE

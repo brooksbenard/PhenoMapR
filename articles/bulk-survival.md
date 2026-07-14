@@ -341,18 +341,18 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] survminer_0.5.2 ggpubr_0.6.3    survival_3.8-6  ggplot2_4.0.3  
+    ## [1] survminer_0.5.2 ggpubr_1.0.0    survival_3.8-6  ggplot2_4.0.3  
     ## [5] patchwork_1.3.2 PhenoMapR_0.1.0
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] gtable_0.3.6       xfun_0.59          bslib_0.11.0       htmlwidgets_1.6.4 
-    ##  [5] rstatix_0.7.3      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
+    ##  [1] gtable_0.3.6       xfun_0.60          bslib_0.11.0       htmlwidgets_1.6.4 
+    ##  [5] rstatix_1.0.0      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
     ##  [9] tools_4.6.1        generics_0.1.4     curl_7.1.0         tibble_3.3.1      
     ## [13] pkgconfig_2.0.3    Matrix_1.7-5       RColorBrewer_1.1-3 S7_0.2.2          
     ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.6.1    
-    ## [21] farver_2.1.2       textshaping_1.0.5  carData_3.0-6      litedown_0.9      
+    ## [21] farver_2.1.2       textshaping_1.0.5  carData_3.0-6      litedown_0.10     
     ## [25] htmltools_0.5.9    sass_0.4.10        yaml_2.3.12        Formula_1.2-5     
-    ## [29] pillar_1.11.1      pkgdown_2.2.0      car_3.1-5          jquerylib_0.1.4   
+    ## [29] pillar_1.11.1      pkgdown_2.2.1      car_3.1-5          jquerylib_0.1.4   
     ## [33] tidyr_1.3.2        cachem_1.1.0       abind_1.4-8        commonmark_2.0.0  
     ## [37] tidyselect_1.2.1   digest_0.6.39      stringi_1.8.7      dplyr_1.2.1       
     ## [41] purrr_1.2.2        labeling_0.4.3     splines_4.6.1      fastmap_1.2.0     
@@ -360,6 +360,6 @@ sessionInfo()
     ## [49] withr_3.0.3        scales_1.4.0       backports_1.5.1    googledrive_2.1.2 
     ## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
     ## [57] gridExtra_2.3.1    ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
-    ## [61] knitr_1.51         markdown_2.0       rlang_1.2.0        gridtext_0.1.6    
-    ## [65] Rcpp_1.1.1-1.1     glue_1.8.1         xml2_1.6.0         jsonlite_2.0.0    
+    ## [61] knitr_1.51         markdown_2.0       rlang_1.3.0        gridtext_0.1.6    
+    ## [65] Rcpp_1.1.2         glue_1.8.1         xml2_1.6.0         jsonlite_2.0.0    
     ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.1.0

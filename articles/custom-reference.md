@@ -815,7 +815,7 @@ sessionInfo()
     ## [8] base     
     ## 
     ## other attached packages:
-    ##  [1] ggsignif_0.6.4        survminer_0.5.2       ggpubr_0.6.3         
+    ##  [1] ggsignif_0.6.4        survminer_0.5.2       ggpubr_1.0.0         
     ##  [4] survival_3.8-6        circlize_0.4.18       ComplexHeatmap_2.28.0
     ##  [7] patchwork_1.3.2       dplyr_1.2.1           ggplot2_4.0.3        
     ## [10] PhenoMapR_0.1.0      
@@ -824,28 +824,28 @@ sessionInfo()
     ##  [1] tidyselect_1.2.1        farver_2.1.2            S7_0.2.2               
     ##  [4] fastmap_1.2.0           digest_0.6.39           lifecycle_1.0.5        
     ##  [7] cluster_2.1.8.2         magrittr_2.0.5          compiler_4.6.1         
-    ## [10] rlang_1.2.0             sass_0.4.10             tools_4.6.1            
+    ## [10] rlang_1.3.0             sass_0.4.10             tools_4.6.1            
     ## [13] yaml_2.3.12             data.table_1.18.4       knitr_1.51             
     ## [16] labeling_0.4.3          htmlwidgets_1.6.4       curl_7.1.0             
     ## [19] splitstackshape_1.4.8.1 RColorBrewer_1.1-3      abind_1.4-8            
     ## [22] withr_3.0.3             purrr_1.2.2             BiocGenerics_0.58.1    
     ## [25] desc_1.4.3              stats4_4.6.1            googledrive_2.1.2      
-    ## [28] colorspace_2.1-2        scales_1.4.0            iterators_1.0.14       
+    ## [28] colorspace_2.1-3        scales_1.4.0            iterators_1.0.14       
     ## [31] cli_3.6.6               rmarkdown_2.31          crayon_1.5.3           
     ## [34] ragg_1.5.2              generics_0.1.4          otel_0.2.0             
     ## [37] httr_1.4.8              rjson_0.2.23            cachem_1.1.0           
     ## [40] splines_4.6.1           parallel_4.6.1          matrixStats_1.5.0      
     ## [43] vctrs_0.7.3             Matrix_1.7-5            carData_3.0-6          
     ## [46] jsonlite_2.0.0          car_3.1-5               IRanges_2.46.0         
-    ## [49] GetoptLong_1.1.1        S4Vectors_0.50.1        rstatix_0.7.3          
+    ## [49] GetoptLong_1.1.1        S4Vectors_0.50.1        rstatix_1.0.0          
     ## [52] Formula_1.2-5           clue_0.3-68             systemfonts_1.3.2      
     ## [55] magick_2.9.1            foreach_1.5.2           jquerylib_0.1.4        
-    ## [58] tidyr_1.3.2             glue_1.8.1              pkgdown_2.2.0          
+    ## [58] tidyr_1.3.2             glue_1.8.1              pkgdown_2.2.1          
     ## [61] codetools_0.2-20        gtable_0.3.6            shape_1.4.6.1          
     ## [64] tibble_3.3.1            pillar_1.11.1           htmltools_0.5.9        
     ## [67] R6_2.6.1                textshaping_1.0.5       doParallel_1.0.17      
     ## [70] evaluate_1.0.5          lattice_0.22-9          png_0.1-9              
     ## [73] backports_1.5.1         broom_1.0.13            gargle_1.6.1           
-    ## [76] bslib_0.11.0            Rcpp_1.1.1-1.1          gridExtra_2.3.1        
-    ## [79] HGNChelper_0.8.15       xfun_0.59               fs_2.1.0               
+    ## [76] bslib_0.11.0            Rcpp_1.1.2              gridExtra_2.3.1        
+    ## [79] HGNChelper_0.8.15       xfun_0.60               fs_2.1.0               
     ## [82] pkgconfig_2.0.3         GlobalOptions_0.1.4
