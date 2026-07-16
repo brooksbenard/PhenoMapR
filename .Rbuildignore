@@ -47,7 +47,7 @@
 ^inst/benchmarks$
 ^inst/benchmarking$
 ^manuscript$
-^inst/extdata
+^inst/extdata/vignette_subsets$
 ^inst/vignette-drafts$
 ^inst/figures$
 ^man/figures$

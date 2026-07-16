@@ -1,5 +1,17 @@
 # PhenoMapR 0.1.0.9000
 
+## Bug fixes
+
+* Shiny quick demo: the bundled `PAAD_CRA001160_demo_5000.rds` is shipped
+  again (a `.Rbuildignore` pattern was excluding all of `inst/extdata`), so
+  the demo no longer downloads the ~850 MB Seurat object from Google Drive.
+  The full pool is now downloaded only when explicitly opted in via
+  `PHENOMAPR_CRA001160_RDS_URL` or `PHENOMAPR_SHINY_DEMO_FULL=1`.
+* Shiny scoring: the app now passes `layer=`/`slot=` according to the
+  installed `PhenoMap()` signature, fixing
+  `PhenoMap failed: unused argument (layer = layer)` when the app is newer
+  than the installed core.
+
 ## Compatibility
 
 * Seurat **v4 and v5**: `PhenoMap()` and `find_phenotype_markers()` use

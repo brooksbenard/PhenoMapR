@@ -955,7 +955,7 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
                                        z_score_cutoff, pseudobulk, group_by,
                                        assay, layer, reference_sign) {
   t0 <- Sys.time()
-  scores <- PhenoMapR::PhenoMap(
+  args <- list(
     expression = expression,
     reference = reference,
     cancer_type = if (is.null(cancer_type) || !nzchar(cancer_type)) NULL else cancer_type,
@@ -963,10 +963,19 @@ run_phenomap_with_progress <- function(expression, reference, cancer_type,
     pseudobulk = pseudobulk,
     group_by = if (pseudobulk && nzchar(group_by %||% "")) group_by else NULL,
     assay = if (nzchar(assay %||% "")) assay else NULL,
-    layer = layer,
     reference_sign = reference_sign,
     verbose = TRUE
   )
+  # Match the installed PhenoMapR core: current versions take `layer=`, older
+  # ones only `slot=`. Passing the wrong one triggers
+  # "unused argument (layer = layer)" when the app is newer than the core.
+  pm_formals <- names(formals(PhenoMapR::PhenoMap))
+  if ("layer" %in% pm_formals) {
+    args$layer <- layer
+  } else if ("slot" %in% pm_formals) {
+    args$slot <- layer
+  }
+  scores <- do.call(PhenoMapR::PhenoMap, args)
   attr(scores, "elapsed_s") <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
   scores
 }
@@ -2735,7 +2744,33 @@ attach_matrix_coldata <- function(expr, metadata, cell_id_col = ".cell_id") {
   list(expression = expr, metadata = md, from = "CRA001160")
 }
 
-#' Load (and cache) the full CRA001160 demo expression pool.
+#' Read the bundled pre-sampled demo (a list pool), if present.
+#' @keywords internal
+.load_shiny_demo_pool_from_bundle <- function() {
+  bundle_path <- .shiny_demo_bundle_path()
+  if (is.null(bundle_path)) return(NULL)
+  demo <- tryCatch(readRDS(bundle_path), error = function(e) NULL)
+  if (is.null(demo) || is.null(demo$expression) || is.null(demo$metadata)) {
+    return(NULL)
+  }
+  md <- demo$metadata
+  if (is.null(md$.cell_id)) {
+    md$.cell_id <- colnames(demo$expression)
+  }
+  list(
+    expression = demo$expression,
+    metadata = md,
+    from = demo$from %||% "CRA001160"
+  )
+}
+
+#' Load (and cache) the CRA001160 demo expression pool.
+#'
+#' Prefers the small bundled demo (\code{PAAD_CRA001160_demo_5000.rds}); the
+#' full pool is only downloaded from Google Drive when the caller explicitly
+#' opts in via \code{PHENOMAPR_CRA001160_RDS} / \code{PHENOMAPR_CRA001160_RDS_URL}
+#' or \code{PHENOMAPR_SHINY_DEMO_FULL=1}. This keeps the quick demo from silently
+#' pulling the 850 MB Seurat object.
 #' @keywords internal
 load_shiny_demo_pool <- function() {
   if (!is.null(.shiny_demo_pool_cache$pool)) {
@@ -2744,30 +2779,38 @@ load_shiny_demo_pool <- function() {
   roots <- .shiny_demo_search_roots()
   pool <- NULL
 
-  h5_paths <- c(
-    Sys.getenv("PHENOMAPR_CRA001160_H5", unset = ""),
-    unlist(lapply(roots, function(r) {
-      file.path(r, "vignettes", "PAAD_CRA001160_expression.h5")
-    }), use.names = FALSE)
-  )
-  tsv_paths <- c(
-    Sys.getenv("PHENOMAPR_CRA001160_META", unset = ""),
-    unlist(lapply(roots, function(r) {
-      file.path(r, "vignettes", "PAAD_CRA001160_CellMetainfo_table.tsv")
-    }), use.names = FALSE)
-  )
-  h5_file <- .shiny_first_existing(h5_paths)
-  tsv_file <- .shiny_first_existing(tsv_paths)
-  if (!is.null(h5_file) && !is.null(tsv_file)) {
-    pool <- .load_shiny_demo_pool_from_h5_tsv(h5_file, tsv_file)
+  # 1) Small bundled demo pool (preferred; ships with the package).
+  pool <- .load_shiny_demo_pool_from_bundle()
+
+  # 2) Local full pool from H5 + metadata TSV (dev machines only).
+  if (is.null(pool)) {
+    h5_paths <- c(
+      Sys.getenv("PHENOMAPR_CRA001160_H5", unset = ""),
+      unlist(lapply(roots, function(r) {
+        file.path(r, "vignettes", "PAAD_CRA001160_expression.h5")
+      }), use.names = FALSE)
+    )
+    tsv_paths <- c(
+      Sys.getenv("PHENOMAPR_CRA001160_META", unset = ""),
+      unlist(lapply(roots, function(r) {
+        file.path(r, "vignettes", "PAAD_CRA001160_CellMetainfo_table.tsv")
+      }), use.names = FALSE)
+    )
+    h5_file <- .shiny_first_existing(h5_paths)
+    tsv_file <- .shiny_first_existing(tsv_paths)
+    if (!is.null(h5_file) && !is.null(tsv_file)) {
+      pool <- .load_shiny_demo_pool_from_h5_tsv(h5_file, tsv_file)
+    }
   }
 
+  # 3) Local Seurat / pool RDS files already on disk (no download).
   if (is.null(pool)) {
     rds_paths <- unlist(lapply(roots, function(r) {
       c(
         file.path(r, "inst", "extdata", "vignette_subsets", "PAAD_CRA001160_seurat_subset.rds"),
         file.path(r, "inst", "extdata", "shiny", "PAAD_CRA001160_demo_pool.rds"),
-        file.path(r, "vignette_subsets", "PAAD_CRA001160_seurat_subset.rds")
+        file.path(r, "vignette_subsets", "PAAD_CRA001160_seurat_subset.rds"),
+        file.path(r, "vignettes", "PAAD_CRA001160_seurat.rds")
       )
     }), use.names = FALSE)
     rds_paths <- c(
@@ -2783,7 +2826,11 @@ load_shiny_demo_pool <- function() {
     }
   }
 
-  if (is.null(pool)) {
+  # 4) Remote full pool — opt-in only, so the quick demo never silently pulls
+  #    the ~850 MB Seurat object from Google Drive.
+  want_full <- nzchar(Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", unset = "")) ||
+    identical(Sys.getenv("PHENOMAPR_SHINY_DEMO_FULL", unset = ""), "1")
+  if (is.null(pool) && isTRUE(want_full)) {
     url <- Sys.getenv("PHENOMAPR_CRA001160_RDS_URL", unset = "")
     dest <- file.path(tempdir(), "PAAD_CRA001160_seurat_subset.rds")
     dl_ok <- FALSE
