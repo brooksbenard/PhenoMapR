@@ -207,8 +207,12 @@ FALSE)</td>
 <td align="left">Assay name for Seurat/SCE objects</td>
 </tr>
 <tr class="even">
-<td align="left"><strong>slot</strong></td>
-<td align="left">Seurat slot (“data”, “counts”, “scale.data”)</td>
+<td align="left"><strong>layer</strong></td>
+<td align="left">Seurat matrix to score: <code>"data"</code>
+(normalized), <code>"counts"</code> (raw), or <code>"scale.data"</code>
+(Seurat v5 name; default). <code>slot</code> is accepted as a Seurat v4
+alias for the same values. PhenoMapR calls <code><a href="https://satijalab.github.io/seurat-object/reference/AssayData.html" class="external-link">GetAssayData()</a></code>
+with the argument your installed SeuratObject expects.</td>
 </tr>
 <tr class="odd">
 <td align="left"><strong>verbose</strong></td>
@@ -232,13 +236,13 @@ FALSE)</td>
 <span>  cancer_type <span class="op">=</span> <span class="st">"BRCA"</span>          <span class="co"># use list_cancer_types(reference) to see avaliable options</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Score single-cell/spatial data</span></span>
+<span><span class="co"># Score single-cell / spatial Seurat (v4 or v5)</span></span>
 <span><span class="va">scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
 <span>  expression <span class="op">=</span> <span class="va">seurat_obj</span>,</span>
 <span>  reference <span class="op">=</span> <span class="st">"tcga"</span>,</span>
 <span>  cancer_type <span class="op">=</span> <span class="st">"LUAD"</span>,</span>
 <span>  assay <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Spatial"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat_obj</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="st">"Spatial"</span> <span class="kw">else</span> <span class="st">"RNA"</span>,</span>
-<span>  slot <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Spatial"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat_obj</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="st">"counts"</span> <span class="kw">else</span> <span class="st">"data"</span></span>
+<span>  layer <span class="op">=</span> <span class="kw">if</span> <span class="op">(</span><span class="st">"Spatial"</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">seurat_obj</span><span class="op">@</span><span class="va">assays</span><span class="op">)</span><span class="op">)</span> <span class="st">"counts"</span> <span class="kw">else</span> <span class="st">"data"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;">
 </div>
@@ -258,8 +262,14 @@ type, is that the expression data takes the form of
 <span></span>
 <span><span class="va">scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span><span class="va">expression_matrix</span>, reference <span class="op">=</span> <span class="st">"precog"</span>, cancer_type <span class="op">=</span> <span class="st">"BRCA"</span><span class="op">)</span></span></code></pre></div>
 </details><details><summary><strong> Seurat Objects</strong>
-</summary><p>Single-cell and spatial Seurat objects; use <code>assay</code> and
-<code>slot</code> to match your data.</p>
+</summary><p>Works with <strong>Seurat v4 and v5</strong>. Choose the assay
+(<code>RNA</code>, <code>Spatial</code>, <code>SCT</code>, …) and the
+expression matrix with <strong><code>layer</code></strong> (Seurat v5;
+preferred). The Seurat v4 name <code>slot</code> is still accepted as an
+alias for the same values (<code>"data"</code>, <code>"counts"</code>,
+<code>"scale.data"</code>).</p>
+<p>Use <code>"data"</code> for log-normalized expression (typical for
+scoring) or <code>"counts"</code> for raw counts.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://satijalab.org/seurat" class="external-link">Seurat</a></span><span class="op">)</span></span>
 <span></span>
@@ -269,7 +279,7 @@ type, is that the expression data takes the form of
 <span>  reference <span class="op">=</span> <span class="st">"tcga"</span>,</span>
 <span>  cancer_type <span class="op">=</span> <span class="st">"LUAD"</span>,</span>
 <span>  assay <span class="op">=</span> <span class="st">"RNA"</span>,</span>
-<span>  slot <span class="op">=</span> <span class="st">"data"</span></span>
+<span>  layer <span class="op">=</span> <span class="st">"data"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Add scores back to Seurat object</span></span>
@@ -281,7 +291,7 @@ type, is that the expression data takes the form of
 <span>  reference <span class="op">=</span> <span class="st">"precog"</span>,</span>
 <span>  cancer_type <span class="op">=</span> <span class="st">"BRCA"</span>,</span>
 <span>  assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span>
-<span>  slot <span class="op">=</span> <span class="st">"counts"</span></span>
+<span>  layer <span class="op">=</span> <span class="st">"counts"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 </details><details><summary><strong> SingleCellExperiment Objects</strong>
 </summary><p>Use the assay name that holds your (e.g. log-normalized)

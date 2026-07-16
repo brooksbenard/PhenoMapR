@@ -14,7 +14,8 @@ PhenoMap(
   pseudobulk = FALSE,
   group_by = NULL,
   assay = NULL,
-  slot = "data",
+  layer = "data",
+  slot = NULL,
   verbose = TRUE,
   reference_sign = 1L,
   score_mode = c("weighted_sum", "activity_adjusted"),
@@ -73,12 +74,17 @@ PhenoMap(
   Assay name for Seurat/SCE objects (default: "RNA" for sc, "Spatial"
   for spatial)
 
+- layer:
+
+  Seurat matrix to score (`"data"` normalized, `"counts"` raw, or
+  `"scale.data"`; default `"data"`). Seurat v5 terminology. PhenoMapR
+  maps this to `GetAssayData(layer=...)` or `GetAssayData(slot=...)`
+  based on the installed SeuratObject version.
+
 - slot:
 
-  Data layer for Seurat objects: "data" for normalized, "counts" for
-  raw, "scale.data" for scaled (default: "data"). In Seurat v5+ this
-  maps to the layer parameter; in Seurat v4, slot. The function handles
-  both automatically.
+  Alias for `layer` (Seurat v4 name for the same matrix). Prefer `layer`
+  in new code. If both are set to different values, an error is thrown.
 
 - verbose:
 
@@ -157,13 +163,13 @@ scores <- PhenoMap(
   cancer_type = "BRCA"
 )
 
-# Single cell Seurat object
+# Single-cell Seurat object (prefer layer=; Seurat v5)
 scores <- PhenoMap(
   expression = seurat_obj,
   reference = "tcga",
   cancer_type = "LUAD",
   assay = "RNA",
-  slot = "data"
+  layer = "data"
 )
 
 # Spatial with pseudobulk
@@ -171,6 +177,8 @@ scores <- PhenoMap(
   expression = spatial_seurat,
   reference = "ici_precog",
   cancer_type = "MELANOMA_Metastatic",
+  assay = "Spatial",
+  layer = "data",
   pseudobulk = TRUE,
   group_by = "sample_id"
 )

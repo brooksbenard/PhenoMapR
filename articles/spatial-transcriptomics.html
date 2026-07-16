@@ -111,12 +111,83 @@ pancreatic cancer dataset available from <a href="https://humantumoratlas.org/" 
 <span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>googledrive_quiet <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_deauth.html" class="external-link">drive_deauth</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">gd_id_spot</span> <span class="op">&lt;-</span> <span class="st">"1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"</span></span>
-<span><span class="va">rds_spot</span> <span class="op">&lt;-</span> <span class="st">"HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"</span></span>
-<span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">rds_spot</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_download.html" class="external-link">drive_download</a></span><span class="op">(</span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_id.html" class="external-link">as_id</a></span><span class="op">(</span><span class="va">gd_id_spot</span><span class="op">)</span>, <span class="va">rds_spot</span>, overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">.is_drive_quota_json</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">path</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">info</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.info.html" class="external-link">file.info</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span> <span class="op">||</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span><span class="op">)</span> <span class="op">||</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">info</span><span class="op">$</span><span class="va">size</span><span class="op">)</span> <span class="op">||</span> <span class="va">info</span><span class="op">$</span><span class="va">size</span> <span class="op">&lt;</span> <span class="fl">10</span> <span class="op">||</span> <span class="va">info</span><span class="op">$</span><span class="va">size</span> <span class="op">&gt;</span> <span class="fl">5000</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">txt</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/readLines.html" class="external-link">readLines</a></span><span class="op">(</span><span class="va">path</span>, n <span class="op">=</span> <span class="fl">30L</span>, warn <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span>, collapse <span class="op">=</span> <span class="st">"\n"</span><span class="op">)</span>,</span>
+<span>    error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="st">""</span></span>
+<span>  <span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"downloadQuotaExceeded|The download quota for this file"</span>, <span class="va">txt</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
+<span><span class="va">.is_valid_rds_blob</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">path</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span> <span class="op">||</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu">.is_drive_quota_json</span><span class="op">(</span><span class="va">path</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span>    <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">info</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.info.html" class="external-link">file.info</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">info</span><span class="op">$</span><span class="va">size</span><span class="op">)</span> <span class="op">||</span> <span class="va">info</span><span class="op">$</span><span class="va">size</span> <span class="op">&lt;</span> <span class="fl">1e5</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span></span>
+<span>  <span class="va">con</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/connections.html" class="external-link">file</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"rb"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/connections.html" class="external-link">close</a></span><span class="op">(</span><span class="va">con</span><span class="op">)</span>, add <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">magic</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readBin.html" class="external-link">readBin</a></span><span class="op">(</span><span class="va">con</span>, what <span class="op">=</span> <span class="st">"raw"</span>, n <span class="op">=</span> <span class="fl">6L</span><span class="op">)</span></span>
+<span>  <span class="va">is_gzip</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">magic</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">2L</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">magic</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span>, <span class="fu"><a href="https://rdrr.io/r/base/raw.html" class="external-link">as.raw</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0x1f</span>, <span class="fl">0x8b</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">is_xz</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">magic</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">6L</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">magic</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">6</span><span class="op">]</span>, <span class="fu"><a href="https://rdrr.io/r/base/raw.html" class="external-link">as.raw</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0xfd</span>, <span class="fl">0x37</span>, <span class="fl">0x7a</span>, <span class="fl">0x58</span>, <span class="fl">0x5a</span>, <span class="fl">0x00</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">is_rds</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">magic</span><span class="op">)</span> <span class="op">&gt;=</span> <span class="fl">2L</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rawConversion.html" class="external-link">rawToChar</a></span><span class="op">(</span><span class="va">magic</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span><span class="op">)</span>, <span class="st">"RD"</span><span class="op">)</span></span>
+<span>  <span class="va">is_gzip</span> <span class="op">||</span> <span class="va">is_xz</span> <span class="op">||</span> <span class="va">is_rds</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">.resolve_vignette_rds</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">filename</span>, <span class="va">drive_id</span>, <span class="va">env_var</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">candidates</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="va">filename</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="st">"vignettes"</span>, <span class="va">filename</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="st">".."</span>, <span class="va">filename</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="st">".."</span>, <span class="st">"vignettes"</span>, <span class="va">filename</span><span class="op">)</span></span>
+<span>  <span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">hit</span> <span class="op">&lt;-</span> <span class="va">candidates</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">candidates</span><span class="op">)</span> <span class="op">&amp;</span></span>
+<span>                      <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">candidates</span>, <span class="va">.is_valid_rds_blob</span>, <span class="fu"><a href="https://rdrr.io/r/base/logical.html" class="external-link">logical</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">hit</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">hit</span><span class="op">)</span></span>
+<span>  <span class="va">dest</span> <span class="op">&lt;-</span> <span class="va">filename</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">env_var</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">env_var</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">url</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="va">env_var</span>, unset <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">url</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Downloading "</span>, <span class="va">filename</span>, <span class="st">" from "</span>, <span class="va">env_var</span><span class="op">)</span></span>
+<span>      <span class="va">ok</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="op">{</span></span>
+<span>        <span class="fu">utils</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/utils/download.file.html" class="external-link">download.file</a></span><span class="op">(</span><span class="va">url</span>, <span class="va">dest</span>, mode <span class="op">=</span> <span class="st">"wb"</span>, quiet <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>        <span class="cn">TRUE</span></span>
+<span>      <span class="op">}</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="va">ok</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="fu">.is_valid_rds_blob</span><span class="op">(</span><span class="va">dest</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
+<span>      <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Downloading "</span>, <span class="va">filename</span>, <span class="st">" from Google Drive"</span><span class="op">)</span></span>
+<span>  <span class="va">ok</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span><span class="op">{</span></span>
+<span>    <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_download.html" class="external-link">drive_download</a></span><span class="op">(</span></span>
+<span>      <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_id.html" class="external-link">as_id</a></span><span class="op">(</span><span class="va">drive_id</span><span class="op">)</span>, <span class="va">dest</span>, overwrite <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>    <span class="op">)</span></span>
+<span>    <span class="cn">TRUE</span></span>
+<span>  <span class="op">}</span>, error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="va">ok</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/Logic.html" class="external-link">isTRUE</a></span><span class="op">(</span><span class="fu">.is_valid_rds_blob</span><span class="op">(</span><span class="va">dest</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
+<span>  <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">dest</span><span class="op">)</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/stop.html" class="external-link">stop</a></span><span class="op">(</span></span>
+<span>    <span class="st">"Could not obtain "</span>, <span class="va">filename</span>,</span>
+<span>    <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="va">env_var</span><span class="op">)</span> <span class="op">&amp;&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nzchar</a></span><span class="op">(</span><span class="va">env_var</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">". Place it under vignettes/ or set "</span>, <span class="va">env_var</span>, <span class="st">"."</span><span class="op">)</span></span>
+<span>    <span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>      <span class="st">". Place it under vignettes/."</span></span>
+<span>    <span class="op">}</span>,</span>
+<span>    call. <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">gd_id_spot</span> <span class="op">&lt;-</span> <span class="st">"1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"</span></span>
+<span><span class="va">rds_spot</span> <span class="op">&lt;-</span> <span class="fu">.resolve_vignette_rds</span><span class="op">(</span></span>
+<span>  <span class="st">"HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"</span>,</span>
+<span>  <span class="va">gd_id_spot</span>,</span>
+<span>  <span class="st">"PHENOMAPR_SPATIAL_RDS_URL"</span></span>
+<span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">seurat_spot</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="va">rds_spot</span><span class="op">)</span></span>
 <span></span>
@@ -139,7 +210,7 @@ pancreatic cancer dataset available from <a href="https://humantumoratlas.org/" 
 <span>    reference <span class="op">=</span> <span class="st">"precog"</span>,</span>
 <span>    cancer_type <span class="op">=</span> <span class="st">"Pancreatic"</span>,</span>
 <span>    assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span>
-<span>    slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>    layer <span class="op">=</span> <span class="st">"data"</span>,</span>
 <span>    verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
@@ -279,25 +350,26 @@ maped.</p>
 <span><span class="op">}</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/gc.html" class="external-link">gc</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">##            used  (Mb) gc trigger  (Mb)  max used  (Mb)</span></span>
-<span><span class="co">## Ncells  4398784 235.0    7893412 421.6   7893412 421.6</span></span>
-<span><span class="co">## Vcells 11309091  86.3  126659540 966.4 126303666 963.7</span></span></code></pre>
+<span><span class="co">## Ncells  4401432 235.1    7907672 422.4   7907672 422.4</span></span>
+<span><span class="co">## Vcells 11321600  86.4  126673958 966.5 126319018 963.8</span></span></code></pre>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load the **CytoSPACE** object (single cells placed on Visium coordinates).</span></span>
-<span><span class="va">rds_cyto</span> <span class="op">&lt;-</span> <span class="st">"HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"</span></span>
-<span><span class="va">gd_id_cyto</span> <span class="op">&lt;-</span> <span class="st">"1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"</span></span>
-<span></span>
-<span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">rds_cyto</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_download.html" class="external-link">drive_download</a></span><span class="op">(</span><span class="fu">googledrive</span><span class="fu">::</span><span class="fu"><a href="https://googledrive.tidyverse.org/reference/drive_id.html" class="external-link">as_id</a></span><span class="op">(</span><span class="va">gd_id_cyto</span><span class="op">)</span>, <span class="va">rds_cyto</span>, overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
+<span><span class="va">rds_cyto</span> <span class="op">&lt;-</span> <span class="fu">.resolve_vignette_rds</span><span class="op">(</span></span>
+<span>  <span class="st">"HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"</span>,</span>
+<span>  <span class="st">"1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"</span>,</span>
+<span>  <span class="st">"PHENOMAPR_SPATIAL_CYTO_RDS_URL"</span></span>
+<span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">seurat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">readRDS</a></span><span class="op">(</span><span class="va">rds_cyto</span><span class="op">)</span></span>
 <span></span>
-<span>  <span class="va">scores_spatial</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
+<span><span class="co"># Score CytoSPACE-mapped cells. Prefer counts: many CytoSPACE exports keep an</span></span>
+<span><span class="co"># empty Assay5 `data` layer (PhenoMapR falls back to counts automatically).</span></span>
+<span><span class="va">scores_spatial</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/PhenoMap.html">PhenoMap</a></span><span class="op">(</span></span>
 <span>    expression <span class="op">=</span> <span class="va">seurat</span>,</span>
 <span>    reference <span class="op">=</span> <span class="st">"precog"</span>,</span>
 <span>    cancer_type <span class="op">=</span> <span class="st">"Pancreatic"</span>,</span>
 <span>    assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span>
-<span>    slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>    layer <span class="op">=</span> <span class="st">"counts"</span>,</span>
 <span>    verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>  <span class="op">)</span></span>
 <span>  <span class="va">seurat</span> <span class="op">&lt;-</span> <span class="fu">PhenoMapR</span><span class="fu">::</span><span class="fu"><a href="../reference/add_scores_to_seurat.html">add_scores_to_seurat</a></span><span class="op">(</span><span class="va">seurat</span>, <span class="va">scores_spatial</span><span class="op">)</span></span>
@@ -1714,7 +1786,7 @@ limits; run locally for all three heatmaps.</p>
 <span>  cell_id_column <span class="op">=</span> <span class="st">"cell_id"</span>,</span>
 <span>  marker_scope <span class="op">=</span> <span class="st">"phenotype_groups"</span>,</span>
 <span>  assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span>
-<span>  slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>  layer <span class="op">=</span> <span class="st">"counts"</span>,</span>
 <span>  max_cells_per_ident <span class="op">=</span> <span class="va">max_cells_markers</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
@@ -1729,7 +1801,7 @@ limits; run locally for all three heatmaps.</p>
 <span>    marker_scope <span class="op">=</span> <span class="st">"cell_type_specific"</span>,</span>
 <span>    celltype_contrast <span class="op">=</span> <span class="st">"vs_opposite_tail"</span>,</span>
 <span>    assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span>
-<span>    slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>    layer <span class="op">=</span> <span class="st">"counts"</span>,</span>
 <span>    max_cells_per_ident <span class="op">=</span> <span class="va">max_cells_markers</span>,</span>
 <span>    verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>  <span class="op">)</span></span>
@@ -1742,7 +1814,7 @@ limits; run locally for all three heatmaps.</p>
 <span>    marker_scope <span class="op">=</span> <span class="st">"cell_type_specific"</span>,</span>
 <span>    celltype_contrast <span class="op">=</span> <span class="st">"within_cell_type"</span>,</span>
 <span>    assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span>
-<span>    slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>    layer <span class="op">=</span> <span class="st">"counts"</span>,</span>
 <span>    max_cells_per_ident <span class="op">=</span> <span class="va">max_cells_markers</span>,</span>
 <span>    verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>  <span class="op">)</span></span>
@@ -1894,7 +1966,6 @@ limits; run locally for all three heatmaps.</p>
 <span>    <span class="op">)</span></span>
 <span>  <span class="op">}</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<p><img src="spatial-transcriptomics_files/figure-html/heatmap-markers-global-spatial-1.png" class="r-plt" alt="" width="100%" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level4">
 <h4 id="step-4-cell-type-phenotype-vs-all-opposite-tail-cells">Step 4: Cell-type × phenotype vs all opposite-tail cells<a class="anchor" aria-label="anchor" href="#step-4-cell-type-phenotype-vs-all-opposite-tail-cells"></a>
@@ -2104,54 +2175,53 @@ Acids Res. 54, D1579–D1589 (2026).</p>
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
 <span><span class="co">##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        </span></span>
-<span><span class="co">##   [4] magrittr_2.0.5         magick_2.9.1           spatstat.utils_3.2-3  </span></span>
-<span><span class="co">##   [7] farver_2.1.2           rmarkdown_2.31         GlobalOptions_0.1.4   </span></span>
-<span><span class="co">##  [10] fs_2.1.0               ragg_1.5.2             vctrs_0.7.3           </span></span>
-<span><span class="co">##  [13] ROCR_1.0-12            spatstat.explore_3.8-1 htmltools_0.5.9       </span></span>
-<span><span class="co">##  [16] progress_1.2.3         curl_7.1.0             sass_0.4.10           </span></span>
-<span><span class="co">##  [19] sctransform_0.4.3      parallelly_1.48.0      KernSmooth_2.23-26    </span></span>
-<span><span class="co">##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            </span></span>
-<span><span class="co">##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         </span></span>
-<span><span class="co">##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.3          </span></span>
-<span><span class="co">##  [31] iterators_1.0.14       mime_0.13              lifecycle_1.0.5       </span></span>
-<span><span class="co">##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              </span></span>
-<span><span class="co">##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    </span></span>
-<span><span class="co">##  [40] future_1.70.0          shiny_1.14.0           digest_0.6.39         </span></span>
-<span><span class="co">##  [43] colorspace_2.1-3       S4Vectors_0.50.1       rprojroot_2.1.1       </span></span>
-<span><span class="co">##  [46] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           </span></span>
-<span><span class="co">##  [49] pkgload_1.5.3          textshaping_1.0.5      labeling_0.4.3        </span></span>
-<span><span class="co">##  [52] progressr_1.0.0        spatstat.sparse_3.2-0  httr_1.4.8            </span></span>
-<span><span class="co">##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.1        </span></span>
-<span><span class="co">##  [58] gargle_1.6.1           doParallel_1.0.17      withr_3.0.3           </span></span>
-<span><span class="co">##  [61] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         </span></span>
-<span><span class="co">##  [64] pkgbuild_1.4.8         MASS_7.3-65            rjson_0.2.23          </span></span>
-<span><span class="co">##  [67] tools_4.6.1            lmtest_0.9-40          otel_0.2.0            </span></span>
-<span><span class="co">##  [70] googledrive_2.1.2      httpuv_1.6.17          future.apply_1.20.2   </span></span>
-<span><span class="co">##  [73] goftest_1.2-3          glue_1.8.1             nlme_3.1-169          </span></span>
-<span><span class="co">##  [76] promises_1.5.0         grid_4.6.1             Rtsne_0.17            </span></span>
-<span><span class="co">##  [79] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        </span></span>
-<span><span class="co">##  [82] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           </span></span>
-<span><span class="co">##  [85] data.table_1.18.4      hms_1.1.4              BiocGenerics_0.58.1   </span></span>
-<span><span class="co">##  [88] spatstat.geom_3.8-1    RcppAnnoy_0.0.23       foreach_1.5.2         </span></span>
-<span><span class="co">##  [91] ggrepel_0.9.8          RANN_2.6.2             pillar_1.11.1         </span></span>
-<span><span class="co">##  [94] stringr_1.6.0          limma_3.68.4           spam_2.11-4           </span></span>
-<span><span class="co">##  [97] RcppHNSW_0.7.0         later_1.4.8            circlize_0.4.18       </span></span>
-<span><span class="co">## [100] splines_4.6.1          lattice_0.22-9         survival_3.8-6        </span></span>
-<span><span class="co">## [103] deldir_2.0-4           tidyselect_1.2.1       ComplexHeatmap_2.28.0 </span></span>
-<span><span class="co">## [106] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            </span></span>
-<span><span class="co">## [109] gridExtra_2.3.1        IRanges_2.46.0         scattermore_1.2       </span></span>
-<span><span class="co">## [112] stats4_4.6.1           xfun_0.60              statmod_1.5.2         </span></span>
-<span><span class="co">## [115] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         </span></span>
-<span><span class="co">## [118] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        </span></span>
-<span><span class="co">## [121] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             </span></span>
-<span><span class="co">## [124] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     </span></span>
-<span><span class="co">## [127] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.2            </span></span>
-<span><span class="co">## [130] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             </span></span>
-<span><span class="co">## [133] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.1         </span></span>
-<span><span class="co">## [136] presto_1.0.0           prettyunits_1.2.0      dotCall64_1.2         </span></span>
-<span><span class="co">## [139] listenv_1.0.0          viridisLite_0.4.3      scales_1.4.0          </span></span>
-<span><span class="co">## [142] ggridges_0.5.7         purrr_1.2.2            crayon_1.5.3          </span></span>
-<span><span class="co">## [145] GetoptLong_1.1.1       rlang_1.3.0            cowplot_1.2.0</span></span></code></pre>
+<span><span class="co">##   [4] magrittr_2.0.5         spatstat.utils_3.2-3   farver_2.1.2          </span></span>
+<span><span class="co">##   [7] rmarkdown_2.31         GlobalOptions_0.1.4    fs_2.1.0              </span></span>
+<span><span class="co">##  [10] ragg_1.5.2             vctrs_0.7.3            ROCR_1.0-12           </span></span>
+<span><span class="co">##  [13] spatstat.explore_3.8-1 htmltools_0.5.9        progress_1.2.3        </span></span>
+<span><span class="co">##  [16] curl_7.1.0             sass_0.4.10            sctransform_0.4.3     </span></span>
+<span><span class="co">##  [19] parallelly_1.48.0      KernSmooth_2.23-26     bslib_0.11.0          </span></span>
+<span><span class="co">##  [22] htmlwidgets_1.6.4      desc_1.4.3             ica_1.0-3             </span></span>
+<span><span class="co">##  [25] plyr_1.8.9             plotly_4.12.0          zoo_1.8-15            </span></span>
+<span><span class="co">##  [28] cachem_1.1.0           igraph_2.3.3           iterators_1.0.14      </span></span>
+<span><span class="co">##  [31] mime_0.13              lifecycle_1.0.5        pkgconfig_2.0.3       </span></span>
+<span><span class="co">##  [34] Matrix_1.7-5           R6_2.6.1               fastmap_1.2.0         </span></span>
+<span><span class="co">##  [37] clue_0.3-68            fitdistrplus_1.2-6     future_1.70.0         </span></span>
+<span><span class="co">##  [40] shiny_1.14.0           digest_0.6.39          colorspace_2.1-3      </span></span>
+<span><span class="co">##  [43] S4Vectors_0.50.1       rprojroot_2.1.1        tensor_1.5.1          </span></span>
+<span><span class="co">##  [46] RSpectra_0.16-2        irlba_2.3.7            pkgload_1.5.3         </span></span>
+<span><span class="co">##  [49] textshaping_1.0.5      labeling_0.4.3         progressr_1.0.0       </span></span>
+<span><span class="co">##  [52] spatstat.sparse_3.2-0  httr_1.4.8             polyclip_1.10-7       </span></span>
+<span><span class="co">##  [55] abind_1.4-8            compiler_4.6.1         gargle_1.6.1          </span></span>
+<span><span class="co">##  [58] doParallel_1.0.17      withr_3.0.3            S7_0.2.2              </span></span>
+<span><span class="co">##  [61] fastDummies_1.7.6      hexbin_1.28.5          pkgbuild_1.4.8        </span></span>
+<span><span class="co">##  [64] MASS_7.3-65            rjson_0.2.23           tools_4.6.1           </span></span>
+<span><span class="co">##  [67] lmtest_0.9-40          otel_0.2.0             googledrive_2.1.2     </span></span>
+<span><span class="co">##  [70] httpuv_1.6.17          future.apply_1.20.2    goftest_1.2-3         </span></span>
+<span><span class="co">##  [73] glue_1.8.1             nlme_3.1-169           promises_1.5.0        </span></span>
+<span><span class="co">##  [76] grid_4.6.1             Rtsne_0.17             cluster_2.1.8.2       </span></span>
+<span><span class="co">##  [79] reshape2_1.4.5         generics_0.1.4         gtable_0.3.6          </span></span>
+<span><span class="co">##  [82] spatstat.data_3.1-9    tidyr_1.3.2            data.table_1.18.4     </span></span>
+<span><span class="co">##  [85] hms_1.1.4              BiocGenerics_0.58.1    spatstat.geom_3.8-1   </span></span>
+<span><span class="co">##  [88] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         </span></span>
+<span><span class="co">##  [91] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         </span></span>
+<span><span class="co">##  [94] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           </span></span>
+<span><span class="co">##  [97] circlize_0.4.18        splines_4.6.1          lattice_0.22-9        </span></span>
+<span><span class="co">## [100] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      </span></span>
+<span><span class="co">## [103] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         </span></span>
+<span><span class="co">## [106] knitr_1.51             gridExtra_2.3.1        IRanges_2.46.0        </span></span>
+<span><span class="co">## [109] scattermore_1.2        stats4_4.6.1           xfun_0.60             </span></span>
+<span><span class="co">## [112] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         </span></span>
+<span><span class="co">## [115] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        </span></span>
+<span><span class="co">## [118] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             </span></span>
+<span><span class="co">## [121] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     </span></span>
+<span><span class="co">## [124] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.2            </span></span>
+<span><span class="co">## [127] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             </span></span>
+<span><span class="co">## [130] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.1         </span></span>
+<span><span class="co">## [133] prettyunits_1.2.0      dotCall64_1.2          listenv_1.0.0         </span></span>
+<span><span class="co">## [136] viridisLite_0.4.3      scales_1.4.0           ggridges_0.5.7        </span></span>
+<span><span class="co">## [139] purrr_1.2.2            crayon_1.5.3           GetoptLong_1.1.1      </span></span>
+<span><span class="co">## [142] rlang_1.3.0            cowplot_1.2.0</span></span></code></pre>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

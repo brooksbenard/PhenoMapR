@@ -71,7 +71,8 @@ available, else base R) and does not require Seurat.</p>
 <span>  marker_scope <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"phenotype_groups"</span>, <span class="st">"cell_type_specific"</span><span class="op">)</span>,</span>
 <span>  cell_type_column <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  assay <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>  layer <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>  slot <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  test.use <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"wilcox"</span>, <span class="st">"t"</span>, <span class="st">"roc"</span>, <span class="st">"negbinom"</span>, <span class="st">"poisson"</span>, <span class="st">"LR"</span><span class="op">)</span>,</span>
 <span>  min.pct <span class="op">=</span> <span class="fl">0.1</span>,</span>
 <span>  logfc.threshold <span class="op">=</span> <span class="fl">0.25</span>,</span>
@@ -134,9 +135,14 @@ column in <code>group_labels</code> that contains cell type labels.</p></dd>
 <dd><p>Assay name for Seurat/SCE (e.g. <code>"RNA"</code>).</p></dd>
 
 
+<dt id="arg-layer">layer<a class="anchor" aria-label="anchor" href="#arg-layer"></a></dt>
+<dd><p>Seurat matrix for testing (<code>"data"</code>, <code>"counts"</code>, or
+<code>"scale.data"</code>; default <code>"data"</code>). Seurat v5 name; use
+<code>slot</code> for the Seurat v4 alias (same values).</p></dd>
+
+
 <dt id="arg-slot">slot<a class="anchor" aria-label="anchor" href="#arg-slot"></a></dt>
-<dd><p>Layer for Seurat: <code>"data"</code>, <code>"counts"</code>, or
-<code>"scale.data"</code> (default <code>"data"</code>).</p></dd>
+<dd><p>Alias for <code>layer</code> (Seurat v4 terminology).</p></dd>
 
 
 <dt id="arg-test-use">test.use<a class="anchor" aria-label="anchor" href="#arg-test-use"></a></dt>

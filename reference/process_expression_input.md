@@ -10,7 +10,8 @@ process_expression_input(
   pseudobulk = FALSE,
   group_by = NULL,
   assay = NULL,
-  slot = "data",
+  layer = "data",
+  slot = NULL,
   genes_to_extract = NULL,
   verbose = TRUE
 )

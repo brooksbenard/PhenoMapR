@@ -36,12 +36,83 @@ theme_set(theme_minimal(base_size = 14))
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
-rds_spot <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"
-
-if (!file.exists(rds_spot)) {
-  googledrive::drive_download(googledrive::as_id(gd_id_spot), rds_spot, overwrite = TRUE)
+.is_drive_quota_json <- function(path) {
+  info <- file.info(path)
+  if (is.null(path) || !isTRUE(file.exists(path)) ||
+      is.na(info$size) || info$size < 10 || info$size > 5000) {
+    return(FALSE)
+  }
+  txt <- tryCatch(
+    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
+    error = function(e) ""
+  )
+  grepl("downloadQuotaExceeded|The download quota for this file", txt)
 }
+.is_valid_rds_blob <- function(path) {
+  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
+  if (.is_drive_quota_json(path)) {
+    unlink(path)
+    return(FALSE)
+  }
+  info <- file.info(path)
+  if (is.na(info$size) || info$size < 1e5) return(FALSE)
+  con <- file(path, "rb")
+  on.exit(close(con), add = TRUE)
+  magic <- readBin(con, what = "raw", n = 6L)
+  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
+  is_xz <- length(magic) >= 6L && identical(magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00)))
+  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
+  is_gzip || is_xz || is_rds
+}
+.resolve_vignette_rds <- function(filename, drive_id, env_var = NULL) {
+  candidates <- unique(c(
+    filename,
+    file.path("vignettes", filename),
+    file.path("..", filename),
+    file.path("..", "vignettes", filename)
+  ))
+  hit <- candidates[file.exists(candidates) &
+                      vapply(candidates, .is_valid_rds_blob, logical(1))][1]
+  if (!is.na(hit)) return(hit)
+  dest <- filename
+  if (!is.null(env_var) && nzchar(env_var)) {
+    url <- Sys.getenv(env_var, unset = "")
+    if (nzchar(url)) {
+      message("Downloading ", filename, " from ", env_var)
+      ok <- tryCatch({
+        utils::download.file(url, dest, mode = "wb", quiet = TRUE)
+        TRUE
+      }, error = function(e) FALSE)
+      if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
+      if (file.exists(dest)) unlink(dest)
+    }
+  }
+  message("Downloading ", filename, " from Google Drive")
+  ok <- tryCatch({
+    googledrive::drive_download(
+      googledrive::as_id(drive_id), dest, overwrite = TRUE
+    )
+    TRUE
+  }, error = function(e) FALSE)
+  if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
+  if (file.exists(dest)) unlink(dest)
+  stop(
+    "Could not obtain ", filename,
+    if (!is.null(env_var) && nzchar(env_var)) {
+      paste0(". Place it under vignettes/ or set ", env_var, ".")
+    } else {
+      ". Place it under vignettes/."
+    },
+    call. = FALSE
+  )
+}
+
+gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
+rds_spot <- .resolve_vignette_rds(
+  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds",
+  gd_id_spot,
+  "PHENOMAPR_SPATIAL_RDS_URL"
+)
 
 seurat_spot <- readRDS(rds_spot)
 
@@ -66,7 +137,7 @@ scores_spot <- PhenoMapR::PhenoMap(
     reference = "precog",
     cancer_type = "Pancreatic",
     assay = "Spatial",
-    slot = "data",
+    layer = "data",
     verbose = FALSE
   )
 
@@ -216,27 +287,28 @@ gc(verbose = FALSE)
 ```
 
     ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells  4398784 235.0    7893412 421.6   7893412 421.6
-    ## Vcells 11309091  86.3  126659540 966.4 126303666 963.7
+    ## Ncells  4401432 235.1    7907672 422.4   7907672 422.4
+    ## Vcells 11321600  86.4  126673958 966.5 126319018 963.8
 
 ``` r
 
 # Load the **CytoSPACE** object (single cells placed on Visium coordinates).
-rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
-gd_id_cyto <- "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
-
-if (!file.exists(rds_cyto)) {
-  googledrive::drive_download(googledrive::as_id(gd_id_cyto), rds_cyto, overwrite = TRUE)
-}
+rds_cyto <- .resolve_vignette_rds(
+  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds",
+  "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll",
+  "PHENOMAPR_SPATIAL_CYTO_RDS_URL"
+)
 
 seurat <- readRDS(rds_cyto)
 
-  scores_spatial <- PhenoMapR::PhenoMap(
+# Score CytoSPACE-mapped cells. Prefer counts: many CytoSPACE exports keep an
+# empty Assay5 `data` layer (PhenoMapR falls back to counts automatically).
+scores_spatial <- PhenoMapR::PhenoMap(
     expression = seurat,
     reference = "precog",
     cancer_type = "Pancreatic",
     assay = "Spatial",
-    slot = "data",
+    layer = "counts",
     verbose = FALSE
   )
   seurat <- PhenoMapR::add_scores_to_seurat(seurat, scores_spatial)
@@ -1669,7 +1741,7 @@ markers_global <- PhenoMapR::find_phenotype_markers(
   cell_id_column = "cell_id",
   marker_scope = "phenotype_groups",
   assay = "Spatial",
-  slot = "data",
+  layer = "counts",
   max_cells_per_ident = max_cells_markers,
   verbose = FALSE
 )
@@ -1684,7 +1756,7 @@ if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
     marker_scope = "cell_type_specific",
     celltype_contrast = "vs_opposite_tail",
     assay = "Spatial",
-    slot = "data",
+    layer = "counts",
     max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )
@@ -1697,7 +1769,7 @@ if (.spatial_run_full_markers && !is.null(ct_col_markers)) {
     marker_scope = "cell_type_specific",
     celltype_contrast = "within_cell_type",
     assay = "Spatial",
-    slot = "data",
+    layer = "counts",
     max_cells_per_ident = max_cells_markers,
     verbose = FALSE
   )
@@ -1852,8 +1924,6 @@ if (!is.null(expr_pm) && !is.null(markers_global)) {
   }
 }
 ```
-
-![](spatial-transcriptomics_files/figure-html/heatmap-markers-global-spatial-1.png)
 
 #### Step 4: Cell-type × phenotype vs all opposite-tail cells
 
@@ -2055,51 +2125,50 @@ sessionInfo()
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        
-    ##   [4] magrittr_2.0.5         magick_2.9.1           spatstat.utils_3.2-3  
-    ##   [7] farver_2.1.2           rmarkdown_2.31         GlobalOptions_0.1.4   
-    ##  [10] fs_2.1.0               ragg_1.5.2             vctrs_0.7.3           
-    ##  [13] ROCR_1.0-12            spatstat.explore_3.8-1 htmltools_0.5.9       
-    ##  [16] progress_1.2.3         curl_7.1.0             sass_0.4.10           
-    ##  [19] sctransform_0.4.3      parallelly_1.48.0      KernSmooth_2.23-26    
-    ##  [22] bslib_0.11.0           htmlwidgets_1.6.4      desc_1.4.3            
-    ##  [25] ica_1.0-3              plyr_1.8.9             plotly_4.12.0         
-    ##  [28] zoo_1.8-15             cachem_1.1.0           igraph_2.3.3          
-    ##  [31] iterators_1.0.14       mime_0.13              lifecycle_1.0.5       
-    ##  [34] pkgconfig_2.0.3        Matrix_1.7-5           R6_2.6.1              
-    ##  [37] fastmap_1.2.0          clue_0.3-68            fitdistrplus_1.2-6    
-    ##  [40] future_1.70.0          shiny_1.14.0           digest_0.6.39         
-    ##  [43] colorspace_2.1-3       S4Vectors_0.50.1       rprojroot_2.1.1       
-    ##  [46] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           
-    ##  [49] pkgload_1.5.3          textshaping_1.0.5      labeling_0.4.3        
-    ##  [52] progressr_1.0.0        spatstat.sparse_3.2-0  httr_1.4.8            
-    ##  [55] polyclip_1.10-7        abind_1.4-8            compiler_4.6.1        
-    ##  [58] gargle_1.6.1           doParallel_1.0.17      withr_3.0.3           
-    ##  [61] S7_0.2.2               fastDummies_1.7.6      hexbin_1.28.5         
-    ##  [64] pkgbuild_1.4.8         MASS_7.3-65            rjson_0.2.23          
-    ##  [67] tools_4.6.1            lmtest_0.9-40          otel_0.2.0            
-    ##  [70] googledrive_2.1.2      httpuv_1.6.17          future.apply_1.20.2   
-    ##  [73] goftest_1.2-3          glue_1.8.1             nlme_3.1-169          
-    ##  [76] promises_1.5.0         grid_4.6.1             Rtsne_0.17            
-    ##  [79] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        
-    ##  [82] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           
-    ##  [85] data.table_1.18.4      hms_1.1.4              BiocGenerics_0.58.1   
-    ##  [88] spatstat.geom_3.8-1    RcppAnnoy_0.0.23       foreach_1.5.2         
-    ##  [91] ggrepel_0.9.8          RANN_2.6.2             pillar_1.11.1         
-    ##  [94] stringr_1.6.0          limma_3.68.4           spam_2.11-4           
-    ##  [97] RcppHNSW_0.7.0         later_1.4.8            circlize_0.4.18       
-    ## [100] splines_4.6.1          lattice_0.22-9         survival_3.8-6        
-    ## [103] deldir_2.0-4           tidyselect_1.2.1       ComplexHeatmap_2.28.0 
-    ## [106] miniUI_0.1.2           pbapply_1.7-4          knitr_1.51            
-    ## [109] gridExtra_2.3.1        IRanges_2.46.0         scattermore_1.2       
-    ## [112] stats4_4.6.1           xfun_0.60              statmod_1.5.2         
-    ## [115] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         
-    ## [118] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        
-    ## [121] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             
-    ## [124] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     
-    ## [127] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.2            
-    ## [130] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             
-    ## [133] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.1         
-    ## [136] presto_1.0.0           prettyunits_1.2.0      dotCall64_1.2         
-    ## [139] listenv_1.0.0          viridisLite_0.4.3      scales_1.4.0          
-    ## [142] ggridges_0.5.7         purrr_1.2.2            crayon_1.5.3          
-    ## [145] GetoptLong_1.1.1       rlang_1.3.0            cowplot_1.2.0
+    ##   [4] magrittr_2.0.5         spatstat.utils_3.2-3   farver_2.1.2          
+    ##   [7] rmarkdown_2.31         GlobalOptions_0.1.4    fs_2.1.0              
+    ##  [10] ragg_1.5.2             vctrs_0.7.3            ROCR_1.0-12           
+    ##  [13] spatstat.explore_3.8-1 htmltools_0.5.9        progress_1.2.3        
+    ##  [16] curl_7.1.0             sass_0.4.10            sctransform_0.4.3     
+    ##  [19] parallelly_1.48.0      KernSmooth_2.23-26     bslib_0.11.0          
+    ##  [22] htmlwidgets_1.6.4      desc_1.4.3             ica_1.0-3             
+    ##  [25] plyr_1.8.9             plotly_4.12.0          zoo_1.8-15            
+    ##  [28] cachem_1.1.0           igraph_2.3.3           iterators_1.0.14      
+    ##  [31] mime_0.13              lifecycle_1.0.5        pkgconfig_2.0.3       
+    ##  [34] Matrix_1.7-5           R6_2.6.1               fastmap_1.2.0         
+    ##  [37] clue_0.3-68            fitdistrplus_1.2-6     future_1.70.0         
+    ##  [40] shiny_1.14.0           digest_0.6.39          colorspace_2.1-3      
+    ##  [43] S4Vectors_0.50.1       rprojroot_2.1.1        tensor_1.5.1          
+    ##  [46] RSpectra_0.16-2        irlba_2.3.7            pkgload_1.5.3         
+    ##  [49] textshaping_1.0.5      labeling_0.4.3         progressr_1.0.0       
+    ##  [52] spatstat.sparse_3.2-0  httr_1.4.8             polyclip_1.10-7       
+    ##  [55] abind_1.4-8            compiler_4.6.1         gargle_1.6.1          
+    ##  [58] doParallel_1.0.17      withr_3.0.3            S7_0.2.2              
+    ##  [61] fastDummies_1.7.6      hexbin_1.28.5          pkgbuild_1.4.8        
+    ##  [64] MASS_7.3-65            rjson_0.2.23           tools_4.6.1           
+    ##  [67] lmtest_0.9-40          otel_0.2.0             googledrive_2.1.2     
+    ##  [70] httpuv_1.6.17          future.apply_1.20.2    goftest_1.2-3         
+    ##  [73] glue_1.8.1             nlme_3.1-169           promises_1.5.0        
+    ##  [76] grid_4.6.1             Rtsne_0.17             cluster_2.1.8.2       
+    ##  [79] reshape2_1.4.5         generics_0.1.4         gtable_0.3.6          
+    ##  [82] spatstat.data_3.1-9    tidyr_1.3.2            data.table_1.18.4     
+    ##  [85] hms_1.1.4              BiocGenerics_0.58.1    spatstat.geom_3.8-1   
+    ##  [88] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         
+    ##  [91] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         
+    ##  [94] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           
+    ##  [97] circlize_0.4.18        splines_4.6.1          lattice_0.22-9        
+    ## [100] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      
+    ## [103] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         
+    ## [106] knitr_1.51             gridExtra_2.3.1        IRanges_2.46.0        
+    ## [109] scattermore_1.2        stats4_4.6.1           xfun_0.60             
+    ## [112] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         
+    ## [115] lazyeval_0.2.3         yaml_2.3.12            evaluate_1.0.5        
+    ## [118] codetools_0.2-20       tibble_3.3.1           cli_3.6.6             
+    ## [121] uwot_0.2.4             xtable_1.8-8           reticulate_1.46.0     
+    ## [124] systemfonts_1.3.2      jquerylib_0.1.4        Rcpp_1.1.2            
+    ## [127] globals_0.19.1         spatstat.random_3.5-0  png_0.1-9             
+    ## [130] spatstat.univar_3.2-0  parallel_4.6.1         pkgdown_2.2.1         
+    ## [133] prettyunits_1.2.0      dotCall64_1.2          listenv_1.0.0         
+    ## [136] viridisLite_0.4.3      scales_1.4.0           ggridges_0.5.7        
+    ## [139] purrr_1.2.2            crayon_1.5.3           GetoptLong_1.1.1      
+    ## [142] rlang_1.3.0            cowplot_1.2.0

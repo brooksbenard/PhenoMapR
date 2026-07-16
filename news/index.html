@@ -47,6 +47,15 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0.9000" id="phenomapr-0109000">PhenoMapR 0.1.0.9000<a class="anchor" aria-label="anchor" href="#phenomapr-0109000"></a></h2>
 <div class="section level3">
+<h3 id="bug-fixes-0-1-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-1-0-9000"></a></h3>
+<ul><li>Shiny quick demo: the bundled <code>PAAD_CRA001160_demo_5000.rds</code> is shipped again (a <code>.Rbuildignore</code> pattern was excluding all of <code>inst/extdata</code>), so the demo no longer downloads the ~850 MB Seurat object from Google Drive. The full pool is now downloaded only when explicitly opted in via <code>PHENOMAPR_CRA001160_RDS_URL</code> or <code>PHENOMAPR_SHINY_DEMO_FULL=1</code>.</li>
+<li>Shiny scoring: the app now passes <code>layer=</code>/<code>slot=</code> according to the installed <code><a href="../reference/PhenoMap.html">PhenoMap()</a></code> signature, fixing <code>PhenoMap failed: unused argument (layer = layer)</code> when the app is newer than the installed core.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="compatibility-0-1-0-9000">Compatibility<a class="anchor" aria-label="anchor" href="#compatibility-0-1-0-9000"></a></h3>
+<ul><li>Seurat <strong>v4 and v5</strong>: <code><a href="../reference/PhenoMap.html">PhenoMap()</a></code> and <code><a href="../reference/find_phenotype_markers.html">find_phenotype_markers()</a></code> use Seurat v5 <code>layer=</code> by default (<code>data</code> / <code>counts</code> / <code>scale.data</code>) and still accept v4 <code>slot=</code> as an alias. Internally <code>GetAssayData</code> / <code>SetAssayData</code> use the argument your installed SeuratObject expects, with a one-shot fallback to the other name. Spatial Seurat objects honour the caller’s <code>layer</code>/<code>slot</code> instead of forcing <code>counts</code>.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="breaking-changes-0-1-0-9000">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-1-0-9000"></a></h3>
 <ul><li>
 <code><a href="../reference/PhenoMap.html">PhenoMap()</a></code> score columns are now named <code>PhenoMapR_&lt;reference_label&gt;</code> instead of <code>weighted_sum_score_&lt;reference_label&gt;</code>. Derived columns follow the same prefix (for example <code>phenotype_group_PhenoMapR_precog_BRCA</code>, <code>empirical_p_PhenoMapR_precog_BRCA</code>). Re-run scoring on saved objects or rename metadata columns manually.</li>

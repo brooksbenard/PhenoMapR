@@ -62,7 +62,8 @@ from various reference datasets (PRECOG, TCGA, Pediatric, ICI).</p>
 <span>  pseudobulk <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  group_by <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  assay <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  slot <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>  layer <span class="op">=</span> <span class="st">"data"</span>,</span>
+<span>  slot <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  reference_sign <span class="op">=</span> <span class="fl">1L</span>,</span>
 <span>  score_mode <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"weighted_sum"</span>, <span class="st">"activity_adjusted"</span><span class="op">)</span>,</span>
@@ -119,11 +120,18 @@ pseudobulk = TRUE. For Seurat/SCE objects, should be a metadata column.</p></dd>
 "Spatial" for spatial)</p></dd>
 
 
+<dt id="arg-layer">layer<a class="anchor" aria-label="anchor" href="#arg-layer"></a></dt>
+<dd><p>Seurat matrix to score (<code>"data"</code> normalized,
+<code>"counts"</code> raw, or <code>"scale.data"</code>; default <code>"data"</code>).
+Seurat v5 terminology. PhenoMapR maps this to
+<code>GetAssayData(layer=...)</code> or <code>GetAssayData(slot=...)</code> based on
+the installed SeuratObject version.</p></dd>
+
+
 <dt id="arg-slot">slot<a class="anchor" aria-label="anchor" href="#arg-slot"></a></dt>
-<dd><p>Data layer for Seurat objects: "data" for normalized,
-"counts" for raw, "scale.data" for scaled (default: "data").
-In Seurat v5+ this maps to the layer parameter; in Seurat v4, slot.
-The function handles both automatically.</p></dd>
+<dd><p>Alias for <code>layer</code> (Seurat v4 name for the same matrix).
+Prefer <code>layer</code> in new code. If both are set to different values, an
+error is thrown.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -201,13 +209,13 @@ are retained for downstream analyses (e.g. cell type marker genes).</p>
 <span class="r-in"><span>  cancer_type <span class="op">=</span> <span class="st">"BRCA"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Single cell Seurat object</span></span></span>
+<span class="r-in"><span><span class="co"># Single-cell Seurat object (prefer layer=; Seurat v5)</span></span></span>
 <span class="r-in"><span><span class="va">scores</span> <span class="op">&lt;-</span> <span class="fu">PhenoMap</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  expression <span class="op">=</span> <span class="va">seurat_obj</span>,</span></span>
 <span class="r-in"><span>  reference <span class="op">=</span> <span class="st">"tcga"</span>,</span></span>
 <span class="r-in"><span>  cancer_type <span class="op">=</span> <span class="st">"LUAD"</span>,</span></span>
 <span class="r-in"><span>  assay <span class="op">=</span> <span class="st">"RNA"</span>,</span></span>
-<span class="r-in"><span>  slot <span class="op">=</span> <span class="st">"data"</span></span></span>
+<span class="r-in"><span>  layer <span class="op">=</span> <span class="st">"data"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Spatial with pseudobulk</span></span></span>
@@ -215,6 +223,8 @@ are retained for downstream analyses (e.g. cell type marker genes).</p>
 <span class="r-in"><span>  expression <span class="op">=</span> <span class="va">spatial_seurat</span>,</span></span>
 <span class="r-in"><span>  reference <span class="op">=</span> <span class="st">"ici_precog"</span>,</span></span>
 <span class="r-in"><span>  cancer_type <span class="op">=</span> <span class="st">"MELANOMA_Metastatic"</span>,</span></span>
+<span class="r-in"><span>  assay <span class="op">=</span> <span class="st">"Spatial"</span>,</span></span>
+<span class="r-in"><span>  layer <span class="op">=</span> <span class="st">"data"</span>,</span></span>
 <span class="r-in"><span>  pseudobulk <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
 <span class="r-in"><span>  group_by <span class="op">=</span> <span class="st">"sample_id"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>

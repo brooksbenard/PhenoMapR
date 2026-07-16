@@ -63,7 +63,7 @@ arguments:**
 | **pseudobulk** | Aggregate samples/slices before scoring? (default: FALSE) |
 | **group_by** | Grouping variable for pseudobulk |
 | **assay** | Assay name for Seurat/SCE objects |
-| **slot** | Seurat slot (“data”, “counts”, “scale.data”) |
+| **layer** | Seurat matrix to score: `"data"` (normalized), `"counts"` (raw), or `"scale.data"` (Seurat v5 name; default). `slot` is accepted as a Seurat v4 alias for the same values. PhenoMapR calls [`GetAssayData()`](https://satijalab.github.io/seurat-object/reference/AssayData.html) with the argument your installed SeuratObject expects. |
 | **verbose** | Print progress messages |
 
 For the simplest use case of PhenoMapR, implement the following:
@@ -84,13 +84,13 @@ scores <- PhenoMap(
   cancer_type = "BRCA"          # use list_cancer_types(reference) to see avaliable options
 )
 
-# Score single-cell/spatial data
+# Score single-cell / spatial Seurat (v4 or v5)
 scores <- PhenoMap(
   expression = seurat_obj,
   reference = "tcga",
   cancer_type = "LUAD",
   assay = if ("Spatial" %in% names(seurat_obj@assays)) "Spatial" else "RNA",
-  slot = if ("Spatial" %in% names(seurat_obj@assays)) "counts" else "data"
+  layer = if ("Spatial" %in% names(seurat_obj@assays)) "counts" else "data"
 )
 ```
 
@@ -118,8 +118,13 @@ scores <- PhenoMap(expression_matrix, reference = "precog", cancer_type = "BRCA"
 
 **Seurat Objects**
 
-Single-cell and spatial Seurat objects; use `assay` and `slot` to match
-your data.
+Works with **Seurat v4 and v5**. Choose the assay (`RNA`, `Spatial`,
+`SCT`, …) and the expression matrix with **`layer`** (Seurat v5;
+preferred). The Seurat v4 name `slot` is still accepted as an alias for
+the same values (`"data"`, `"counts"`, `"scale.data"`).
+
+Use `"data"` for log-normalized expression (typical for scoring) or
+`"counts"` for raw counts.
 
 ``` r
 
@@ -131,7 +136,7 @@ scores <- PhenoMap(
   reference = "tcga",
   cancer_type = "LUAD",
   assay = "RNA",
-  slot = "data"
+  layer = "data"
 )
 
 # Add scores back to Seurat object
@@ -143,7 +148,7 @@ scores <- PhenoMap(
   reference = "precog",
   cancer_type = "BRCA",
   assay = "Spatial",
-  slot = "counts"
+  layer = "counts"
 )
 ```
 
