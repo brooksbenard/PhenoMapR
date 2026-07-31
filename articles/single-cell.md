@@ -1392,7 +1392,7 @@ sessionInfo()
     ## other attached packages:
     ##  [1] purrr_1.2.2           ggsignif_0.6.4        ggchicklet2_0.7.0    
     ##  [4] circlize_0.4.18       ComplexHeatmap_2.28.0 patchwork_1.3.2      
-    ##  [7] Seurat_5.5.1          SeuratObject_5.4.0    sp_2.2-1             
+    ##  [7] Seurat_5.5.1          SeuratObject_5.4.0    sp_2.2-3             
     ## [10] tidyr_1.3.2           dplyr_1.2.1           ggpubr_1.0.0         
     ## [13] ggplot2_4.0.3         googledrive_2.1.2     PhenoMapR_0.1.0      
     ## [16] testthat_3.3.2       
@@ -1400,10 +1400,10 @@ sessionInfo()
     ## loaded via a namespace (and not attached):
     ##   [1] RcppAnnoy_0.0.23       splines_4.6.1          later_1.4.8           
     ##   [4] tibble_3.3.1           polyclip_1.10-7        fastDummies_1.7.6     
-    ##   [7] lifecycle_1.0.5        rstatix_1.0.0          doParallel_1.0.17     
+    ##   [7] lifecycle_1.0.5        rstatix_1.1.0          doParallel_1.0.17     
     ##  [10] rprojroot_2.1.1        globals_0.19.1         lattice_0.22-9        
     ##  [13] MASS_7.3-65            backports_1.5.1        magrittr_2.0.5        
-    ##  [16] plotly_4.12.0          sass_0.4.10            rmarkdown_2.31        
+    ##  [16] plotly_4.12.1          sass_0.4.10            rmarkdown_2.31        
     ##  [19] jquerylib_0.1.4        yaml_2.3.12            httpuv_1.6.17         
     ##  [22] otel_0.2.0             sctransform_0.4.3      spam_2.11-4           
     ##  [25] pkgbuild_1.4.8         spatstat.sparse_3.2-0  reticulate_1.46.0     
@@ -1411,11 +1411,11 @@ sessionInfo()
     ##  [31] abind_1.4-8            pkgload_1.5.3          Rtsne_0.17            
     ##  [34] presto_1.0.0           BiocGenerics_0.58.1    IRanges_2.46.0        
     ##  [37] S4Vectors_0.50.1       ggrepel_0.9.8          irlba_2.3.7           
-    ##  [40] listenv_1.0.0          spatstat.utils_3.2-3   goftest_1.2-3         
-    ##  [43] RSpectra_0.16-2        spatstat.random_3.5-0  fitdistrplus_1.2-6    
+    ##  [40] listenv_1.0.0          spatstat.utils_3.2-4   goftest_1.2-3         
+    ##  [43] RSpectra_0.16-2        spatstat.random_3.5-1  fitdistrplus_1.2-6    
     ##  [46] parallelly_1.48.0      pkgdown_2.2.1          codetools_0.2-20      
     ##  [49] shape_1.4.6.1          tidyselect_1.2.1       farver_2.1.2          
-    ##  [52] matrixStats_1.5.0      stats4_4.6.1           spatstat.explore_3.8-1
+    ##  [52] matrixStats_1.5.0      stats4_4.6.1           spatstat.explore_3.8-2
     ##  [55] jsonlite_2.0.0         GetoptLong_1.1.1       progressr_1.0.0       
     ##  [58] Formula_1.2-5          ggridges_0.5.7         survival_3.8-6        
     ##  [61] iterators_1.0.14       systemfonts_1.3.2      foreach_1.5.2         
@@ -1423,8 +1423,8 @@ sessionInfo()
     ##  [67] ica_1.0-3              Rcpp_1.1.2             glue_1.8.1            
     ##  [70] gridExtra_2.3.1        mgcv_1.9-4             xfun_0.60             
     ##  [73] withr_3.0.3            fastmap_1.2.0          digest_0.6.39         
-    ##  [76] R6_2.6.1               mime_0.13              colorspace_2.1-3      
-    ##  [79] textshaping_1.0.5      scattermore_1.2        tensor_1.5.1          
+    ##  [76] R6_2.6.1               mime_0.13              textshaping_1.0.5     
+    ##  [79] colorspace_2.1-3       scattermore_1.2        tensor_1.5.1          
     ##  [82] spatstat.data_3.1-9    generics_0.1.4         data.table_1.18.4     
     ##  [85] prettyunits_1.2.0      httr_1.4.8             htmlwidgets_1.6.4     
     ##  [88] uwot_0.2.4             pkgconfig_2.0.3        gtable_0.3.6          
@@ -1442,8 +1442,7 @@ sessionInfo()
     ## [124] compiler_4.6.1         rlang_1.3.0            crayon_1.5.3          
     ## [127] future.apply_1.20.2    labeling_0.4.3         plyr_1.8.9            
     ## [130] fs_2.1.0               stringi_1.8.7          viridisLite_0.4.3     
-    ## [133] deldir_2.0-4           lazyeval_0.2.3         spatstat.geom_3.8-1   
-    ## [136] Matrix_1.7-5           RcppHNSW_0.7.0         hms_1.1.4             
-    ## [139] future_1.70.0          shiny_1.14.0           ROCR_1.0-12           
-    ## [142] gargle_1.6.1           igraph_2.3.3           broom_1.0.13          
-    ## [145] bslib_0.11.0
+    ## [133] deldir_2.0-4           spatstat.geom_3.8-2    Matrix_1.7-5          
+    ## [136] RcppHNSW_0.7.0         hms_1.1.4              future_1.75.0         
+    ## [139] shiny_1.14.0           ROCR_1.0-12            gargle_1.6.1          
+    ## [142] igraph_2.3.3           broom_1.0.13           bslib_0.11.0

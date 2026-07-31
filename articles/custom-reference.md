@@ -898,7 +898,7 @@ sessionInfo()
     ## [40] splines_4.6.1           parallel_4.6.1          matrixStats_1.5.0      
     ## [43] vctrs_0.7.3             Matrix_1.7-5            carData_3.0-6          
     ## [46] jsonlite_2.0.0          car_3.1-5               IRanges_2.46.0         
-    ## [49] GetoptLong_1.1.1        S4Vectors_0.50.1        rstatix_1.0.0          
+    ## [49] GetoptLong_1.1.1        S4Vectors_0.50.1        rstatix_1.1.0          
     ## [52] Formula_1.2-5           clue_0.3-68             systemfonts_1.3.2      
     ## [55] magick_2.9.1            foreach_1.5.2           jquerylib_0.1.4        
     ## [58] tidyr_1.3.2             glue_1.8.1              pkgdown_2.2.1          

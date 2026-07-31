@@ -419,7 +419,7 @@ sessionInfo()
     ## 
     ## loaded via a namespace (and not attached):
     ##  [1] gtable_0.3.6       xfun_0.60          bslib_0.11.0       htmlwidgets_1.6.4 
-    ##  [5] rstatix_1.0.0      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
+    ##  [5] rstatix_1.1.0      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
     ##  [9] tools_4.6.1        generics_0.1.4     curl_7.1.0         tibble_3.3.1      
     ## [13] pkgconfig_2.0.3    Matrix_1.7-5       RColorBrewer_1.1-3 S7_0.2.2          
     ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.6.1    
