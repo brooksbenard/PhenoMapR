@@ -69,6 +69,7 @@ Suggests:
     DT,
     htmltools,
     ggsignif,
+    ggrepel,
     ggh4x,
     ggchicklet2,
     shinyFiles,

@@ -186,22 +186,29 @@
 #'
 #' @export
 cell_type_colors <- c(
-  "Acinar"     = "#66c2a5",
-  "Alpha"      = "#a6cee3",
-  "B_cell"     = "#1f78b4",
-  "Beta"       = "#8c510a",
-  "CD4T"       = "#b2df8a",
-  "CD8T"       = "#33a02c",
-  "Delta"      = "#c51b7d",
-  "Dendritic"  = "#fb9a99",
-  "Ductal"     = "#e31a1c",
+  "Acinar"      = "#66c2a5",
+  "Alpha"       = "#a6cee3",
+  "B"           = "#B4849F",
+  "B_cell"      = "#1f78b4",
+  "Beta"        = "#8c510a",
+  "CD4T"        = "#b2df8a",
+  "CD8T"        = "#33a02c",
+  "Delta"       = "#c51b7d",
+  "Dendritic"   = "#fb9a99",
+  "Ductal"      = "#e31a1c",
+  # CRA001160 / Peng et al. labels (match single-cell vignette palette)
+  "Ductal type 1" = "#4477AA",
+  "Ductal type 2" = "#9C735B",
+  "Endocrine"   = "#73ADD6",
   "Endothelial" = "#8073ac",
-  "Fibroblast" = "#fdbf6f",
-  "Macrophage" = "#ff7f00",
-  "Mast"       = "#cab2d6",
-  "NK"         = "#6a3d9a",
-  "Plasma"     = "#e5e572",
-  "Schwann"    = "#b15928"
+  "Fibroblast"  = "#fdbf6f",
+  "Macrophage"  = "#ff7f00",
+  "Mast"        = "#cab2d6",
+  "NK"          = "#6a3d9a",
+  "Plasma"      = "#e5e572",
+  "Schwann"     = "#b15928",
+  "Stellate"    = "#AAB040",
+  "T"           = "#EE8866"
 )
 
 

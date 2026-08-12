@@ -66,35 +66,45 @@ jobs:
           echo "vignettes/ contents:"
           ls -la vignettes/*.Rmd 2>/dev/null || { echo "ERROR: no .Rmd in vignettes/"; exit 1; }
 
-      - name: Fetch full CRA001160 vignette data
+      - name: Fetch CRA001160 H5 + metadata for single-cell vignette
         env:
-          PHENOMAPR_CRA001160_RDS_URL: ${{ secrets.PHENOMAPR_CRA001160_RDS_URL }}
+          PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
           PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
         run: |
           set -euo pipefail
           mkdir -p vignettes
-          if [ -n "${PHENOMAPR_CRA001160_RDS_URL:-}" ]; then
-            echo "Downloading full CRA001160 RDS from PHENOMAPR_CRA001160_RDS_URL"
+          # Single-cell vignette requires the original TISCH2 H5 (log-normalized)
+          # plus CellMetainfo TSV — not PAAD_CRA001160_full.rds / Seurat counts.
+          if [ -n "${PHENOMAPR_CRA001160_H5_URL:-}" ]; then
+            echo "Downloading CRA001160 H5 from PHENOMAPR_CRA001160_H5_URL"
             curl -L --fail --retry 3 --retry-delay 5 \
-              -o vignettes/PAAD_CRA001160_full.rds \
-              "$PHENOMAPR_CRA001160_RDS_URL"
-            ls -lh vignettes/PAAD_CRA001160_full.rds
-            # Reject Drive quota JSON stubs
-            sz=$(wc -c < vignettes/PAAD_CRA001160_full.rds | tr -d ' ')
+              -o vignettes/PAAD_CRA001160_expression.h5 \
+              "$PHENOMAPR_CRA001160_H5_URL"
+            ls -lh vignettes/PAAD_CRA001160_expression.h5
+            sz=$(wc -c < vignettes/PAAD_CRA001160_expression.h5 | tr -d ' ')
             if [ "$sz" -lt 1000000 ]; then
-              echo "ERROR: CRA001160 download looks too small (${sz} bytes); likely a Drive quota error page."
-              head -c 400 vignettes/PAAD_CRA001160_full.rds || true
+              echo "ERROR: CRA001160 H5 download looks too small (${sz} bytes); likely a Drive quota error page."
+              head -c 400 vignettes/PAAD_CRA001160_expression.h5 || true
               exit 1
             fi
           else
-            echo "WARNING: PHENOMAPR_CRA001160_RDS_URL secret is empty."
-            echo "Single-cell article needs the FULL CRA001160 object (not a subset)."
+            echo "WARNING: PHENOMAPR_CRA001160_H5_URL secret is empty."
+            echo "Single-cell article needs PAAD_CRA001160_expression.h5 (full cohort)."
           fi
           if [ -n "${PHENOMAPR_CRA001160_META_URL:-}" ]; then
             echo "Downloading CRA001160 metadata from PHENOMAPR_CRA001160_META_URL"
             curl -L --fail --retry 3 --retry-delay 5 \
               -o vignettes/PAAD_CRA001160_CellMetainfo_table.tsv \
-              "$PHENOMAPR_CRA001160_META_URL" || true
+              "$PHENOMAPR_CRA001160_META_URL"
+            ls -lh vignettes/PAAD_CRA001160_CellMetainfo_table.tsv
+            sz=$(wc -c < vignettes/PAAD_CRA001160_CellMetainfo_table.tsv | tr -d ' ')
+            if [ "$sz" -lt 100000 ]; then
+              echo "ERROR: CRA001160 metadata download looks too small (${sz} bytes)."
+              head -c 400 vignettes/PAAD_CRA001160_CellMetainfo_table.tsv || true
+              exit 1
+            fi
+          else
+            echo "WARNING: PHENOMAPR_CRA001160_META_URL secret is empty."
           fi
 
       - name: Build pkgdown site
@@ -103,7 +113,6 @@ jobs:
         env:
           PKGDOWN_DEV_MODE: release
           PHENOMAPR_GSE111672_RDS_URL: ${{ secrets.PHENOMAPR_GSE111672_RDS_URL }}
-          PHENOMAPR_CRA001160_RDS_URL: ${{ secrets.PHENOMAPR_CRA001160_RDS_URL }}
           PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
           PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
           PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}

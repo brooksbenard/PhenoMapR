@@ -1,5 +1,13 @@
 # PhenoMapR 0.1.0.9000
 
+## Methodology / orthogonal validation
+
+* ctPANDA (Tang et al., *Cancer Cell* 2026): cell-type-matched comparison of
+  CRA001160 PhenoMapR adverse/favorable markers vs published crPRG lists lives
+  under `manuscript/benchmarks/methodology/` (`--only=ctpanda`), not the
+  single-cell vignette. Bundled lists remain at
+  `inst/extdata/ctpanda/ctpanda_prgs.rds` (`tools/make_ctpanda_prgs.R`).
+
 ## Bug fixes
 
 * Shiny quick demo: the bundled `PAAD_CRA001160_demo_5000.rds` is shipped

@@ -6,9 +6,8 @@ The vignettes use data files that are too large for GitHub. You can place them l
 
 | File | Drive file ID | Vignette |
 |------|----------------|----------|
-| `PAAD_CRA001160_full.rds` | (host via GitHub Release / non-Drive URL) | Single-cell — preferred full bundle (`$expression` + `$metadata`) |
-| `PAAD_CRA001160_expression.h5` | `1PolTXggREz8XmhutCLTQJGCfKxFAzqMl` | Single-cell (CRA001160) |
-| `PAAD_CRA001160_CellMetainfo_table.tsv` | `17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu` | Single-cell (CRA001160) |
+| `PAAD_CRA001160_expression.h5` | `1PolTXggREz8XmhutCLTQJGCfKxFAzqMl` | Single-cell (CRA001160) — **required**; original TISCH2 log-normalized H5, full cohort |
+| `PAAD_CRA001160_CellMetainfo_table.tsv` | `17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu` | Single-cell (CRA001160) — **required** metadata |
 | `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj` | Spatial transcriptomics |
 
 **Pre-rendered figures (tracked in git):** CytoSPACE location overviews, neighborhood enrichment heatmaps, pairwise co-localization score heatmaps, PhenoMapR Spearman correlation heatmaps, spatial CellChat figures, and pair evidence maps under `inst/figures/` (and `inst/figures/spatial_pair_maps/`). Pair tables: `inst/data/spatial_coloc_cellchat_pairs.rds`, `spatial_coloc_cellchat_lr_pairs.rds`, `spatial_coloc_cellchat_assoc.rds`. Regenerate with `Rscript scripts/render_spatial_colocalization_heatmap.R` and `Rscript scripts/render_spatial_colocalization_cellchat.R`.
@@ -58,7 +57,6 @@ In R, **before** knitting or sourcing the vignettes, run (you can use the file I
 ```r
 # Use the file IDs from the table at the top of this README.
 Sys.setenv(
-  PHENOMAPR_CRA001160_RDS_URL   = "https://github.com/OWNER/REPO/releases/download/TAG/PAAD_CRA001160_full.rds",
   PHENOMAPR_CRA001160_H5_URL    = "https://drive.google.com/uc?export=download&id=1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
   PHENOMAPR_CRA001160_META_URL  = "https://drive.google.com/uc?export=download&id=17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
   PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj",
@@ -90,15 +88,14 @@ R
 
 ### Large files on Google Drive
 
-For large files, Google may show a warning page instead of downloading, or return a small JSON error when the file’s **download quota is exceeded**. The single-cell article expects the **full** CRA001160 cohort (not a subset). Preferred CI path:
+For large files, Google may show a warning page instead of downloading, or return a small JSON error when the file’s **download quota is exceeded**. The single-cell article requires the **original TISCH2 H5** (`PAAD_CRA001160_expression.h5`) plus metadata TSV for the **full** CRA001160 cohort (Tumor + Normal; not a subset and not `PAAD_CRA001160_full.rds`). Preferred CI path:
 
-1. Build the full bundle locally: `Rscript tools/make_cra001160_full_rds.R`
-2. Publish it: `bash tools/upload_cra001160_release.sh`
-3. Set repository secret `PHENOMAPR_CRA001160_RDS_URL` to the printed release asset URL (must be a **non-Drive** mirror).
+1. Host non-Drive mirrors of `PAAD_CRA001160_expression.h5` and `PAAD_CRA001160_CellMetainfo_table.tsv`.
+2. Set repository secrets `PHENOMAPR_CRA001160_H5_URL` and `PHENOMAPR_CRA001160_META_URL` to those URLs.
 
-Place `PAAD_CRA001160_full.rds` under `vignettes/` for local knitting (gitignored). If automatic Drive download fails for H5/Seurat:
+For local knitting, place both files under `vignettes/` (gitignored). If automatic Drive download fails:
 
-- **Easiest:** Use Option 1 — download the file in your browser from Drive and place it in `vignettes/`.
+- **Easiest:** Use Option 1 — download the files in your browser from Drive and place them in `vignettes/`.
 - Or use the [gdown](https://github.com/wkentaro/gdown) Python tool with the file ID: `gdown FILE_ID`.
 
 ### GitHub Actions (CI)
@@ -109,7 +106,6 @@ Add the direct download URLs as repository secrets (e.g. `PHENOMAPR_GSE111672_RD
 env:
   PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
   PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
-  PHENOMAPR_CRA001160_RDS_URL: ${{ secrets.PHENOMAPR_CRA001160_RDS_URL }}
   PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}
   PHENOMAPR_GSE205154_MATRIX_URL: ${{ secrets.PHENOMAPR_GSE205154_MATRIX_URL }}
   PHENOMAPR_GSE205154_INFO_URL: ${{ secrets.PHENOMAPR_GSE205154_INFO_URL }}
