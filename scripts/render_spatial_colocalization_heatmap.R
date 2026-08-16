@@ -342,6 +342,131 @@ grDevices::png(
 )
 grDevices::dev.off()
 
+# Adverse / Favorable only (exclude *_Other) — same z-scores, filtered labels
+af_keep <- rownames(mat)[
+  as.character(meta_labs$Prognostic[match(rownames(mat), meta_labs$label)]) %in%
+    c("Adverse", "Favorable")
+]
+if (length(af_keep) >= 2L) {
+  mat_af <- mat[af_keep, af_keep, drop = FALSE]
+  mat_p_adj_af <- mat_p_adj[af_keep, af_keep, drop = FALSE]
+  col_ncells_af <- col_ncells[af_keep]
+  meta_af <- meta_labs[meta_labs$label %in% af_keep, , drop = FALSE]
+  ha_af <- .spatial_make_ha(
+    mat_af, meta_af, col_ncells_af, pal_ct, pal_pg,
+    anno_legend_ncol = 1L,
+    legend_title_size = .spatial_coloc_legend_title_size
+  )
+  hm_wh_af <- .spatial_hm_wh(mat_af)
+  png_sz_af <- .spatial_png_inches(mat_af)
+  .cell_fun_af_stars <- function(j, i, x, y, w, h, fill) {
+    qv <- mat_p_adj_af[i, j]
+    if (!is.finite(qv)) return(invisible(NULL))
+    sym <- if (qv < 0.001) {
+      "***"
+    } else if (qv < 0.01) {
+      "**"
+    } else if (qv < 0.05) {
+      "*"
+    } else {
+      return(invisible(NULL))
+    }
+    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+  }
+  ht_af <- ComplexHeatmap::Heatmap(
+    mat_af,
+    name = "Z",
+    col = col_fun,
+    width = hm_wh_af$width,
+    height = hm_wh_af$height,
+    cluster_rows = FALSE,
+    cluster_columns = FALSE,
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    left_annotation = ha_af$row,
+    top_annotation = ha_af$col,
+    row_title = "Reference Cell Type",
+    column_title = "Neighborhood Cell Type",
+    row_title_gp = grid::gpar(fontsize = 12),
+    column_title_gp = grid::gpar(fontsize = 12),
+    row_title_side = "left",
+    column_title_side = "bottom",
+    heatmap_legend_param = .spatial_heatmap_legend_param(
+      "Neighborhood\nenrichment z",
+      .spatial_coloc_legend_title_size
+    ),
+    border = TRUE,
+    cell_fun = .cell_fun_af_stars
+  )
+  out_png_af <- file.path(
+    out_dir, "spatial_colocalization_nhood_enrichment_adverse_favorable.png"
+  )
+  message("Writing ", out_png_af, " ...")
+  grDevices::png(
+    out_png_af,
+    width = png_sz_af["width"],
+    height = png_sz_af["height"],
+    units = "in",
+    res = 150
+  )
+  .spatial_draw_heatmap(
+    ht_af,
+    column_title = "Neighborhood enrichment of Adverse / Favorable cell types",
+    column_title_gp = .spatial_title_gp(14),
+    legend_mode = "right_1col"
+  )
+  grDevices::dev.off()
+
+  ht_af_cluster <- ComplexHeatmap::Heatmap(
+    mat_af,
+    name = "Z",
+    col = col_fun,
+    width = hm_wh_af$width,
+    height = hm_wh_af$height,
+    cluster_rows = TRUE,
+    cluster_columns = TRUE,
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    show_row_dend = FALSE,
+    show_column_dend = FALSE,
+    left_annotation = ha_af$row,
+    top_annotation = ha_af$col,
+    row_title = "Reference Cell Type",
+    column_title = "Neighborhood Cell Type",
+    row_title_gp = grid::gpar(fontsize = 12),
+    column_title_gp = grid::gpar(fontsize = 12),
+    row_title_side = "left",
+    column_title_side = "bottom",
+    heatmap_legend_param = .spatial_heatmap_legend_param(
+      "Neighborhood\nenrichment z",
+      .spatial_coloc_legend_title_size
+    ),
+    border = TRUE,
+    cell_fun = .cell_fun_af_stars
+  )
+  out_png_af_cluster <- file.path(
+    out_dir,
+    "spatial_colocalization_nhood_enrichment_adverse_favorable_clustered.png"
+  )
+  message("Writing ", out_png_af_cluster, " ...")
+  grDevices::png(
+    out_png_af_cluster,
+    width = png_sz_af["width"],
+    height = png_sz_af["height"],
+    units = "in",
+    res = 150
+  )
+  .spatial_draw_heatmap(
+    ht_af_cluster,
+    column_title = "Neighborhood enrichment of Adverse / Favorable cell types (clustered)",
+    column_title_gp = .spatial_title_gp(14),
+    legend_mode = "right_1col"
+  )
+  grDevices::dev.off()
+}
+
 # --- cooccur_local heatmap ---
 message("Running cooccur_local on ", nrow(scoc_df), " cells ...")
 rad_sc <- max(

@@ -20,9 +20,12 @@
   )
 }
 
-# CellChat probability (cream → blue; used for L-R probability heatmaps).
+# CellChat probability (RdPu; used for L-R probability heatmaps).
 .spatial_cellchat_prob_palette_colors <- function() {
-  c("#FCFBE3", "#E8EDF3", "#9DB2BF", "#587BB5", "#2C5AA0")
+  c(
+    "#fff7f3", "#fde0dd", "#fcc5c0", "#fa9fb5", "#f768a1",
+    "#dd3497", "#ae017e", "#7a0177", "#49006a"
+  )
 }
 
 .spatial_cellchat_prob_col_fun <- function(lim) {
@@ -40,7 +43,7 @@
   )
 }
 
-# Backward-compatible aliases (CellChat cream-blue).
+# Backward-compatible aliases (CellChat RdPu).
 .spatial_colocal_palette_colors <- .spatial_cellchat_prob_palette_colors
 .spatial_colocal_col_fun <- .spatial_cellchat_prob_col_fun
 .spatial_colocal_scale_gg <- .spatial_cellchat_prob_scale_gg

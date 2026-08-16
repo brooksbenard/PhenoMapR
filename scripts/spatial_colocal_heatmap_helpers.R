@@ -39,7 +39,10 @@
 .spatial_save_label_ncells <- function(root, tab) {
   data_dir <- file.path(root, "inst", "data")
   dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
-  saveRDS(as.integer(tab), file.path(data_dir, "spatial_coloc_label_ncells.rds"))
+  # as.integer(table) drops names; keep a named integer vector for reload.
+  vals <- as.integer(tab)
+  names(vals) <- names(tab)
+  saveRDS(vals, file.path(data_dir, "spatial_coloc_label_ncells.rds"))
   invisible(tab)
 }
 
@@ -63,27 +66,48 @@
   } else {
     .spatial_bar_mm
   }
-  top_anno_mm <- bar_mm + 2 * anno_mm + 2
-  # Column annotation names + barplot y-axis need extra left margin.
-  left_anno_mm <- 2 * anno_mm + bar_mm * 0.45 + 3
+  # Empty title spacer + bar + CellType + Prognostic strips.
+  top_anno_mm <- bar_mm + 2 * anno_mm + (if (identical(cell_mm, .spatial_hm_cell_mm_compact)) 2.5 else 4) + 2
+  # Left margin for bar axis ticks + "N cells" name offset.
+  left_anno_mm <- 2 * anno_mm + bar_mm * 0.45 + 18
   legend_pad <- 1.6
+  # Room for multi-line column_title + gap above the annotations.
+  title_pad <- 0.9
   c(
     width = as.numeric(grid::convertWidth(wh$width, "in", valueOnly = TRUE)) +
       as.numeric(grid::convertWidth(grid::unit(left_anno_mm, "mm"), "in", valueOnly = TRUE)) +
       pad_w + legend_pad,
     height = as.numeric(grid::convertHeight(wh$height, "in", valueOnly = TRUE)) +
       as.numeric(grid::convertHeight(grid::unit(top_anno_mm, "mm"), "in", valueOnly = TRUE)) +
-      pad_h + 0.8
+      pad_h + 0.8 + title_pad
   )
 }
 
 .spatial_bar_axis_at <- function(x) {
   mx <- max(x, 1L, na.rm = TRUE)
   if (mx <= 1000) {
-    pretty(c(0, mx), n = 3)
+    # Prefer few ticks so labels stay short and leave room for "N cells".
+    if (mx <= 200) {
+      c(0, mx)
+    } else if (mx <= 500) {
+      c(0, round(mx / 2), mx)
+    } else {
+      c(0, 500, max(1000, mx))
+    }
   } else {
     c(0, round(mx / 2), mx)
   }
+}
+
+.spatial_bar_axis_labels <- function(at) {
+  vapply(at, function(v) {
+    if (!is.finite(v)) return("")
+    if (v >= 1000) {
+      paste0(format(v / 1000, trim = TRUE, digits = 2), "k")
+    } else {
+      as.character(as.integer(round(v)))
+    }
+  }, character(1))
 }
 
 .spatial_spearman_palette <- function() {
@@ -115,17 +139,42 @@
     legend_title_size = 9
 ) {
   legend_title_gp <- grid::gpar(fontsize = legend_title_size, fontface = "bold")
-  row_ct <- as.character(meta_labs$CellType[match(rownames(mat), meta_labs$label)])
-  row_pg <- as.character(meta_labs$Prognostic[match(rownames(mat), meta_labs$label)])
-  col_ct <- as.character(meta_labs$CellType[match(colnames(mat), meta_labs$label)])
-  col_pg <- as.character(meta_labs$Prognostic[match(colnames(mat), meta_labs$label)])
-  col_nc <- col_ncells[colnames(mat)]
+  rn <- rownames(mat)
+  cn <- colnames(mat)
+  # Named vectors so ComplexHeatmap maps annotations by label under
+  # row_order / column_order reordering (not fragile positional match).
+  row_ct <- stats::setNames(
+    as.character(meta_labs$CellType[match(rn, meta_labs$label)]),
+    rn
+  )
+  row_pg <- stats::setNames(
+    as.character(meta_labs$Prognostic[match(rn, meta_labs$label)]),
+    rn
+  )
+  col_ct <- stats::setNames(
+    as.character(meta_labs$CellType[match(cn, meta_labs$label)]),
+    cn
+  )
+  col_pg <- stats::setNames(
+    as.character(meta_labs$Prognostic[match(cn, meta_labs$label)]),
+    cn
+  )
+  col_nc <- stats::setNames(as.integer(col_ncells[cn]), cn)
   col_nc[is.na(col_nc)] <- 0L
+  if (anyNA(row_ct) || anyNA(col_ct) || anyNA(row_pg) || anyNA(col_pg)) {
+    stop("Annotation labels failed to match matrix row/column names")
+  }
+  tick_candidates <- .spatial_bar_axis_at(col_nc)
+  bar_ylim_max <- max(c(as.numeric(col_nc), tick_candidates, 1), na.rm = TRUE) * 1.02
   anno_mm <- if (compact) .spatial_anno_mm_compact else .spatial_anno_mm
   bar_mm <- if (compact) .spatial_bar_mm_compact else .spatial_bar_mm
+  spacer_mm <- if (compact) 2.5 else 5
   anno_u <- grid::unit(anno_mm, "mm")
   bar_u <- grid::unit(bar_mm, "mm")
-  bar_axis_at <- .spatial_bar_axis_at(col_nc)
+  # Only "N cells" needs a large offset to clear left-side tick labels;
+  # CellType / Prognostic Group stay close to their strips.
+  ncells_name_offset <- if (compact) 8 else 12
+  name_offsets <- grid::unit(c(0, ncells_name_offset, 1.2, 1.2), "mm")
   list(
     row = ComplexHeatmap::rowAnnotation(
       CellType = row_ct,
@@ -136,14 +185,19 @@
       show_legend = c(FALSE)
     ),
     col = ComplexHeatmap::HeatmapAnnotation(
+      title_spacer = ComplexHeatmap::anno_empty(
+        border = FALSE,
+        height = grid::unit(spacer_mm, "mm")
+      ),
       `N cells` = ComplexHeatmap::anno_barplot(
         col_nc,
         gp = grid::gpar(fill = "#666666", col = NA),
         border = FALSE,
         height = bar_u,
-        ylim = c(0, max(col_nc, 1L, na.rm = TRUE)),
+        ylim = c(0, bar_ylim_max),
         axis_param = list(
-          at = bar_axis_at,
+          at = tick_candidates,
+          labels = as.character(tick_candidates),
           gp = grid::gpar(fontsize = if (compact) 5 else 6),
           side = "left",
           labels_rot = 0
@@ -152,13 +206,13 @@
       CellType = col_ct,
       `Prognostic Group` = col_pg,
       col = list(CellType = pal_ct, `Prognostic Group` = pal_pg),
-      show_annotation_name = TRUE,
+      show_annotation_name = c(FALSE, TRUE, TRUE, TRUE),
       annotation_name_side = "left",
       annotation_name_gp = grid::gpar(
         fontsize = if (compact) 6 else 7,
         fontface = "plain"
       ),
-      annotation_name_offset = grid::unit(1.2, "mm"),
+      annotation_name_offset = name_offsets,
       gap = grid::unit(1.2, "mm"),
       annotation_legend_param = list(
         CellType = list(
@@ -174,7 +228,10 @@
           labels_gp = grid::gpar(fontsize = legend_title_size - 1)
         )
       ),
-      annotation_height = grid::unit(c(bar_mm, anno_mm, anno_mm), "mm")
+      annotation_height = grid::unit(
+        c(spacer_mm, bar_mm, anno_mm, anno_mm),
+        "mm"
+      )
     )
   )
 }
@@ -194,17 +251,18 @@
     right_1col = list(
       heatmap_legend_side = "right",
       annotation_legend_side = "right",
-      padding = grid::unit(c(2, 18, 2, 24), "mm")
+      # top / left padding: title gap + room for bar ticks and "N cells"
+      padding = grid::unit(c(10, 18, 4, 28), "mm")
     ),
     right_2col = list(
       heatmap_legend_side = "right",
       annotation_legend_side = "right",
-      padding = grid::unit(c(2, 16, 2, 24), "mm")
+      padding = grid::unit(c(10, 16, 4, 28), "mm")
     ),
     bottom = list(
       heatmap_legend_side = "bottom",
       annotation_legend_side = "bottom",
-      padding = grid::unit(c(10, 2, 2, 2), "mm")
+      padding = grid::unit(c(10, 2, 10, 2), "mm")
     )
   )
 }
@@ -215,9 +273,18 @@
     column_title_gp = NULL,
     merge_legend = FALSE,
     ht_gap = grid::unit(2, "mm"),
-    legend_mode = "right_2col"
+    legend_mode = "right_2col",
+    annotation_legend_list = NULL,
+    heatmap_legend_list = NULL
 ) {
   draw_args <- .spatial_legend_draw_args(legend_mode)
+  extra <- list()
+  if (!is.null(annotation_legend_list)) {
+    extra$annotation_legend_list <- annotation_legend_list
+  }
+  if (!is.null(heatmap_legend_list)) {
+    extra$heatmap_legend_list <- heatmap_legend_list
+  }
   do.call(
     ComplexHeatmap::draw,
     c(
@@ -228,8 +295,33 @@
         merge_legend = merge_legend,
         ht_gap = ht_gap
       ),
-      draw_args
+      draw_args,
+      extra
     )
+  )
+}
+
+.spatial_outline_legend <- function(
+    dual_col = "#762A83",
+    score_label = "score \u2265 0.75",
+    dual_label = "Spatial + CellChat",
+    title = "Outlines",
+    legend_title_size = 9
+) {
+  ComplexHeatmap::Legend(
+    title = title,
+    labels = c(score_label, dual_label),
+    type = "points",
+    pch = 0,
+    size = grid::unit(c(4, 4.5), "mm"),
+    legend_gp = grid::gpar(
+      col = c("black", dual_col),
+      lwd = c(1.5, 2.2),
+      fill = NA
+    ),
+    background = "white",
+    title_gp = grid::gpar(fontsize = legend_title_size, fontface = "bold"),
+    labels_gp = grid::gpar(fontsize = legend_title_size - 1)
   )
 }
 
@@ -246,7 +338,13 @@
   mat
 }
 
-.cluster_heatmap_order <- function(mat, col_fun, ha_row, ha_col) {
+.cluster_heatmap_order <- function(
+    mat,
+    col_fun,
+    ha_row,
+    ha_col,
+    distance = .spatial_cor_dist
+) {
   ht <- ComplexHeatmap::Heatmap(
     mat,
     name = "tmp",
@@ -254,8 +352,8 @@
     na_col = "#eeeeee",
     cluster_rows = TRUE,
     cluster_columns = TRUE,
-    clustering_distance_rows = .spatial_cor_dist,
-    clustering_distance_columns = .spatial_cor_dist,
+    clustering_distance_rows = distance,
+    clustering_distance_columns = distance,
     show_row_names = FALSE,
     show_column_names = FALSE,
     show_row_dend = FALSE,
@@ -281,12 +379,15 @@
     title_line2 = NULL,
     width_in = NULL,
     height_in = NULL,
-    legend_mode = "right_2col"
+    legend_mode = "right_2col",
+    annotation_legend_list = NULL,
+    heatmap_legend_list = NULL
 ) {
+  # Trailing blank lines add space between the title and the top annotations.
   title <- if (is.null(title_line2) || !nzchar(title_line2)) {
-    title_line1
+    paste0(title_line1, "\n\n")
   } else {
-    .spatial_two_line_title(title_line1, title_line2)
+    paste0(.spatial_two_line_title(title_line1, title_line2), "\n\n")
   }
   message("Writing ", basename(out_path), " ...")
   if (is.null(width_in) || is.null(height_in)) {
@@ -303,7 +404,9 @@
     ht,
     column_title = title,
     column_title_gp = .spatial_title_gp(10),
-    legend_mode = legend_mode
+    legend_mode = legend_mode,
+    annotation_legend_list = annotation_legend_list,
+    heatmap_legend_list = heatmap_legend_list
   )
   grDevices::dev.off()
 }

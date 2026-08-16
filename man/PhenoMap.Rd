@@ -43,7 +43,11 @@ datasets. Should match column names in reference data. For ICI PRECOG,
 use format "ABBREV" or "ABBREV_Metastatic" (e.g., "MELANOMA", "MELANOMA_Metastatic")}
 
 \item{z_score_cutoff}{Absolute z-score threshold for filtering genes
-(default: 2)}
+(default: 2). Built-in PRECOG/TCGA matrices shipped in the package are
+already sparse at this cutoff (entries with \eqn{|z| \leq 2} stored as
+\code{NA}; see \code{\link{precog}}, \code{\link{tcga}}), so lowering the
+cutoff below 2 does not recover discarded associations unless a denser
+custom reference is supplied.}
 
 \item{pseudobulk}{Logical. If TRUE, aggregate expression before scoring
 (default: FALSE)}

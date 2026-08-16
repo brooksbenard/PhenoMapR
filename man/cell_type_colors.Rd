@@ -5,7 +5,7 @@
 \alias{cell_type_colors}
 \title{Default Cell Type Color Palette}
 \format{
-An object of class \code{character} of length 16.
+An object of class \code{character} of length 22.
 }
 \usage{
 cell_type_colors

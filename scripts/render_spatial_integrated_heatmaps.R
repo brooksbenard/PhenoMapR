@@ -165,7 +165,14 @@ ht_neighbor_outline <- ComplexHeatmap::Heatmap(
   ),
   width_in = png_sz["width"],
   height_in = png_sz["height"],
-  legend_mode = "right_1col"
+  legend_mode = "right_1col",
+  annotation_legend_list = list(
+    .spatial_outline_legend(
+      dual_col = dual_outline_color,
+      score_label = paste0("|rho| > ", cor_outline_threshold),
+      dual_label = "Spatial + CellChat"
+    )
+  )
 )
 
 ht_cooccur_outline <- ComplexHeatmap::Heatmap(
@@ -200,7 +207,14 @@ ht_cooccur_outline <- ComplexHeatmap::Heatmap(
   ),
   width_in = png_sz["width"],
   height_in = png_sz["height"],
-  legend_mode = "right_1col"
+  legend_mode = "right_1col",
+  annotation_legend_list = list(
+    .spatial_outline_legend(
+      dual_col = dual_outline_color,
+      score_label = paste0("|rho| > ", cor_outline_threshold),
+      dual_label = "Spatial + CellChat"
+    )
+  )
 )
 
 ht_cc <- ComplexHeatmap::Heatmap(
@@ -360,6 +374,252 @@ p_ev <- ggplot(tier_df, aes(x = .data$evidence_tier, y = .data$n, fill = .data$e
 out_ev <- file.path(out_dir, "spatial_coloc_integration_evidence.png")
 message("Writing ", basename(out_ev), " ...")
 ggsave(out_ev, p_ev, width = 8.5, height = 5.5, dpi = 150, bg = "white")
+
+# --- Adverse / Favorable only: neighborhood enrichment + coloc × CellChat ---
+# Pair table is already filtered to Adverse/Favorable tails (no *_Other).
+af_labs <- labs_ord
+af_meta <- meta_labs[meta_labs$label %in% af_labs, , drop = FALSE]
+af_ncells <- col_ncells[af_labs]
+
+mat_nhood_z <- .build_pair_matrix(af_labs, pair_df, "nhood_z", fill = NA_real_)
+mat_nhood_q <- .build_pair_matrix(af_labs, pair_df, "nhood_q", fill = NA_real_)
+mat_local_af <- .build_pair_matrix(af_labs, pair_df, "local_cooccur", fill = 0)
+mat_local_af[!is.finite(mat_local_af)] <- 0
+mat_dual_af <- .build_pair_matrix(af_labs, pair_df, "dual_spatial_lr", fill = FALSE)
+mat_cc_sig_af <- .build_pair_matrix(af_labs, pair_df, "cellchat_sig", fill = FALSE)
+
+mabs_af <- suppressWarnings(max(abs(as.numeric(mat_nhood_z)), na.rm = TRUE))
+if (!is.finite(mabs_af) || mabs_af <= 0) mabs_af <- 1
+col_fun_nhood_af <- circlize::colorRamp2(
+  c(-mabs_af, 0, mabs_af),
+  c("#7F312FFF", "#f7f7f7", "#005C55FF")
+)
+
+ha_af <- .spatial_make_ha(
+  mat_nhood_z, af_meta, af_ncells, pal_ct, pal_pg,
+  anno_legend_ncol = 1L,
+  legend_title_size = 9L
+)
+wh_af <- .spatial_hm_wh(mat_nhood_z)
+png_af <- .spatial_png_inches(mat_nhood_z, pad_h = 4.4)
+
+.cell_fun_nhood_stars <- function(mat_q) {
+  function(j, i, x, y, w, h, fill) {
+    qv <- mat_q[i, j]
+    if (!is.finite(qv)) return(invisible(NULL))
+    sym <- if (qv < 0.001) {
+      "***"
+    } else if (qv < 0.01) {
+      "**"
+    } else if (qv < 0.05) {
+      "*"
+    } else {
+      return(invisible(NULL))
+    }
+    grid::grid.text(sym, x, y, gp = grid::gpar(fontsize = 9))
+  }
+}
+
+ht_nhood_af <- ComplexHeatmap::Heatmap(
+  mat_nhood_z,
+  name = "Z",
+  col = col_fun_nhood_af,
+  width = wh_af$width,
+  height = wh_af$height,
+  na_col = "#eeeeee",
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  left_annotation = ha_af$row,
+  top_annotation = ha_af$col,
+  row_title = "Reference Cell Type",
+  column_title = "Neighborhood Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  border = TRUE,
+  heatmap_legend_param = .spatial_heatmap_legend_param(
+    "Neighborhood\nenrichment z",
+    9L
+  ),
+  cell_fun = .cell_fun_nhood_stars(mat_nhood_q)
+)
+
+.spatial_draw_ht_png(
+  ht_nhood_af,
+  file.path(out_dir, "spatial_colocalization_nhood_enrichment_adverse_favorable.png"),
+  "Neighborhood enrichment of Adverse / Favorable cell types",
+  "Excludes Other (non-tail) groups; FDR stars from full-tissue nhood test",
+  width_in = png_af["width"],
+  height_in = png_af["height"],
+  legend_mode = "right_1col"
+)
+
+nhood_af_ord <- .cluster_heatmap_order(
+  mat_nhood_z,
+  col_fun_nhood_af,
+  ha_af$row,
+  ha_af$col,
+  distance = "euclidean"
+)
+mat_nhood_z_cl <- mat_nhood_z[nhood_af_ord$row, nhood_af_ord$col, drop = FALSE]
+mat_nhood_q_cl <- mat_nhood_q[nhood_af_ord$row, nhood_af_ord$col, drop = FALSE]
+ha_af_cl <- .spatial_make_ha(
+  mat_nhood_z_cl, af_meta, af_ncells, pal_ct, pal_pg,
+  anno_legend_ncol = 1L,
+  legend_title_size = 9L
+)
+ht_nhood_af_cluster <- ComplexHeatmap::Heatmap(
+  mat_nhood_z_cl,
+  name = "Z",
+  col = col_fun_nhood_af,
+  width = wh_af$width,
+  height = wh_af$height,
+  na_col = "#eeeeee",
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  left_annotation = ha_af_cl$row,
+  top_annotation = ha_af_cl$col,
+  row_title = "Reference Cell Type",
+  column_title = "Neighborhood Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  border = TRUE,
+  heatmap_legend_param = .spatial_heatmap_legend_param(
+    "Neighborhood\nenrichment z",
+    9L
+  ),
+  cell_fun = .cell_fun_nhood_stars(mat_nhood_q_cl)
+)
+
+.spatial_draw_ht_png(
+  ht_nhood_af_cluster,
+  file.path(
+    out_dir,
+    "spatial_colocalization_nhood_enrichment_adverse_favorable_clustered.png"
+  ),
+  "Neighborhood enrichment of Adverse / Favorable cell types (clustered)",
+  "Excludes Other (non-tail) groups; FDR stars from full-tissue nhood test",
+  width_in = png_af["width"],
+  height_in = png_af["height"],
+  legend_mode = "right_1col"
+)
+
+# Local co-localization scores with high-score + dual CellChat outlines
+local_outline_threshold <- 0.75
+mabs_local_af <- suppressWarnings(max(as.numeric(mat_local_af), na.rm = TRUE))
+if (!is.finite(mabs_local_af) || mabs_local_af <= 0) mabs_local_af <- 1
+col_fun_local_af <- .spatial_coloc_score_col_fun(mabs_local_af)
+
+ha_local_af <- .spatial_make_ha(
+  mat_local_af, af_meta, af_ncells, pal_ct, pal_pg,
+  anno_legend_ncol = 1L,
+  legend_title_size = 9L
+)
+local_af_ord <- .cluster_heatmap_order(
+  mat_local_af,
+  col_fun_local_af,
+  ha_local_af$row,
+  ha_local_af$col,
+  distance = "euclidean"
+)
+mat_local_af_cl <- mat_local_af[local_af_ord$row, local_af_ord$col, drop = FALSE]
+mat_dual_af_cl <- mat_dual_af[local_af_ord$row, local_af_ord$col, drop = FALSE]
+ha_local_af_cl <- .spatial_make_ha(
+  mat_local_af_cl, af_meta, af_ncells, pal_ct, pal_pg,
+  anno_legend_ncol = 1L,
+  legend_title_size = 9L
+)
+
+.cell_fun_local_and_dual <- function(
+    mat_local,
+    mat_dual_flag,
+    score_thr,
+    dual_col
+) {
+  function(j, i, x, y, w, h, fill) {
+    val <- mat_local[i, j]
+    if (is.finite(val) && val >= score_thr) {
+      grid::grid.rect(
+        x, y, w, h,
+        gp = grid::gpar(col = "black", lwd = 1.5, fill = NA)
+      )
+    }
+    if (isTRUE(mat_dual_flag[i, j])) {
+      grid::grid.rect(
+        x, y, w, h,
+        gp = grid::gpar(col = dual_col, lwd = 2.2, fill = NA)
+      )
+    }
+  }
+}
+
+ht_local_af_integrated <- ComplexHeatmap::Heatmap(
+  mat_local_af_cl,
+  name = "Mean score",
+  col = col_fun_local_af,
+  width = wh_af$width,
+  height = wh_af$height,
+  na_col = "#eeeeee",
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  show_column_names = FALSE,
+  left_annotation = ha_local_af_cl$row,
+  top_annotation = ha_local_af_cl$col,
+  row_title = "Reference Cell Type",
+  column_title = "Target Cell Type",
+  row_title_gp = grid::gpar(fontsize = 12),
+  column_title_gp = grid::gpar(fontsize = 12),
+  row_title_side = "left",
+  column_title_side = "bottom",
+  border = TRUE,
+  heatmap_legend_param = .spatial_heatmap_legend_param(
+    "Co-localization\nscore",
+    9L
+  ),
+  cell_fun = .cell_fun_local_and_dual(
+    mat_local_af_cl,
+    mat_dual_af_cl,
+    local_outline_threshold,
+    dual_outline_color
+  )
+)
+
+.spatial_draw_ht_png(
+  ht_local_af_integrated,
+  file.path(
+    out_dir,
+    "spatial_colocalization_colocalization_scores_clustered_outlined_integrated.png"
+  ),
+  "Local co-localization of Adverse / Favorable cell types (clustered)",
+  paste0(
+    "score \u2265 ", local_outline_threshold,
+    " black; spatial co-localization + CellChat purple"
+  ),
+  width_in = png_af["width"],
+  height_in = png_af["height"],
+  legend_mode = "right_1col",
+  annotation_legend_list = list(
+    .spatial_outline_legend(
+      dual_col = dual_outline_color,
+      score_label = paste0("score \u2265 ", local_outline_threshold),
+      dual_label = "Spatial + CellChat"
+    )
+  )
+)
+
+message(
+  "Adverse/Favorable nhood + coloc/CellChat overlays: ",
+  sum(mat_dual_af, na.rm = TRUE), " dual-positive pairs; ",
+  sum(mat_cc_sig_af, na.rm = TRUE), " CellChat-supported pairs."
+)
 
 message(
   "Done. Integrated heatmaps written to ", out_dir,

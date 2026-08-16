@@ -17,8 +17,12 @@
 #' @param cancer_type Cancer type label. Required if using built-in reference 
 #'   datasets. Should match column names in reference data. For ICI PRECOG, 
 #'   use format "ABBREV" or "ABBREV_Metastatic" (e.g., "MELANOMA", "MELANOMA_Metastatic")
-#' @param z_score_cutoff Absolute z-score threshold for filtering genes 
-#'   (default: 2)
+#' @param z_score_cutoff Absolute z-score threshold for filtering genes
+#'   (default: 2). Built-in PRECOG/TCGA matrices shipped in the package are
+#'   already sparse at this cutoff (entries with \eqn{|z| \leq 2} stored as
+#'   \code{NA}; see \code{\link{precog}}, \code{\link{tcga}}), so lowering the
+#'   cutoff below 2 does not recover discarded associations unless a denser
+#'   custom reference is supplied.
 #' @param pseudobulk Logical. If TRUE, aggregate expression before scoring 
 #'   (default: FALSE)
 #' @param group_by Column name for pseudobulk grouping. Required if 

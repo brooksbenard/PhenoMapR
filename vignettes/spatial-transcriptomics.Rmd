@@ -50,9 +50,12 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
 .spatial_run_full_markers <- !.is_vignette_ci()
 .spatial_nhood_prerender_file <- "spatial_colocalization_nhood_enrichment.png"
 .spatial_nhood_cluster_prerender_file <- "spatial_colocalization_nhood_enrichment_clustered.png"
+.spatial_nhood_af_prerender_file <- "spatial_colocalization_nhood_enrichment_adverse_favorable.png"
+.spatial_nhood_af_cluster_prerender_file <- "spatial_colocalization_nhood_enrichment_adverse_favorable_clustered.png"
 .spatial_scores_prerender_file <- "spatial_colocalization_colocalization_scores.png"
 .spatial_scores_cluster_prerender_file <- "spatial_colocalization_colocalization_scores_clustered.png"
 .spatial_scores_cluster_outline_prerender_file <- "spatial_colocalization_colocalization_scores_clustered_outlined.png"
+.spatial_scores_cluster_outline_integrated_prerender_file <- "spatial_colocalization_colocalization_scores_clustered_outlined_integrated.png"
 .spatial_pheno_cooccur_cor_prerender_file <- "spatial_colocalization_pheno_vs_cooccur_spearman.png"
 .spatial_pheno_cooccur_cor_cluster_prerender_file <- "spatial_colocalization_pheno_vs_cooccur_spearman_clustered.png"
 .spatial_pheno_cooccur_cor_cluster_outline_prerender_file <- "spatial_colocalization_pheno_vs_cooccur_spearman_clustered_outlined.png"
@@ -149,7 +152,10 @@ run_spatial_cellchat_live <- !.spatial_prerender_exists(.spatial_cellchat_bubble
   !.spatial_prerender_exists(.spatial_coloc_expression_axis_prerender_file) ||
   !.spatial_prerender_exists(.spatial_coloc_top_lr_axes_prerender_file) ||
   !.spatial_prerender_exists(.spatial_pheno_cooccur_cor_cluster_outline_integrated_prerender_file) ||
-  !.spatial_prerender_exists(.spatial_pheno_neighbor_cor_cluster_outline_integrated_prerender_file)
+  !.spatial_prerender_exists(.spatial_pheno_neighbor_cor_cluster_outline_integrated_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_nhood_af_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_nhood_af_cluster_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_scores_cluster_outline_integrated_prerender_file)
 run_spatial_coloc_live <- run_spatial_nhood_live || run_spatial_nhood_cluster_live ||
   run_spatial_local_live || run_spatial_local_cluster_live || run_spatial_local_cluster_outline_live ||
   run_spatial_pheno_cooccur_cor_live || run_spatial_pheno_cooccur_cor_cluster_live ||
@@ -1429,6 +1435,16 @@ Clustering rows and columns (without dendrograms) reorders the neighborhood enri
 knitr::include_graphics(.prerender_fig_path(.spatial_nhood_cluster_prerender_file))
 ```
 
+Focusing on the **Adverse** and **Favorable** tails (excluding **Other**) makes the prognostic neighborhood structure easier to read. The heatmaps below use the same neighborhood enrichment z-scores, restricted to those labels:
+
+```{r cytospace-spatialcooccur-nhood-af-prerender, fig.width=7, fig.height=6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_nhood_af_prerender_file))
+```
+
+```{r cytospace-spatialcooccur-nhood-af-cluster-prerender, fig.width=7, fig.height=6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_nhood_af_cluster_prerender_file))
+```
+
 ### Local co-localization scores (`cooccur_local`) — Question 1
 
 The heatmap below shows **pairwise local co-localization scores** across all **`CellType_PrognosticGroup`** labels (not neighborhood enrichment z-scores). Each cell is the **mean non-zero `cooccur_local()` score** for reference group (row) versus target group (column).
@@ -1445,6 +1461,12 @@ Cells with mean non-zero local scores **≥ 0.75** are outlined in black on the 
 
 ```{r cytospace-spatialcooccur-scores-cluster-outline-prerender, fig.width=7, fig.height=6, out.width="100%", echo=FALSE, eval=!run_spatial_local_cluster_outline_live}
 knitr::include_graphics(.prerender_fig_path(.spatial_scores_cluster_outline_prerender_file))
+```
+
+After spatial CellChat integration, the Adverse / Favorable-only co-localization heatmap below keeps the **black** high-score outlines (score ≥ 0.75) and adds **purple** outlines for pairs with both spatial co-localization and CellChat L-R support (`dual_spatial_lr`):
+
+```{r cytospace-spatialcooccur-scores-cluster-outline-integrated-prerender, fig.width=7, fig.height=6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_scores_cluster_outline_integrated_prerender_file))
 ```
 
 ### PhenoMapR score vs local co-localization — Question 2
@@ -1600,7 +1622,7 @@ knitr::include_graphics(.prerender_fig_path(.spatial_cellchat_dual_prerender_fil
 knitr::include_graphics(.prerender_fig_path(.spatial_cellchat_chord_prerender_file))
 ```
 
-Top pathways for the strongest spatial + signaling pairs (e.g. **Fibroblast_Adverse → Ductal_Adverse**):
+Top pathways for the strongest spatial + signaling pairs. We highlight two complementary axes below: **Ductal_Adverse → Ductal_Adverse** (within-type co-localization with EGFR-centered secreted signaling) and **Fibroblast_Adverse → Ductal_Adverse** (cross-type local mixing dominated by integrin–ECM contact):
 
 ```{r cytospace-cellchat-lr-prerender, fig.width=11, fig.height=7, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
 knitr::include_graphics(.prerender_fig_path(.spatial_cellchat_lr_prerender_file))
@@ -1718,9 +1740,13 @@ if (!is.na(pairs_rds)) {
 }
 ```
 
-**Interpretation.** Many high-scoring pairs are **within-group** (e.g. adverse ductal cells enriched near other adverse ductal cells), consistent with spatial clustering of extreme phenotypes. Cross-type pairs such as **Fibroblast_Adverse → Ductal_Adverse** combine moderate neighborhood enrichment, local mixing, and spatial CellChat L-R probability—candidate **stromal–epithelial** interactions among adverse prognostic cells that are both co-localized and within signaling range on tissue.
+**Interpretation — two highlight axes.**
 
-**Physical vs secreted.** The association table above summarizes how **physical** (contact/ECM) vs **secreted** CellChat probabilities relate to neighborhood enrichment, local co-localization, and PhenoMapR spatial correlations among prognostic pairs with signaling support. In general, **physical** interaction probability tracks immediate co-localization more strongly than **secreted** signaling, which can remain nonzero over broader neighborhoods where neighbor PhenoMapR scores covary.
+1. **Adverse ductal → adverse ductal (clinical / signaling highlight).** This is the top dual-positive pair by integrated score: significant neighborhood enrichment, very high local co-localization, and strong spatial CellChat support. Absolute CellChat mass is laminin–integrin dominated, but the most actionable secreted program is **EGFR autocrine signaling** (TGFA / EREG / AREG → EGFR ± ERBB2). This frames PhenoMapR adverse ductal tails as a spatially clustered niche with a clinically familiar RTK axis.
+
+2. **Adverse fibroblast → adverse ductal (PhenoMapR + spatial validation).** This is the strongest **cross-type** dual-positive pair: local co-localization with abundant CellChat that is **~96% physical**. Communication is driven by the **integrin αv / β1–ECM axis** (COL1A1/2, FN1, laminins, POSTN → ITGAV / ITGB1 and related integrin pairs)—recovering the expected CAF–epithelial contact architecture among PhenoMapR adverse tails that mix on tissue. EGF ligands (AREG / TGFA / HBEGF → EGFR) are also present here at lower probability, linking this validation axis to the ductal EGFR highlight without replacing integrin–ECM as the primary cross-type signature.
+
+**Physical vs secreted.** The association table above summarizes how **physical** (contact/ECM) vs **secreted** CellChat probabilities relate to neighborhood enrichment, local co-localization, and PhenoMapR spatial correlations among prognostic pairs with signaling support. In general, **physical** interaction probability tracks immediate co-localization more strongly than **secreted** signaling, which can remain nonzero over broader neighborhoods where neighbor PhenoMapR scores covary. That split matches the two-axis framing: integrin–ECM validates spatial contact biology, while EGFR nominates a secreted clinical node inside (and adjacent to) adverse ductal clusters.
 
 ## Prognostic markers
 
@@ -2079,8 +2105,8 @@ In line with the other Pancreatic cancer vignettes, PhenoMapR identifies ductal 
 
 - **Part 1 (spots)**: Spot-level object `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds`; **H&E** via `SpatialPlot`; PhenoMapR scoring; **hex** summary of z-scaled scores plus **point** map of 5th-percentile groups (**same `coord_fixed` / limits as H&E**; no jitter).
 - **Part 2 (CytoSPACE)**: `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`; same PRECOG **Pancreatic** reference at **cell** resolution; score distribution, score by cell type, prognostic groups, and spatial maps (jittered cells per spot).
-- **Co-localization**: pre-rendered **`spatialCooccur::nhood_enrichment()`** and **`spatialCooccur::cooccur_local()`** heatmaps (ordered and clustered), plus **Spearman correlations** of PhenoMapR scores with local co-localization scores and with co-occurring neighbors' PhenoMapR scores; regenerate with `scripts/render_spatial_colocalization_heatmap.R`.
-- **Spatial CellChat integration**: co-localization metrics merged with distance-constrained **[CellChat v2](https://github.com/jinworks/CellChat)** L-R inference on CytoSPACE-mapped cells (`datatype = "spatial"`); integrated four-panel heatmaps, dual-evidence Spearman outlines (black = |ρ| > 0.5, purple = spatial + CellChat), and evidence-tier summary; regenerate with `scripts/render_spatial_colocalization_cellchat.R` (or `scripts/render_spatial_integrated_heatmaps.R` from cached `inst/data/spatial_coloc_cellchat_pairs.rds`).
+- **Co-localization**: pre-rendered **`spatialCooccur::nhood_enrichment()`** and **`spatialCooccur::cooccur_local()`** heatmaps (ordered and clustered; Adverse/Favorable-only nhood variants), plus **Spearman correlations** of PhenoMapR scores with local co-localization scores and with co-occurring neighbors' PhenoMapR scores; regenerate with `scripts/render_spatial_colocalization_heatmap.R`.
+- **Spatial CellChat integration**: co-localization metrics merged with distance-constrained **[CellChat v2](https://github.com/jinworks/CellChat)** L-R inference on CytoSPACE-mapped cells (`datatype = "spatial"`); integrated four-panel heatmaps, dual-evidence outlines on Spearman and local co-localization heatmaps (black = high score / |ρ| > 0.5, purple = spatial + CellChat), and evidence-tier summary; regenerate with `scripts/render_spatial_colocalization_cellchat.R` (or `scripts/render_spatial_integrated_heatmaps.R` from cached `inst/data/spatial_coloc_cellchat_pairs.rds`).
 - **Markers**: three **`plot_phenotype_markers()`** heatmaps on CytoSPACE cells — (1) **cell-type agnostic** (`heatmap_type = "global"`), (2) **cell type × phenotype vs all opposite-tail cells** (`celltype_contrast = "vs_opposite_tail"`), (3) **within cell type** (`celltype_contrast = "within_cell_type"`); each uses **five genes and five `anno_mark` labels per block**.
 
 ## References

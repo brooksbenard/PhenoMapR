@@ -21,9 +21,12 @@ expected_figs <- c(
   # Co-localization heatmaps (base)
   "spatial_colocalization_nhood_enrichment.png",
   "spatial_colocalization_nhood_enrichment_clustered.png",
+  "spatial_colocalization_nhood_enrichment_adverse_favorable.png",
+  "spatial_colocalization_nhood_enrichment_adverse_favorable_clustered.png",
   "spatial_colocalization_colocalization_scores.png",
   "spatial_colocalization_colocalization_scores_clustered.png",
   "spatial_colocalization_colocalization_scores_clustered_outlined.png",
+  "spatial_colocalization_colocalization_scores_clustered_outlined_integrated.png",
   "spatial_colocalization_pheno_vs_cooccur_spearman.png",
   "spatial_colocalization_pheno_vs_cooccur_spearman_clustered.png",
   "spatial_colocalization_pheno_vs_cooccur_spearman_clustered_outlined.png",
