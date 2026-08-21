@@ -312,7 +312,7 @@ Detailed walkthroughs for the main uses of `PhenoMapR` (on the [pkgdown site](ht
 | **[Score bulk expression data](bulk-survival.html)** | Score 289 primary/metastatic bulk samples with PhenoMapR PRECOG references; stratify by primary vs metastatic; **Kaplan–Meier** survival by prognostic score. |
 | **[Generate and use a custom reference signature](custom-reference.html)** | Build a custom gene z-score reference from bulk expression and survival using `derive_reference_from_bulk()`, then score samples with that reference. |
 
-<!-- **Vignette data:** The article datasets are hosted on [Google Drive](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (too large for the repo). When you run or knit an article, missing files are downloaded automatically if the **googledrive** package is installed (e.g. `install.packages("PhenoMapR", dependencies = TRUE)`). You can also [download the files manually](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) into `vignettes/` and run from the package root. See `vignettes/README.md` in the repo for all options. -->
+<!-- **Vignette data:** The article datasets are hosted on [Google Drive](https://drive.google.com/drive/folders/1unzVigogMy6XT6KwiFJ2AnKSLsMAzl2X) (too large for the repo). When you run or knit an article, missing files are downloaded automatically if the **googledrive** package is installed (e.g. `install.packages("PhenoMapR", dependencies = TRUE)`). You can also [download the files manually](https://drive.google.com/drive/folders/1unzVigogMy6XT6KwiFJ2AnKSLsMAzl2X) and run the example code from any working directory. See `vignettes/README.md` in the repo for file IDs. -->
 
 <hr style="height:4px;border:none;color:#D3D3D3;background-color:#D3D3D3;" />
 

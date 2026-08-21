@@ -1,114 +1,28 @@
 # Vignette Data
 
-The vignettes use data files that are too large for GitHub. You can place them locally, let the vignettes download from Google Drive via **googledrive**, or set direct-download URLs.
+The vignettes use data files that are too large for GitHub. Example code downloads them with **googledrive** (`drive_deauth()` — no Google login). If a file is already in the working directory it is reused.
 
-**PhenoMapR data on Google Drive:** [Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) — subfolders **Bulk_Expression**, **Single_Cell**, and **Spatial_Transcriptomics** contain the same files used by the vignettes. The vignettes use these fixed file IDs when downloading with **googledrive**:
+**PhenoMapR data on Google Drive:** [Vignettes folder](https://drive.google.com/drive/folders/1unzVigogMy6XT6KwiFJ2AnKSLsMAzl2X)
 
 | File | Drive file ID | Vignette |
 |------|----------------|----------|
-| `PAAD_CRA001160_expression.h5` | `1PolTXggREz8XmhutCLTQJGCfKxFAzqMl` | Single-cell (CRA001160) — **required**; original TISCH2 log-normalized H5, full cohort |
-| `PAAD_CRA001160_CellMetainfo_table.tsv` | `17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu` | Single-cell (CRA001160) — **required** metadata |
-| `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj` | Spatial transcriptomics |
+| `PAAD_CRA001160_expression.h5` | `1iFWJa13s5UClrP362CQtAAE7KYEo8iBc` | Single-cell — **full** CRA001160 cohort (TISCH2 log-normalized H5) |
+| `PAAD_CRA001160_CellMetainfo_table.tsv` | `1yC7Vw3oQ2APB6ZlK7BUl-2DLKGJhFbGN` | Single-cell — cell metadata |
+| `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds` | `1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE` | Spatial transcriptomics (spots) |
+| `HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds` | `1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll` | Spatial transcriptomics (CytoSPACE) |
+| `GSE205154_GPL20301_expression.rds` | `1RxKOOtsWkTkoooQld8N7xU7lY2Sh4P2b` | Bulk survival |
+| `GSE205154_info.rds` | `1isX8lV9UVl_a1YLiopRlWUchPYPUTPXo` | Bulk survival |
+| `GSE253260_expression.rds` | `1RaaNkdn-k1fvjWXJuipBmrf_NoqNjX-g` | Custom reference |
+| `GSE253260_info.rds` | `15mw6GighBth2iZ_QQS695QRMymfYUy9W` | Custom reference |
 
-**Pre-rendered figures (tracked in git):** CytoSPACE location overviews, neighborhood enrichment heatmaps, pairwise co-localization score heatmaps, PhenoMapR Spearman correlation heatmaps, spatial CellChat figures, and pair evidence maps under `inst/figures/` (and `inst/figures/spatial_pair_maps/`). Pair tables: `inst/data/spatial_coloc_cellchat_pairs.rds`, `spatial_coloc_cellchat_lr_pairs.rds`, `spatial_coloc_cellchat_assoc.rds`. Regenerate with `Rscript scripts/render_spatial_colocalization_heatmap.R` and `Rscript scripts/render_spatial_colocalization_cellchat.R`.
-| `GSE205154.GPL20301.matrix.txt` | `1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN` | Bulk survival |
-| `GSE205154.info.txt` | `1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ` | Bulk survival |
-| `GSE253260_expression.rds` | `1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R` | Custom reference |
-| `GSE253260_info.rds` | `1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f` | Custom reference |
+**Single-cell vs Shiny:** the single-cell article always uses the **full** CRA001160 H5 + metadata from Drive. The Shiny quick demo uses only the small bundled subset `inst/extdata/shiny/PAAD_CRA001160_demo_5000.rds` (regenerate with `Rscript tools/make_shiny_demo_bundle.R`).
 
----
-
-## Option 1: Place files locally (simplest)
-
-Download from the [Drive Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) (open each subfolder and download the files), then put them in `vignettes/`, `Vignettes/`, or the package root. If a file is present, the vignette uses it and does not download.
+**Pre-rendered spatial figures** live under `inst/figures/` (and `inst/figures/spatial_pair_maps/`). Regenerate with `Rscript scripts/render_spatial_colocalization_heatmap.R` and related scripts.
 
 ---
 
-## Option 2: Automatic download from Google Drive (googledrive)
+## Setup
 
-If a data file is **not** found locally, each vignette will try to download it from Google Drive using the **googledrive** package (no login: `drive_deauth()` is used for public links).
-
-1. Install the package with Suggests: `install.packages("PhenoMapR", dependencies = TRUE)` or `install.packages("googledrive")`.
-2. Run or knit the vignette from the package root (so paths like `vignettes/PAAD_CRA001160_expression.h5` resolve). The first run will download the file(s) into `vignettes/` (or the current directory).
-
-Files must be shared **Anyone with the link**. The vignettes use the file IDs in the table above.
-
----
-
-## Option 3: Load from URL (environment variables)
-
-You can supply **direct download** URLs via environment variables. This is useful in CI (e.g. GitHub Actions) where you store the URLs in secrets; the vignettes fall back to these if the file is still missing after trying local paths and googledrive.
-
-### Step 1: Get each file’s direct download link from Drive
-
-1. Open the [Vignettes folder](https://drive.google.com/drive/folders/1rKGZBX7sa_Iq8AJb1wcxiRc3oD6v6B5n) on Google Drive.
-2. Open **Single_Cell**, then for each of `PAAD_CRA001160_expression.h5` and `PAAD_CRA001160_CellMetainfo_table.tsv`:
-   - Right-click the file → **Share** → set to **Anyone with the link** (Viewer).
-   - Copy the link. It looks like: `https://drive.google.com/file/d/XXXXXXXXXX/view?usp=sharing`
-   - The **file ID** is the part between `/d/` and `/view` (e.g. `XXXXXXXXXX`).
-   - The **direct download URL** is: `https://drive.google.com/uc?export=download&id=XXXXXXXXXX`
-3. Do the same for the file in **Spatial_Transcriptomics** (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds`).
-4. (Optional) For **Bulk_Expression**, get direct download URLs for `GSE205154.GPL20301.matrix.txt`, `GSE205154.info.txt`, and `GSE253260.rds` the same way.
-
-### Step 2: Set the URLs and run the vignettes
-
-In R, **before** knitting or sourcing the vignettes, run (you can use the file IDs from the table at the top):
-
-```r
-# Use the file IDs from the table at the top of this README.
-Sys.setenv(
-  PHENOMAPR_CRA001160_H5_URL    = "https://drive.google.com/uc?export=download&id=1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
-  PHENOMAPR_CRA001160_META_URL  = "https://drive.google.com/uc?export=download&id=17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
-  PHENOMAPR_SPATIAL_RDS_URL     = "https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj",
-  PHENOMAPR_GSE205154_MATRIX_URL = "https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN",
-  PHENOMAPR_GSE205154_INFO_URL   = "https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ",
-  PHENOMAPR_GSE253260_EXPR_URL   = "https://drive.google.com/uc?export=download&id=1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R",
-  PHENOMAPR_GSE253260_INFO_URL   = "https://drive.google.com/uc?export=download&id=1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"
-)
-
-# Then knit or run the vignettes, e.g.:
-# rmarkdown::render("vignettes/single-cell.Rmd")
-# rmarkdown::render("vignettes/spatial-transcriptomics.Rmd")
-# rmarkdown::render("vignettes/bulk-survival.Rmd")
-# rmarkdown::render("vignettes/custom-reference.Rmd")
-```
-
-Or set them in the shell before starting R:
-
-```bash
-export PHENOMAPR_CRA001160_H5_URL="https://drive.google.com/uc?export=download&id=1PolTXggREz8XmhutCLTQJGCfKxFAzqMl"
-export PHENOMAPR_CRA001160_META_URL="https://drive.google.com/uc?export=download&id=17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu"
-export PHENOMAPR_SPATIAL_RDS_URL="https://drive.google.com/uc?export=download&id=1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj"
-export PHENOMAPR_GSE205154_MATRIX_URL="https://drive.google.com/uc?export=download&id=1Vk4KCQWF9ikpAuMsjFzVDCoy1TzDl2rN"
-export PHENOMAPR_GSE205154_INFO_URL="https://drive.google.com/uc?export=download&id=1omAA2kfVn-nyyZfcc4vBhRFogC6cuoNQ"
-export PHENOMAPR_GSE253260_EXPR_URL="https://drive.google.com/uc?export=download&id=1YuZQjGY6CTt-uicxRqYzp9t_tnIuQN4R"
-export PHENOMAPR_GSE253260_INFO_URL="https://drive.google.com/uc?export=download&id=1Tpb8JC-2wO0Qppi5kM1vRuYTwBD1vY8f"
-R
-```
-
-### Large files on Google Drive
-
-For large files, Google may show a warning page instead of downloading, or return a small JSON error when the file’s **download quota is exceeded**. The single-cell article requires the **original TISCH2 H5** (`PAAD_CRA001160_expression.h5`) plus metadata TSV for the **full** CRA001160 cohort (Tumor + Normal; not a subset and not `PAAD_CRA001160_full.rds`). Preferred CI path:
-
-1. Host non-Drive mirrors of `PAAD_CRA001160_expression.h5` and `PAAD_CRA001160_CellMetainfo_table.tsv`.
-2. Set repository secrets `PHENOMAPR_CRA001160_H5_URL` and `PHENOMAPR_CRA001160_META_URL` to those URLs.
-
-For local knitting, place both files under `vignettes/` (gitignored). If automatic Drive download fails:
-
-- **Easiest:** Use Option 1 — download the files in your browser from Drive and place them in `vignettes/`.
-- Or use the [gdown](https://github.com/wkentaro/gdown) Python tool with the file ID: `gdown FILE_ID`.
-
-### GitHub Actions (CI)
-
-Add the direct download URLs as repository secrets (e.g. `PHENOMAPR_GSE111672_RDS_URL`, etc.), then in your workflow set:
-
-```yaml
-env:
-  PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
-  PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
-  PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}
-  PHENOMAPR_GSE205154_MATRIX_URL: ${{ secrets.PHENOMAPR_GSE205154_MATRIX_URL }}
-  PHENOMAPR_GSE205154_INFO_URL: ${{ secrets.PHENOMAPR_GSE205154_INFO_URL }}
-  PHENOMAPR_GSE253260_EXPR_URL: ${{ secrets.PHENOMAPR_GSE253260_EXPR_URL }}
-  PHENOMAPR_GSE253260_INFO_URL: ${{ secrets.PHENOMAPR_GSE253260_INFO_URL }}
-```
+1. Install Suggests: `install.packages("PhenoMapR", dependencies = TRUE)` (includes **googledrive**).
+2. Copy the load chunk from any article and run it: missing files download into your working directory.
+3. If a Drive download fails, download the files in your browser from the folder above and place them in your working directory.

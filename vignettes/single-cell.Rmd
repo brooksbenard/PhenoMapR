@@ -10,38 +10,6 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
-
-# When knit from inside the PhenoMapR source tree, load the in-tree
-# dev package instead of a stale system install (knitr spawns a fresh R
-# process, so an interactive devtools::load_all() does not carry over).
-.try_load_phenomapr_dev <- function(max_walk = 6L) {
-  start_dir <- tryCatch(
-    normalizePath(knitr::opts_knit$get("output.dir") %||% getwd(),
-                  mustWork = FALSE),
-    error = function(e) getwd()
-  )
-  if (is.null(start_dir) || !nzchar(start_dir)) start_dir <- getwd()
-  cur <- start_dir
-  for (i in seq_len(max_walk)) {
-    desc <- file.path(cur, "DESCRIPTION")
-    if (file.exists(desc)) {
-      pkg <- tryCatch(unname(read.dcf(desc, fields = "Package")[[1, 1]]),
-                      error = function(e) NA_character_)
-      if (identical(pkg, "PhenoMapR") &&
-          requireNamespace("pkgload", quietly = TRUE)) {
-        pkgload::load_all(cur, quiet = TRUE, helpers = FALSE,
-                          export_all = FALSE)
-        message("Loaded PhenoMapR (dev) from ", cur)
-        return(TRUE)
-      }
-    }
-    parent <- dirname(cur)
-    if (identical(parent, cur)) break
-    cur <- parent
-  }
-  FALSE
-}
-`%||%` <- function(x, y) if (is.null(x)) y else x
 ```
 
 ## Overview
@@ -50,13 +18,11 @@ This vignette demonstrates how to use **`PhenoMapR`** on a single-cell RNA-seq d
 
 ## Load data
 
-We will use pre-processed expression and annotation files from TISCH2 for the CRA001160 dataset. Download the expression matrix and cell metadata from Google Drive and visualize cell type distributions across all samples in the dataset.
+We use the **full** CRA001160 cohort (TISCH2 log-normalized expression H5 + cell metadata). Files are downloaded from [Google Drive](https://drive.google.com/drive/folders/1unzVigogMy6XT6KwiFJ2AnKSLsMAzl2X) on first run (or reused if already present in the working directory). The small Shiny demo subset is separate and is **not** used here.
 
 ```{r load-data, fig.align='center', fig.width=10, fig.height=7}
 suppressPackageStartupMessages({
-  if (!isTRUE(.try_load_phenomapr_dev())) {
-    library(PhenoMapR)
-  }
+  library(PhenoMapR)
   library(googledrive)
   library(ggplot2)
   library(ggpubr)
@@ -72,148 +38,39 @@ suppressPackageStartupMessages({
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-# Full CRA001160 cohort from the original TISCH2 H5 + metadata TSV.
-# Do not use PAAD_CRA001160_full.rds / Seurat counts here: those matrices
-# differ from the log-normalized H5 used in the long-standing vignette.
-# All Tumor + Normal cells are retained (no subsetting / source filter).
-.h5_name <- "PAAD_CRA001160_expression.h5"
-.meta_name <- "PAAD_CRA001160_CellMetainfo_table.tsv"
-
-.find_vignette_data <- function(filename) {
-  candidates <- c(
-    filename,
-    file.path("vignettes", filename),
-    file.path("..", filename),
-    file.path("..", "vignettes", filename)
-  )
-  hit <- candidates[file.exists(candidates)][1]
-  if (is.na(hit)) NULL else hit
-}
-.is_drive_quota_json <- function(path) {
-  info <- file.info(path)
-  if (is.null(path) || !isTRUE(file.exists(path)) ||
-      is.na(info$size) || info$size < 10 || info$size > 5000) {
-    return(FALSE)
-  }
-  txt <- tryCatch(
-    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
-    error = function(e) ""
-  )
-  grepl("downloadQuotaExceeded|The download quota for this file", txt)
-}
-.purge_quota_stub <- function(path) {
-  if (.is_drive_quota_json(path)) {
-    message("Removing Google Drive quota error stub: ", path)
-    unlink(path)
-  }
-}
-.is_valid_h5 <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  .purge_quota_stub(path)
-  if (!isTRUE(file.exists(path))) return(FALSE)
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e6) return(FALSE)
-  con <- file(path, "rb")
-  on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 8L)
-  identical(magic, as.raw(c(0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a)))
-}
-.is_valid_meta_tsv <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  .purge_quota_stub(path)
-  if (!isTRUE(file.exists(path))) return(FALSE)
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e5) return(FALSE)
-  hdr <- tryCatch(readLines(path, n = 1L, warn = FALSE), error = function(e) "")
-  grepl("UMAP_1", hdr, fixed = TRUE) && grepl("Cell", hdr, fixed = TRUE)
-}
-.resolve_vignette_file <- function(filename, drive_id, env_var, validator) {
-  existing <- .find_vignette_data(filename)
-  if (!is.null(existing) && isTRUE(validator(existing))) return(existing)
-  dest <- filename
-  url <- Sys.getenv(env_var, unset = "")
-  if (nzchar(url)) {
-    message("Downloading ", filename, " from ", env_var)
-    ok <- tryCatch({
-      utils::download.file(url, dest, mode = "wb", quiet = TRUE)
-      TRUE
-    }, error = function(e) {
-      message("URL download failed: ", conditionMessage(e))
-      FALSE
-    })
-    if (isTRUE(ok) && isTRUE(validator(dest))) return(dest)
-    if (file.exists(dest)) unlink(dest)
-  }
-  message("Downloading ", filename, " from Google Drive")
-  ok <- tryCatch({
+h5_path <- "PAAD_CRA001160_expression.h5"
+meta_path <- "PAAD_CRA001160_CellMetainfo_table.tsv"
+drive_files <- list(
+  list(path = h5_path, id = "1iFWJa13s5UClrP362CQtAAE7KYEo8iBc"),
+  list(path = meta_path, id = "1yC7Vw3oQ2APB6ZlK7BUl-2DLKGJhFbGN")
+)
+for (f in drive_files) {
+  if (!file.exists(f$path)) {
+    message("Downloading ", basename(f$path), " from Google Drive...")
     googledrive::drive_download(
-      googledrive::as_id(drive_id), dest, overwrite = TRUE
+      googledrive::as_id(f$id), path = f$path, overwrite = TRUE
     )
-    TRUE
-  }, error = function(e) {
-    message("Google Drive download failed: ", conditionMessage(e))
-    FALSE
-  })
-  if (isTRUE(ok) && isTRUE(validator(dest))) return(dest)
-  .purge_quota_stub(dest)
-  if (file.exists(dest) && !isTRUE(validator(dest))) unlink(dest)
-  NULL
+  }
 }
 
-.h5_path <- .resolve_vignette_file(
-  .h5_name,
-  "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
-  "PHENOMAPR_CRA001160_H5_URL",
-  .is_valid_h5
-)
-.meta_path <- .resolve_vignette_file(
-  .meta_name,
-  "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
-  "PHENOMAPR_CRA001160_META_URL",
-  .is_valid_meta_tsv
-)
-
-if (is.null(.h5_path) || is.null(.meta_path)) {
-  stop(
-    "Could not obtain the FULL CRA001160 H5 expression matrix and metadata TSV. ",
-    "Place PAAD_CRA001160_expression.h5 and ",
-    "PAAD_CRA001160_CellMetainfo_table.tsv under vignettes/, or set ",
-    "PHENOMAPR_CRA001160_H5_URL / PHENOMAPR_CRA001160_META_URL to a ",
-    "non-Drive mirror. Google Drive frequently returns downloadQuotaExceeded ",
-    "for the public CRA001160 files.",
-    call. = FALSE
-  )
-}
-
-# Expression matrix (TISCH2 log-normalized H5) and cell/sample metadata
-expr_mat <- Seurat::Read10X_h5(.h5_path)
-meta <- read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE) %>%
+expr_mat <- Seurat::Read10X_h5(h5_path)
+meta <- read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE) %>%
   mutate(`Celltype (original)` = gsub(" cell", "", `Celltype (original)`)) %>%
   dplyr::rename(
     celltype_malignancy = `Celltype (malignancy)`,
     celltype_original = `Celltype (original)`
   )
 
-# Keep every cell shared by H5 and metadata (full cohort: Tumor + Normal).
 cells_keep <- intersect(colnames(expr_mat), as.character(meta$Cell))
 if (!length(cells_keep)) {
   stop("No overlapping cell IDs between expression and metadata.", call. = FALSE)
-}
-if (length(cells_keep) < ncol(expr_mat) || length(cells_keep) < nrow(meta)) {
-  message(
-    "Aligning H5 and metadata on shared cell IDs: keeping ",
-    length(cells_keep), " / ", ncol(expr_mat), " H5 columns and ",
-    length(cells_keep), " / ", nrow(meta), " metadata rows."
-  )
 }
 expr_mat <- expr_mat[, cells_keep, drop = FALSE]
 meta <- meta[match(cells_keep, as.character(meta$Cell)), , drop = FALSE]
 rownames(meta) <- NULL
 message(
-  "CRA001160 load (H5, all cells): ", nrow(expr_mat), " genes x ",
-  ncol(expr_mat), " cells (", length(unique(meta$Patient)), " patients; ",
-  paste(names(table(meta$Source)), table(meta$Source), sep = "=", collapse = ", "),
-  ")."
+  "CRA001160 (full): ", nrow(expr_mat), " genes x ", ncol(expr_mat),
+  " cells (", length(unique(meta$Patient)), " patients)."
 )
 
 # visuals for cohort
@@ -442,10 +299,10 @@ As expected, **`PhenoMapR`** scores are strongly correlated between TCGA and PRE
 
 # PRECOG
 meta_ordered <- meta %>%
-  arrange(abs(PhenoMapR_Pancreatic))
+  arrange(abs(.data[[score_precog_col]]))
 
 # scale the score for easier visualization
-meta_ordered$score_scaled <- scale(meta_ordered$PhenoMapR_Pancreatic)
+meta_ordered$score_scaled <- scale(meta_ordered[[score_precog_col]])
 
 precog_scaled_umap <- ggscatter(meta_ordered,
           x = "UMAP_1", 

@@ -10,11 +10,13 @@
 
 ## Bug fixes
 
+* Single-cell vignette: load the **full** CRA001160 cohort from Google Drive
+  only (H5 + metadata); removed URL/secret/subset fallbacks. The Shiny quick
+  demo continues to use only the small bundled
+  `PAAD_CRA001160_demo_5000.rds`.
 * Shiny quick demo: the bundled `PAAD_CRA001160_demo_5000.rds` is shipped
   again (a `.Rbuildignore` pattern was excluding all of `inst/extdata`), so
-  the demo no longer downloads the ~850 MB Seurat object from Google Drive.
-  The full pool is now downloaded only when explicitly opted in via
-  `PHENOMAPR_CRA001160_RDS_URL` or `PHENOMAPR_SHINY_DEMO_FULL=1`.
+  the demo no longer downloads the full CRA001160 cohort at runtime.
 * Shiny scoring: the app now passes `layer=`/`slot=` according to the
   installed `PhenoMap()` signature, fixing
   `PhenoMap failed: unused argument (layer = layer)` when the app is newer

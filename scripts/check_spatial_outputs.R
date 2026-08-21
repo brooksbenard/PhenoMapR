@@ -52,7 +52,16 @@ expected_figs <- c(
   "spatial_coloc_expression_axis_heatmap.png",
   "spatial_coloc_top_lr_spatial_axes.png",
   "spatial_coloc_cellchat_spatial_network.png",
-  "spatial_coloc_cellchat_spatial_feature.png"
+  "spatial_coloc_cellchat_spatial_feature.png",
+  # Supplemental compact panels
+  "spatial_supp_nhood_coloc_ccc_allgroups.png",
+  "spatial_supp_coloc_pathway_heatmap.png",
+  "spatial_axis_ductal_egfr_spatial_compact.png",
+  "spatial_axis_fibro_ductal_ecm_spatial_compact.png",
+  "spatial_supp_axis_spatial_compact.png",
+  "spatial_axis_fibro_collagen_spatial_compact.png",
+  "spatial_axis_ductal_laminin_spatial_compact.png",
+  "spatial_axis_fibro_ductal_collagen_spatial_compact.png"
 )
 
 expected_data <- c(

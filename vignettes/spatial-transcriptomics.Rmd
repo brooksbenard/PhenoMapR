@@ -11,36 +11,6 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
 
-# When knit from inside the PhenoMapR source tree, load the in-tree
-# dev package instead of a stale system install.
-.try_load_phenomapr_dev <- function(max_walk = 6L) {
-  start_dir <- tryCatch(
-    normalizePath(knitr::opts_knit$get("output.dir") %||% getwd(),
-                  mustWork = FALSE),
-    error = function(e) getwd()
-  )
-  if (is.null(start_dir) || !nzchar(start_dir)) start_dir <- getwd()
-  cur <- start_dir
-  for (i in seq_len(max_walk)) {
-    desc <- file.path(cur, "DESCRIPTION")
-    if (file.exists(desc)) {
-      pkg <- tryCatch(unname(read.dcf(desc, fields = "Package")[[1, 1]]),
-                      error = function(e) NA_character_)
-      if (identical(pkg, "PhenoMapR") &&
-          requireNamespace("pkgload", quietly = TRUE)) {
-        pkgload::load_all(cur, quiet = TRUE, helpers = FALSE,
-                          export_all = FALSE)
-        message("Loaded PhenoMapR (dev) from ", cur)
-        return(TRUE)
-      }
-    }
-    parent <- dirname(cur)
-    if (identical(parent, cur)) break
-    cur <- parent
-  }
-  FALSE
-}
-`%||%` <- function(x, y) if (is.null(x)) y else x
 .is_vignette_ci <- function() {
   nzchar(Sys.getenv("CI", unset = "")) ||
     nzchar(Sys.getenv("GITHUB_ACTIONS", unset = ""))
@@ -78,6 +48,14 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE, out.width = "100%")
 .spatial_coloc_pathway_topic_prerender_file <- "spatial_coloc_pathway_topic_composition.png"
 .spatial_coloc_expression_axis_prerender_file <- "spatial_coloc_expression_axis_heatmap.png"
 .spatial_coloc_top_lr_axes_prerender_file <- "spatial_coloc_top_lr_spatial_axes.png"
+.spatial_supp_nhood_coloc_ccc_prerender_file <- "spatial_supp_nhood_coloc_ccc_allgroups.png"
+.spatial_supp_coloc_pathway_prerender_file <- "spatial_supp_coloc_pathway_heatmap.png"
+.spatial_axis_egfr_spatial_compact_prerender_file <- "spatial_axis_ductal_egfr_spatial_compact.png"
+.spatial_axis_ecm_spatial_compact_prerender_file <- "spatial_axis_fibro_ductal_ecm_spatial_compact.png"
+.spatial_supp_axis_spatial_compact_prerender_file <- "spatial_supp_axis_spatial_compact.png"
+.spatial_axis_fibro_collagen_spatial_compact_prerender_file <- "spatial_axis_fibro_collagen_spatial_compact.png"
+.spatial_axis_ductal_laminin_spatial_compact_prerender_file <- "spatial_axis_ductal_laminin_spatial_compact.png"
+.spatial_axis_fibro_ductal_collagen_spatial_compact_prerender_file <- "spatial_axis_fibro_ductal_collagen_spatial_compact.png"
 .spatial_cytospace_loc_scaled_prerender_file <- "spatial_cytospace_locations_scaled.png"
 .spatial_cytospace_loc_uniform_prerender_file <- "spatial_cytospace_locations_uniform.png"
 .spatial_cytospace_phenomapr_scaled_prerender_file <- "spatial_cytospace_phenomapr_scaled.png"
@@ -155,26 +133,34 @@ run_spatial_cellchat_live <- !.spatial_prerender_exists(.spatial_cellchat_bubble
   !.spatial_prerender_exists(.spatial_pheno_neighbor_cor_cluster_outline_integrated_prerender_file) ||
   !.spatial_prerender_exists(.spatial_nhood_af_prerender_file) ||
   !.spatial_prerender_exists(.spatial_nhood_af_cluster_prerender_file) ||
-  !.spatial_prerender_exists(.spatial_scores_cluster_outline_integrated_prerender_file)
+  !.spatial_prerender_exists(.spatial_scores_cluster_outline_integrated_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_supp_nhood_coloc_ccc_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_supp_coloc_pathway_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_axis_egfr_spatial_compact_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_axis_ecm_spatial_compact_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_supp_axis_spatial_compact_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_axis_fibro_collagen_spatial_compact_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_axis_ductal_laminin_spatial_compact_prerender_file) ||
+  !.spatial_prerender_exists(.spatial_axis_fibro_ductal_collagen_spatial_compact_prerender_file)
 run_spatial_coloc_live <- run_spatial_nhood_live || run_spatial_nhood_cluster_live ||
   run_spatial_local_live || run_spatial_local_cluster_live || run_spatial_local_cluster_outline_live ||
   run_spatial_pheno_cooccur_cor_live || run_spatial_pheno_cooccur_cor_cluster_live ||
   run_spatial_pheno_cooccur_cor_cluster_outline_live ||
   run_spatial_pheno_neighbor_cor_live || run_spatial_pheno_neighbor_cor_cluster_live ||
   run_spatial_pheno_neighbor_cor_cluster_outline_live
-.try_load_phenomapr_dev()
 ```
 
 ## Overview
 
-This vignette demonstrates applying `{PhenoMapR}` to spatial transcriptomics data in two parts. **Part 1** uses **spot-level** 10X Visium data from an HTAN PDAC sample to show broad tissue regions of phenotypic interest. **Part 2** uses the same sample after we mapped paired single-cell data to the spots using [**CytoSPACE**](https://www.nature.com/articles/s41587-023-01697-9); we then mirror the single-cell workflow (score by cell type, identify marker genes, and plot heatmaps) at **cell** resolution and assess **co-localization** of prognostic cell types.
+This vignette demonstrates applying `{PhenoMapR}` to spatial transcriptomics data in two parts. **Part 1** uses **spot-level** 10X Visium data from an HTAN PDAC sample to show broad tissue regions of phenotypic interest. **Part 2** uses the same sample after we mapped paired single-cell data to the spots using [**CytoSPACE**](https://www.nature.com/articles/s41587-023-01697-9) [[2]](#ref2); we then mirror the single-cell workflow (score by cell type, identify marker genes, and plot heatmaps) at **cell** resolution and assess **co-localization** of prognostic cell types with **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** [[3]](#ref3) and spatial **[CellChat v2](https://github.com/jinworks/CellChat)** [[4]](#ref4).
 
-The sample (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test`) is from a pancreatic cancer dataset available from [HTAN](https://humantumoratlas.org/).
+The sample (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test`) is from a pancreatic cancer dataset available from [HTAN](https://humantumoratlas.org/). We score spots and CytoSPACE-mapped cells with the built-in **PRECOG** [[1]](#ref1) **Pancreatic** meta-z signature.
 
 ## Download data and vizualize H&E
 ```{r load-setup}
 suppressPackageStartupMessages({
   library(PhenoMapR)
+  library(googledrive)
   library(Seurat)
   library(SeuratObject)
   library(ggplot2)
@@ -189,83 +175,15 @@ theme_set(theme_minimal(base_size = 14))
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-.is_drive_quota_json <- function(path) {
-  info <- file.info(path)
-  if (is.null(path) || !isTRUE(file.exists(path)) ||
-      is.na(info$size) || info$size < 10 || info$size > 5000) {
-    return(FALSE)
-  }
-  txt <- tryCatch(
-    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
-    error = function(e) ""
-  )
-  grepl("downloadQuotaExceeded|The download quota for this file", txt)
-}
-.is_valid_rds_blob <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  if (.is_drive_quota_json(path)) {
-    unlink(path)
-    return(FALSE)
-  }
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e5) return(FALSE)
-  con <- file(path, "rb")
-  on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 6L)
-  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
-  is_xz <- length(magic) >= 6L && identical(magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00)))
-  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
-  is_gzip || is_xz || is_rds
-}
-.resolve_vignette_rds <- function(filename, drive_id, env_var = NULL) {
-  candidates <- unique(c(
-    filename,
-    file.path("vignettes", filename),
-    file.path("..", filename),
-    file.path("..", "vignettes", filename)
-  ))
-  hit <- candidates[file.exists(candidates) &
-                      vapply(candidates, .is_valid_rds_blob, logical(1))][1]
-  if (!is.na(hit)) return(hit)
-  dest <- filename
-  if (!is.null(env_var) && nzchar(env_var)) {
-    url <- Sys.getenv(env_var, unset = "")
-    if (nzchar(url)) {
-      message("Downloading ", filename, " from ", env_var)
-      ok <- tryCatch({
-        utils::download.file(url, dest, mode = "wb", quiet = TRUE)
-        TRUE
-      }, error = function(e) FALSE)
-      if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
-      if (file.exists(dest)) unlink(dest)
-    }
-  }
-  message("Downloading ", filename, " from Google Drive")
-  ok <- tryCatch({
-    googledrive::drive_download(
-      googledrive::as_id(drive_id), dest, overwrite = TRUE
-    )
-    TRUE
-  }, error = function(e) FALSE)
-  if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
-  if (file.exists(dest)) unlink(dest)
-  stop(
-    "Could not obtain ", filename,
-    if (!is.null(env_var) && nzchar(env_var)) {
-      paste0(". Place it under vignettes/ or set ", env_var, ".")
-    } else {
-      ". Place it under vignettes/."
-    },
-    call. = FALSE
+rds_spot <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"
+if (!file.exists(rds_spot)) {
+  message("Downloading ", rds_spot, " from Google Drive...")
+  googledrive::drive_download(
+    googledrive::as_id("1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"),
+    path = rds_spot,
+    overwrite = TRUE
   )
 }
-
-gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
-rds_spot <- .resolve_vignette_rds(
-  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds",
-  gd_id_spot,
-  "PHENOMAPR_SPATIAL_RDS_URL"
-)
 
 seurat_spot <- readRDS(rds_spot)
 
@@ -418,11 +336,15 @@ for (nm in c("seurat_spot", "scores_spot", "h_and_e", "hex_phenomapr",
 gc(verbose = FALSE)
 
 # Load the **CytoSPACE** object (single cells placed on Visium coordinates).
-rds_cyto <- .resolve_vignette_rds(
-  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds",
-  "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll",
-  "PHENOMAPR_SPATIAL_CYTO_RDS_URL"
-)
+rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
+if (!file.exists(rds_cyto)) {
+  message("Downloading ", rds_cyto, " from Google Drive...")
+  googledrive::drive_download(
+    googledrive::as_id("1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"),
+    path = rds_cyto,
+    overwrite = TRUE
+  )
+}
 
 seurat <- readRDS(rds_cyto)
 
@@ -679,7 +601,7 @@ Visually, adverse and favorable cells can appear to segregate on the tissue. The
 2. **PhenoMapR tracks co-localization context** — among cells in a reference prognostic group, does PhenoMapR correlate with local co-localization to a target group, or with the PhenoMapR scores of co-localized target neighbors? (Spearman ρ heatmaps)
 3. **Co-localization enriches for spatial CellChat L-R pairs** — among significantly co-localized sender → receiver pairs, is there enriched ligand–receptor communication in **spatial CellChat** mode using CytoSPACE-mapped Visium coordinates? (integrated `dual_spatial_lr` pairs)
 
-We quantify (1)–(2) with **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** (Inamo *et al.*, [medRxiv 2025](https://doi.org/10.1101/2025.08.05.25332835)) and (3) with **[CellChat v2](https://github.com/jinworks/CellChat)** spatial inference on the same CytoSPACE object.
+We quantify (1)–(2) with **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)** [[3]](#ref3) (Inamo *et al.*, [*JCI Insight* 2026](https://doi.org/10.1172/jci.insight.198074)) and (3) with **[CellChat v2](https://github.com/jinworks/CellChat)** [[4]](#ref4) spatial inference on the same CytoSPACE object.
 
 ## Co-localization of prognostic cells (CytoSPACE)
 
@@ -1508,7 +1430,7 @@ knitr::include_graphics(.prerender_fig_path(.spatial_pheno_neighbor_cor_cluster_
 
 The co-localization and PhenoMapR correlation analyses above identify **which prognostic cell groups neighbor one another** (Question 1) and whether **PhenoMapR scores track local mixing** (Question 2). Question 3 asks whether those **significantly co-localized** sender → receiver pairs are enriched for **spatial CellChat** ligand–receptor (L-R) interactions on the same CytoSPACE-mapped cells.
 
-We integrate the spatial metrics with **[CellChat v2](https://github.com/jinworks/CellChat)** ([Jin *et al.*, *Nat. Protoc.* 2024](https://doi.org/10.1038/s41596-024-01045-4)) in **spatial mode**, using CytoSPACE-mapped **Visium tissue coordinates** (`GetTissueCoordinates`) and distance constraints from the CellChat spatial FAQ (65 µm spot size, `contact.range = 100` µm for Visium, `interaction.range = 250` µm for secreted signaling):
+We integrate the spatial metrics with **[CellChat v2](https://github.com/jinworks/CellChat)** [[4]](#ref4) ([Jin *et al.*, *Nat. Protoc.* 2025](https://doi.org/10.1038/s41596-024-01045-4)) in **spatial mode**, using CytoSPACE-mapped **Visium tissue coordinates** (`GetTissueCoordinates`) and distance constraints from the CellChat spatial FAQ (65 µm spot size, `contact.range = 100` µm for Visium, `interaction.range = 250` µm for secreted signaling):
 
 1. **Pairwise spatial summary** — for every `CellType_PrognosticGroup` sender → receiver pair, combine **neighborhood enrichment** z-score, **local co-localization** score (`cooccur_local`), and Spearman **ρ** (PhenoMapR vs co-localization / neighbor PhenoMapR).
 2. **Spatial CellChat inference** — run on cells in the **Adverse** and **Favorable** tails (≥10 cells per group), using normalized **Spatial** assay expression, CytoSPACE **imagerow/imagecol** coordinates, and the same combined labels (`Ductal_Adverse`, `Plasma_Favorable`, …). Communication probabilities use `datatype = "spatial"` with `distance.use = TRUE` so L-R pairs are weighted by physical cell–cell distance on tissue.
@@ -1747,6 +1669,42 @@ if (!is.na(pairs_rds)) {
 2. **Adverse fibroblast → adverse ductal (PhenoMapR + spatial validation).** This is the strongest **cross-type** dual-positive pair: local co-localization with abundant CellChat that is **~96% physical**. Communication is driven by the **integrin αv / β1–ECM axis** (COL1A1/2, FN1, laminins, POSTN → ITGAV / ITGB1 and related integrin pairs)—recovering the expected CAF–epithelial contact architecture among PhenoMapR adverse tails that mix on tissue. EGF ligands (AREG / TGFA / HBEGF → EGFR) are also present here at lower probability, linking this validation axis to the ductal EGFR highlight without replacing integrin–ECM as the primary cross-type signature.
 
 **Physical vs secreted.** The association table above summarizes how **physical** (contact/ECM) vs **secreted** CellChat probabilities relate to neighborhood enrichment, local co-localization, and PhenoMapR spatial correlations among prognostic pairs with signaling support. In general, **physical** interaction probability tracks immediate co-localization more strongly than **secreted** signaling, which can remain nonzero over broader neighborhoods where neighbor PhenoMapR scores covary. That split matches the two-axis framing: integrin–ECM validates spatial contact biology, while EGFR nominates a secreted clinical node inside (and adjacent to) adverse ductal clusters.
+
+### Supplemental compact panels
+
+Compact summaries for all Adverse / Favorable cell-type groups: **(1)** a three-metric heatmap of neighborhood enrichment, local co-localization, and spatial CellChat (shared clustering); **(2)** top CellChat pathways supporting dual-positive co-localized pairs; **(3)** compact 2×2 tissue maps of the top physical CCC + co-localization axes (Fib Adv autocrine collagen, Ductal Adv autocrine laminin, Fib Adv → Ductal Adv collagen), using the same CytoSPACE `row`/`col` aspect as the cell-type overview (`coord_fixed(ratio = 0.6)`); **(4)** compact tissue maps of the EGFR and integrin–ECM highlight axes. Regenerate with `Rscript scripts/render_spatial_supp_compact_figures.R`.
+
+```{r cytospace-supp-nhood-coloc-ccc-prerender, fig.width=11, fig.height=4.6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_supp_nhood_coloc_ccc_prerender_file))
+```
+
+```{r cytospace-supp-coloc-pathway-prerender, fig.width=11.2, fig.height=6.6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_supp_coloc_pathway_prerender_file))
+```
+
+```{r cytospace-supp-axis-fibro-collagen-prerender, fig.width=4.25, fig.height=4.2, out.width="52%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_axis_fibro_collagen_spatial_compact_prerender_file))
+```
+
+```{r cytospace-supp-axis-ductal-laminin-prerender, fig.width=4.25, fig.height=4.2, out.width="52%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_axis_ductal_laminin_spatial_compact_prerender_file))
+```
+
+```{r cytospace-supp-axis-fibro-ductal-collagen-prerender, fig.width=4.25, fig.height=4.2, out.width="52%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_axis_fibro_ductal_collagen_spatial_compact_prerender_file))
+```
+
+```{r cytospace-supp-axis-spatial-compact-prerender, fig.width=10.6, fig.height=6.4, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_supp_axis_spatial_compact_prerender_file))
+```
+
+```{r cytospace-axis-egfr-spatial-compact-prerender, fig.width=6.6, fig.height=6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_axis_egfr_spatial_compact_prerender_file))
+```
+
+```{r cytospace-axis-ecm-spatial-compact-prerender, fig.width=6.6, fig.height=6, out.width="100%", echo=FALSE, eval=!run_spatial_cellchat_live}
+knitr::include_graphics(.prerender_fig_path(.spatial_axis_ecm_spatial_compact_prerender_file))
+```
 
 ## Prognostic markers
 
@@ -2112,7 +2070,16 @@ In line with the other Pancreatic cancer vignettes, PhenoMapR identifies ductal 
 ## References
 
 <a id="ref1"></a>
-**[1]** Benard, B. A. et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. Nucleic Acids Res. 54, D1579–D1589 (2026).
+**[1]** Benard, B. A. et al. PRECOG update: an augmented resource of clinical outcome associations with gene expression for adult, pediatric, and immunotherapy cohorts. *Nucleic Acids Res.* 54, D1579–D1589 (2026). [https://doi.org/10.1093/nar/gkaf1215](https://doi.org/10.1093/nar/gkaf1215)
+
+<a id="ref2"></a>
+**[2]** Vahid, M. R. et al. High-resolution alignment of single-cell and spatial transcriptomes with CytoSPACE. *Nat Biotechnol* 41, 1543–1548 (2023). [https://doi.org/10.1038/s41587-023-01697-9](https://doi.org/10.1038/s41587-023-01697-9)
+
+<a id="ref3"></a>
+**[3]** Inamo, J. et al. Spatial transcriptomics reveals immune–stromal crosstalk within the synovium of patients with juvenile idiopathic arthritis. *JCI Insight* 11, e198074 (2026). [https://doi.org/10.1172/jci.insight.198074](https://doi.org/10.1172/jci.insight.198074). Software (`spatialCooccur`): [https://github.com/juninamo/spatialCooccur](https://github.com/juninamo/spatialCooccur)
+
+<a id="ref4"></a>
+**[4]** Jin, S., Plikus, M. V. & Nie, Q. CellChat for systematic analysis of cell–cell communication from single-cell transcriptomics. *Nat Protoc* 20, 180–219 (2025). [https://doi.org/10.1038/s41596-024-01045-4](https://doi.org/10.1038/s41596-024-01045-4). Software (CellChat v2): [https://github.com/jinworks/CellChat](https://github.com/jinworks/CellChat)
 
 ## Session Info
 

@@ -2,7 +2,9 @@
 # Build inst/extdata/shiny/PAAD_CRA001160_demo_5000.rds for the Shiny demo.
 # Run from package root: Rscript tools/make_shiny_demo_bundle.R
 #
-# Requires CRA001160 vignette files or a full Seurat RDS (see load_shiny_demo_pool).
+# Loads the FULL CRA001160 cohort (TISCH2 H5 + metadata) from Google Drive
+# (or reuses local copies under vignettes/), then writes a 5,000-cell subset
+# for the Shiny app. The single-cell vignette uses the full cohort separately.
 
 args <- commandArgs(trailingOnly = TRUE)
 dest <- if (length(args) >= 1L) {
@@ -17,19 +19,42 @@ if (!file.exists(helpers)) {
 }
 sys.source(helpers, envir = .GlobalEnv)
 
+if (!requireNamespace("Seurat", quietly = TRUE)) {
+  stop("Seurat is required to build the Shiny demo bundle.")
+}
+if (!requireNamespace("googledrive", quietly = TRUE)) {
+  stop("googledrive is required to download CRA001160 from Google Drive.")
+}
+
 dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
+vignette_dir <- if (dir.exists("vignettes")) "vignettes" else "."
+h5_path <- file.path(vignette_dir, "PAAD_CRA001160_expression.h5")
+meta_path <- file.path(vignette_dir, "PAAD_CRA001160_CellMetainfo_table.tsv")
+
+options(googledrive_quiet = TRUE)
+googledrive::drive_deauth()
+drive_files <- list(
+  list(path = h5_path, id = "1iFWJa13s5UClrP362CQtAAE7KYEo8iBc"),
+  list(path = meta_path, id = "1yC7Vw3oQ2APB6ZlK7BUl-2DLKGJhFbGN")
+)
+for (f in drive_files) {
+  if (!file.exists(f$path)) {
+    message("Downloading ", basename(f$path), " from Google Drive...")
+    googledrive::drive_download(
+      googledrive::as_id(f$id), path = f$path, overwrite = TRUE
+    )
+  }
+}
+
+pool <- .load_shiny_demo_pool_from_h5_tsv(h5_path, meta_path)
+if (is.null(pool)) {
+  stop("Failed to load CRA001160 H5 + metadata for demo bundle generation.")
+}
+pool$source_info <- shiny_demo_source_info()
 
 n_cells <- 5000L
 n_genes <- 500L
 bundle_seed <- 20250625L
-
-pool <- load_shiny_demo_pool()
-if (is.null(pool)) {
-  stop(
-    "CRA001160 source data not found. Place vignette files under vignettes/ ",
-    "or set PHENOMAPR_CRA001160_H5 / PHENOMAPR_CRA001160_META."
-  )
-}
 
 set.seed(bundle_seed)
 cells <- colnames(pool$expression)

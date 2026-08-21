@@ -38,8 +38,12 @@ if (!file.exists(h5) || !file.exists(tsv)) {
   }
   options(googledrive_quiet = TRUE)
   googledrive::drive_deauth()
-  googledrive::drive_download(googledrive::as_id("1PolTXggREz8XmhutCLTQJGCfKxFAzqMl"), h5, overwrite = TRUE)
-  googledrive::drive_download(googledrive::as_id("17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu"), tsv, overwrite = TRUE)
+  googledrive::drive_download(
+    googledrive::as_id("1iFWJa13s5UClrP362CQtAAE7KYEo8iBc"), h5, overwrite = TRUE
+  )
+  googledrive::drive_download(
+    googledrive::as_id("1yC7Vw3oQ2APB6ZlK7BUl-2DLKGJhFbGN"), tsv, overwrite = TRUE
+  )
 }
 
 message("Reading expression matrix ...")

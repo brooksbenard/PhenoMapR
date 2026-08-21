@@ -67,60 +67,41 @@ jobs:
           ls -la vignettes/*.Rmd 2>/dev/null || { echo "ERROR: no .Rmd in vignettes/"; exit 1; }
 
       - name: Fetch CRA001160 H5 + metadata for single-cell vignette
-        env:
-          PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
-          PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
         run: |
           set -euo pipefail
           mkdir -p vignettes
-          # Single-cell vignette requires the original TISCH2 H5 (log-normalized)
-          # plus CellMetainfo TSV — not PAAD_CRA001160_full.rds / Seurat counts.
-          if [ -n "${PHENOMAPR_CRA001160_H5_URL:-}" ]; then
-            echo "Downloading CRA001160 H5 from PHENOMAPR_CRA001160_H5_URL"
-            curl -L --fail --retry 3 --retry-delay 5 \
-              -o vignettes/PAAD_CRA001160_expression.h5 \
-              "$PHENOMAPR_CRA001160_H5_URL"
-            ls -lh vignettes/PAAD_CRA001160_expression.h5
-            sz=$(wc -c < vignettes/PAAD_CRA001160_expression.h5 | tr -d ' ')
-            if [ "$sz" -lt 1000000 ]; then
-              echo "ERROR: CRA001160 H5 download looks too small (${sz} bytes); likely a Drive quota error page."
-              head -c 400 vignettes/PAAD_CRA001160_expression.h5 || true
-              exit 1
-            fi
-          else
-            echo "WARNING: PHENOMAPR_CRA001160_H5_URL secret is empty."
-            echo "Single-cell article needs PAAD_CRA001160_expression.h5 (full cohort)."
-          fi
-          if [ -n "${PHENOMAPR_CRA001160_META_URL:-}" ]; then
-            echo "Downloading CRA001160 metadata from PHENOMAPR_CRA001160_META_URL"
-            curl -L --fail --retry 3 --retry-delay 5 \
-              -o vignettes/PAAD_CRA001160_CellMetainfo_table.tsv \
-              "$PHENOMAPR_CRA001160_META_URL"
-            ls -lh vignettes/PAAD_CRA001160_CellMetainfo_table.tsv
-            sz=$(wc -c < vignettes/PAAD_CRA001160_CellMetainfo_table.tsv | tr -d ' ')
-            if [ "$sz" -lt 100000 ]; then
-              echo "ERROR: CRA001160 metadata download looks too small (${sz} bytes)."
-              head -c 400 vignettes/PAAD_CRA001160_CellMetainfo_table.tsv || true
-              exit 1
-            fi
-          else
-            echo "WARNING: PHENOMAPR_CRA001160_META_URL secret is empty."
-          fi
+          Rscript -e '
+            if (!requireNamespace("googledrive", quietly = TRUE)) {
+              stop("googledrive is required to fetch CRA001160 for pkgdown")
+            }
+            options(googledrive_quiet = TRUE)
+            googledrive::drive_deauth()
+            files <- list(
+              list(path = "vignettes/PAAD_CRA001160_expression.h5",
+                   id = "1iFWJa13s5UClrP362CQtAAE7KYEo8iBc"),
+              list(path = "vignettes/PAAD_CRA001160_CellMetainfo_table.tsv",
+                   id = "1yC7Vw3oQ2APB6ZlK7BUl-2DLKGJhFbGN")
+            )
+            for (f in files) {
+              if (!file.exists(f$path)) {
+                message("Downloading ", basename(f$path), " from Google Drive...")
+                googledrive::drive_download(
+                  googledrive::as_id(f$id), path = f$path, overwrite = TRUE
+                )
+              }
+              sz <- file.info(f$path)$size
+              message(basename(f$path), ": ", sz, " bytes")
+              if (is.na(sz) || sz < 1e5) {
+                stop(basename(f$path), " looks too small; Drive download likely failed")
+              }
+            }
+          '
 
       - name: Build pkgdown site
         run: |
           Rscript -e "pkgdown::build_site_github_pages(new_process = TRUE, install = FALSE)"
         env:
           PKGDOWN_DEV_MODE: release
-          PHENOMAPR_GSE111672_RDS_URL: ${{ secrets.PHENOMAPR_GSE111672_RDS_URL }}
-          PHENOMAPR_CRA001160_H5_URL: ${{ secrets.PHENOMAPR_CRA001160_H5_URL }}
-          PHENOMAPR_CRA001160_META_URL: ${{ secrets.PHENOMAPR_CRA001160_META_URL }}
-          PHENOMAPR_SPATIAL_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_RDS_URL }}
-          PHENOMAPR_SPATIAL_CYTO_RDS_URL: ${{ secrets.PHENOMAPR_SPATIAL_CYTO_RDS_URL }}
-          PHENOMAPR_GSE205154_MATRIX_URL: ${{ secrets.PHENOMAPR_GSE205154_MATRIX_URL }}
-          PHENOMAPR_GSE205154_INFO_URL: ${{ secrets.PHENOMAPR_GSE205154_INFO_URL }}
-          PHENOMAPR_GSE253260_EXPR_URL: ${{ secrets.PHENOMAPR_GSE253260_EXPR_URL }}
-          PHENOMAPR_GSE253260_INFO_URL: ${{ secrets.PHENOMAPR_GSE253260_INFO_URL }}
 
       - name: Verify articles were built
         run: |

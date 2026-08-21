@@ -13,6 +13,7 @@ download_from_drive <- function(file_id, dest) {
   if (!requireNamespace("googledrive", quietly = TRUE)) {
     stop("googledrive is required. Install with install.packages('googledrive').")
   }
+  options(googledrive_quiet = TRUE)
   googledrive::drive_deauth()
   googledrive::drive_download(googledrive::as_id(file_id), path = dest, overwrite = TRUE)
   invisible(dest)
@@ -119,9 +120,11 @@ save_spatial_subset <- function(src_rds, dest_rds, max_per_type = 10000L, n_gene
 }
 
 message("Writing vignette subsets to: ", dest_dir)
-ids <- list(gse111672 = "1vJxIlW_kvqFXOPw9qn1L7D6QbMpe-P0c",
-  cra001160 = "14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb",
-  spatial = "1HM0dBrQnaNsdm5mnq23aaQ2ILofJ0_vj")
+ids <- list(
+  gse111672 = "1-A6N-FQAGxhERJPinjpXDoHtPVu-mqiL",
+  cra001160 = "1QIGBCWymDo_UgUVLHJk_3TEPXAYdLZJv",
+  spatial = "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"
+)
 tmp_dir <- tempdir()
 gse_full <- file.path(tmp_dir, "PAAD_GSE111672_seurat.rds")
 cra_full <- file.path(tmp_dir, "PAAD_CRA001160_seurat.rds")
