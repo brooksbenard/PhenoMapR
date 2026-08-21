@@ -29,95 +29,31 @@ Primary and Metastatic meta-z scores from PRECOG.
 
 suppressPackageStartupMessages({
   library(PhenoMapR)
+  library(googledrive)
   library(patchwork)
   library(ggplot2)
 })
 
-# Prefer valid local files, then CI URL secrets, then Google Drive.
-# Reject Drive "quota exceeded" JSON stubs that break readRDS().
-googledrive::drive_deauth()
 options(googledrive_quiet = TRUE)
+googledrive::drive_deauth()
 
-.find_vignette_data <- function(filename) {
-  candidates <- c(
-    filename,
-    file.path("vignettes", filename),
-    file.path("..", filename),
-    file.path("..", "vignettes", filename)
-  )
-  hit <- candidates[file.exists(candidates)][1]
-  if (is.na(hit)) NULL else hit
-}
-.is_drive_quota_json <- function(path) {
-  info <- file.info(path)
-  if (is.null(path) || !isTRUE(file.exists(path)) ||
-      is.na(info$size) || info$size < 10 || info$size > 5000) {
-    return(FALSE)
-  }
-  txt <- tryCatch(
-    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
-    error = function(e) ""
-  )
-  grepl("downloadQuotaExceeded|The download quota for this file", txt)
-}
-.is_valid_rds_blob <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  if (.is_drive_quota_json(path)) {
-    unlink(path)
-    return(FALSE)
-  }
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1000) return(FALSE)
-  con <- file(path, "rb")
-  on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 6L)
-  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
-  is_xz <- length(magic) >= 6L && identical(magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00)))
-  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
-  is_gzip || is_xz || is_rds
-}
-.resolve_vignette_rds <- function(filename, drive_id, env_var) {
-  existing <- .find_vignette_data(filename)
-  if (!is.null(existing) && isTRUE(.is_valid_rds_blob(existing))) return(existing)
-  dest <- filename
-  url <- Sys.getenv(env_var, unset = "")
-  if (nzchar(url)) {
-    message("Downloading ", filename, " from ", env_var)
-    ok <- tryCatch({
-      utils::download.file(url, dest, mode = "wb", quiet = TRUE)
-      TRUE
-    }, error = function(e) FALSE)
-    if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
-    if (file.exists(dest)) unlink(dest)
-  }
-  message("Downloading ", filename, " from Google Drive")
-  ok <- tryCatch({
+info_path <- "GSE205154_info.rds"
+expr_path <- "GSE205154_GPL20301_expression.rds"
+drive_files <- list(
+  list(path = info_path, id = "1isX8lV9UVl_a1YLiopRlWUchPYPUTPXo"),
+  list(path = expr_path, id = "1RxKOOtsWkTkoooQld8N7xU7lY2Sh4P2b")
+)
+for (f in drive_files) {
+  if (!file.exists(f$path)) {
+    message("Downloading ", basename(f$path), " from Google Drive...")
     googledrive::drive_download(
-      googledrive::as_id(drive_id), dest, overwrite = TRUE
+      googledrive::as_id(f$id), path = f$path, overwrite = TRUE
     )
-    TRUE
-  }, error = function(e) FALSE)
-  if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
-  if (file.exists(dest)) unlink(dest)
-  stop(
-    "Could not obtain ", filename,
-    ". Place it under vignettes/ or set ", env_var, ".",
-    call. = FALSE
-  )
+  }
 }
 
-.info_path <- .resolve_vignette_rds(
-  "GSE205154_info.rds",
-  "1c0GUMVzAr6K44Z7CfVRz-dy6jIvb0nNo",
-  "PHENOMAPR_GSE205154_INFO_URL"
-)
-.expr_path <- .resolve_vignette_rds(
-  "GSE205154_GPL20301_expression.rds",
-  "16P-rfXD734seGl_xxTQuSDGMStQk9G7B",
-  "PHENOMAPR_GSE205154_MATRIX_URL"
-)
-pheno <- readRDS(.info_path)
-bulk_mat <- readRDS(.expr_path)
+pheno <- readRDS(info_path)
+bulk_mat <- readRDS(expr_path)
 message("Expression: ", nrow(bulk_mat), " genes × ", ncol(bulk_mat), " samples")
 message("Phenotype: ", nrow(pheno), " samples (Primary: ", sum(pheno$tumor_type == "Primary"), ", Met: ", sum(pheno$tumor_type == "Met"), ")")
 
@@ -414,25 +350,25 @@ sessionInfo()
     ## [1] stats     graphics  grDevices utils     datasets  methods   base     
     ## 
     ## other attached packages:
-    ## [1] survminer_0.5.2 ggpubr_1.0.0    survival_3.8-6  ggplot2_4.0.3  
-    ## [5] patchwork_1.3.2 PhenoMapR_0.1.0
+    ## [1] survminer_0.5.2   ggpubr_1.0.0      survival_3.8-6    ggplot2_4.0.3    
+    ## [5] patchwork_1.3.2   googledrive_2.1.2 PhenoMapR_0.1.0  
     ## 
     ## loaded via a namespace (and not attached):
-    ##  [1] gtable_0.3.6       xfun_0.60          bslib_0.11.0       htmlwidgets_1.6.4 
+    ##  [1] gtable_0.3.6       xfun_0.60          bslib_0.12.0       htmlwidgets_1.6.4 
     ##  [5] rstatix_1.1.0      gargle_1.6.1       lattice_0.22-9     vctrs_0.7.3       
     ##  [9] tools_4.6.1        generics_0.1.4     curl_7.1.0         tibble_3.3.1      
     ## [13] pkgconfig_2.0.3    Matrix_1.7-5       RColorBrewer_1.1-3 S7_0.2.2          
     ## [17] desc_1.4.3         lifecycle_1.0.5    stringr_1.6.0      compiler_4.6.1    
     ## [21] farver_2.1.2       textshaping_1.0.5  carData_3.0-6      litedown_0.10     
-    ## [25] htmltools_0.5.9    sass_0.4.10        yaml_2.3.12        Formula_1.2-5     
+    ## [25] htmltools_0.5.9    sass_0.4.10        yaml_2.3.12        Formula_1.2-6     
     ## [29] pillar_1.11.1      pkgdown_2.2.1      car_3.1-5          jquerylib_0.1.4   
     ## [33] tidyr_1.3.2        cachem_1.1.0       abind_1.4-8        commonmark_2.0.0  
-    ## [37] tidyselect_1.2.1   digest_0.6.39      stringi_1.8.7      dplyr_1.2.1       
+    ## [37] tidyselect_1.2.1   digest_0.6.39      stringi_1.8.9      dplyr_1.2.1       
     ## [41] purrr_1.2.2        labeling_0.4.3     splines_4.6.1      fastmap_1.2.0     
     ## [45] grid_4.6.1         cli_3.6.6          magrittr_2.0.5     broom_1.0.13      
-    ## [49] withr_3.0.3        scales_1.4.0       backports_1.5.1    googledrive_2.1.2 
-    ## [53] rmarkdown_2.31     httr_1.4.8         otel_0.2.0         ggtext_0.1.2      
-    ## [57] gridExtra_2.3.1    ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5    
-    ## [61] knitr_1.51         markdown_2.0       rlang_1.3.0        gridtext_0.1.6    
-    ## [65] Rcpp_1.1.2         glue_1.8.1         xml2_1.6.0         jsonlite_2.0.0    
-    ## [69] R6_2.6.1           systemfonts_1.3.2  fs_2.1.0
+    ## [49] withr_3.0.3        scales_1.4.0       backports_1.5.1    rmarkdown_2.31    
+    ## [53] httr_1.4.8         otel_0.2.0         ggtext_0.1.2       gridExtra_2.3.1   
+    ## [57] ggsignif_0.6.4     ragg_1.5.2         evaluate_1.0.5     knitr_1.51        
+    ## [61] markdown_2.0       rlang_1.3.0        Rcpp_1.1.2         gridtext_0.1.6    
+    ## [65] glue_1.8.1         xml2_1.6.0         jsonlite_2.0.0     R6_2.6.1          
+    ## [69] systemfonts_1.3.2  fs_2.1.0

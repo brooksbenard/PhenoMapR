@@ -12,4 +12,4 @@ cell_type_colors
 
 ## Format
 
-An object of class `character` of length 16.
+An object of class `character` of length 22.

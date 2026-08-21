@@ -5,7 +5,7 @@ with bulk gene expression onto single cell, spatial, and bulk
 transcriptomics data. PhenoMapR nominates and rank-orders samples,
 cells, and spatial locations associated with gene expression signatures
 that are correlated with a phenotype of interest (e.g. overall
-survival). Comprehensive documentation is avaliable at
+survival). Comprehensive documentation is available at
 <https://brooksbenard.github.io/PhenoMapR/>.
 
 ![PhenoMapR

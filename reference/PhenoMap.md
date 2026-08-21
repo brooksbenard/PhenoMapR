@@ -58,7 +58,13 @@ PhenoMap(
 
 - z_score_cutoff:
 
-  Absolute z-score threshold for filtering genes (default: 2)
+  Absolute z-score threshold for filtering genes (default: 2). Built-in
+  PRECOG/TCGA matrices shipped in the package are already sparse at this
+  cutoff (entries with \\\|z\| \leq 2\\ stored as `NA`; see
+  [`precog`](https://brooksbenard.github.io/PhenoMapR/reference/precog.md),
+  [`tcga`](https://brooksbenard.github.io/PhenoMapR/reference/tcga.md)),
+  so lowering the cutoff below 2 does not recover discarded associations
+  unless a denser custom reference is supplied.
 
 - pseudobulk:
 

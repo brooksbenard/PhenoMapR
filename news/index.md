@@ -2,14 +2,25 @@
 
 ## PhenoMapR 0.1.0.9000
 
+### Methodology / orthogonal validation
+
+- ctPANDA (Tang et al., *Cancer Cell* 2026): cell-type-matched
+  comparison of CRA001160 PhenoMapR adverse/favorable markers vs
+  published crPRG lists lives under `manuscript/benchmarks/methodology/`
+  (`--only=ctpanda`), not the single-cell vignette. Bundled lists remain
+  at `inst/extdata/ctpanda/ctpanda_prgs.rds`
+  (`tools/make_ctpanda_prgs.R`).
+
 ### Bug fixes
 
+- Single-cell vignette: load the **full** CRA001160 cohort from Google
+  Drive only (H5 + metadata); removed URL/secret/subset fallbacks. The
+  Shiny quick demo continues to use only the small bundled
+  `PAAD_CRA001160_demo_5000.rds`.
 - Shiny quick demo: the bundled `PAAD_CRA001160_demo_5000.rds` is
   shipped again (a `.Rbuildignore` pattern was excluding all of
-  `inst/extdata`), so the demo no longer downloads the ~850 MB Seurat
-  object from Google Drive. The full pool is now downloaded only when
-  explicitly opted in via `PHENOMAPR_CRA001160_RDS_URL` or
-  `PHENOMAPR_SHINY_DEMO_FULL=1`.
+  `inst/extdata`), so the demo no longer downloads the full CRA001160
+  cohort at runtime.
 - Shiny scoring: the app now passes `layer=`/`slot=` according to the
   installed
   [`PhenoMap()`](https://brooksbenard.github.io/PhenoMapR/reference/PhenoMap.md)

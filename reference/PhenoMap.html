@@ -102,7 +102,11 @@ use format "ABBREV" or "ABBREV_Metastatic" (e.g., "MELANOMA", "MELANOMA_Metastat
 
 <dt id="arg-z-score-cutoff">z_score_cutoff<a class="anchor" aria-label="anchor" href="#arg-z-score-cutoff"></a></dt>
 <dd><p>Absolute z-score threshold for filtering genes
-(default: 2)</p></dd>
+(default: 2). Built-in PRECOG/TCGA matrices shipped in the package are
+already sparse at this cutoff (entries with \(|z| \leq 2\) stored as
+<code>NA</code>; see <code><a href="precog.html">precog</a></code>, <code><a href="tcga.html">tcga</a></code>), so lowering the
+cutoff below 2 does not recover discarded associations unless a denser
+custom reference is supplied.</p></dd>
 
 
 <dt id="arg-pseudobulk">pseudobulk<a class="anchor" aria-label="anchor" href="#arg-pseudobulk"></a></dt>

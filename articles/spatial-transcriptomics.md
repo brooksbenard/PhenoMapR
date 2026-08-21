@@ -8,13 +8,18 @@ transcriptomics data in two parts. **Part 1** uses **spot-level** 10X
 Visium data from an HTAN PDAC sample to show broad tissue regions of
 phenotypic interest. **Part 2** uses the same sample after we mapped
 paired single-cell data to the spots using
-[**CytoSPACE**](https://www.nature.com/articles/s41587-023-01697-9); we
-then mirror the single-cell workflow (score by cell type, identify
-marker genes, and plot heatmaps) at **cell** resolution and assess
-**co-localization** of prognostic cell types.
+[**CytoSPACE**](https://www.nature.com/articles/s41587-023-01697-9)
+[\[2\]](#ref2); we then mirror the single-cell workflow (score by cell
+type, identify marker genes, and plot heatmaps) at **cell** resolution
+and assess **co-localization** of prognostic cell types with
+**[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)**
+[\[3\]](#ref3) and spatial **[CellChat
+v2](https://github.com/jinworks/CellChat)** [\[4\]](#ref4).
 
 The sample (`HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test`) is from a pancreatic
-cancer dataset available from [HTAN](https://humantumoratlas.org/).
+cancer dataset available from [HTAN](https://humantumoratlas.org/). We
+score spots and CytoSPACE-mapped cells with the built-in **PRECOG**
+[\[1\]](#ref1) **Pancreatic** meta-z signature.
 
 ### Download data and vizualize H&E
 
@@ -22,6 +27,7 @@ cancer dataset available from [HTAN](https://humantumoratlas.org/).
 
 suppressPackageStartupMessages({
   library(PhenoMapR)
+  library(googledrive)
   library(Seurat)
   library(SeuratObject)
   library(ggplot2)
@@ -36,83 +42,15 @@ theme_set(theme_minimal(base_size = 14))
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-.is_drive_quota_json <- function(path) {
-  info <- file.info(path)
-  if (is.null(path) || !isTRUE(file.exists(path)) ||
-      is.na(info$size) || info$size < 10 || info$size > 5000) {
-    return(FALSE)
-  }
-  txt <- tryCatch(
-    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
-    error = function(e) ""
-  )
-  grepl("downloadQuotaExceeded|The download quota for this file", txt)
-}
-.is_valid_rds_blob <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  if (.is_drive_quota_json(path)) {
-    unlink(path)
-    return(FALSE)
-  }
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e5) return(FALSE)
-  con <- file(path, "rb")
-  on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 6L)
-  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
-  is_xz <- length(magic) >= 6L && identical(magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00)))
-  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
-  is_gzip || is_xz || is_rds
-}
-.resolve_vignette_rds <- function(filename, drive_id, env_var = NULL) {
-  candidates <- unique(c(
-    filename,
-    file.path("vignettes", filename),
-    file.path("..", filename),
-    file.path("..", "vignettes", filename)
-  ))
-  hit <- candidates[file.exists(candidates) &
-                      vapply(candidates, .is_valid_rds_blob, logical(1))][1]
-  if (!is.na(hit)) return(hit)
-  dest <- filename
-  if (!is.null(env_var) && nzchar(env_var)) {
-    url <- Sys.getenv(env_var, unset = "")
-    if (nzchar(url)) {
-      message("Downloading ", filename, " from ", env_var)
-      ok <- tryCatch({
-        utils::download.file(url, dest, mode = "wb", quiet = TRUE)
-        TRUE
-      }, error = function(e) FALSE)
-      if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
-      if (file.exists(dest)) unlink(dest)
-    }
-  }
-  message("Downloading ", filename, " from Google Drive")
-  ok <- tryCatch({
-    googledrive::drive_download(
-      googledrive::as_id(drive_id), dest, overwrite = TRUE
-    )
-    TRUE
-  }, error = function(e) FALSE)
-  if (isTRUE(ok) && isTRUE(.is_valid_rds_blob(dest))) return(dest)
-  if (file.exists(dest)) unlink(dest)
-  stop(
-    "Could not obtain ", filename,
-    if (!is.null(env_var) && nzchar(env_var)) {
-      paste0(". Place it under vignettes/ or set ", env_var, ".")
-    } else {
-      ". Place it under vignettes/."
-    },
-    call. = FALSE
+rds_spot <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds"
+if (!file.exists(rds_spot)) {
+  message("Downloading ", rds_spot, " from Google Drive...")
+  googledrive::drive_download(
+    googledrive::as_id("1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"),
+    path = rds_spot,
+    overwrite = TRUE
   )
 }
-
-gd_id_spot <- "1OkIr7ksAWxKVjtdlGqYHMidvHZZsySEE"
-rds_spot <- .resolve_vignette_rds(
-  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test.hgnc.rds",
-  gd_id_spot,
-  "PHENOMAPR_SPATIAL_RDS_URL"
-)
 
 seurat_spot <- readRDS(rds_spot)
 
@@ -286,18 +224,22 @@ for (nm in c("seurat_spot", "scores_spot", "h_and_e", "hex_phenomapr",
 gc(verbose = FALSE)
 ```
 
-    ##            used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells  4399522 235.0    7902214 422.1   7902214 422.1
-    ## Vcells 11319011  86.4  126670976 966.5 126315719 963.8
+    ##           used  (Mb) gc trigger  (Mb)  max used  (Mb)
+    ## Ncells 4262487 227.7    7882507 421.0   7882507 421.0
+    ## Vcells 7724803  59.0  122552400 935.1 122781469 936.8
 
 ``` r
 
 # Load the **CytoSPACE** object (single cells placed on Visium coordinates).
-rds_cyto <- .resolve_vignette_rds(
-  "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds",
-  "1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll",
-  "PHENOMAPR_SPATIAL_CYTO_RDS_URL"
-)
+rds_cyto <- "HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"
+if (!file.exists(rds_cyto)) {
+  message("Downloading ", rds_cyto, " from Google Drive...")
+  googledrive::drive_download(
+    googledrive::as_id("1gcOyLriW9bIFNbDuQN6Vi1UsrMGKDxll"),
+    path = rds_cyto,
+    overwrite = TRUE
+  )
+}
 
 seurat <- readRDS(rds_cyto)
 
@@ -592,10 +534,10 @@ hypotheses on prognostic **`CellType_PrognosticGroup`** labels:
 
 We quantify (1)–(2) with
 **[`spatialCooccur`](https://github.com/juninamo/spatialCooccur)**
-(Inamo *et al.*, [medRxiv
-2025](https://doi.org/10.1101/2025.08.05.25332835)) and (3) with
-**[CellChat v2](https://github.com/jinworks/CellChat)** spatial
-inference on the same CytoSPACE object.
+[\[3\]](#ref3) (Inamo *et al.*, [*JCI Insight*
+2026](https://doi.org/10.1172/jci.insight.198074)) and (3) with
+**[CellChat v2](https://github.com/jinworks/CellChat)** [\[4\]](#ref4)
+spatial inference on the same CytoSPACE object.
 
 ### Co-localization of prognostic cells (CytoSPACE)
 
@@ -1373,6 +1315,15 @@ co-occurrence profiles.
 
 ![](../reference/figures/spatial_colocalization_nhood_enrichment_clustered.png)
 
+Focusing on the **Adverse** and **Favorable** tails (excluding
+**Other**) makes the prognostic neighborhood structure easier to read.
+The heatmaps below use the same neighborhood enrichment z-scores,
+restricted to those labels:
+
+![](../reference/figures/spatial_colocalization_nhood_enrichment_adverse_favorable.png)
+
+![](../reference/figures/spatial_colocalization_nhood_enrichment_adverse_favorable_clustered.png)
+
 #### Local co-localization scores (`cooccur_local`) — Question 1
 
 The heatmap below shows **pairwise local co-localization scores** across
@@ -1388,6 +1339,13 @@ Cells with mean non-zero local scores **≥ 0.75** are outlined in black
 on the clustered heatmap below.
 
 ![](../reference/figures/spatial_colocalization_colocalization_scores_clustered_outlined.png)
+
+After spatial CellChat integration, the Adverse / Favorable-only
+co-localization heatmap below keeps the **black** high-score outlines
+(score ≥ 0.75) and adds **purple** outlines for pairs with both spatial
+co-localization and CellChat L-R support (`dual_spatial_lr`):
+
+![](../reference/figures/spatial_colocalization_colocalization_scores_clustered_outlined_integrated.png)
 
 #### PhenoMapR score vs local co-localization — Question 2
 
@@ -1440,12 +1398,12 @@ pairs are enriched for **spatial CellChat** ligand–receptor (L-R)
 interactions on the same CytoSPACE-mapped cells.
 
 We integrate the spatial metrics with **[CellChat
-v2](https://github.com/jinworks/CellChat)** ([Jin *et al.*, *Nat.
-Protoc.* 2024](https://doi.org/10.1038/s41596-024-01045-4)) in **spatial
-mode**, using CytoSPACE-mapped **Visium tissue coordinates**
-(`GetTissueCoordinates`) and distance constraints from the CellChat
-spatial FAQ (65 µm spot size, `contact.range = 100` µm for Visium,
-`interaction.range = 250` µm for secreted signaling):
+v2](https://github.com/jinworks/CellChat)** [\[4\]](#ref4) ([Jin *et
+al.*, *Nat. Protoc.* 2025](https://doi.org/10.1038/s41596-024-01045-4))
+in **spatial mode**, using CytoSPACE-mapped **Visium tissue
+coordinates** (`GetTissueCoordinates`) and distance constraints from the
+CellChat spatial FAQ (65 µm spot size, `contact.range = 100` µm for
+Visium, `interaction.range = 250` µm for secreted signaling):
 
 1.  **Pairwise spatial summary** — for every `CellType_PrognosticGroup`
     sender → receiver pair, combine **neighborhood enrichment** z-score,
@@ -1580,8 +1538,11 @@ CellChat probability).
 
 ![](../reference/figures/spatial_coloc_cellchat_chord.png)
 
-Top pathways for the strongest spatial + signaling pairs
-(e.g. **Fibroblast_Adverse → Ductal_Adverse**):
+Top pathways for the strongest spatial + signaling pairs. We highlight
+two complementary axes below: **Ductal_Adverse → Ductal_Adverse**
+(within-type co-localization with EGFR-centered secreted signaling) and
+**Fibroblast_Adverse → Ductal_Adverse** (cross-type local mixing
+dominated by integrin–ECM contact):
 
 ![](../reference/figures/spatial_coloc_cellchat_lr_bubble.png)
 
@@ -1648,14 +1609,28 @@ hotspots, and target-neighbor fraction — all on **CytoSPACE
 `Rscript scripts/render_spatial_pair_spatial_maps.R` (after the CellChat
 render script).
 
-**Interpretation.** Many high-scoring pairs are **within-group**
-(e.g. adverse ductal cells enriched near other adverse ductal cells),
-consistent with spatial clustering of extreme phenotypes. Cross-type
-pairs such as **Fibroblast_Adverse → Ductal_Adverse** combine moderate
-neighborhood enrichment, local mixing, and spatial CellChat L-R
-probability—candidate **stromal–epithelial** interactions among adverse
-prognostic cells that are both co-localized and within signaling range
-on tissue.
+**Interpretation — two highlight axes.**
+
+1.  **Adverse ductal → adverse ductal (clinical / signaling
+    highlight).** This is the top dual-positive pair by integrated
+    score: significant neighborhood enrichment, very high local
+    co-localization, and strong spatial CellChat support. Absolute
+    CellChat mass is laminin–integrin dominated, but the most actionable
+    secreted program is **EGFR autocrine signaling** (TGFA / EREG / AREG
+    → EGFR ± ERBB2). This frames PhenoMapR adverse ductal tails as a
+    spatially clustered niche with a clinically familiar RTK axis.
+
+2.  **Adverse fibroblast → adverse ductal (PhenoMapR + spatial
+    validation).** This is the strongest **cross-type** dual-positive
+    pair: local co-localization with abundant CellChat that is **~96%
+    physical**. Communication is driven by the **integrin αv / β1–ECM
+    axis** (COL1A1/2, FN1, laminins, POSTN → ITGAV / ITGB1 and related
+    integrin pairs)—recovering the expected CAF–epithelial contact
+    architecture among PhenoMapR adverse tails that mix on tissue. EGF
+    ligands (AREG / TGFA / HBEGF → EGFR) are also present here at lower
+    probability, linking this validation axis to the ductal EGFR
+    highlight without replacing integrin–ECM as the primary cross-type
+    signature.
 
 **Physical vs secreted.** The association table above summarizes how
 **physical** (contact/ECM) vs **secreted** CellChat probabilities relate
@@ -1663,7 +1638,39 @@ to neighborhood enrichment, local co-localization, and PhenoMapR spatial
 correlations among prognostic pairs with signaling support. In general,
 **physical** interaction probability tracks immediate co-localization
 more strongly than **secreted** signaling, which can remain nonzero over
-broader neighborhoods where neighbor PhenoMapR scores covary.
+broader neighborhoods where neighbor PhenoMapR scores covary. That split
+matches the two-axis framing: integrin–ECM validates spatial contact
+biology, while EGFR nominates a secreted clinical node inside (and
+adjacent to) adverse ductal clusters.
+
+#### Supplemental compact panels
+
+Compact summaries for all Adverse / Favorable cell-type groups: **(1)**
+a three-metric heatmap of neighborhood enrichment, local
+co-localization, and spatial CellChat (shared clustering); **(2)** top
+CellChat pathways supporting dual-positive co-localized pairs; **(3)**
+compact 2×2 tissue maps of the top physical CCC + co-localization axes
+(Fib Adv autocrine collagen, Ductal Adv autocrine laminin, Fib Adv →
+Ductal Adv collagen), using the same CytoSPACE `row`/`col` aspect as the
+cell-type overview (`coord_fixed(ratio = 0.6)`); **(4)** compact tissue
+maps of the EGFR and integrin–ECM highlight axes. Regenerate with
+`Rscript scripts/render_spatial_supp_compact_figures.R`.
+
+![](../reference/figures/spatial_supp_nhood_coloc_ccc_allgroups.png)
+
+![](../reference/figures/spatial_supp_coloc_pathway_heatmap.png)
+
+![](../reference/figures/spatial_axis_fibro_collagen_spatial_compact.png)
+
+![](../reference/figures/spatial_axis_ductal_laminin_spatial_compact.png)
+
+![](../reference/figures/spatial_axis_fibro_ductal_collagen_spatial_compact.png)
+
+![](../reference/figures/spatial_supp_axis_spatial_compact.png)
+
+![](../reference/figures/spatial_axis_ductal_egfr_spatial_compact.png)
+
+![](../reference/figures/spatial_axis_fibro_ductal_ecm_spatial_compact.png)
 
 ### Prognostic markers
 
@@ -2063,18 +2070,19 @@ phenotypes.
   cells per spot).
 - **Co-localization**: pre-rendered
   **`spatialCooccur::nhood_enrichment()`** and
-  **`spatialCooccur::cooccur_local()`** heatmaps (ordered and
-  clustered), plus **Spearman correlations** of PhenoMapR scores with
-  local co-localization scores and with co-occurring neighbors’
-  PhenoMapR scores; regenerate with
+  **`spatialCooccur::cooccur_local()`** heatmaps (ordered and clustered;
+  Adverse/Favorable-only nhood variants), plus **Spearman correlations**
+  of PhenoMapR scores with local co-localization scores and with
+  co-occurring neighbors’ PhenoMapR scores; regenerate with
   `scripts/render_spatial_colocalization_heatmap.R`.
 - **Spatial CellChat integration**: co-localization metrics merged with
   distance-constrained **[CellChat
   v2](https://github.com/jinworks/CellChat)** L-R inference on
   CytoSPACE-mapped cells (`datatype = "spatial"`); integrated four-panel
-  heatmaps, dual-evidence Spearman outlines (black = \|ρ\| \> 0.5,
-  purple = spatial + CellChat), and evidence-tier summary; regenerate
-  with `scripts/render_spatial_colocalization_cellchat.R` (or
+  heatmaps, dual-evidence outlines on Spearman and local co-localization
+  heatmaps (black = high score / \|ρ\| \> 0.5, purple = spatial +
+  CellChat), and evidence-tier summary; regenerate with
+  `scripts/render_spatial_colocalization_cellchat.R` (or
   `scripts/render_spatial_integrated_heatmaps.R` from cached
   `inst/data/spatial_coloc_cellchat_pairs.rds`).
 - **Markers**: three
@@ -2089,7 +2097,24 @@ phenotypes.
 
 **\[1\]** Benard, B. A. et al. PRECOG update: an augmented resource of
 clinical outcome associations with gene expression for adult, pediatric,
-and immunotherapy cohorts. Nucleic Acids Res. 54, D1579–D1589 (2026).
+and immunotherapy cohorts. *Nucleic Acids Res.* 54, D1579–D1589 (2026).
+<https://doi.org/10.1093/nar/gkaf1215>
+
+**\[2\]** Vahid, M. R. et al. High-resolution alignment of single-cell
+and spatial transcriptomes with CytoSPACE. *Nat Biotechnol* 41,
+1543–1548 (2023). <https://doi.org/10.1038/s41587-023-01697-9>
+
+**\[3\]** Inamo, J. et al. Spatial transcriptomics reveals
+immune–stromal crosstalk within the synovium of patients with juvenile
+idiopathic arthritis. *JCI Insight* 11, e198074 (2026).
+<https://doi.org/10.1172/jci.insight.198074>. Software
+(`spatialCooccur`): <https://github.com/juninamo/spatialCooccur>
+
+**\[4\]** Jin, S., Plikus, M. V. & Nie, Q. CellChat for systematic
+analysis of cell–cell communication from single-cell transcriptomics.
+*Nat Protoc* 20, 180–219 (2025).
+<https://doi.org/10.1038/s41596-024-01045-4>. Software (CellChat v2):
+<https://github.com/jinworks/CellChat>
 
 ### Session Info
 
@@ -2120,55 +2145,52 @@ sessionInfo()
     ## 
     ## other attached packages:
     ## [1] ggchicklet2_0.7.0  patchwork_1.3.2    dplyr_1.2.1        ggplot2_4.0.3     
-    ## [5] Seurat_5.5.1       SeuratObject_5.4.0 sp_2.2-3           PhenoMapR_0.1.0   
-    ## [9] testthat_3.3.2    
+    ## [5] Seurat_5.5.1       SeuratObject_5.4.0 sp_2.2-3           googledrive_2.1.2 
+    ## [9] PhenoMapR_0.1.0   
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        
     ##   [4] magrittr_2.0.5         spatstat.utils_3.2-4   farver_2.1.2          
     ##   [7] rmarkdown_2.31         GlobalOptions_0.1.4    fs_2.1.0              
     ##  [10] ragg_1.5.2             vctrs_0.7.3            ROCR_1.0-12           
-    ##  [13] spatstat.explore_3.8-2 htmltools_0.5.9        progress_1.2.3        
-    ##  [16] curl_7.1.0             sass_0.4.10            sctransform_0.4.3     
-    ##  [19] parallelly_1.48.0      KernSmooth_2.23-26     bslib_0.11.0          
-    ##  [22] htmlwidgets_1.6.4      desc_1.4.3             ica_1.0-3             
-    ##  [25] plyr_1.8.9             plotly_4.12.1          zoo_1.8-15            
-    ##  [28] cachem_1.1.0           igraph_2.3.3           iterators_1.0.14      
-    ##  [31] mime_0.13              lifecycle_1.0.5        pkgconfig_2.0.3       
-    ##  [34] Matrix_1.7-5           R6_2.6.1               fastmap_1.2.0         
-    ##  [37] clue_0.3-68            fitdistrplus_1.2-6     future_1.75.0         
-    ##  [40] shiny_1.14.0           digest_0.6.39          colorspace_2.1-3      
-    ##  [43] S4Vectors_0.50.1       rprojroot_2.1.1        tensor_1.5.1          
-    ##  [46] RSpectra_0.16-2        irlba_2.3.7            pkgload_1.5.3         
-    ##  [49] textshaping_1.0.5      labeling_0.4.3         progressr_1.0.0       
-    ##  [52] spatstat.sparse_3.2-0  httr_1.4.8             polyclip_1.10-7       
-    ##  [55] abind_1.4-8            compiler_4.6.1         gargle_1.6.1          
-    ##  [58] doParallel_1.0.17      withr_3.0.3            S7_0.2.2              
-    ##  [61] fastDummies_1.7.6      hexbin_1.28.6          pkgbuild_1.4.8        
-    ##  [64] MASS_7.3-65            rjson_0.2.23           tools_4.6.1           
-    ##  [67] lmtest_0.9-40          otel_0.2.0             googledrive_2.1.2     
-    ##  [70] httpuv_1.6.17          future.apply_1.20.2    goftest_1.2-3         
-    ##  [73] glue_1.8.1             nlme_3.1-169           promises_1.5.0        
-    ##  [76] grid_4.6.1             Rtsne_0.17             cluster_2.1.8.2       
-    ##  [79] reshape2_1.4.5         generics_0.1.4         gtable_0.3.6          
-    ##  [82] spatstat.data_3.1-9    tidyr_1.3.2            data.table_1.18.4     
-    ##  [85] hms_1.1.4              BiocGenerics_0.58.1    spatstat.geom_3.8-2   
-    ##  [88] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         
-    ##  [91] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         
-    ##  [94] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           
-    ##  [97] circlize_0.4.18        splines_4.6.1          lattice_0.22-9        
-    ## [100] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      
-    ## [103] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         
-    ## [106] knitr_1.51             gridExtra_2.3.1        IRanges_2.46.0        
-    ## [109] scattermore_1.2        stats4_4.6.1           xfun_0.60             
-    ## [112] brio_1.1.5             matrixStats_1.5.0      stringi_1.8.7         
-    ## [115] yaml_2.3.12            evaluate_1.0.5         codetools_0.2-20      
-    ## [118] tibble_3.3.1           cli_3.6.6              uwot_0.2.4            
-    ## [121] xtable_1.8-8           reticulate_1.46.0      systemfonts_1.3.2     
-    ## [124] jquerylib_0.1.4        Rcpp_1.1.2             globals_0.19.1        
-    ## [127] spatstat.random_3.5-1  png_0.1-9              spatstat.univar_3.2-0 
-    ## [130] parallel_4.6.1         pkgdown_2.2.1          prettyunits_1.2.0     
-    ## [133] dotCall64_1.2          listenv_1.0.0          viridisLite_0.4.3     
-    ## [136] scales_1.4.0           ggridges_0.5.7         purrr_1.2.2           
-    ## [139] crayon_1.5.3           GetoptLong_1.1.1       rlang_1.3.0           
-    ## [142] cowplot_1.2.0
+    ##  [13] spatstat.explore_3.8-2 htmltools_0.5.9        curl_7.1.0            
+    ##  [16] sass_0.4.10            sctransform_0.4.3      parallelly_1.48.0     
+    ##  [19] KernSmooth_2.23-26     bslib_0.12.0           htmlwidgets_1.6.4     
+    ##  [22] desc_1.4.3             ica_1.0-3              plyr_1.8.9            
+    ##  [25] plotly_4.12.1          zoo_1.9-0              cachem_1.1.0          
+    ##  [28] igraph_2.3.3           iterators_1.0.14       mime_0.13             
+    ##  [31] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-5          
+    ##  [34] R6_2.6.1               fastmap_1.2.0          clue_0.3-68           
+    ##  [37] fitdistrplus_1.2-6     future_1.75.0          shiny_1.14.0          
+    ##  [40] digest_0.6.39          colorspace_2.1-3       S4Vectors_0.50.1      
+    ##  [43] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           
+    ##  [46] textshaping_1.0.5      labeling_0.4.3         progressr_1.0.0       
+    ##  [49] spatstat.sparse_3.2-0  httr_1.4.8             polyclip_1.10-7       
+    ##  [52] abind_1.4-8            compiler_4.6.1         gargle_1.6.1          
+    ##  [55] doParallel_1.0.17      withr_3.0.3            S7_0.2.2              
+    ##  [58] fastDummies_1.7.6      hexbin_1.28.6          MASS_7.3-65           
+    ##  [61] rjson_0.2.23           tools_4.6.1            lmtest_0.9-40         
+    ##  [64] otel_0.2.0             httpuv_1.6.17          future.apply_1.20.2   
+    ##  [67] goftest_1.2-3          glue_1.8.1             nlme_3.1-169          
+    ##  [70] promises_1.5.0         grid_4.6.1             Rtsne_0.17            
+    ##  [73] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        
+    ##  [76] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           
+    ##  [79] data.table_1.18.4      BiocGenerics_0.58.1    spatstat.geom_3.8-2   
+    ##  [82] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         
+    ##  [85] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         
+    ##  [88] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           
+    ##  [91] circlize_0.4.18        splines_4.6.1          lattice_0.22-9        
+    ##  [94] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      
+    ##  [97] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         
+    ## [100] knitr_1.51             gridExtra_2.3.1        IRanges_2.46.0        
+    ## [103] scattermore_1.2        stats4_4.6.1           xfun_0.60             
+    ## [106] matrixStats_1.5.0      stringi_1.8.9          yaml_2.3.12           
+    ## [109] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          
+    ## [112] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          
+    ## [115] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       
+    ## [118] Rcpp_1.1.2             globals_0.19.1         spatstat.random_3.5-1 
+    ## [121] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.1        
+    ## [124] pkgdown_2.2.1          dotCall64_1.2          listenv_1.0.0         
+    ## [127] viridisLite_0.4.3      scales_1.4.0           ggridges_0.5.7        
+    ## [130] crayon_1.5.3           purrr_1.2.2            GetoptLong_1.1.1      
+    ## [133] rlang_1.3.0            cowplot_1.2.0

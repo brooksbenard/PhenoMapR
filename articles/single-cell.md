@@ -20,17 +20,16 @@ al. 2025](https://www.nature.com/articles/s41467-025-66162-4)
 
 ## Load data
 
-We will use pre-processed expression and annotation files from TISCH2
-for the CRA001160 dataset. Download the expression matrix and cell
-metadata from Google Drive and visualize cell type distributions across
-all samples in the dataset.
+We use the **full** CRA001160 cohort (TISCH2 log-normalized expression
+H5 + cell metadata). Files are downloaded from [Google
+Drive](https://drive.google.com/drive/folders/1unzVigogMy6XT6KwiFJ2AnKSLsMAzl2X)
+on first run (or reused if already present in the working directory).
+The small Shiny demo subset is separate and is **not** used here.
 
 ``` r
 
 suppressPackageStartupMessages({
-  if (!isTRUE(.try_load_phenomapr_dev())) {
-    library(PhenoMapR)
-  }
+  library(PhenoMapR)
   library(googledrive)
   library(ggplot2)
   library(ggpubr)
@@ -46,217 +45,28 @@ suppressPackageStartupMessages({
 options(googledrive_quiet = TRUE)
 googledrive::drive_deauth()
 
-# Full CRA001160 only (no packaged subset). Prefer local full bundle /
-# H5+TSV / Seurat, then CI URL secrets, then Google Drive.
-.h5_name <- "PAAD_CRA001160_expression.h5"
-.meta_name <- "PAAD_CRA001160_CellMetainfo_table.tsv"
-.seurat_name <- "PAAD_CRA001160_seurat.rds"
-.full_name <- "PAAD_CRA001160_full.rds"
-
-.find_vignette_data <- function(filename) {
-  candidates <- c(
-    filename,
-    file.path("vignettes", filename),
-    file.path("..", filename),
-    file.path("..", "vignettes", filename)
-  )
-  hit <- candidates[file.exists(candidates)][1]
-  if (is.na(hit)) NULL else hit
-}
-.is_drive_quota_json <- function(path) {
-  info <- file.info(path)
-  if (is.null(path) || !isTRUE(file.exists(path)) ||
-      is.na(info$size) || info$size < 10 || info$size > 5000) {
-    return(FALSE)
-  }
-  txt <- tryCatch(
-    paste(readLines(path, n = 30L, warn = FALSE), collapse = "\n"),
-    error = function(e) ""
-  )
-  grepl("downloadQuotaExceeded|The download quota for this file", txt)
-}
-.purge_quota_stub <- function(path) {
-  if (.is_drive_quota_json(path)) {
-    message("Removing Google Drive quota error stub: ", path)
-    unlink(path)
-  }
-}
-.is_valid_h5 <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  .purge_quota_stub(path)
-  if (!isTRUE(file.exists(path))) return(FALSE)
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e6) return(FALSE)
-  con <- file(path, "rb")
-  on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 8L)
-  identical(magic, as.raw(c(0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a)))
-}
-.is_valid_meta_tsv <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  .purge_quota_stub(path)
-  if (!isTRUE(file.exists(path))) return(FALSE)
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e5) return(FALSE)
-  hdr <- tryCatch(readLines(path, n = 1L, warn = FALSE), error = function(e) "")
-  grepl("UMAP_1", hdr, fixed = TRUE) && grepl("Cell", hdr, fixed = TRUE)
-}
-.is_valid_rds_blob <- function(path) {
-  if (is.null(path) || !isTRUE(file.exists(path))) return(FALSE)
-  .purge_quota_stub(path)
-  if (!isTRUE(file.exists(path))) return(FALSE)
-  info <- file.info(path)
-  if (is.na(info$size) || info$size < 1e5) return(FALSE)
-  con <- file(path, "rb")
-  on.exit(close(con), add = TRUE)
-  magic <- readBin(con, what = "raw", n = 6L)
-  is_gzip <- length(magic) >= 2L && identical(magic[1:2], as.raw(c(0x1f, 0x8b)))
-  is_xz <- length(magic) >= 6L && identical(
-    magic[1:6], as.raw(c(0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00))
-  )
-  is_rds <- length(magic) >= 2L && identical(rawToChar(magic[1:2]), "RD")
-  is_gzip || is_xz || is_rds
-}
-.resolve_vignette_file <- function(filename, drive_id, env_var, validator,
-                                   try_drive = TRUE) {
-  existing <- .find_vignette_data(filename)
-  if (!is.null(existing) && isTRUE(validator(existing))) return(existing)
-  dest <- filename
-  url <- Sys.getenv(env_var, unset = "")
-  if (nzchar(url)) {
-    message("Downloading ", filename, " from ", env_var)
-    ok <- tryCatch({
-      utils::download.file(url, dest, mode = "wb", quiet = TRUE)
-      TRUE
-    }, error = function(e) {
-      message("URL download failed: ", conditionMessage(e))
-      FALSE
-    })
-    if (isTRUE(ok) && isTRUE(validator(dest))) return(dest)
-    if (file.exists(dest)) unlink(dest)
-  }
-  if (isTRUE(try_drive) && !is.null(drive_id) && nzchar(drive_id)) {
-    message("Downloading ", filename, " from Google Drive")
-    ok <- tryCatch({
-      googledrive::drive_download(
-        googledrive::as_id(drive_id), dest, overwrite = TRUE
-      )
-      TRUE
-    }, error = function(e) {
-      message("Google Drive download failed: ", conditionMessage(e))
-      FALSE
-    })
-    if (isTRUE(ok) && isTRUE(validator(dest))) return(dest)
-    .purge_quota_stub(dest)
-    if (file.exists(dest) && !isTRUE(validator(dest))) unlink(dest)
-  }
-  NULL
-}
-.normalize_cra_meta <- function(meta_df) {
-  if ("Celltype (original)" %in% names(meta_df)) {
-    meta_df <- meta_df %>%
-      mutate(`Celltype (original)` = gsub(" cell", "", `Celltype (original)`)) %>%
-      dplyr::rename(
-        celltype_malignancy = `Celltype (malignancy)`,
-        celltype_original = `Celltype (original)`
-      )
-  }
-  if (!"Cell" %in% names(meta_df) && !is.null(rownames(meta_df))) {
-    meta_df$Cell <- rownames(meta_df)
-  }
-  meta_df
-}
-.load_cra_full_rds <- function(path) {
-  message("Loading CRA001160 full object: ", path)
-  obj <- readRDS(path)
-  if (is.list(obj) && !is.null(obj$expression) && !is.null(obj$metadata)) {
-    return(list(
-      expression = obj$expression,
-      metadata = .normalize_cra_meta(as.data.frame(obj$metadata))
-    ))
-  }
-  if (inherits(obj, "Seurat")) {
-    expr <- tryCatch(
-      PhenoMapR:::.get_assay_data_compat(obj, assay = "RNA", slot = "counts"),
-      error = function(e) {
-        PhenoMapR:::.get_assay_data_compat(obj, assay = "RNA", slot = "data")
-      }
-    )
-    return(list(
-      expression = expr,
-      metadata = NULL  # require TSV for UMAP / TISCH labels
-    ))
-  }
-  NULL
-}
-
-expr_mat <- NULL
-meta <- NULL
-
-# 1) Full expression+metadata bundle (local or PHENOMAPR_CRA001160_RDS_URL)
-.full_path <- .resolve_vignette_file(
-  .full_name,
-  drive_id = NULL,
-  env_var = "PHENOMAPR_CRA001160_RDS_URL",
-  validator = .is_valid_rds_blob,
-  try_drive = FALSE
+h5_path <- "PAAD_CRA001160_expression.h5"
+meta_path <- "PAAD_CRA001160_CellMetainfo_table.tsv"
+drive_files <- list(
+  list(path = h5_path, id = "1iFWJa13s5UClrP362CQtAAE7KYEo8iBc"),
+  list(path = meta_path, id = "1yC7Vw3oQ2APB6ZlK7BUl-2DLKGJhFbGN")
 )
-# Also accept a Seurat/full object saved under the legacy seurat filename when
-# PHENOMAPR_CRA001160_RDS_URL points at it (downloaded as .full_name first).
-if (is.null(.full_path)) {
-  .full_path <- .resolve_vignette_file(
-    .seurat_name,
-    drive_id = "14p_fYIFeuuRdXBF3J-5ZsXElq_mduSzb",
-    env_var = "PHENOMAPR_CRA001160_SEURAT_URL",
-    validator = .is_valid_rds_blob,
-    try_drive = TRUE
-  )
-}
-if (!is.null(.full_path)) {
-  loaded <- .load_cra_full_rds(.full_path)
-  if (!is.null(loaded)) {
-    expr_mat <- loaded$expression
-    meta <- loaded$metadata
-  }
-}
-
-# 2) H5 + metadata TSV for expression when bundle did not supply both
-if (is.null(expr_mat)) {
-  .h5_path <- .resolve_vignette_file(
-    .h5_name,
-    "1PolTXggREz8XmhutCLTQJGCfKxFAzqMl",
-    "PHENOMAPR_CRA001160_H5_URL",
-    .is_valid_h5
-  )
-  if (!is.null(.h5_path)) {
-    expr_mat <- Seurat::Read10X_h5(.h5_path)
-  }
-}
-if (is.null(meta)) {
-  .meta_path <- .resolve_vignette_file(
-    .meta_name,
-    "17mqxnKOZJn0jW2iD9RV0wZeWsilAIwdu",
-    "PHENOMAPR_CRA001160_META_URL",
-    .is_valid_meta_tsv
-  )
-  if (!is.null(.meta_path)) {
-    meta <- .normalize_cra_meta(
-      read.delim(.meta_path, stringsAsFactors = FALSE, check.names = FALSE)
+for (f in drive_files) {
+  if (!file.exists(f$path)) {
+    message("Downloading ", basename(f$path), " from Google Drive...")
+    googledrive::drive_download(
+      googledrive::as_id(f$id), path = f$path, overwrite = TRUE
     )
   }
 }
 
-if (is.null(expr_mat) || is.null(meta)) {
-  stop(
-    "Could not obtain the FULL CRA001160 expression matrix and metadata. ",
-    "Place PAAD_CRA001160_full.rds (list with $expression + $metadata), ",
-    "or H5+TSV / Seurat+TSV under vignettes/, or set ",
-    "PHENOMAPR_CRA001160_RDS_URL (preferred) / H5_URL / META_URL to a ",
-    "non-Drive mirror. Google Drive frequently returns downloadQuotaExceeded ",
-    "for the public CRA001160 files.",
-    call. = FALSE
+expr_mat <- Seurat::Read10X_h5(h5_path)
+meta <- read.delim(meta_path, stringsAsFactors = FALSE, check.names = FALSE) %>%
+  mutate(`Celltype (original)` = gsub(" cell", "", `Celltype (original)`)) %>%
+  dplyr::rename(
+    celltype_malignancy = `Celltype (malignancy)`,
+    celltype_original = `Celltype (original)`
   )
-}
 
 cells_keep <- intersect(colnames(expr_mat), as.character(meta$Cell))
 if (!length(cells_keep)) {
@@ -266,7 +76,7 @@ expr_mat <- expr_mat[, cells_keep, drop = FALSE]
 meta <- meta[match(cells_keep, as.character(meta$Cell)), , drop = FALSE]
 rownames(meta) <- NULL
 message(
-  "CRA001160 load (full): ", nrow(expr_mat), " genes x ", ncol(expr_mat),
+  "CRA001160 (full): ", nrow(expr_mat), " genes x ", ncol(expr_mat),
   " cells (", length(unique(meta$Patient)), " patients)."
 )
 
@@ -521,10 +331,10 @@ and PRECOG references across all major cell types.
 
 # PRECOG
 meta_ordered <- meta %>%
-  arrange(abs(PhenoMapR_Pancreatic))
+  arrange(abs(.data[[score_precog_col]]))
 
 # scale the score for easier visualization
-meta_ordered$score_scaled <- scale(meta_ordered$PhenoMapR_Pancreatic)
+meta_ordered$score_scaled <- scale(meta_ordered[[score_precog_col]])
 
 precog_scaled_umap <- ggscatter(meta_ordered,
           x = "UMAP_1", 
@@ -902,19 +712,19 @@ if (!is.null(markers)) {
 }
 ```
 
-    ##          gene avg_log2FC pct_in_group  pct_rest p_val p_adj
-    ## 126      ENO1  13.623106     96.31048 66.391464     0     0
-    ## 244       CDA   1.675788     46.18865  7.900419     0     0
-    ## 323  SH3BGRL3  15.462975     98.46850 75.142893     0     0
-    ## 540    SLC2A1   1.803979     52.24504 12.257081     0     0
-    ## 1096  S100A10  29.761667     99.72155 87.057030     0     0
+    ##         gene avg_log2FC pct_in_group  pct_rest p_val p_adj
+    ## 13     ISG15  1.3634979     93.17786 41.839197     0     0
+    ## 34  AURKAIP1  0.8237655     93.83919 52.991236     0     0
+    ## 69      RER1  0.7967829     91.01984 41.686778     0     0
+    ## 76    PRXL2B  0.4068488     52.94118  9.526229     0     0
+    ## 101     ICMT  0.3150654     53.28924 12.282484     0     0
 
-    ##           gene avg_log2FC pct_in_group pct_rest p_val p_adj
-    ## 21192     ENO1  -7.976144     50.05221 83.27194     0     0
-    ## 21295    CAPZB  -2.413023     44.97041 76.60358     0     0
-    ## 21325    CDC42  -2.957609     56.21302 82.63686     0     0
-    ## 21389 SH3BGRL3 -11.537925     60.80752 88.88607     0     0
-    ## 21568     CAP1  -2.646242     36.16429 74.45700     0     0
+    ##        gene avg_log2FC pct_in_group pct_rest p_val p_adj
+    ## 21079 ISG15 -1.2916584     15.97633 70.01143     0     0
+    ## 21192  ENO1 -1.6344839     34.63279 85.16449     0     0
+    ## 21295 CAPZB -0.9759845     31.56979 80.82053     0     0
+    ## 21298  NBL1 -0.7554952      9.64149 55.70939     0     0
+    ## 21325 CDC42 -1.1043594     37.66098 84.97396     0     0
 
 ## Marker genes heatmap
 
@@ -1395,54 +1205,52 @@ sessionInfo()
     ##  [7] Seurat_5.5.1          SeuratObject_5.4.0    sp_2.2-3             
     ## [10] tidyr_1.3.2           dplyr_1.2.1           ggpubr_1.0.0         
     ## [13] ggplot2_4.0.3         googledrive_2.1.2     PhenoMapR_0.1.0      
-    ## [16] testthat_3.3.2       
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RcppAnnoy_0.0.23       splines_4.6.1          later_1.4.8           
     ##   [4] tibble_3.3.1           polyclip_1.10-7        fastDummies_1.7.6     
     ##   [7] lifecycle_1.0.5        rstatix_1.1.0          doParallel_1.0.17     
-    ##  [10] rprojroot_2.1.1        globals_0.19.1         lattice_0.22-9        
+    ##  [10] globals_0.19.1         lattice_0.22-9         hdf5r_1.3.12          
     ##  [13] MASS_7.3-65            backports_1.5.1        magrittr_2.0.5        
     ##  [16] plotly_4.12.1          sass_0.4.10            rmarkdown_2.31        
     ##  [19] jquerylib_0.1.4        yaml_2.3.12            httpuv_1.6.17         
     ##  [22] otel_0.2.0             sctransform_0.4.3      spam_2.11-4           
-    ##  [25] pkgbuild_1.4.8         spatstat.sparse_3.2-0  reticulate_1.46.0     
-    ##  [28] cowplot_1.2.0          pbapply_1.7-4          RColorBrewer_1.1-3    
-    ##  [31] abind_1.4-8            pkgload_1.5.3          Rtsne_0.17            
-    ##  [34] presto_1.0.0           BiocGenerics_0.58.1    IRanges_2.46.0        
-    ##  [37] S4Vectors_0.50.1       ggrepel_0.9.8          irlba_2.3.7           
-    ##  [40] listenv_1.0.0          spatstat.utils_3.2-4   goftest_1.2-3         
-    ##  [43] RSpectra_0.16-2        spatstat.random_3.5-1  fitdistrplus_1.2-6    
-    ##  [46] parallelly_1.48.0      pkgdown_2.2.1          codetools_0.2-20      
-    ##  [49] shape_1.4.6.1          tidyselect_1.2.1       farver_2.1.2          
-    ##  [52] matrixStats_1.5.0      stats4_4.6.1           spatstat.explore_3.8-2
-    ##  [55] jsonlite_2.0.0         GetoptLong_1.1.1       progressr_1.0.0       
-    ##  [58] Formula_1.2-5          ggridges_0.5.7         survival_3.8-6        
-    ##  [61] iterators_1.0.14       systemfonts_1.3.2      foreach_1.5.2         
-    ##  [64] tools_4.6.1            progress_1.2.3         ragg_1.5.2            
-    ##  [67] ica_1.0-3              Rcpp_1.1.2             glue_1.8.1            
-    ##  [70] gridExtra_2.3.1        mgcv_1.9-4             xfun_0.60             
-    ##  [73] withr_3.0.3            fastmap_1.2.0          digest_0.6.39         
-    ##  [76] R6_2.6.1               mime_0.13              textshaping_1.0.5     
-    ##  [79] colorspace_2.1-3       scattermore_1.2        tensor_1.5.1          
-    ##  [82] spatstat.data_3.1-9    generics_0.1.4         data.table_1.18.4     
-    ##  [85] prettyunits_1.2.0      httr_1.4.8             htmlwidgets_1.6.4     
-    ##  [88] uwot_0.2.4             pkgconfig_2.0.3        gtable_0.3.6          
-    ##  [91] lmtest_0.9-40          S7_0.2.2               brio_1.1.5            
-    ##  [94] htmltools_0.5.9        carData_3.0-6          dotCall64_1.2         
-    ##  [97] clue_0.3-68            scales_1.4.0           png_0.1-9             
-    ## [100] spatstat.univar_3.2-0  knitr_1.51             reshape2_1.4.5        
-    ## [103] rjson_0.2.23           nlme_3.1-169           curl_7.1.0            
-    ## [106] cachem_1.1.0           zoo_1.8-15             GlobalOptions_0.1.4   
-    ## [109] stringr_1.6.0          KernSmooth_2.23-26     parallel_4.6.1        
-    ## [112] miniUI_0.1.2           desc_1.4.3             pillar_1.11.1         
-    ## [115] vctrs_0.7.3            RANN_2.6.2             promises_1.5.0        
-    ## [118] car_3.1-5              xtable_1.8-8           cluster_2.1.8.2       
-    ## [121] evaluate_1.0.5         magick_2.9.1           cli_3.6.6             
-    ## [124] compiler_4.6.1         rlang_1.3.0            crayon_1.5.3          
-    ## [127] future.apply_1.20.2    labeling_0.4.3         plyr_1.8.9            
-    ## [130] fs_2.1.0               stringi_1.8.7          viridisLite_0.4.3     
-    ## [133] deldir_2.0-4           spatstat.geom_3.8-2    Matrix_1.7-5          
-    ## [136] RcppHNSW_0.7.0         hms_1.1.4              future_1.75.0         
-    ## [139] shiny_1.14.0           ROCR_1.0-12            gargle_1.6.1          
-    ## [142] igraph_2.3.3           broom_1.0.13           bslib_0.11.0
+    ##  [25] spatstat.sparse_3.2-0  reticulate_1.46.0      cowplot_1.2.0         
+    ##  [28] pbapply_1.7-4          RColorBrewer_1.1-3     abind_1.4-8           
+    ##  [31] Rtsne_0.17             presto_1.0.0           BiocGenerics_0.58.1   
+    ##  [34] IRanges_2.46.0         S4Vectors_0.50.1       ggrepel_0.9.8         
+    ##  [37] irlba_2.3.7            listenv_1.0.0          spatstat.utils_3.2-4  
+    ##  [40] goftest_1.2-3          RSpectra_0.16-2        spatstat.random_3.5-1 
+    ##  [43] fitdistrplus_1.2-6     parallelly_1.48.0      pkgdown_2.2.1         
+    ##  [46] codetools_0.2-20       tidyselect_1.2.1       shape_1.4.6.1         
+    ##  [49] farver_2.1.2           matrixStats_1.5.0      stats4_4.6.1          
+    ##  [52] spatstat.explore_3.8-2 jsonlite_2.0.0         GetoptLong_1.1.1      
+    ##  [55] progressr_1.0.0        Formula_1.2-6          ggridges_0.5.7        
+    ##  [58] survival_3.8-6         iterators_1.0.14       systemfonts_1.3.2     
+    ##  [61] foreach_1.5.2          tools_4.6.1            ragg_1.5.2            
+    ##  [64] ica_1.0-3              Rcpp_1.1.2             glue_1.8.1            
+    ##  [67] gridExtra_2.3.1        mgcv_1.9-4             xfun_0.60             
+    ##  [70] withr_3.0.3            fastmap_1.2.0          digest_0.6.39         
+    ##  [73] R6_2.6.1               mime_0.13              textshaping_1.0.5     
+    ##  [76] colorspace_2.1-3       scattermore_1.2        tensor_1.5.1          
+    ##  [79] spatstat.data_3.1-9    generics_0.1.4         data.table_1.18.4     
+    ##  [82] httr_1.4.8             htmlwidgets_1.6.4      uwot_0.2.4            
+    ##  [85] pkgconfig_2.0.3        gtable_0.3.6           lmtest_0.9-40         
+    ##  [88] S7_0.2.2               htmltools_0.5.9        carData_3.0-6         
+    ##  [91] dotCall64_1.2          clue_0.3-68            scales_1.4.0          
+    ##  [94] png_0.1-9              spatstat.univar_3.2-0  knitr_1.51            
+    ##  [97] reshape2_1.4.5         rjson_0.2.23           nlme_3.1-169          
+    ## [100] curl_7.1.0             cachem_1.1.0           zoo_1.9-0             
+    ## [103] GlobalOptions_0.1.4    stringr_1.6.0          KernSmooth_2.23-26    
+    ## [106] parallel_4.6.1         miniUI_0.1.2           desc_1.4.3            
+    ## [109] pillar_1.11.1          vctrs_0.7.3            RANN_2.6.2            
+    ## [112] promises_1.5.0         car_3.1-5              xtable_1.8-8          
+    ## [115] cluster_2.1.8.2        evaluate_1.0.5         magick_2.9.1          
+    ## [118] cli_3.6.6              compiler_4.6.1         rlang_1.3.0           
+    ## [121] crayon_1.5.3           future.apply_1.20.2    labeling_0.4.3        
+    ## [124] plyr_1.8.9             fs_2.1.0               stringi_1.8.9         
+    ## [127] viridisLite_0.4.3      deldir_2.0-4           spatstat.geom_3.8-2   
+    ## [130] Matrix_1.7-5           RcppHNSW_0.7.0         bit64_4.8.4           
+    ## [133] future_1.75.0          shiny_1.14.0           ROCR_1.0-12           
+    ## [136] gargle_1.6.1           igraph_2.3.3           broom_1.0.13          
+    ## [139] bslib_0.12.0           bit_4.6.0
