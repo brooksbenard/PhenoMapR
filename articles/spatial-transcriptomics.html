@@ -287,8 +287,8 @@ maped.</p>
 <span><span class="op">}</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/gc.html" class="external-link">gc</a></span><span class="op">(</span>verbose <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">##           used  (Mb) gc trigger  (Mb)  max used  (Mb)</span></span>
-<span><span class="co">## Ncells 4262487 227.7    7882507 421.0   7882507 421.0</span></span>
-<span><span class="co">## Vcells 7724803  59.0  122552400 935.1 122781469 936.8</span></span></code></pre>
+<span><span class="co">## Ncells 4265211 227.8    7887110 421.3   7887110 421.3</span></span>
+<span><span class="co">## Vcells 7727846  59.0  122555901 935.1 122784404 936.8</span></span></code></pre>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load the **CytoSPACE** object (single cells placed on Visium coordinates).</span></span>
 <span><span class="va">rds_cyto</span> <span class="op">&lt;-</span> <span class="st">"HT270P1-S1H2Fc2U1Z1Bs1-H2Bs2-Test_processed.rds"</span></span>
@@ -328,7 +328,7 @@ maped.</p>
 <span><span class="co"># downstream chunks (scores / tails / coloc) depend on it.</span></span>
 <span><span class="va">cell_locations</span> <span class="op">&lt;-</span> <span class="va">seurat</span><span class="op">@</span><span class="va">meta.data</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
-<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="st">"Cell"</span>, <span class="st">"row"</span>, <span class="st">"col"</span>, <span class="st">"CellType"</span>, <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/tidyselect/man/all_of.html" class="external-link">all_of</a></span><span class="op">(</span><span class="va">score_col</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
+<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="st">"Cell"</span>, <span class="st">"row"</span>, <span class="st">"col"</span>, <span class="st">"CellType"</span>, <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/all_of.html" class="external-link">all_of</a></span><span class="op">(</span><span class="va">score_col</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">.data</span><span class="op">$</span><span class="va">row</span>, <span class="va">.data</span><span class="op">$</span><span class="va">col</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>points_per_location <span class="op">=</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html" class="external-link">n</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">ungroup</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -2160,7 +2160,7 @@ Software (CellChat v2): <a href="https://github.com/jinworks/CellChat" class="ex
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <pre><code><span><span class="co">## R version 4.6.1 (2026-06-24)</span></span>
 <span><span class="co">## Platform: x86_64-pc-linux-gnu</span></span>
-<span><span class="co">## Running under: Ubuntu 24.04.4 LTS</span></span>
+<span><span class="co">## Running under: Ubuntu 24.04.5 LTS</span></span>
 <span><span class="co">## </span></span>
 <span><span class="co">## Matrix products: default</span></span>
 <span><span class="co">## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 </span></span>
@@ -2185,22 +2185,22 @@ Software (CellChat v2): <a href="https://github.com/jinworks/CellChat" class="ex
 <span><span class="co">## </span></span>
 <span><span class="co">## loaded via a namespace (and not attached):</span></span>
 <span><span class="co">##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        </span></span>
-<span><span class="co">##   [4] magrittr_2.0.5         spatstat.utils_3.2-4   farver_2.1.2          </span></span>
-<span><span class="co">##   [7] rmarkdown_2.31         GlobalOptions_0.1.4    fs_2.1.0              </span></span>
+<span><span class="co">##   [4] magrittr_2.0.5         spatstat.utils_3.2-5   farver_2.1.2          </span></span>
+<span><span class="co">##   [7] rmarkdown_2.32         GlobalOptions_0.1.4    fs_2.1.0              </span></span>
 <span><span class="co">##  [10] ragg_1.5.2             vctrs_0.7.3            ROCR_1.0-12           </span></span>
-<span><span class="co">##  [13] spatstat.explore_3.8-2 htmltools_0.5.9        curl_7.1.0            </span></span>
+<span><span class="co">##  [13] spatstat.explore_3.8-3 htmltools_0.5.9        curl_8.0.0            </span></span>
 <span><span class="co">##  [16] sass_0.4.10            sctransform_0.4.3      parallelly_1.48.0     </span></span>
 <span><span class="co">##  [19] KernSmooth_2.23-26     bslib_0.12.0           htmlwidgets_1.6.4     </span></span>
 <span><span class="co">##  [22] desc_1.4.3             ica_1.0-3              plyr_1.8.9            </span></span>
-<span><span class="co">##  [25] plotly_4.12.1          zoo_1.9-0              cachem_1.1.0          </span></span>
+<span><span class="co">##  [25] plotly_4.12.1          zoo_1.9-1              cachem_1.1.0          </span></span>
 <span><span class="co">##  [28] igraph_2.3.3           iterators_1.0.14       mime_0.13             </span></span>
 <span><span class="co">##  [31] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-5          </span></span>
 <span><span class="co">##  [34] R6_2.6.1               fastmap_1.2.0          clue_0.3-68           </span></span>
-<span><span class="co">##  [37] fitdistrplus_1.2-6     future_1.75.0          shiny_1.14.0          </span></span>
-<span><span class="co">##  [40] digest_0.6.39          colorspace_2.1-3       S4Vectors_0.50.1      </span></span>
+<span><span class="co">##  [37] fitdistrplus_1.2-6     future_1.76.0          shiny_1.14.0          </span></span>
+<span><span class="co">##  [40] digest_0.6.39          colorspace_2.1-3       S4Vectors_0.50.3      </span></span>
 <span><span class="co">##  [43] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           </span></span>
 <span><span class="co">##  [46] textshaping_1.0.5      labeling_0.4.3         progressr_1.0.0       </span></span>
-<span><span class="co">##  [49] spatstat.sparse_3.2-0  httr_1.4.8             polyclip_1.10-7       </span></span>
+<span><span class="co">##  [49] spatstat.sparse_3.2-0  httr_1.4.9             polyclip_1.10-7       </span></span>
 <span><span class="co">##  [52] abind_1.4-8            compiler_4.6.1         gargle_1.6.1          </span></span>
 <span><span class="co">##  [55] doParallel_1.0.17      withr_3.0.3            S7_0.2.2              </span></span>
 <span><span class="co">##  [58] fastDummies_1.7.6      hexbin_1.28.6          MASS_7.3-65           </span></span>
@@ -2210,20 +2210,20 @@ Software (CellChat v2): <a href="https://github.com/jinworks/CellChat" class="ex
 <span><span class="co">##  [70] promises_1.5.0         grid_4.6.1             Rtsne_0.17            </span></span>
 <span><span class="co">##  [73] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        </span></span>
 <span><span class="co">##  [76] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           </span></span>
-<span><span class="co">##  [79] data.table_1.18.4      BiocGenerics_0.58.1    spatstat.geom_3.8-2   </span></span>
+<span><span class="co">##  [79] data.table_1.18.6.1    BiocGenerics_0.58.1    spatstat.geom_3.8-3   </span></span>
 <span><span class="co">##  [82] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         </span></span>
-<span><span class="co">##  [85] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         </span></span>
+<span><span class="co">##  [85] RANN_2.6.3             pillar_1.11.1          stringr_1.6.0         </span></span>
 <span><span class="co">##  [88] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           </span></span>
 <span><span class="co">##  [91] circlize_0.4.18        splines_4.6.1          lattice_0.22-9        </span></span>
 <span><span class="co">##  [94] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      </span></span>
-<span><span class="co">##  [97] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         </span></span>
-<span><span class="co">## [100] knitr_1.51             gridExtra_2.3.1        IRanges_2.46.0        </span></span>
-<span><span class="co">## [103] scattermore_1.2        stats4_4.6.1           xfun_0.60             </span></span>
+<span><span class="co">##  [97] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-5         </span></span>
+<span><span class="co">## [100] knitr_1.52             gridExtra_2.3.1        IRanges_2.46.0        </span></span>
+<span><span class="co">## [103] scattermore_1.2        stats4_4.6.1           xfun_0.61             </span></span>
 <span><span class="co">## [106] matrixStats_1.5.0      stringi_1.8.9          yaml_2.3.12           </span></span>
 <span><span class="co">## [109] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          </span></span>
-<span><span class="co">## [112] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          </span></span>
-<span><span class="co">## [115] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       </span></span>
-<span><span class="co">## [118] Rcpp_1.1.2             globals_0.19.1         spatstat.random_3.5-1 </span></span>
+<span><span class="co">## [112] cli_3.6.6              uwot_0.2.5             xtable_1.8-8          </span></span>
+<span><span class="co">## [115] reticulate_1.47.0      systemfonts_1.3.2      jquerylib_0.1.4       </span></span>
+<span><span class="co">## [118] Rcpp_1.1.2             globals_0.19.1         spatstat.random_3.5-2 </span></span>
 <span><span class="co">## [121] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.1        </span></span>
 <span><span class="co">## [124] pkgdown_2.2.1          dotCall64_1.2          listenv_1.0.0         </span></span>
 <span><span class="co">## [127] viridisLite_0.4.3      scales_1.4.0           ggridges_0.5.7        </span></span>

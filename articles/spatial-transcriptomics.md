@@ -225,8 +225,8 @@ gc(verbose = FALSE)
 ```
 
     ##           used  (Mb) gc trigger  (Mb)  max used  (Mb)
-    ## Ncells 4262487 227.7    7882507 421.0   7882507 421.0
-    ## Vcells 7724803  59.0  122552400 935.1 122781469 936.8
+    ## Ncells 4265211 227.8    7887110 421.3   7887110 421.3
+    ## Vcells 7727846  59.0  122555901 935.1 122784404 936.8
 
 ``` r
 
@@ -2125,7 +2125,7 @@ sessionInfo()
 
     ## R version 4.6.1 (2026-06-24)
     ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.4 LTS
+    ## Running under: Ubuntu 24.04.5 LTS
     ## 
     ## Matrix products: default
     ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -2150,22 +2150,22 @@ sessionInfo()
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] RColorBrewer_1.1-3     shape_1.4.6.1          jsonlite_2.0.0        
-    ##   [4] magrittr_2.0.5         spatstat.utils_3.2-4   farver_2.1.2          
-    ##   [7] rmarkdown_2.31         GlobalOptions_0.1.4    fs_2.1.0              
+    ##   [4] magrittr_2.0.5         spatstat.utils_3.2-5   farver_2.1.2          
+    ##   [7] rmarkdown_2.32         GlobalOptions_0.1.4    fs_2.1.0              
     ##  [10] ragg_1.5.2             vctrs_0.7.3            ROCR_1.0-12           
-    ##  [13] spatstat.explore_3.8-2 htmltools_0.5.9        curl_7.1.0            
+    ##  [13] spatstat.explore_3.8-3 htmltools_0.5.9        curl_8.0.0            
     ##  [16] sass_0.4.10            sctransform_0.4.3      parallelly_1.48.0     
     ##  [19] KernSmooth_2.23-26     bslib_0.12.0           htmlwidgets_1.6.4     
     ##  [22] desc_1.4.3             ica_1.0-3              plyr_1.8.9            
-    ##  [25] plotly_4.12.1          zoo_1.9-0              cachem_1.1.0          
+    ##  [25] plotly_4.12.1          zoo_1.9-1              cachem_1.1.0          
     ##  [28] igraph_2.3.3           iterators_1.0.14       mime_0.13             
     ##  [31] lifecycle_1.0.5        pkgconfig_2.0.3        Matrix_1.7-5          
     ##  [34] R6_2.6.1               fastmap_1.2.0          clue_0.3-68           
-    ##  [37] fitdistrplus_1.2-6     future_1.75.0          shiny_1.14.0          
-    ##  [40] digest_0.6.39          colorspace_2.1-3       S4Vectors_0.50.1      
+    ##  [37] fitdistrplus_1.2-6     future_1.76.0          shiny_1.14.0          
+    ##  [40] digest_0.6.39          colorspace_2.1-3       S4Vectors_0.50.3      
     ##  [43] tensor_1.5.1           RSpectra_0.16-2        irlba_2.3.7           
     ##  [46] textshaping_1.0.5      labeling_0.4.3         progressr_1.0.0       
-    ##  [49] spatstat.sparse_3.2-0  httr_1.4.8             polyclip_1.10-7       
+    ##  [49] spatstat.sparse_3.2-0  httr_1.4.9             polyclip_1.10-7       
     ##  [52] abind_1.4-8            compiler_4.6.1         gargle_1.6.1          
     ##  [55] doParallel_1.0.17      withr_3.0.3            S7_0.2.2              
     ##  [58] fastDummies_1.7.6      hexbin_1.28.6          MASS_7.3-65           
@@ -2175,20 +2175,20 @@ sessionInfo()
     ##  [70] promises_1.5.0         grid_4.6.1             Rtsne_0.17            
     ##  [73] cluster_2.1.8.2        reshape2_1.4.5         generics_0.1.4        
     ##  [76] gtable_0.3.6           spatstat.data_3.1-9    tidyr_1.3.2           
-    ##  [79] data.table_1.18.4      BiocGenerics_0.58.1    spatstat.geom_3.8-2   
+    ##  [79] data.table_1.18.6.1    BiocGenerics_0.58.1    spatstat.geom_3.8-3   
     ##  [82] RcppAnnoy_0.0.23       foreach_1.5.2          ggrepel_0.9.8         
-    ##  [85] RANN_2.6.2             pillar_1.11.1          stringr_1.6.0         
+    ##  [85] RANN_2.6.3             pillar_1.11.1          stringr_1.6.0         
     ##  [88] spam_2.11-4            RcppHNSW_0.7.0         later_1.4.8           
     ##  [91] circlize_0.4.18        splines_4.6.1          lattice_0.22-9        
     ##  [94] survival_3.8-6         deldir_2.0-4           tidyselect_1.2.1      
-    ##  [97] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-4         
-    ## [100] knitr_1.51             gridExtra_2.3.1        IRanges_2.46.0        
-    ## [103] scattermore_1.2        stats4_4.6.1           xfun_0.60             
+    ##  [97] ComplexHeatmap_2.28.0  miniUI_0.1.2           pbapply_1.7-5         
+    ## [100] knitr_1.52             gridExtra_2.3.1        IRanges_2.46.0        
+    ## [103] scattermore_1.2        stats4_4.6.1           xfun_0.61             
     ## [106] matrixStats_1.5.0      stringi_1.8.9          yaml_2.3.12           
     ## [109] evaluate_1.0.5         codetools_0.2-20       tibble_3.3.1          
-    ## [112] cli_3.6.6              uwot_0.2.4             xtable_1.8-8          
-    ## [115] reticulate_1.46.0      systemfonts_1.3.2      jquerylib_0.1.4       
-    ## [118] Rcpp_1.1.2             globals_0.19.1         spatstat.random_3.5-1 
+    ## [112] cli_3.6.6              uwot_0.2.5             xtable_1.8-8          
+    ## [115] reticulate_1.47.0      systemfonts_1.3.2      jquerylib_0.1.4       
+    ## [118] Rcpp_1.1.2             globals_0.19.1         spatstat.random_3.5-2 
     ## [121] png_0.1-9              spatstat.univar_3.2-0  parallel_4.6.1        
     ## [124] pkgdown_2.2.1          dotCall64_1.2          listenv_1.0.0         
     ## [127] viridisLite_0.4.3      scales_1.4.0           ggridges_0.5.7        

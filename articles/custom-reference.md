@@ -793,7 +793,7 @@ sessionInfo()
 
     ## R version 4.6.1 (2026-06-24)
     ## Platform: x86_64-pc-linux-gnu
-    ## Running under: Ubuntu 24.04.4 LTS
+    ## Running under: Ubuntu 24.04.5 LTS
     ## 
     ## Matrix products: default
     ## BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -823,19 +823,19 @@ sessionInfo()
     ##  [4] fastmap_1.2.0           digest_0.6.39           lifecycle_1.0.5        
     ##  [7] cluster_2.1.8.2         magrittr_2.0.5          compiler_4.6.1         
     ## [10] rlang_1.3.0             sass_0.4.10             tools_4.6.1            
-    ## [13] yaml_2.3.12             data.table_1.18.4       knitr_1.51             
-    ## [16] labeling_0.4.3          htmlwidgets_1.6.4       curl_7.1.0             
+    ## [13] yaml_2.3.12             data.table_1.18.6.1     knitr_1.52             
+    ## [16] labeling_0.4.3          htmlwidgets_1.6.4       curl_8.0.0             
     ## [19] splitstackshape_1.4.8.1 RColorBrewer_1.1-3      abind_1.4-8            
     ## [22] withr_3.0.3             purrr_1.2.2             BiocGenerics_0.58.1    
     ## [25] desc_1.4.3              stats4_4.6.1            colorspace_2.1-3       
     ## [28] scales_1.4.0            iterators_1.0.14        cli_3.6.6              
-    ## [31] rmarkdown_2.31          crayon_1.5.3            ragg_1.5.2             
-    ## [34] generics_0.1.4          otel_0.2.0              httr_1.4.8             
+    ## [31] rmarkdown_2.32          crayon_1.5.3            ragg_1.5.2             
+    ## [34] generics_0.1.4          otel_0.2.0              httr_1.4.9             
     ## [37] rjson_0.2.23            cachem_1.1.0            splines_4.6.1          
     ## [40] parallel_4.6.1          matrixStats_1.5.0       vctrs_0.7.3            
     ## [43] Matrix_1.7-5            carData_3.0-6           jsonlite_2.0.0         
     ## [46] car_3.1-5               IRanges_2.46.0          GetoptLong_1.1.1       
-    ## [49] S4Vectors_0.50.1        rstatix_1.1.0           Formula_1.2-6          
+    ## [49] S4Vectors_0.50.3        rstatix_1.1.0           Formula_1.2-6          
     ## [52] clue_0.3-68             systemfonts_1.3.2       magick_2.9.1           
     ## [55] foreach_1.5.2           jquerylib_0.1.4         tidyr_1.3.2            
     ## [58] glue_1.8.1              pkgdown_2.2.1           codetools_0.2-20       
@@ -845,5 +845,5 @@ sessionInfo()
     ## [70] lattice_0.22-9          png_0.1-9               backports_1.5.1        
     ## [73] broom_1.0.13            gargle_1.6.1            bslib_0.12.0           
     ## [76] Rcpp_1.1.2              gridExtra_2.3.1         HGNChelper_0.8.15      
-    ## [79] xfun_0.60               fs_2.1.0                pkgconfig_2.0.3        
+    ## [79] xfun_0.61               fs_2.1.0                pkgconfig_2.0.3        
     ## [82] GlobalOptions_0.1.4
