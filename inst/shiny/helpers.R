@@ -1785,7 +1785,7 @@ extract_embedding_from_metadata <- function(meta_df, dim1_col, dim2_col,
 # cutting peak memory for multi-GB h5ad files. Ignored for in-memory objects
 # (matrix / Seurat / SCE) where row subsetting is already cheap downstream.
 extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
-                                      gene_subset = NULL) {
+                                      layer = NULL, gene_subset = NULL) {
   if (is.matrix(obj) || inherits(obj, "Matrix")) return(obj)
   if (is.data.frame(obj)) return(as.matrix(obj))
   if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
@@ -1793,7 +1793,18 @@ extract_expression_matrix <- function(obj, assay = NULL, slot = "data",
     if (is.null(use_assay) || !nzchar(use_assay)) {
       use_assay <- if ("Spatial" %in% names(obj@assays)) "Spatial" else "RNA"
     }
-    layer_name <- if (slot %in% c("data", "counts", "scale.data")) slot else "data"
+    # Step 5 passes the score-matrix choice as `layer=` (same name PhenoMap()
+    # uses). Older callers pass `slot=`. An explicit layer wins.
+    matrix_name <- if (!is.null(layer) && nzchar(as.character(layer)[1L])) {
+      as.character(layer)[1L]
+    } else {
+      slot
+    }
+    layer_name <- if (matrix_name %in% c("data", "counts", "scale.data")) {
+      matrix_name
+    } else {
+      "data"
+    }
     # Use the Seurat 4 / 5 compatibility shim so we don't trip the
     # "slot is now defunct" error on SeuratObject >= 5.0 (the shim
     # picks layer= or slot= based on what the installed
